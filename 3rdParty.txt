@@ -1,0 +1,17 @@
+Used 3rd Party Libraries
+------------------------
+
+Here is a list of all external 3rd party libraries used by 3DimViewer:
+
+- Qt Toolkit (http://qt.nokia.com/products/)
+- OpenSceneGraph library (http://www.openscenegraph.org)
+- VPL (https://bitbucket.org/3dimlab/vpl)
+- The OpenGL Extension Wrangler Library (http://glew.sourceforge.net/)
+- DCMTk toolkit (http://dicom.offis.de/dcmtk)
+- cURL library (http://curl.haxx.se/)
+- OpenSSL Toolkit (http://www.openssl.org/)
+- zlib library (http://www.zlib.net/)
+
+Some of these libraries might be distributed under a more restrictive license
+then the 3DimViewer one. Please see licenses of individual 3rd party libraries
+for more details.
