@@ -18,11 +18,11 @@ include( ${CMAKE_SOURCE_DIR}/CMakeModules/LibraryMacros.txt )
 include( ${CMAKE_SOURCE_DIR}/CMakeModules/PluginMacros.txt )
 include( ${CMAKE_SOURCE_DIR}/CMakeModules/InstallMacros.txt )
 
-
-
 #-------------------------------------------------------------------------------
 # Choose applications you want to compile
 option( BUILD_3DimViewer "Should 3DimViewer be built?" ON )
+
+set( _num_of_apps 0 )
 
 if( BUILD_3DimViewer )
     math( EXPR _num_of_apps "${_num_of_apps} + 1" )
@@ -295,6 +295,10 @@ set( TRIDIM_COREMEDI_LIB 3DimCoreMedi )
 set( TRIDIM_GRAPH_LIB 3DimGraph )
 set( TRIDIM_GRAPHMEDI_LIB 3DimGraphMedi )
 set( TRIDIM_GUIQT_LIB 3DimGuiQt )
+
+# 3Dim plugins
+set( TRIDIM_DEMO_PLUGIN DemoPlugin )
+set( TRIDIM_GAUGE_PLUGIN GaugePlugin )
 
 if( BUILD_3DimViewer )
     add_subdirectory( 3DimViewer 3DimViewer )

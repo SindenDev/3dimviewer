@@ -20,7 +20,7 @@
 #
 #===============================================================================
 
-ADD_3DIM_LIB_TARGET( ${ICE_TRIANGULATION_LIB} )
+#ADD_3DIM_LIB_TARGET( ${ICE_TRIANGULATION_LIB} )
 
 
 # Create library
@@ -70,9 +70,9 @@ endif()
 # Build library 
 TRIDIM_LIBRARY_BUILD()
 
-add_dependencies ( ${TRIDIM_LIBRARY_NAME}
-                   ${ICE_TRIANGULATION_LIB}
-                   )
+#add_dependencies ( ${TRIDIM_LIBRARY_NAME}
+#                   ${ICE_TRIANGULATION_LIB}
+#                   )
                    
 # Link libraries
 target_link_libraries( ${TRIDIM_LIBRARY_NAME}
