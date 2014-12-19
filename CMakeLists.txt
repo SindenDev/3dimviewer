@@ -311,6 +311,9 @@ set( TRIDIM_GUIQTMEDI_LIB 3DimGuiQtMedi )
 set( TRIDIM_DEMO_PLUGIN DemoPlugin )
 set( TRIDIM_GAUGE_PLUGIN GaugePlugin )
 
+macro(ADD_NON_OSS_PLUGINS)
+endmacro(ADD_NON_OSS_PLUGINS)
+
 if( BUILD_3DimViewer )
     add_subdirectory( 3DimViewer 3DimViewer )
 endif( BUILD_3DimViewer )
