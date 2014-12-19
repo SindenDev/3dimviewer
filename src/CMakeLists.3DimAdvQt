@@ -1,0 +1,44 @@
+#===============================================================================
+#
+# 3DimAdv library
+# Copyright (c) 2010-2011 by 3Dim Laboratory s.r.o.
+#
+#===============================================================================
+
+# Note: same as 3DimAdv but with activation dialog excluded
+
+
+# Create library
+TRIDIM_LIBRARY( 3DimAdvQt )
+
+# Options
+set( TRIDIM_ADVQT_LIB_INCLUDE include/3dim/adv )
+set( TRIDIM_ADVQT_LIB_SRC src/adv )
+
+include_directories( ${CMAKE_SOURCE_DIR}/${TRIDIM_ADVQT_LIB_INCLUDE} )
+
+#-------------------------------------------------------------------------------
+# Add Headers and Sources
+
+ADD_LIBRARY_HEADER_DIRECTORY( ${CMAKE_SOURCE_DIR}/${TRIDIM_ADVQT_LIB_INCLUDE}/network )
+ADD_LIBRARY_HEADER_DIRECTORY( ${CMAKE_SOURCE_DIR}/${TRIDIM_ADVQT_LIB_INCLUDE}/segmentation )
+ADD_LIBRARY_SOURCE_DIRECTORY( ${CMAKE_SOURCE_DIR}/${TRIDIM_ADVQT_LIB_SRC}/network )
+ADD_LIBRARY_SOURCE_DIRECTORY( ${CMAKE_SOURCE_DIR}/${TRIDIM_ADVQT_LIB_SRC}/segmentation )
+
+#-------------------------------------------------------------------------------
+# Create source groups
+
+ADD_SOURCE_GROUPS( ${TRIDIM_ADVQT_LIB_INCLUDE}
+                   ${TRIDIM_ADVQT_LIB_SRC} 
+                   network segmentation
+                   )
+
+#-------------------------------------------------------------------------------
+# Finalize library
+
+# Build library 
+TRIDIM_LIBRARY_BUILD()
+
+# Installation
+TRIDIM_LIBRARY_INSTALL()
+
