@@ -1,0 +1,127 @@
+================================================================================
+- $Id: ChangeLog.txt 1356 2011-10-30 13:39:48Z spanel $
+-
+- 3DimViewer
+- A lightweight 3D DICOM viewer.
+-
+- Copyright (c) 2008-2014 by 3Dim Laboratory s.r.o.
+-
+================================================================================
+
+3DimViewer Version 2.1 (2014/03/13):
+  - Mac OS X support.
+  - Unified background colors.
+  - Correct handling of source name collisions during DICOM save.
+  - Added volume rendering slider to change in 3D window title.
+  - Fixed synchronization of all VR sliders.
+  - Added "Show Log" button in preferences.
+  - Updated czech translations.
+  - New customized context menu for toolbars and panels.
+  - Ability to save screenshots (through dock widget title context menu).
+  - Screenshot button in added to dock widget title.
+  - New icons for ortho slices tabs.
+  - Added scroll areas to panels.
+  - Density values are shown for current mouse position.
+  - Updated preferences dialog.
+  - A new data set information dialog instead of the old simple message box.
+  - Ability to load DICOMs from ZIP files.
+  - Fixed progress dialogs.
+  - SW creates minidump on unhandled exception.
+  - Added support for dumping call stack to log on failures.
+  - Many smaller bug fixes.
+
+3DimViewer Version 2.0 (2012/08/22):
+  - The viewer is now licensed under less restrictive Apache 2.0 license!   
+  - QUI has been ported from the wxWidgets library to the Qt toolkit that is the
+    only supported GUI toolkit from now!   
+  - Ported to recent versions of OSG 3.0.1 and MDSTk 1.1.x libraries.
+  - Volume rendering integrated into the 3D scene.
+  - Many improvements of the volume rendering routines.
+  - Added new window layouts.
+  - Polygonal surfaces are represented using the OpenMesh library from now.
+  - Added export of polygonal surfaces into STL files.  
+  - Fully functional Linux version.  
+  - Several bugfixes.
+
+3DimViewer Version 1.4 (2011/10/30):
+  - Cutting plane in the volume rendering added.
+  - Fixed bugs in DICOM import.
+  - Added support for multi-frame DICOM files produced by Planmeca dental CT.
+  - Orthogonal slices (XY, XZ and YZ) has been renamed to more common axial,
+    coronal and sagittal slice.
+  - On screen widgets support added.
+  - Widgets that show information on loaded DICOM data, orientation of the 3D
+    scene and scale of the scene directly added.
+    on the screen.
+  - Application switches to the default manipulation mode when focus lost.
+  - Found and fixed mouse wheel zooming bug.
+  - Undo data size computation bug resolved. 
+  - Found and corrected bug in region volume initialization after data load.  
+  - Undo engine modifications and bug corrections (memory leaks,
+    multi-snapshots, etc.).
+  - Fixed flickering when the application window is resizing.
+  - Fixed bug in toolbars drawing.
+  (Linux specific)
+  - Corrected bug in locales that causes its wrong functionality.
+  - Preview of DICOM datasets when loading DICOM data has been fixed.
+  - Help window works fine now (wxHtmlWindow::LoadFile()).
+  - Minor changes and bugfixes.
+
+3DimViewer Version 1.3 (2011/05/19):
+  - Licensing policy has been changed. The viewer is now available to public
+    under MPL open source license!
+  - 3DimViewer has been successfully ported to Linux! Almost all parts (95%)
+    of the viewer are fully functional.
+  - Fixed bug in region volume initialization after loading new dataset.
+  - Corrected mouse wheel zooming bug.
+  - Application switches to the default manipulation mode when focus is lost.
+  - Undo engine modifications and bug corrections.
+  - Several minor changes.
+
+3DimViewer Version 1.2 (2011/03/11):
+  - Minor changes and bugfixes.
+
+3DimViewer Version 1.1 (2011/02/24):
+  - Improvements and bugfixes in plugin activation process.
+
+3DimViewer Version 1.0 (2011/02/19):
+  - New volume rendering based on routines by Jiri Vadura providing better
+    functionality and more fetures than before.
+  - Modified DICOM import which supports an arbitrary oriented image plane.
+  - Many important bug fixes and other minor changes.
+
+3DimViewer Version 0.6 Beta (2010/04/01):
+  - Fixed bug in DICOM import (series vs. study identifier).
+  - Modified internal data management consumes less memory then before.
+  - Several minor changes in loadable plugins support.
+
+3DimViewer Version 0.5 Beta (2010/03/05):
+  - Completely remade DICOM import that supports uncompressed and compressed
+    data. Many thanks to the authors of the DCMTk toolkit.
+  - Added support for dynamically loadable plugins.
+  - Added distance and density measuring tools.
+  - A new DataExpress service can be used to send us CT data.
+  - Many minor changes and bug fixes.
+
+3DimViewer Version 0.4 Beta (2009/07/14):
+  - Corrected bugs in volume rendering. Modified shaders performs good
+    on both NVidia graphic cards and ATI cards.
+  - Added few image filtering functions.
+  - A new option enabling error logging can be found in preferences.
+  - Several minor changes.
+
+3DimViewer Version 0.3 Beta (not released):
+  - New volume rendering routines accelerated via OpenGL shaders. Many
+    thanks to Jiri Vadura.
+  - Added toolbar buttons for hiding orthogonal slices in 3D scene.
+
+3DimViewer Version 0.2 Beta (2008/12/12):
+  - DICOM import routine has been modified. It no longer recognizes DICOM file
+    by the .dcm extension, but only by its content.
+  - Several minor bug fixes. 
+
+3DimViewer Version 0.1 Beta (2008/11/28):
+  - First version of the viewer...
+
+================================================================================
+

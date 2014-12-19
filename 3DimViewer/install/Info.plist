@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.3dimlaboratory.3DimViewer</string>
+	<key>CFBundleName</key>
+	<string>3DimViewer</string>
+	<key>CFBundleExecutable</key>
+	<string>3DimViewer</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleDisplayName</key>
+	<string>3DimViewer</string>
+	<key>CFBundleVersion</key>
+	<string>2.1</string>
+	<key>CFBundleShortVersionString</key>
+	<string>2.1</string>
+	<key>CFBundleIconFile</key>
+	<string>3DimViewer.icns</string>
+	<key>CFBundleDocumentTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeExtensions</key>
+			<array>
+				<string>vlm</string>
+			</array>
+			<key>CFBundleTypeName</key>
+			<string>3DimViewer File</string>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleTypeIconFile</key>
+			<string>3DimViewer.icns</string>
+			<key>LSHandlerRank</key>
+			<string>Owner</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>public.archive</string>
+				<string>public.data</string>
+				<string>public.content</string>
+			</array>
+			<key>NSExportableTypes</key>
+			<array>
+				<string>public.archive</string>
+				<string>public.data</string>
+				<string>public.content</string>
+			</array>
+		</dict>
+	</array>
+	<key>UTExportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeIdentifier</key>
+			<string>public.archive</string>
+			<key>UTTypeReferenceURL</key>
+			<string>http://www.3dim-laboratory.com</string>
+			<key>UTTypeDescription</key>
+			<string>3DimViewer File</string>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.content</string>
+				<string>public.data</string>
+				<string>public.archive</string>
+			</array>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>com.apple.ostype</key>
+				<string>public.archive</string>
+				<key>public.filename-extension</key>
+				<array>
+					<string>vlm</string>
+				</array>
+			</dict>
+		</dict>
+	</array>
+</dict>
+</plist>

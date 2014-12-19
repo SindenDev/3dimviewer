@@ -1,0 +1,123 @@
+#===============================================================================
+# $Id: InstallMacros.txt 1283 2011-04-28 11:26:26Z spanel $
+#
+# 3DimViewer
+# Lightweight 3D DICOM viewer.
+#
+# Copyright 2008-2012 3Dim Laboratory s.r.o.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+#===============================================================================
+
+#-------------------------------------------------------------------------------
+# Install shaders
+
+macro( INSTALL_SHADERS )
+  FILE( GLOB files "${CMAKE_CURRENT_SOURCE_DIR}/shaders/*.frag" "${CMAKE_CURRENT_SOURCE_DIR}/shaders/*.rgba" "${CMAKE_CURRENT_SOURCE_DIR}/shaders/*.gray" "${CMAKE_CURRENT_SOURCE_DIR}/shaders/*.vert")
+  install(FILES ${files} DESTINATION shaders)
+endmacro( INSTALL_SHADERS )
+
+#-------------------------------------------------------------------------------
+# Install shaders 2
+
+macro( INSTALL_SHADERS2 )
+  FILE( GLOB files "${CMAKE_CURRENT_SOURCE_DIR}/shaders2/*.frag" "${CMAKE_CURRENT_SOURCE_DIR}/shaders2/*.rgba" "${CMAKE_CURRENT_SOURCE_DIR}/shaders2/*.gray" "${CMAKE_CURRENT_SOURCE_DIR}/shaders2/*.vert")
+  install(FILES ${files} DESTINATION shaders2)
+endmacro( INSTALL_SHADERS2 )
+
+#-------------------------------------------------------------------------------
+# Install locale
+
+macro( INSTALL_LOCALE )
+#  FILE( GLOB files "${CMAKE_CURRENT_SOURCE_DIR}/locale/?*.*" )
+#  install(FILES ${files} DESTINATION locale)
+  
+  FILE( GLOB files "${CMAKE_CURRENT_SOURCE_DIR}/locale/cs/?*.*" )
+  install(FILES ${files} DESTINATION locale/cs)
+  
+  FILE( GLOB files "${CMAKE_CURRENT_SOURCE_DIR}/locale/en/?*.*" )
+  install(FILES ${files} DESTINATION locale/en)
+endmacro( INSTALL_LOCALE )
+
+#-------------------------------------------------------------------------------
+# Install qt translations
+
+macro( INSTALL_TRANSLATIONS )  
+  FILE( GLOB files "${CMAKE_CURRENT_BINARY_DIR}/?*.qm" )
+  install(FILES ${files} DESTINATION locale)
+endmacro( INSTALL_TRANSLATIONS )
+
+#-------------------------------------------------------------------------------
+# Install implants
+
+macro( INSTALL_IMPLANTS )
+  FILE( GLOB files "${CMAKE_CURRENT_SOURCE_DIR}/implants/?*.*" )
+  install(FILES ${files} DESTINATION implants)
+  
+  FILE( GLOB files "${CMAKE_CURRENT_SOURCE_DIR}/implants/images/?*.*" )
+  install(FILES ${files} DESTINATION implants/images) 
+endmacro( INSTALL_IMPLANTS )
+
+#-------------------------------------------------------------------------------
+# Install images
+
+macro( INSTALL_IMAGES )
+  FILE( GLOB files "${CMAKE_CURRENT_SOURCE_DIR}/images/?*.*" )
+  install(FILES ${files} DESTINATION images)
+endmacro( INSTALL_IMAGES )
+
+#-------------------------------------------------------------------------------
+# Install models
+
+macro( INSTALL_MODELS )
+  FILE( GLOB files "${CMAKE_CURRENT_SOURCE_DIR}/models/?*.*" )
+  install(FILES ${files} DESTINATION models)
+endmacro( INSTALL_MODELS )
+
+#-------------------------------------------------------------------------------
+# Install icons
+
+macro( INSTALL_ICONS )
+  FILE( GLOB files "${CMAKE_CURRENT_SOURCE_DIR}/icons/?*.*" )
+  install(FILES ${files} DESTINATION icons)
+endmacro( INSTALL_ICONS )
+
+#-------------------------------------------------------------------------------
+# Install documentation
+
+macro( INSTALL_DOCS )
+  FILE( GLOB files "${CMAKE_CURRENT_SOURCE_DIR}/doc/?*.*" )
+  install(FILES ${files} DESTINATION doc)
+endmacro( INSTALL_DOCS )
+
+#-------------------------------------------------------------------------------
+# Install fonts
+
+macro( INSTALL_FONTS )
+  FILE( GLOB files "${CMAKE_CURRENT_SOURCE_DIR}/fonts/?*.*" )
+  install(FILES ${files} DESTINATION fonts)
+endmacro( INSTALL_FONTS )
+
+#-------------------------------------------------------------------------------
+# Install application data
+
+macro( INSTALL_APP_DATA )
+#  INSTALL_SHADERS()
+  INSTALL_LOCALE()
+  INSTALL_MODELS()
+  INSTALL_IMAGES()
+  INSTALL_ICONS()
+  INSTALL_DOCS()
+endmacro( INSTALL_APP_DATA )
+

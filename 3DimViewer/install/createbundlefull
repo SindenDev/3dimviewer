@@ -1,0 +1,118 @@
+#!/bin/sh
+# 3DimViewer app bundle creation
+
+# source did path
+SRCPATH=..
+BUNDLEPATH=./3DimViewer.app
+LIBPATH=/usr/local/lib
+THREEDIMAPP=$BUNDLEPATH/Contents/MacOS/3DimViewer
+
+# copy binary to destination directory
+mkdir -p $BUNDLEPATH/Contents/MacOS
+cp $SRCPATH/bin/3DimViewer $THREEDIMAPP
+
+# change relative references in app binary to absolute ones
+install_name_tool -change "libOpenThreads.12.dylib" "$LIBPATH/libOpenThreads.12.dylib" $THREEDIMAPP
+install_name_tool -change "libosg.91.dylib" "$LIBPATH/libosg.91.dylib" $THREEDIMAPP
+install_name_tool -change "libosgUtil.91.dylib" "$LIBPATH/libosgUtil.91.dylib" $THREEDIMAPP
+install_name_tool -change "libosgDB.91.dylib" "$LIBPATH/libosgDB.91.dylib" $THREEDIMAPP
+install_name_tool -change "libosgText.91.dylib" "$LIBPATH/libosgText.91.dylib" $THREEDIMAPP
+install_name_tool -change "libosgTerrain.91.dylib" "$LIBPATH/libosgTerrain.91.dylib" $THREEDIMAPP
+install_name_tool -change "libosgFX.91.dylib" "$LIBPATH/libosgFX.91.dylib" $THREEDIMAPP
+install_name_tool -change "libosgViewer.91.dylib" "$LIBPATH/libosgViewer.91.dylib" $THREEDIMAPP
+install_name_tool -change "libosgGA.91.dylib" "$LIBPATH/libosgGA.91.dylib" $THREEDIMAPP
+install_name_tool -change "libosgManipulator.91.dylib" "$LIBPATH/libosgManipulator.91.dylib" $THREEDIMAPP
+install_name_tool -change "libosgWidget.91.dylib" "$LIBPATH/libosgWidget.91.dylib" $THREEDIMAPP
+
+# copy plugins - DataExpress and GaugePlugin
+mkdir -p $BUNDLEPATH/Contents/PlugIns
+cp $SRCPATH/plugins/libDataExpressPlugin.dylib $BUNDLEPATH/Contents/PlugIns/libDataExpressPlugin.dylib
+cp $SRCPATH/plugins/libGaugePlugin.dylib $BUNDLEPATH/Contents/PlugIns/libGaugePlugin.dylib
+cp $SRCPATH/plugins/libAutoSegPlugin.dylib $BUNDLEPATH/Contents/PlugIns/libAutoSegPlugin.dylib
+cp $SRCPATH/plugins/libManualSegPlugin.dylib $BUNDLEPATH/Contents/PlugIns/libManualSegPlugin.dylib
+cp $SRCPATH/plugins/libManualSeg3dPlugin.dylib $BUNDLEPATH/Contents/PlugIns/libManualSeg3dPlugin.dylib
+cp $SRCPATH/plugins/libModelCreatePlugin.dylib $BUNDLEPATH/Contents/PlugIns/libModelCreatePlugin.dylib
+cp $SRCPATH/plugins/libRegionControlPlugin.dylib $BUNDLEPATH/Contents/PlugIns/libRegionControlPlugin.dylib
+cp $SRCPATH/plugins/libLookupTableEditorPlugin.dylib $BUNDLEPATH/Contents/PlugIns/libLookupTableEditorPlugin.dylib
+# TODO: fix library references in plugins
+
+# copy additional files that wouldn't be copied by macdeployqt - resources etc
+mkdir -p $BUNDLEPATH/Contents/doc
+#cp $SRCPATH/install/ChangeLog.txt $BUNDLEPATH/Contents/doc/ChangeLog.txt
+cp $SRCPATH/install/3rdParty.txt $BUNDLEPATH/Contents/doc/3rdParty.txt
+cp $SRCPATH/install/license.txt $BUNDLEPATH/Contents/doc/license.txt
+cp $SRCPATH/install/plugin_license-English.txt $BUNDLEPATH/Contents/doc/plugin_license-English.txt
+
+rsync -cP --exclude=.svn $SRCPATH/doc/* $BUNDLEPATH/Contents/doc
+rsync -cP --exclude=.svn $SRCPATH/icons/* $BUNDLEPATH/Contents/icons
+rsync -cP --exclude=.svn $SRCPATH/fonts/* $BUNDLEPATH/Contents/fonts
+#rsync -cP --exclude=.svn $SRCPATH/styles/* $BUNDLEPATH/Contents/styles
+rsync -cP --exclude=.svn $SRCPATH/models/* $BUNDLEPATH/Contents/models
+rsync -cP --exclude=.svn $SRCPATH/locale/* $BUNDLEPATH/Contents/locale
+
+cp ./Info.plist $BUNDLEPATH/Contents/Info.plist
+mkdir $BUNDLEPATH/Contents/Resources
+cp ./3DimViewer.icns $BUNDLEPATH/Contents/Resources/3DimViewer.icns 
+
+# copy some missing files that macdeployqt won't handle
+mkdir $BUNDLEPATH/Contents/Frameworks
+cp $LIBPATH/OpenMesh/libOpenMeshCore.2.2.dylib $BUNDLEPATH/Contents/Frameworks/libOpenMeshCore.2.2.dylib
+cp $LIBPATH/OpenMesh/libOpenMeshTools.2.2.dylib $BUNDLEPATH/Contents/Frameworks/libOpenMeshTools.2.2.dylib
+cp $LIBPATH/libfreetype.6.dylib $BUNDLEPATH/Contents/Frameworks/libfreetype.6.dylib
+cp /usr/lib/libGLEW.1.9.0.dylib $BUNDLEPATH/Contents/Frameworks/libGLEW.1.9.0.dylib
+cp /usr/lib/libssl.0.9.8.dylib $BUNDLEPATH/Contents/Frameworks/libssl.0.9.8.dylib
+cp /usr/lib/libcrypto.0.9.8.dylib $BUNDLEPATH/Contents/Frameworks/libcrypto.0.9.8.dylib
+cp /usr/lib/libz.1.dylib $BUNDLEPATH/Contents/Frameworks/libz.1.dylib
+cp /usr/lib/libiconv.2.dylib $BUNDLEPATH/Contents/Frameworks/libiconv.2.dylib
+
+# adjust paths in them
+install_name_tool -change $LIBPATH/OpenMesh/libOpenMeshCore.2.2.dylib @executable_path/../Frameworks/libOpenMeshCore.2.2.dylib $BUNDLEPATH/Contents/Frameworks/libOpenMeshTools.2.2.dylib
+install_name_tool -change /usr/lib/libcrypto.0.9.8.dylib @executable_path/../Frameworks/libcrypto.0.9.8.dylib $BUNDLEPATH/Contents/Frameworks/libssl.0.9.8.dylib
+install_name_tool -change /usr/lib/libz.1.dylib @executable_path/../Frameworks/libz.1.dylib $BUNDLEPATH/Contents/Frameworks/libcrypto.0.9.8.dylib
+
+# change relative references in app binary to absolute ones
+install_name_tool -change $LIBPATH/OpenMesh/libOpenMeshCore.2.2.dylib @executable_path/../Frameworks/libOpenMeshCore.2.2.dylib $THREEDIMAPP
+install_name_tool -change $LIBPATH/OpenMesh/libOpenMeshTools.2.2.dylib @executable_path/../Frameworks/libOpenMeshTools.2.2.dylib $THREEDIMAPP
+install_name_tool -change /usr/lib/libGLEW.1.9.0.dylib @executable_path/../Frameworks/libGLEW.1.9.0.dylib $THREEDIMAPP
+install_name_tool -change /usr/lib/libssl.0.9.8.dylib @executable_path/../Frameworks/libssl.0.9.8.dylib $THREEDIMAPP
+install_name_tool -change /usr/lib/libcrypto.0.9.8.dylib @executable_path/../Frameworks/libcrypto.0.9.8.dylib $THREEDIMAPP
+install_name_tool -change /usr/lib/libz.1.dylib @executable_path/../Frameworks/libz.1.dylib $THREEDIMAPP
+install_name_tool -change /usr/lib/libiconv.2.dylib @executable_path/../Frameworks/libiconv.2.dylib $THREEDIMAPP
+
+# copy missing osg plugins 
+OSGPLUGINS=osgPlugins-3.1.1
+mkdir $BUNDLEPATH/Contents/PlugIns
+cp $LIBPATH/$OSGPLUGINS/osgdb_freetype.so $BUNDLEPATH/Contents/PlugIns/osgdb_freetype.so
+cp $LIBPATH/$OSGPLUGINS/osgdb_bmp.so $BUNDLEPATH/Contents/PlugIns/osgdb_bmp.so
+cp $LIBPATH/$OSGPLUGINS/osgdb_imageio.so $BUNDLEPATH/Contents/PlugIns/osgdb_imageio.so
+cp $LIBPATH/$OSGPLUGINS/osgdb_stl.so $BUNDLEPATH/Contents/PlugIns/osgdb_stl.so
+
+install_name_tool -change "libosg.91.dylib" "@executable_path/../Frameworks/libosg.91.dylib" $BUNDLEPATH/Contents/PlugIns/osgdb_freetype.so
+install_name_tool -change "libosgDB.91.dylib" "@executable_path/../Frameworks/libosgDB.91.dylib" $BUNDLEPATH/Contents/PlugIns/osgdb_freetype.so
+install_name_tool -change "libosgUtil.91.dylib" "@executable_path/../Frameworks/libosgUtil.91.dylib" $BUNDLEPATH/Contents/PlugIns/osgdb_freetype.so
+install_name_tool -change "libosgText.91.dylib" "@executable_path/../Frameworks/libosgText.91.dylib" $BUNDLEPATH/Contents/PlugIns/osgdb_freetype.so
+install_name_tool -change "libOpenThreads.12.dylib" "@executable_path/../Frameworks/libOpenThreads.12.dylib" $BUNDLEPATH/Contents/PlugIns/osgdb_freetype.so
+install_name_tool -change "$LIBPATH/libfreetype.6.dylib" "@executable_path/../Frameworks/libfreetype.6.dylib" $BUNDLEPATH/Contents/PlugIns/osgdb_freetype.so
+install_name_tool -change "/usr/lib/libz.1.dylib" "@executable_path/../Frameworks/libz.1.dylib" $BUNDLEPATH/Contents/PlugIns/osgdb_freetype.so
+
+install_name_tool -change "libosg.91.dylib" "@executable_path/../Frameworks/libosg.91.dylib" $BUNDLEPATH/Contents/PlugIns/osgdb_bmp.so
+install_name_tool -change "libosgDB.91.dylib" "@executable_path/../Frameworks/libosgDB.91.dylib" $BUNDLEPATH/Contents/PlugIns/osgdb_bmp.so
+install_name_tool -change "libosgUtil.91.dylib" "@executable_path/../Frameworks/libosgUtil.91.dylib" $BUNDLEPATH/Contents/PlugIns/osgdb_bmp.so
+install_name_tool -change "libOpenThreads.12.dylib" "@executable_path/../Frameworks/libOpenThreads.12.dylib" $BUNDLEPATH/Contents/PlugIns/osgdb_bmp.so
+install_name_tool -change "/usr/lib/libz.1.dylib" "@executable_path/../Frameworks/libz.1.dylib" $BUNDLEPATH/Contents/PlugIns/osgdb_bmp.so
+
+install_name_tool -change "libosg.91.dylib" "@executable_path/../Frameworks/libosg.91.dylib" $BUNDLEPATH/Contents/PlugIns/osgdb_imageio.so
+install_name_tool -change "libosgDB.91.dylib" "@executable_path/../Frameworks/libosgDB.91.dylib" $BUNDLEPATH/Contents/PlugIns/osgdb_imageio.so
+install_name_tool -change "libosgUtil.91.dylib" "@executable_path/../Frameworks/libosgUtil.91.dylib" $BUNDLEPATH/Contents/PlugIns/osgdb_imageio.so
+install_name_tool -change "libOpenThreads.12.dylib" "@executable_path/../Frameworks/libOpenThreads.12.dylib" $BUNDLEPATH/Contents/PlugIns/osgdb_imageio.so
+install_name_tool -change "/usr/lib/libz.1.dylib" "@executable_path/../Frameworks/libz.1.dylib" $BUNDLEPATH/Contents/PlugIns/osgdb_imageio.so
+
+install_name_tool -change "libosg.91.dylib" "@executable_path/../Frameworks/libosg.91.dylib" $BUNDLEPATH/Contents/PlugIns/osgdb_stl.so
+install_name_tool -change "libosgDB.91.dylib" "@executable_path/../Frameworks/libosgDB.91.dylib" $BUNDLEPATH/Contents/PlugIns/osgdb_stl.so
+install_name_tool -change "libosgUtil.91.dylib" "@executable_path/../Frameworks/libosgUtil.91.dylib" $BUNDLEPATH/Contents/PlugIns/osgdb_stl.so
+install_name_tool -change "libOpenThreads.12.dylib" "@executable_path/../Frameworks/libOpenThreads.12.dylib" $BUNDLEPATH/Contents/PlugIns/osgdb_stl.so
+install_name_tool -change "/usr/lib/libz.1.dylib" "@executable_path/../Frameworks/libz.1.dylib" $BUNDLEPATH/Contents/PlugIns/osgdb_stl.so
+
+# run mac deploy utility (set verbose to 2 for more information, add -dmg for dmg creation)
+#macdeployqt $BUNDLEPATH -verbose=1 -dmg
+macdeployqt $BUNDLEPATH -verbose=1
