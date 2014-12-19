@@ -18,11 +18,11 @@ include( ${CMAKE_SOURCE_DIR}/CMakeModules/LibraryMacros.txt )
 include( ${CMAKE_SOURCE_DIR}/CMakeModules/PluginMacros.txt )
 include( ${CMAKE_SOURCE_DIR}/CMakeModules/InstallMacros.txt )
 
-
-
 #-------------------------------------------------------------------------------
 # Choose applications you want to compile
 option( BUILD_3DimViewer "Should 3DimViewer be built?" ON )
+
+set( _num_of_apps 0 )
 
 if( BUILD_3DimViewer )
     math( EXPR _num_of_apps "${_num_of_apps} + 1" )

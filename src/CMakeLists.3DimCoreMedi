@@ -20,7 +20,7 @@
 #
 #===============================================================================
 
-ADD_3DIM_LIB_TARGET( ${ICE_TRIANGULATION_LIB} )
+#ADD_3DIM_LIB_TARGET( ${ICE_TRIANGULATION_LIB} )
 
 
 # Create library
