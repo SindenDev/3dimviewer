@@ -53,7 +53,7 @@ endif(APPLE)
 #-------------------------------------------------------------------------------
 # Options
 
-set( QT3DIMVIEWER_PATH ${TRIDIM_EXECUTABLES_PATH}/3DimViewerQt )
+set( QT3DIMVIEWER_PATH ${TRIDIM_EXECUTABLES_PATH}/3DimViewer )
 set( QT3DIMVIEWER_INCLUDE include )
 set( QT3DIMVIEWER_SRC src )
 set( QT3DIMVIEWER_UI ui )
