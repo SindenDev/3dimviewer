@@ -197,7 +197,7 @@ add_definitions( -DPLUGIN_VIEWER_3DIM )
 # Add plugins
 ADD_3DIM_QTPLUGIN_TARGET( ${TRIDIM_GAUGE_PLUGIN} )
 ADD_3DIM_QTPLUGIN_TARGET( ${TRIDIM_DEMO_PLUGIN} )
-
+ADD_NON_OSS_PLUGINS()
 endif( BUILD_PLUGINS )
 
 #-------------------------------------------------------------------------------
