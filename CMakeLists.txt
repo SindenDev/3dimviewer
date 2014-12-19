@@ -285,16 +285,27 @@ endif( BUILDING_QT_APP )
 set( TRIDIM_LIBRARIES_INCLUDE_PATH ${CMAKE_SOURCE_DIR}/include )
 set( TRIDIM_LIBRARIES_SOURCE_PATH ${CMAKE_SOURCE_DIR}/src )
 
+# 3Dim executables and plugins path
+set( TRIDIM_EXECUTABLES_PATH ${CMAKE_SOURCE_DIR})
+if( BUILDING_QT_APP )
+  set( TRIDIM_PLUGINS_PATH ${CMAKE_SOURCE_DIR}/plugins )
+  set( TRIDIM_OSS_PLUGINS_PATH ${CMAKE_SOURCE_DIR}/plugins )
+else( BUILDING_QT_APP )
+  # ${CMAKE_SOURCE_DIR}/plugins is not available anymore
+endif( BUILDING_QT_APP )
+
 #-------------------------------------------------------------------------------
 # Names of all 3Dim libraries and plugins
 
 # 3Dim libraries
-set( TRIDIM_ADV_LIB 3DimAdv )
+#set( TRIDIM_ADV_LIB 3DimAdv )
+set( TRIDIM_ADVQT_LIB 3DimAdvQt )
 set( TRIDIM_CORE_LIB 3DimCore )
 set( TRIDIM_COREMEDI_LIB 3DimCoreMedi )
 set( TRIDIM_GRAPH_LIB 3DimGraph )
 set( TRIDIM_GRAPHMEDI_LIB 3DimGraphMedi )
 set( TRIDIM_GUIQT_LIB 3DimGuiQt )
+set( TRIDIM_GUIQTMEDI_LIB 3DimGuiQtMedi )
 
 # 3Dim plugins
 set( TRIDIM_DEMO_PLUGIN DemoPlugin )

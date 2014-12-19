@@ -49,7 +49,7 @@ ADD_3DIM_LIB_TARGET( ${TRIDIM_GUIQTMEDI_LIB} )
 #-------------------------------------------------------------------------------
 # Add Headers and Sources
 
-ADD_PLUGIN_HEADER_DIRECTORY( ${TRIDIM_THIS_PLUGIN_PATH}${TRIDIM_THIS_PLUGIN_INCLUDE} )
+ADD_PLUGIN_HEADER_DIRECTORY( ${TRIDIM_THIS_PLUGIN_PATH}${TRIDIM_THIS_PLUGIN_INCLUDE} )  
 ADD_PLUGIN_SOURCE_DIRECTORY( ${TRIDIM_THIS_PLUGIN_PATH}${TRIDIM_THIS_PLUGIN_SRC} )
 
 #-------------------------------------------------------------------------------
