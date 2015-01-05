@@ -1,0 +1,315 @@
+Required 3rd Party Libraries
+----------------------------
+
+- Qt Toolkit (http://qt.nokia.com/products/)
+- OpenSceneGraph library (http://www.openscenegraph.org)
+- VPL toolkit (https://bitbucket.org/3dimlab/vpl)
+- OpenMesh (http://www.openmesh.org/)
+- The OpenGL Extension Wrangler Library (http://glew.sourceforge.net/)
+- DCMTk toolkit (http://dicom.offis.de/dcmtk)
+- cURL library (http://curl.haxx.se/)
+- OpenSSL Toolkit (http://www.openssl.org/)
+- Zlib library (http://www.zlib.net/)
+
+
+Qt Toolkit
+----------
+
+Copyright (C) 2011 Nokia Corporation and/or its subsidiary(-ies).
+All rights reserved.
+Contact: Nokia Corporation (qt-info@nokia.com)
+
+This file is part of the QtCore module of the Qt Toolkit.
+
+GNU Lesser General Public License Usage
+This file may be used under the terms of the GNU Lesser General Public
+License version 2.1 as published by the Free Software Foundation and
+appearing in the file LICENSE.LGPL included in the packaging of this
+file. Please review the following information to ensure the GNU Lesser
+General Public License version 2.1 requirements will be met:
+http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+
+In addition, as a special exception, Nokia gives you certain additional
+rights. These rights are described in the Nokia Qt LGPL Exception
+version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+
+GNU General Public License Usage
+Alternatively, this file may be used under the terms of the GNU General
+Public License version 3.0 as published by the Free Software Foundation
+and appearing in the file LICENSE.GPL included in the packaging of this
+file. Please review the following information to ensure the GNU General
+Public License version 3.0 requirements will be met:
+http://www.gnu.org/copyleft/gpl.html.
+
+Other Usage
+Alternatively, this file may be used in accordance with the terms and
+conditions contained in a signed written agreement between you and Nokia.
+
+Nokia Qt LGPL Exception version 1.1
+
+As an additional permission to the GNU Lesser General Public License version
+2.1, the object code form of a "work that uses the Library" may incorporate
+material from a header file that is part of the Library.  You may distribute
+such object code under terms of your choice, provided that:
+    (i)   the header files of the Library have not been modified; and 
+    (ii)  the incorporated material is limited to numerical parameters, data
+          structure layouts, accessors, macros, inline functions and
+          templates; and
+    (iii) you comply with the terms of Section 6 of the GNU Lesser General
+          Public License version 2.1.
+
+Moreover, you may apply this exception to a modified version of the Library,
+provided that such modification does not involve copying material from the
+Library into the modified Library's header files unless such material is
+limited to (i) numerical parameters; (ii) data structure layouts;
+(iii) accessors; and (iv) small macros, templates and inline functions of
+five lines or less in length.
+
+Furthermore, you are not required to apply this additional permission to a
+modified version of the Library.
+
+
+OpenSceneGraph Public License, Version 0.0
+------------------------------------------
+                
+Copyright (C) 2002 Robert Osfield.
+
+Everyone is permitted to copy and distribute verbatim copies
+of this licence document, but changing it is not allowed.
+
+                   OPENSCENEGRAPH PUBLIC LICENCE
+ TERMS AND CONDITIONS FOR COPYING, DISTRIBUTION AND MODIFICATION
+
+This library is free software; you can redistribute it and/or modify it
+under the terms of the OpenSceneGraph Public License (OSGPL) version 0.0
+or later.
+
+Notes: the OSGPL is based on the LGPL, with the 4 exceptions laid in the wxWindows 
+section below. The LGPL in the final section of this license.
+
+
+Medical Data Segmentation Toolkit license
+-----------------------------------------
+
+Copyright (c) 2003-2011, Michal Spanel, FIT, Brno University of Technology
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+    * Redistributions of source code must retain the above copyright 
+    notice, this list of conditions and the following disclaimer.
+
+    * Redistributions in binary form must reproduce the above copyright 
+    notice, this list of conditions and the following disclaimer in the 
+    documentation and/or other materials provided with the distribution.
+
+    * Neither the name of the Brno University of Technology nor the names 
+    of its contributors may be used to endorse or promote products 
+    derived from this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" 
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
+ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE 
+LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR 
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS 
+INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) 
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE 
+POSSIBILITY OF SUCH DAMAGE.
+
+
+OpenMesh license
+----------------
+
+Copyright (C) 2001-2011 by Computer Graphics Group, RWTH Aachen
+www.openmesh.org
+
+OpenMesh is free software: you can redistribute it and/or modify 
+it under the terms of the GNU Lesser General Public License as
+published by the Free Software Foundation, either version 3 of
+the License, or (at your option) any later version with the
+following exceptions:
+
+If other files instantiate templates or use macros
+or inline functions from this file, or you compile this file and
+link it with other files to produce an executable, this file does
+not by itself cause the resulting executable to be covered by the
+GNU Lesser General Public License. This exception does not however
+invalidate any other reasons why the executable file might be
+covered by the GNU Lesser General Public License.
+
+OpenMesh is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Lesser General Public License for more details.
+
+You should have received a copy of the GNU LesserGeneral Public
+License along with OpenMesh.  If not,
+see <http://www.gnu.org/licenses/>.
+
+
+The OpenGL Extension Wrangler Library
+-------------------------------------
+
+Copyright (C) 2002-2007, Milan Ikits <milan ikits[]ieee org>
+Copyright (C) 2002-2007, Marcelo E. Magallon <mmagallo[]debian org>
+Copyright (C) 2002, Lev Povalahev
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without 
+modification, are permitted provided that the following conditions are met:
+
+* Redistributions of source code must retain the above copyright notice, 
+  this list of conditions and the following disclaimer.
+* Redistributions in binary form must reproduce the above copyright notice, 
+  this list of conditions and the following disclaimer in the documentation 
+  and/or other materials provided with the distribution.
+* The name of the author may be used to endorse or promote products 
+  derived from this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" 
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE 
+LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR 
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
+THE POSSIBILITY OF SUCH DAMAGE.
+
+
+DCMTk toolkit
+-------------
+
+Copyright (C) 1998-2005, OFFIS
+
+This software and supporting documentation were developed by
+
+  Kuratorium OFFIS e.V.
+  Healthcare Information and Communication Systems
+  Escherweg 2
+  D-26121 Oldenburg, Germany
+
+THIS SOFTWARE IS MADE AVAILABLE,  AS IS,  AND OFFIS MAKES NO  WARRANTY
+REGARDING  THE  SOFTWARE,  ITS  PERFORMANCE,  ITS  MERCHANTABILITY  OR
+FITNESS FOR ANY PARTICULAR USE, FREEDOM FROM ANY COMPUTER DISEASES  OR
+ITS CONFORMITY TO ANY SPECIFICATION. THE ENTIRE RISK AS TO QUALITY AND
+PERFORMANCE OF THE SOFTWARE IS WITH THE USER.
+
+Author: Marco Eichelberg
+
+
+cURL library
+------------
+
+COPYRIGHT AND PERMISSION NOTICE
+
+Copyright (c) 1996 - 2009, Daniel Stenberg, <daniel@haxx.se>.
+
+All rights reserved.
+
+Permission to use, copy, modify, and distribute this software for any purpose
+with or without fee is hereby granted, provided that the above copyright
+notice and this permission notice appear in all copies.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT OF THIRD PARTY RIGHTS. IN
+NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
+OR OTHER DEALINGS IN THE SOFTWARE.
+
+Except as contained in this notice, the name of a copyright holder shall not
+be used in advertising or otherwise to promote the sale, use or other dealings
+in this Software without prior written authorization of the copyright holder.
+
+
+OpenSSL library
+---------------
+
+The OpenSSL toolkit stays under a dual license, i.e. both the conditions of
+the OpenSSL License and the original SSLeay license apply to the toolkit.
+See below for the actual license texts. Actually both licenses are BSD-style
+Open Source licenses. In case of any license issues related to OpenSSL
+please contact openssl-core@openssl.org.
+
+Copyright (c) 1998-2008 The OpenSSL Project.  All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions
+are met:
+
+1. Redistributions of source code must retain the above copyright
+notice, this list of conditions and the following disclaimer. 
+
+2. Redistributions in binary form must reproduce the above copyright
+notice, this list of conditions and the following disclaimer in
+the documentation and/or other materials provided with the
+distribution.
+
+3. All advertising materials mentioning features or use of this
+software must display the following acknowledgment:
+"This product includes software developed by the OpenSSL Project
+for use in the OpenSSL Toolkit. (http://www.openssl.org/)"
+
+4. The names "OpenSSL Toolkit" and "OpenSSL Project" must not be used to
+endorse or promote products derived from this software without
+prior written permission. For written permission, please contact
+openssl-core@openssl.org.
+
+5. Products derived from this software may not be called "OpenSSL"
+nor may "OpenSSL" appear in their names without prior written
+permission of the OpenSSL Project.
+
+6. Redistributions of any form whatsoever must retain the following
+acknowledgment:
+"This product includes software developed by the OpenSSL Project
+for use in the OpenSSL Toolkit (http://www.openssl.org/)"
+
+THIS SOFTWARE IS PROVIDED BY THE OpenSSL PROJECT ``AS IS'' AND ANY
+EXPRESSED OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE OpenSSL PROJECT OR
+ITS CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
+NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
+OF THE POSSIBILITY OF SUCH DAMAGE.
+
+This product includes cryptographic software written by Eric Young
+(eay@cryptsoft.com).  This product includes software written by Tim
+Hudson (tjh@cryptsoft.com).
+
+
+ZLib library, version 1.2.3, July 18th, 2005
+--------------------------------------------
+
+Copyright (C) 1995-2005 Jean-loup Gailly and Mark Adler
+
+This software is provided 'as-is', without any express or implied
+warranty.  In no event will the authors be held liable for any damages
+arising from the use of this software.
+
+Permission is granted to anyone to use this software for any purpose,
+including commercial applications, and to alter it and redistribute it
+freely, subject to the following restrictions:
+
+1. The origin of this software must not be misrepresented; you must not
+ claim that you wrote the original software. If you use this software
+ in a product, an acknowledgment in the product documentation would be
+ appreciated but is not required.
+2. Altered source versions must be plainly marked as such, and must not be
+ misrepresented as being the original software.
+3. This notice may not be removed or altered from any source distribution.
+
+Jean-loup Gailly        Mark Adler
+jloup@gzip.org          madler@alumni.caltech.edu

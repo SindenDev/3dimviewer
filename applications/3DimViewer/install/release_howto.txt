@@ -1,0 +1,72 @@
+Postup jak spachat novy binarni release 3DimVieweru
+---------------------------------------------------
+
+1) Upravit ChangeLog.txt
+   - Doplnit cislo nove verze
+   - Pridat datum vydani
+
+2) Upravit cislo verze v aplikaci
+   - DentalViewer.pjd - nazev aplikace, ID_MAIN_FRAME, option Title
+   - vyhledat wxAboutDialogInfo v CMainFrame.cpp a upravit
+   - v CMainApp.cpp upravit makro
+     DECLARE_PRODUCT_INFO("3DimViewer", ?, ?, app::EMPTY_NOTE);
+
+3) Upravit ChangeLog.txt a cisla verze pluginu (je-li treba)
+   - do ChangeLog.txt doplnit cislo verze a datum vydani
+   - upravit definici makra v xyzPlugin.cpp
+     DECLARE_LICENSED_PLUGIN(...)
+
+4) Pregenerovat a dopsat lokalizace textu
+   Pozn.: Locales jsou prozatim spolecne pro vsechny nase applikace!
+   - Spustit MSYS shell
+   - cd do adresare applications/3DimViewer/locale
+   - spustit cmd.sh (nastavuje cesty ke gettext)
+   - spustit generate_all.sh
+     (prohleda zdrojaky a vygeneruje list.txt a 3DimViewer.po textak)
+   - spustit merge_all.sh
+     (merge nove nalezenych textu se starymi preklady v podadresarich)
+   - ZEDITOVAT preklady vsech textu pro vsechny jazyky
+     (soubory .po v podadresarich cs/ apod.)
+   - prekompilovat do binarni podoby
+     compile_all.sh
+   - Rozkopirovat .mo a .po soubory do ostatnich projektu
+
+5) Prelozit solution v releasu, vcetne pluginu (radeji vse kompletne znova)
+
+6) Upravit konfiguracni soubor pro tvorbu instalatoru (pomoci InnoSetup)
+   - v adresari applications/3DimViewer/3DimViewer.iss
+   - je treba hlavne upravit cislo verze aplikace (pozor je na vice mistech!)
+   - pripadne pridat nove ikony, dll-ka, apod.
+
+7) Upravit instalatory pluginu
+   - v adresari applications/3DimViewer/...
+
+7) Vygenerovat instalator pro viewer a pro pluginy
+
+8) Otestovat instalator a zakladni fce programu na cistych windowsech!!!
+   - Doporucuji VirtualBox
+   - Minimalne WinXP, WinVista a Win7
+
+--
+
+9) Upravit PAD file (popis pro webove servery pro "stahovani software")
+
+10) Nakopirovat nove verze na web server
+
+11) Upravit stranky
+
+12) Pridat info na web do News sekce
+
+
+Postup jak spachat novy source release 3DimVieweru
+--------------------------------------------------
+
+13) Pregenerovat Doxygen dokumentaci (Doxygen, HTML Help Workshop, GraphViz)
+    - doc/Doxygen/3DimViewer.dox
+    - upravit verzi programu/dokumentace
+    - pregenerovat...
+
+14) Upravit popis instalace
+    - doc/Installation.html
+    - upravit aktualne pouzivane verze programu
+

@@ -1,0 +1,4 @@
+#!/bin/sh
+# 3DimViewer pkg creation
+
+/usr/local/bin/packagesbuild -v ./3DimViewer.pkgproj
