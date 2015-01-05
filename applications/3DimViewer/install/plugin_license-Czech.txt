@@ -1,0 +1,152 @@
+Licenční smlouva k rozšiřujícím komponentám pro aplikace
+společnosti 3Dim Laboratory s.r.o.
+============================================================
+
+Toto je právní smlouva (dále "Smlouva") mezi Vámi (jakožto jednotlivcem 
+nebo zástupcem fyzické nebo právnické osoby, na jejíž počítač je software 
+instalován) a společností 3Dim Laboratory s.r.o. ("3Dim Laboratory") 
+týkající se počítačového programu ("Software"), se kterým je tato licenční 
+smlouva poskytována, včetně přidružených materiálů, elektronické 
+dokumentace, apod. Termín "Software" se také vztahuje na veškeré 
+aktualizace nebo upravené verze programu, které Vám mohou být poskytnuty 
+společností 3Dim Laboratory.
+
+Software je chráněn zákony na ochranu autorských práv a duševního 
+vlastnictví a ustanoveními mezinárodních smluv a je poskytován na základě 
+licence. Zkopírováním, instalací nebo užíváním software nebo jeho části 
+přistupujete na podmínky této smlouvy a vyjadřujete s nimi souhlas. S 
+podmínkami smlouvy nemusíte souhlasit, avšak pokud a dokud souhlas 
+nevyjádříte, Software nebudete mít právo používat.
+
+Rozšiřující komponenty
+--
+Software je v tomto případě rozšiřující komponenta (též "Plugin"), která 
+doplňuje funkcionalitu jiného software s vlastní licencí. Pluginy můžete
+instalovat a používat výhradně jen jako součást software, pro který jsou
+určeny. Nejste oprávněni používat Pluginy jakýmkoliv dalším způsobem,
+například společně s jinou aplikací. Tato licence Vás opravňuje používat
+příslušný Plugin, ale nezakládá žádné právo na užívání software, pro který
+je Plugin určen.
+
+Udělení licence
+--
+Základní licence pro jednoho uživatele umožňuje Software buď (a) 
+instalovat a používat jednou osobou, která Software používá osobně na 
+jednom nebo více počítačích (například jedna instalace doma a jedna v 
+práci používaná stejnou osobou), nebo (b) instalovat Software na jedné 
+pracovní stanici a používat jej (ne současně) více osobami. V obou 
+případech jste povinni zabezpečit dodržování licenční smlouvy případnou 
+třetí osobou, která má přístup k jím užívanému 
+Softwaru.
+
+S licencemi pro více uživatelů lze Software instalovat na více počítačů 
+nebo zpřístupnit na síti za podmínky, že Software nesmí být současně 
+používán na více počítačích než je počet uživatelů dle Vámi vlastněných 
+licencí. Kromě toho Vy a Vaši zaměstnanci můžete Software instalovat a 
+používat doma a to až do počtu uživatelů dle vlastněných 
+licencí.
+
+Licence Vás opravňuje používat všechny komponety přibalené k Software s 
+vyjímkou komponent s vlastní licencí.
+
+Doba platnosti licence
+--
+Platnost Vaší licence může být časově omezena. Při vypršení doby platnosti 
+musíte přestat Software používat, 3Dim Laboratory vám může přestat 
+poskytovat aktualizace a funkčnost Software může být ukončena. Software 
+může obsahovat funkci časového omezení, která ukončí nebo omezí jeho 
+funkčnost na konci doby platnosti licence.
+
+Prodloužení doby platnosti
+--
+3Dim Laboratory Vám může před ukončením aktuální doby platnosti licence 
+nabídnout možnost prodloužit licenci udělenou na základě této Smlouvy za 
+aktuální cenu stanovenou 3Dim Laboratory.
+
+Zkušební verze
+--
+3Dim Laboratory poskytuje k Software zkušební licensi (též "Trial
+licence"). S použitím zkušební licence můžete software nainstalovat a 
+používat pro testovací účely po dobu 30 dnů. Po uplynutí těchto 30 dnů si 
+musíte opatřit placenou licenci (pokud si přejete software dále používat) 
+nebo software odinstalovat.
+
+Doplňující licenční podmínky
+--
+Zkušební verze Software může být volně šířena za předpokladu, že 
+distribuční balík není nijak upravován. Za kopii nebo používání zkušební 
+verze Software si nejste oprávněni účtovat žádný poplatek. Můžete ale 
+účtovat distribuční poplatek, který je odpovídající ceně za distribuci 
+Software (například média, balné). V žádném případě nejste oprávněni 
+tvrdit, že licencujete nebo prodáváte Software samotný. Distribuce 
+zkušební verze Software vás neopravňuje k jakékoliv kompenzaci ze strany 
+společnosti 3Dim Laboratory.
+
+Komponenty třetích stran
+--
+Software může obsahovat komponenty třetích stran, včetně open source 
+komponent, které jsou Vám poskytovány a licencovány na základě licenčních 
+podmínek jednotlivých komponent (viz. 3rdparty.txt).
+
+Záložní kopie
+--
+Jste oprávněni vytvořit si přiměřené množství záložních kopií Software s 
+tím, že tyto záložní kopie nebudou použity k instalaci nebo k jiným než 
+archivním účelům.
+
+Omezení použití
+--
+Není-li zde uvedeno jinak, nejste oprávněni Software a jeho části používat,
+kopírovat, pronajímat, prodávat, převádět, analyzovat, dekompilovat nebo 
+jinak upravovat. Jste oprávněni převést všechna svá práva používat tento 
+Software na jinou osobu nebo subjekt za předpokladu, že (a) této osobě 
+nebo subjektu převedete tuto licenční smlouvu, Software včetně všech kopií,
+aktualizací a předchozích verzí, (2) že si neponecháte žádné kopie, 
+včetně kopií uložených na počítači a (3) že nabyvatel licence přijme 
+ustanovení a podmínky této licenční smlouvy.
+
+Vyloučení záruk
+--
+Tento Software je poskytnut "tak, jak je" bez jakýchkoli výslovně 
+uvedených nebo předpokládaných záruk včetně záruk obchodovatelnosti, 
+neporušení duševního vlastnictví nebo vhodnosti k určitému účelu. Ujistili 
+jste se používáním výše zmíněné zkušební verze, že Software pracuje podle 
+Vašich požadavků a inzerovaných vlastností. Berete na vědomí, že Software 
+nemůže být zcela 
+bezchybný.
+
+Omezení odpovědnosti
+--
+Společnost 3Dim Laboratory ani její dodavatelé či prodejci nejsou v žádném 
+případě odpovědni za jakékoli škody vzniklé v souvislosti s touto Smlouvou 
+včetně ztráty zisku, znemožnění používání, ztráty nebo poškození dat, 
+nepřímých, náhodných, následných nebo zvláštních škod, a to ani v případě, 
+že byla 3Dim Laboratory na možnost vzniku těchto škod upozorněna. Celková 
+hmotná odpovědnost společnosti 3Dim Laboratory za škodu související se 
+Softwarem nemůže v žádném případě přesáhnout částku, kterou nabyvatel 
+licence zaplatil společnosti 3Dim Laboratory za Software licencovaný touto 
+Smlouvou.
+
+V některých právních řádech nemusí být vyloučení nebo omezení odpovědnosti 
+za předpokládané záruky (pokud existují) nebo za následné nebo náhodné 
+škody povoleno; v takovém případě se na Vás výše uvedená omezení nemusí v 
+plném rozsahu vztahovat. Můžete mít rovněž další práva, která se v různých 
+právních řádech liší.
+
+Ukončení smlouvy
+--
+Kromě důvodů vyplývajících ze zákona nebo zvyklostí může 3Dim Laboratory 
+ukončit tuto Smlouvu s vyloučením odpovědnosti pokud Smlouvu porušíte 
+závažným způsobem a to kdykoliv bez předchozího upozornění. V takovém 
+případě je uživatel povinen přestat Software dále jakkoli používat.
+
+Pokud máte jakékoliv dotazy ohledně této licenční smlouvy nebo si přejete 
+kontaktovat 3Dim Laboratory, prosím navštivte naše stránky.
+
+3Dim Laboratory s.r.o.
+U Vodárny 3032/2a
+616 00 Brno
+www.3dim-laboratory.cz
+
+============================================================
+
