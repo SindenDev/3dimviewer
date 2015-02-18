@@ -49,12 +49,19 @@ data::CDataStats::CDataStats(void)
 void data::CDataStats::update(const CChangedEntries & Changes)
 {
     // Get active dataset
-    data::CObjectPtr< data::CActiveDataSet > ptrDataset( APP_STORAGE.getEntry( data::Storage::ActiveDataSet::Id ) );
+    data::CObjectPtr<data::CActiveDataSet> ptrDataset(APP_STORAGE.getEntry(data::Storage::ActiveDataSet::Id));
+
+    int datasetId = ptrDataset->getId();
+    if (datasetId == CUSTOM_DATA)
+    {
+        return;
+    }
+
     // Get data volume
-    data::CObjectPtr< data::CDensityData > sVolume( APP_STORAGE.getEntry( ptrDataset->getId() ) );
+    data::CObjectPtr<data::CDensityData> sVolume(APP_STORAGE.getEntry(datasetId));
 
     // Compute min and max values
-    vpl::img::getMinMax< vpl::img::CDVolume::tVoxel, vpl::img::CDVolume >( *sVolume.get(), m_minDensity, m_maxDensity );
+    vpl::img::getMinMax<vpl::img::CDVolume::tVoxel, vpl::img::CDVolume>(*sVolume.get(), m_minDensity, m_maxDensity);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

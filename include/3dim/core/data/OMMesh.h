@@ -22,6 +22,7 @@ struct OMTraits : public OpenMesh::DefaultTraits
     VertexAttributes(OpenMesh::Attributes::Status | OpenMesh::Attributes::Normal);
     FaceAttributes(OpenMesh::Attributes::Status | OpenMesh::Attributes::Normal);
     EdgeAttributes(OpenMesh::Attributes::Status);
+    HalfedgeAttributes(OpenMesh::Attributes::Status);
 };
 
 typedef OpenMesh::TriMesh_ArrayKernelT<OMTraits> OMMesh;

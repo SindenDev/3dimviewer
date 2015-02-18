@@ -22,13 +22,99 @@
 
 #include "CDataInfoDialog.h"
 #include "ui_CDataInfoDialog.h"
+#include <C3DimApplication.h>
 
 #include <QTableWidgetItem>
 #include <QSettings>
 #include <QDateTime>
+#include <QDebug>
 
 #include <data/CDensityData.h>
 #include <data/CModelManager.h>
+#include <data/CImageLoaderInfo.h>
+#include <data/CVolumeTransformation.h>
+
+///////////////////////////////////////////////////////////////////////////////
+// DICOM tags dump
+
+#include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
+#define HAVE_STD_STRING
+#include "dcmtk/ofstd/ofstring.h"
+#include <dcmtk/dcmdata/dcfilefo.h>
+
+bool dumpFile(
+	CDataInfoDialog *pDialog,
+	const char *ifname,
+	const E_FileReadMode readMode,
+	const E_TransferSyntax xfer,
+	const size_t printFlags,
+	const OFBool loadIntoMemory,
+	const OFBool stopOnErrors,
+	const OFBool convertToUTF8)
+{
+#define COUT qDebug()
+	if (NULL==ifname || 0==ifname[0])
+		return false;
+
+	DcmFileFormat dfile;
+	DcmObject *dset = &dfile;
+	if (readMode == ERM_dataset) 
+		dset = dfile.getDataset();
+	const OFCmdUnsignedInt maxReadLength = 4096; // default is 4 KB
+	OFCondition cond = dfile.loadFile(ifname, xfer, EGL_noChange, maxReadLength, readMode);
+	if (cond.bad())
+	{
+		qDebug() << "error invalid filename";
+		return false;
+	}
+
+	if (loadIntoMemory) 
+		dfile.loadAllDataIntoMemory();
+
+#ifdef WITH_LIBICONV
+	if (convertToUTF8)
+	{
+		qDebug() << "converting all element values that are affected by Specific Character Set (0008,0005) to UTF-8";
+		cond = dfile.convertToUTF8();
+		if (cond.bad())
+		{
+			qDebug() << "error converting file to UTF-8";
+			if (stopOnErrors) 
+				return false;
+		}
+	}
+#endif
+
+	size_t pixelCounter = 0;
+	const char *pixelFileName = NULL;
+	OFString pixelFilenameStr;
+
+	// dump file content 
+	std::stringstream out;
+	dset->print(out,printFlags, 0 /*level*/, pixelFileName, &pixelCounter);
+	QStringList sl = (QString::fromStdString(out.str())).split('\n');
+	foreach(QString str,sl)
+	{
+		if (!str.isEmpty())
+		{
+			QStringList entrySplit = str.split('#');
+			if (entrySplit.size()>1)
+			{
+				if (2==entrySplit.size())
+					pDialog->AddRow(entrySplit[1],entrySplit[0],QColor(QColor::Invalid),Qt::AlignLeft);
+				else
+					pDialog->AddRow(entrySplit[entrySplit.size()-1],str.left(str.length()-entrySplit[entrySplit.size()-1].length()-1),QColor(QColor::Invalid),Qt::AlignLeft);
+			}
+			else
+				pDialog->AddRow("",str,QColor(QColor::Invalid),Qt::AlignLeft);
+		}
+	}
+	return sl.size()>0;
+}
+
+
+///////////////////////////////////////////////////////////////////////////////
+
 
 // static method
 QString CDataInfoDialog::formatDicomDateAndTime(const QString& wsDate, const QString& wsTime)
@@ -66,7 +152,7 @@ QString CDataInfoDialog::formatDicomDateAndTime(const QString& wsDate, const QSt
 	return "";
 }
 
-CDataInfoDialog::CDataInfoDialog(int model_storage_id, QWidget *parent) :
+CDataInfoDialog::CDataInfoDialog(QWidget *parent) :
     QDialog(parent, Qt::WindowTitleHint | Qt::WindowSystemMenuHint | Qt::WindowMaximizeButtonHint | Qt::WindowCloseButtonHint),
     ui(new Ui::CDataInfoDialog)
 {
@@ -115,22 +201,74 @@ CDataInfoDialog::CDataInfoDialog(int model_storage_id, QWidget *parent) :
 
         spVolume.release();
     }
-    if(model_storage_id > 0)
-    {
-        data::CObjectPtr<data::CModel> spModel( APP_STORAGE.getEntry(model_storage_id) );
-        data::CMesh *pMesh = spModel->getMesh();
-        if (pMesh && pMesh->n_vertices()>0)
+	
+    {        
+        data::CObjectPtr<data::CDensityData> spVolume( APP_STORAGE.getEntry(data::Storage::PatientData::Id) );
+        vpl::img::CVector3D pos = spVolume->m_ImagePosition;
+        data::CObjectPtr<data::CVolumeTransformation> spVolumeTransformation(APP_STORAGE.getEntry(data::Storage::VolumeTransformation::Id));
+        osg::Matrix volMx = spVolumeTransformation->getTransformation();
+        if (!volMx.isIdentity() || pos.getLength()>0.001)
         {
-            AddRow(tr("Bone Model"),"",QColor(0,128,255));
-            if (!spModel->getLabel().empty())
-                AddRow(tr("Name"),QString::fromStdString(spModel->getLabel()));
-            AddRow(tr("Triangles"),QString::number(pMesh->n_faces()));
-            AddRow(tr("Nodes"),QString::number(pMesh->n_vertices()));
-			AddRow(tr("Components"),QString::number(pMesh->componentCount()));
-            if (!pMesh->isClosed())
-                AddRow(tr("Closed"),tr("No"));
+            AddRow(tr("Volume Transformation"),"",QColor(0,128,255));
+            if (!volMx.isIdentity())
+            {
+                for(int i=0;i<4;i++)
+                    AddRow(i==0?(tr("Matrix")):"",QString("%1 %2 %3 %4").arg(volMx(i,0),0,'f',3).arg(volMx(i,1),0,'f',3).arg(volMx(i,2),0,'f',3).arg(volMx(i,3),0,'f',3));
+            }
+            AddRow(tr("Position"),QString("%1 %2 %3").arg(pos.getX(),0,'f',3).arg(pos.getY(),0,'f',3).arg(pos.getZ(),0,'f',3));
         }
+        APP_STORAGE.invalidate(spVolumeTransformation.getEntryPtr());
     }
+
+	for(int id=0;id<MAX_IMPORTED_MODELS;id++)
+	{
+		data::CObjectPtr<data::CModel> spModel( APP_STORAGE.getEntry(data::Storage::ImportedModel::Id+id, data::Storage::NO_UPDATE) );
+		if(spModel->hasData())
+		{
+			data::CMesh *pMesh = spModel->getMesh();
+			//const std::string &std_name(spModel->getLabel());
+			//QString qs_name(QString::fromStdString(std_name));
+			AddRow(tr("Model %1").arg(id+1),"",QColor(0,128,255));
+			if (!spModel->getLabel().empty())
+				AddRow(tr("Name"),QString::fromStdString(spModel->getLabel()));
+			AddRow(tr("Triangles"),QString::number(pMesh->n_faces()));
+			AddRow(tr("Nodes"),QString::number(pMesh->n_vertices()));
+			AddRow(tr("Components"),QString::number(pMesh->componentCount()));
+			if (!pMesh->isClosed())
+				AddRow(tr("Closed"),tr("No"));
+		}
+	}
+
+	{	// dicom file info
+		data::CObjectPtr<data::CImageLoaderInfo> spInfo( APP_STORAGE.getEntry(data::Storage::ImageLoaderInfo::Id) );
+		if (spInfo->getNumOfFiles()>0)
+		{			
+			const data::CImageLoaderInfo::tFiles & list =  spInfo->getList();
+			QString str;
+#ifdef _MSC_VER
+			str = QString::fromUtf16((const ushort *)list[0].c_str());
+#else
+			str =  QString::fromStdString(list[0]);
+#endif
+			if (QFile::exists(str))
+			{
+				AddRow(tr("DICOM Info"),str,QColor(0,128,255));
+			
+#ifdef _WIN32
+				std::string file = C3DimApplication::wcs2ACP(list[0]);
+#else
+                std::string file = list[0];
+#endif
+				E_FileReadMode readMode = ERM_autoDetect;
+				E_TransferSyntax xfer = EXS_Unknown;
+				size_t printFlags = DCMTypes::PF_shortenLongTagValues;
+				OFBool loadIntoMemory = OFTrue;
+				OFBool stopOnErrors = OFTrue;
+				OFBool convertToUTF8 = OFFalse;
+				dumpFile(this,file.c_str(),readMode,xfer,printFlags,loadIntoMemory,stopOnErrors,convertToUTF8);
+			}
+		}
+	}
     QSettings settings;
     settings.beginGroup("DataInfoWindow");
     resize(settings.value("size",minimumSize()).toSize());
@@ -143,7 +281,7 @@ void CDataInfoDialog::AddRowIfNotEmpty(const QString& param, const QString& valu
     AddRow(param,value,color);
 }
 
-void CDataInfoDialog::AddRow(const QString& param, const QString& value, const QColor& color)
+void CDataInfoDialog::AddRow(const QString& param, const QString& value, const QColor& color, int alignment)
 {
     int Id=ui->tableWidget->rowCount();
     ui->tableWidget->insertRow(Id);
@@ -154,7 +292,7 @@ void CDataInfoDialog::AddRow(const QString& param, const QString& value, const Q
     ui->tableWidget->setItem(Id,0,i0);
     QTableWidgetItem *i1 = new QTableWidgetItem(value);
     i1->setFlags(i1->flags() & ~Qt::ItemIsEditable);
-    i1->setTextAlignment(Qt::AlignCenter);
+    i1->setTextAlignment(alignment);
     if (color.isValid())
         i1->setBackgroundColor(color);
     ui->tableWidget->setItem(Id,1,i1);

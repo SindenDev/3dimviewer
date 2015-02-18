@@ -221,7 +221,13 @@ int main(int argc, char *argv[])
         }
 
         // MDSTk logs
+#ifdef WIN32
+		// VPL needs path in ACP
+		std::wstring uniName = (const wchar_t*)file.fileName().utf16();
+		std::string ssLogFile = C3DimApplication::wcs2ACP(uniName);
+#else
         std::string ssLogFile = file.fileName().toStdString();
+#endif
         VPL_LOG_ADD_FILE_APPENDER(ssLogFile);       
         VPL_LOG_INFO("Logging enabled");
     }

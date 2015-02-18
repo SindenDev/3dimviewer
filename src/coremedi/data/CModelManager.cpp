@@ -23,7 +23,8 @@
 #include <data/CModelManager.h>
 #include <data/CDensityData.h>
 #include <app/Signals.h>
-
+#include <data/CModelCut.h>
+#include <data/COrthoSlice.h>
 
 namespace data
 {
@@ -81,8 +82,26 @@ void CModelManager::init()
     for(int id = 0; id < MAX_IMPORTED_MODELS; ++id)
         STORABLE_FACTORY.registerObject(ImportedModel::Id + id, ImportedModel::Type::create, ModelDeps);
 
+	// cuts through imported models
+	for (int i = 0; i < MAX_IMPORTED_MODELS; ++i)
+	{
+		STORABLE_FACTORY.registerObject(ImportedModelCutSliceXY::Id + i, ImportedModelCutSliceXY::Type::create, CEntryDeps().insert(SliceXY::Id).insert(ImportedModel::Id + i));
+		STORABLE_FACTORY.registerObject(ImportedModelCutSliceXZ::Id + i, ImportedModelCutSliceXZ::Type::create, CEntryDeps().insert(SliceXZ::Id).insert(ImportedModel::Id + i));
+		STORABLE_FACTORY.registerObject(ImportedModelCutSliceYZ::Id + i, ImportedModelCutSliceYZ::Type::create, CEntryDeps().insert(SliceYZ::Id).insert(ImportedModel::Id + i));
+	}
+
     // Enforce object creation
     APP_STORAGE.getEntry(BonesModel::Id);
+
+	for (int i = 0; i < MAX_IMPORTED_MODELS; ++i)
+	{
+		CObjectPtr<CModelCutSliceXY> spModelCutXY( APP_STORAGE.getEntry(ImportedModelCutSliceXY::Id + i) );
+		spModelCutXY->setModelId(ImportedModel::Id + i);
+		CObjectPtr<CModelCutSliceXZ> spModelCutXZ( APP_STORAGE.getEntry(ImportedModelCutSliceXZ::Id + i) );
+		spModelCutXZ->setModelId(ImportedModel::Id + i);
+		CObjectPtr<CModelCutSliceYZ> spModelCutYZ( APP_STORAGE.getEntry(ImportedModelCutSliceYZ::Id + i) );
+		spModelCutYZ->setModelId(ImportedModel::Id + i);
+	}
 
     // Initialize storage ids for mesh undo providers
     initMeshUndoProvider(Storage::BonesModel::Id);
@@ -106,6 +125,7 @@ void CModelManager::setModel(int id, CMesh * pMesh)
     CObjectPtr<CModel> spModel( APP_STORAGE.getEntry(id, Storage::NO_UPDATE) );
     
     spModel->setMesh(pMesh);
+	spModel->clearAllProperties();
     
     APP_STORAGE.invalidate(spModel.getEntryPtr());
 }

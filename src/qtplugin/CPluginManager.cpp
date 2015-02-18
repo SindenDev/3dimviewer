@@ -124,6 +124,7 @@ void CPluginManager::disconnectPlugins()
 			data::CObjectPtr<data::CModel> spModel( APP_STORAGE.getEntry(data::Storage::BonesModel::Id) );
             data::CMesh* pMesh=spModel->getMesh();
             spModel->setMesh(NULL);
+			spModel->clearAllProperties();
             APP_STORAGE.invalidate( spModel.getEntryPtr() );
 		}
         for(int i = 0; i < MAX_IMPORTED_MODELS; ++i)
@@ -131,6 +132,7 @@ void CPluginManager::disconnectPlugins()
             data::CObjectPtr<data::CModel> spModel( APP_STORAGE.getEntry(data::Storage::ImportedModel::Id + i) );
             data::CMesh* pMesh=spModel->getMesh();
             spModel->setMesh(NULL);
+			spModel->clearAllProperties();
             APP_STORAGE.invalidate( spModel.getEntryPtr() );
         }
 	}
@@ -243,6 +245,7 @@ void CPluginManager::initPlugin(QObject* plugin, const QString& fileName)
         VPL_LOG_INFO("Plugin: " << fileName.toStdString());
         // set app storage, app mode pointer and pointer to main window
         plugin->setProperty("FileName",fileName);
+		plugin->setProperty("AppSignature",PLUG_APP_SIGNATURE);	// "OpenSource"
         iPlugin->setAppMode(&APP_MODE);
         iPlugin->setDataStorage(&APP_STORAGE);
         iPlugin->setRenderer(VPL_SIGNAL(SigGetRenderer).invoke2());

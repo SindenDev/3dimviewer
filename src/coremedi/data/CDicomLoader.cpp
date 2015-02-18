@@ -1500,4 +1500,382 @@ bool getDicomFileInfo( const vpl::sys::tString &dir, const std::string &filename
     return true;
 }
 
+//=============================================================================
+
+bool loadDicomDCTk2D(const vpl::sys::tString &dir, const std::string &filename, vpl::img::CDicomSlice &slice, sExtendedTags& tags, bool bLoadImageData, int nDesiredBits)
+{
+    vpl::sys::CFileBrowserU browser;
+    vpl::sys::tString oldDir = browser.getDirectory();
+    browser.setDirectory(dir);
+
+    // DCMTk image
+    vpl::base::CScopedPtr<DicomImage> image(NULL);
+
+    // Try to load input DICOM image
+    try
+    {
+        DcmFileFormat file_format;
+        OFCondition	status = file_format.loadFile(filename.c_str());
+        if (!status.good())
+        {
+            throw CDicomLoadingFailure();
+        }
+
+        DcmDataset * dataset = file_format.getDataset();
+        if (!dataset)
+        {
+            throw CDicomLoadingFailure();
+        }
+
+        OFString buffer;
+        DcmTag tag;
+        DcmStack poslist, orientlist;
+        Float64	f1, f2, f3;
+        unsigned long slicepos = 0;
+        double spacing = 0;
+        f1 = f2 = f3 = 0;
+
+        // This code doesn't work for Planmeca's multi-frame files
+        /*        tag = TAG_IMAGE_POSITION;
+        status = dataset->findAndGetFloat64( tag, f1, 0 );
+        status = dataset->findAndGetFloat64( tag, f2, 1 );
+        status = dataset->findAndGetFloat64( tag, f3, 2 );
+        if( status.bad() )
+        {
+        throw CDicomLoadingFailure();
+        }
+        else
+        {
+        slice.m_ImagePosition.setXYZ( f1, f2, f3 );
+        }*/
+
+        // try to locate all slice positions
+        tag = TAG_IMAGE_POSITION;
+        status = dataset->findAndGetElements(tag, poslist);
+        if (status.bad())
+        {
+            DcmStack Stack;
+            OFCondition	status = dataset->findAndGetElements(TAG_SPACING_BETWEEN_SLICES, Stack);
+            if (!status.bad() && Stack.card()>0)
+            {
+                DcmElement * elem = dynamic_cast<DcmElement *>(Stack.elem(0));
+                if (elem)
+                {
+                    // retrieve the position
+                    Float64 f1 = 0;
+                    status = elem->getFloat64(f1, 0);
+                    if (!status.bad() && f1 != 0)
+                        spacing = f1;
+                }
+            }
+        }
+        if (spacing>0 || 0==poslist.card())
+        {
+            slice.m_ImagePosition.setXYZ(f1, f2, f3);
+        }
+        else
+        {
+            // get the image position 	    
+            slicepos = poslist.card() / 2;
+            DcmElement * elem = dynamic_cast<DcmElement *>(poslist.elem(slicepos));
+            if (!elem)
+            {
+                throw CDicomLoadingFailure();
+            }
+
+            // retrieve the position
+            status = elem->getFloat64(f1, 0);
+            status = elem->getFloat64(f2, 1);
+            status = elem->getFloat64(f3, 2);
+            if (status.bad())
+            {
+                throw CDicomLoadingFailure();
+            }
+            else
+            {
+                slice.m_ImagePosition.setXYZ(f1, f2, f3);
+            }
+        }
+
+		int pixelMin = 0, pixelMax = 0, bitsUsed = 0;
+		{	// extract more tags...
+			#define	TAG_DISTANCE_SOURCE_TO_DETECTOR				DcmTag( DcmTagKey( 0x0018, 0x1110 ), DcmVR( EVR_DS ))
+			#define	TAG_DISTANCE_SOURCE_TO_PATIENT				DcmTag( DcmTagKey( 0x0018, 0x1111 ), DcmVR( EVR_DS ))
+			#define	TAG_ESTIMATED_RADIOGRAPHIC_MAGNIFICATION	DcmTag( DcmTagKey( 0x0018, 0x1114 ), DcmVR( EVR_DS ))
+			#define	TAG_GRID_FOCAL_DISTANCE						DcmTag( DcmTagKey( 0x0018, 0x704c ), DcmVR( EVR_DS ))
+			DcmStack dist;
+			OFCondition	status;
+			DcmTag tag = TAG_DISTANCE_SOURCE_TO_DETECTOR;			
+			status = dataset->findAndGetElements(tag, dist);
+			if (status.bad() || dist.empty())
+			{
+			}
+			else
+			{
+				DcmElement * elem = dynamic_cast<DcmElement *>(dist.elem(0));
+				double fDist = 0;
+				status = elem->getFloat64(fDist, 0);
+				tags.fDistanceSourceToDetector = fDist;
+			}			
+			tag = TAG_DISTANCE_SOURCE_TO_PATIENT;			
+			status = dataset->findAndGetElements(tag, dist);
+			if (status.bad() || dist.empty())
+			{
+			}
+			else
+			{
+				DcmElement * elem = dynamic_cast<DcmElement *>(dist.elem(0));
+				double fDist = 0;
+				status = elem->getFloat64(fDist, 0);
+				tags.fDistanceSourceToPatient = fDist;
+			}			
+			tag = TAG_ESTIMATED_RADIOGRAPHIC_MAGNIFICATION;			
+			status = dataset->findAndGetElements(tag, dist);
+			if (status.bad() || dist.empty())
+			{
+			}
+			else
+			{
+				DcmElement * elem = dynamic_cast<DcmElement *>(dist.elem(0));
+				double fDist = 0;
+				status = elem->getFloat64(fDist, 0);
+				tags.fEstimatedRadiographicMagnificationFactor = fDist;
+			}		
+			tag = TAG_GRID_FOCAL_DISTANCE;			
+			status = dataset->findAndGetElements(tag, dist);
+			if (status.bad() || dist.empty())
+			{
+			}
+			else
+			{
+				DcmElement * elem = dynamic_cast<DcmElement *>(dist.elem(0));
+				double fDist = 0;
+				status = elem->getFloat64(fDist, 0);
+				tags.fGridFocalDistance = fDist;
+			}	
+
+			tag = DcmTag( DcmTagKey( 0x0028, 0x0106 ), DcmVR( EVR_US ));			
+			status = dataset->findAndGetElements(tag, dist);
+			if (status.bad() || dist.empty())
+			{
+			}
+			else
+			{
+				DcmElement * elem = dynamic_cast<DcmElement *>(dist.elem(0));
+				Uint16 val = 0;
+				status = elem->getUint16(val,0);
+				pixelMin = val;
+			}	
+			tag = DcmTag( DcmTagKey( 0x0028, 0x0107 ), DcmVR( EVR_US ));			
+			status = dataset->findAndGetElements(tag, dist);
+			if (status.bad() || dist.empty())
+			{
+			}
+			else
+			{
+				DcmElement * elem = dynamic_cast<DcmElement *>(dist.elem(0));
+				Uint16 val = 0;
+				status = elem->getUint16(val,0);
+				pixelMax = val;
+			}	
+			tag = DcmTag( DcmTagKey( 0x0028, 0x0101 ), DcmVR( EVR_US ));			
+			status = dataset->findAndGetElements(tag, dist);
+			if (status.bad() || dist.empty())
+			{
+			}
+			else
+			{
+				DcmElement * elem = dynamic_cast<DcmElement *>(dist.elem(0));
+				Uint16 val = 0;
+				status = elem->getUint16(val,0);
+				bitsUsed = val;
+			}	
+		}
+
+
+        // get the image orientation
+        vpl::img::CVector3D normal_image;
+        readOrientTagDCTk(dataset, slice.m_ImageOrientationX, slice.m_ImageOrientationY, normal_image);
+
+        // slice position calculation
+        vpl::img::CPoint3D zero_point(0, 0, 0);
+        vpl::img::CVector3D position_vector(zero_point, slice.m_ImagePosition);
+        slice.setPosition(normal_image.dotProduct(normal_image, position_vector));
+
+        // prepare for potential decompression
+        OFBool opt_verbose = OFFalse;
+        E_DecompressionColorSpaceConversion opt_decompCSconversion = EDC_photometricInterpretation;
+        E_UIDCreation opt_uidcreation = EUC_default;
+        E_PlanarConfiguration opt_planarconfig = EPC_default;
+        DJDecoderRegistration::registerCodecs(opt_decompCSconversion, opt_uidcreation, opt_planarconfig, opt_verbose);
+
+        E_TransferSyntax es = dataset->getOriginalXfer();
+        OFCondition error = dataset->chooseRepresentation(EXS_LittleEndianExplicit, NULL);
+        if (error.bad())
+        {
+            throw CDicomLoadingFailure();
+        }
+
+        // format conversion
+        // vpl::img::tDensityPixel pMin = vpl::img::CPixelTraits<vpl::img::tDensityPixel>::getPixelMin();
+        // vpl::img::tDensityPixel pMax = vpl::img::CPixelTraits<vpl::img::tDensityPixel>::getPixelMax();
+
+        if (bLoadImageData)
+        {
+            // Create a new image
+            // - Load a single frame from the dataset!
+            image = new DicomImage(dataset, es, 0UL, slicepos, 1UL);
+            if (!image.get() || image->getStatus() != EIS_Normal)
+            {
+                throw CDicomLoadingFailure();
+            }
+
+            // create pixel data
+            vpl::tSize xSize = static_cast< vpl::tSize >(image->getWidth());
+            vpl::tSize ySize = static_cast< vpl::tSize >(image->getHeight());
+            //            unsigned short depth = static_cast< unsigned short >( image->getDepth() );
+
+            // resize the slice
+            slice.vpl::img::CDImage::resize(xSize, ySize, slice.getMargin());
+
+            image->deleteDisplayLUT(0);
+            image->hideAllOverlays();
+            image->removeAllOverlays();
+            image->deleteOverlayData();
+            image->setNoDisplayFunction();
+            image->setNoVoiTransformation();
+            image->getOverlayCount();
+			
+
+
+            // take pixel data pointer 
+            const DiPixel * theData = image->getInterData();
+
+            // take pixel data representation
+            EP_Representation theData_representation = theData->getRepresentation();
+
+            // test pixel data representation
+            if (theData_representation != EPR_Uint16 && theData_representation != EPR_Sint16 &&
+                theData_representation != EPR_Uint8 && theData_representation != EPR_Sint8 &&
+                theData_representation != EPR_Uint32 && theData_representation != EPR_Sint32)
+            {
+                throw CDicomLoadingFailure();
+            }
+
+			// http://dicomiseasy.blogspot.cz/2012/08/chapter-12-pixel-data.html
+			if (pixelMin == pixelMax)
+			{
+				if (theData_representation == EPR_Uint16)
+				{
+					pixelMin = 0;
+					if (bitsUsed!=0)
+						pixelMax = 1<<bitsUsed - 1;
+					else
+						pixelMax = 65535;
+				}
+				if (theData_representation == EPR_Sint16)
+				{
+					pixelMin = -32768;
+					if (bitsUsed!=0)
+						pixelMax = 1<<bitsUsed - 1;
+					else
+						pixelMax = 32767;
+				}
+				if (theData_representation == EPR_Uint8)
+				{
+					pixelMin = 0;
+					if (bitsUsed!=0)
+						pixelMax = 1<<bitsUsed - 1;
+					else
+						pixelMax = 255;
+				}
+				if (theData_representation == EPR_Sint8)
+				{
+					pixelMin = -128;
+					if (bitsUsed!=0)
+						pixelMax = 1<<bitsUsed - 1;
+					else
+						pixelMax = 127;
+				}
+				if (theData_representation == EPR_Uint32)
+				{
+					pixelMin = 0;
+					if (bitsUsed!=0)
+						pixelMax = 1<<bitsUsed - 1;
+					else
+						pixelMax = 0x7FFFFFFF;
+				}
+			}
+
+            // take slice image data pointer from pixel data
+            const vpl::img::tDensityPixel * thePixels = reinterpret_cast< const vpl::img::tDensityPixel* >(theData->getData());
+            if (!thePixels)
+            {
+                throw CDicomLoadingFailure();
+            }
+			
+			const vpl::img::tPixel16 * thePixels16u = reinterpret_cast< const vpl::img::tPixel16* >(theData->getData());
+            const vpl::img::tPixel8 * thePixels8u = reinterpret_cast< const vpl::img::tPixel8* >(theData->getData());
+            const vpl::sys::tInt8   * thePixels8 = reinterpret_cast< const vpl::sys::tInt8* >(theData->getData());
+            const vpl::sys::tInt32  * thePixels32 = reinterpret_cast< const vpl::sys::tInt32* >(theData->getData());
+			const vpl::img::tPixel32* thePixels32u = reinterpret_cast< const vpl::img::tPixel32* >(theData->getData());
+
+			int dstMax = 32767;
+			if (nDesiredBits>0)
+				dstMax = 1<<nDesiredBits - 1;
+#pragma omp parallel for
+            for (vpl::tSize y = 0; y < ySize; y++)
+            {
+                for (vpl::tSize x = 0; x < xSize; x++)
+                {
+                    int Value = 0;
+                    switch (theData_representation)
+                    {
+                    case EPR_Uint8:
+                        Value = thePixels8u[y * xSize + x];
+                        break;
+                    case EPR_Sint8:
+                        Value = thePixels8[y * xSize + x];
+                        break;                    
+                    case EPR_Sint32:
+                        Value = thePixels32[y * xSize + x];
+                        break;
+                    case EPR_Uint32:
+                        Value = thePixels32[y * xSize + x];
+                        break;
+                    case EPR_Uint16:
+                        Value = thePixels16u[y * xSize + x];
+                        break;
+                    default:
+                        Value = thePixels[y * xSize + x];
+                    }			
+
+					if (pixelMax!=pixelMin)
+						Value = (dstMax * (Value - pixelMin))/(pixelMax-pixelMin);
+                    Value = std::min(Value, dstMax);
+                    Value = std::max(Value, 0);
+                    slice(x, y) = (vpl::img::tDensityPixel)Value;
+                }
+            }
+        }
+
+        // Read all required DICOM tags
+        readTagsDCTk(dataset, slice);
+    }
+
+    // Any failure?
+    catch (CDicomLoadingFailure &)
+    {
+        browser.setDirectory(oldDir);
+        DJDecoderRegistration::cleanup();
+        return false;
+    }
+
+    browser.setDirectory(oldDir);
+    DJDecoderRegistration::cleanup();
+    return true;
+}
+
+
+
 } // namespace data

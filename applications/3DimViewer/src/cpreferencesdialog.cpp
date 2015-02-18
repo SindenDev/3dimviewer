@@ -63,6 +63,9 @@ CPreferencesDialog::CPreferencesDialog(const QDir &localeDir, QWidget *parent, Q
     // error logging
     bool bLoggingEnabled = settings.value("LoggingEnabled", QVariant(true)).toBool();
     ui->checkBoxLogging->setChecked(bLoggingEnabled);
+	// Models linked to regions
+	bool bModelsLinkEnabled = settings.value("ModelRegionLinkEnabled", QVariant(DEFAULT_MODEL_REGION_LINK)).toBool();
+	ui->checkBoxLinkModels->setChecked(bModelsLinkEnabled);
     //
     // get bg color
     // because style sheets aren't compatible with QProxyStyle that we use
@@ -115,6 +118,13 @@ void CPreferencesDialog::on_CPreferencesDialog_accepted()
         m_bChangesNeedRestart=true;
     }
 
+	const bool bWantModelRegionLink = ui->checkBoxLinkModels->isChecked();
+	bool bModelRegionLink = settings.value("ModelRegionLinkEnabled", QVariant(DEFAULT_MODEL_REGION_LINK)).toBool();
+	if(bModelRegionLink!=bWantModelRegionLink)
+	{
+		settings.setValue("ModelRegionLinkEnabled", bWantModelRegionLink);
+		m_bChangesNeedRestart = true;
+	}
     QRgb color;
     color = m_bgColor.rgb();
     if (settings.value("BGColor",DEFAULT_BACKGROUND_COLOR).toUInt()!=color)
@@ -154,6 +164,8 @@ void CPreferencesDialog::resetDefaultsPressed( )
     ui->comboBoxRenderingMode->setCurrentIndex(0);
     // set error logging
     ui->checkBoxLogging->setChecked(DEFAULT_LOGGING);
+	// Set model/region link
+	ui->checkBoxLinkModels->setChecked(DEFAULT_MODEL_REGION_LINK);
     // set background color
     m_bgColor=DEFAULT_BACKGROUND_COLOR;
     setButtonColor(m_bgColor, m_bgColor, ui->buttonBGColor);

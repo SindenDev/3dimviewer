@@ -20,15 +20,29 @@
 //
 ///////////////////////////////////////////////////////////////////////////////
 
+#ifdef __APPLE__
+#   include <glew.h>
+#else
+#   include <GL/glew.h>
+#endif
+
 #include "modelswidget.h"
 #include "ui_modelswidget.h"
 #include <data/CModelManager.h>
 #include "qtcompat.h"
 #include <app/Signals.h>
+#include <Signals.h>
+#include <data/CDensityData.h>
+#include <mainwindow.h>
 
 #include <QPushButton>
 #include <QColorDialog>
 #include <QStyleFactory>
+#include <QSettings>
+#include <QMenu>
+#include <QDoubleSpinBox>
+#include <QDialogButtonBox>
+#include <QLabel>
 
 #include <data/CActiveDataSet.h>
 
@@ -46,6 +60,10 @@ CModelsWidget::CModelsWidget(QWidget *parent /*= 0*/)
 {
     ui->setupUi(this);
 
+	// Set model-region link status
+	QSettings settings;
+	m_bModelsLinked = settings.value("ModelRegionLinkEnabled", QVariant(false)).toBool();
+
     // Create table
     ui->tableModels->clearContents();
     ui->tableModels->horizontalHeader()->SETRESIZEMODE(COL_NAME, QHeaderView::Stretch);
@@ -53,12 +71,16 @@ CModelsWidget::CModelsWidget(QWidget *parent /*= 0*/)
     ui->tableModels->clearContents();
     ui->tableModels->setColumnCount(COL_COUNT);
     ui->tableModels->setColumnWidth(COL_VISIBLE, 45);
+	ui->tableModels->setColumnWidth(COL_CUT, 30);	
     ui->tableModels->setColumnWidth(COL_COLOR, 40);
     ui->tableModels->setColumnWidth(COL_DELETE, 30);
     ui->tableModels->horizontalHeader()->SETRESIZEMODE(COL_NAME, QHeaderView::Stretch);
     ui->tableModels->horizontalHeader()->SETRESIZEMODE(COL_VISIBLE, QHeaderView::Fixed);
+	ui->tableModels->horizontalHeader()->SETRESIZEMODE(COL_CUT, QHeaderView::Fixed);
     ui->tableModels->horizontalHeader()->SETRESIZEMODE(COL_COLOR, QHeaderView::Fixed);    
     ui->tableModels->horizontalHeader()->SETRESIZEMODE(COL_DELETE, QHeaderView::ResizeToContents); 
+	ui->tableModels->setContextMenuPolicy(Qt::CustomContextMenu);
+	QObject::connect(ui->tableModels, SIGNAL(customContextMenuRequested(QPoint)), this, SLOT(tableModelsContextMenu(QPoint)));
 
     QPalette tablePalette;
     tablePalette.setColor(QPalette::Inactive, QPalette::Highlight, QColor(150, 150, 150));
@@ -78,6 +100,8 @@ CModelsWidget::CModelsWidget(QWidget *parent /*= 0*/)
 
     updateTable();
     ui->tableModels->selectRow(0);
+
+	ui->checkBoxIOApplyDICOM->setChecked(settings.value("STLUseDICOMCoord",false).toBool());
 
     m_Connection = APP_STORAGE.getEntrySignal(data::Storage::ActiveDataSet::Id).connect(this, &CModelsWidget::onNewDensityData);
 }
@@ -145,7 +169,7 @@ void CModelsWidget::updateTable()
             ui->tableModels->setRowCount(ui->tableModels->rowCount() + 1);
 
             // Label
-            const std::string &std_name(pModel->getName());
+            const std::string &std_name(pModel->getLabel());
             QString qs_name(QString::fromStdString(std_name));
             QTableWidgetItem *ti_name(new QTableWidgetItem(qs_name));
             ti_name->setFlags(Qt::ItemIsSelectable | Qt::ItemIsEditable | Qt::ItemIsEnabled);
@@ -154,6 +178,11 @@ void CModelsWidget::updateTable()
             QTableWidgetItem *ti_visibility = new QTableWidgetItem();
 			ti_visibility->setCheckState(VPL_SIGNAL(SigGetModelVisibility).invoke2(storage_id)?Qt::Checked:Qt::Unchecked);
             ti_visibility->setFlags(Qt::ItemIsSelectable | Qt::ItemIsUserCheckable | Qt::ItemIsEnabled | Qt::ItemIsTristate);
+
+			// Cut checkable button
+			QTableWidgetItem *ti_cut = new QTableWidgetItem();
+			ti_cut->setCheckState(VPL_SIGNAL(SigGetModelCutVisibility).invoke2(storage_id)?Qt::Checked:Qt::Unchecked);
+			ti_cut->setFlags(Qt::ItemIsSelectable | Qt::ItemIsUserCheckable | Qt::ItemIsEnabled | Qt::ItemIsTristate);
 
             // Color
             QPushButton *ti_color = new QPushButton(ui->tableModels);
@@ -181,6 +210,7 @@ void CModelsWidget::updateTable()
             int row_id( ui->tableModels->rowCount() - 1);
             ui->tableModels->setItem(row_id, COL_NAME, ti_name);
             ui->tableModels->setItem(row_id, COL_VISIBLE, ti_visibility);
+			ui->tableModels->setItem(row_id, COL_CUT, ti_cut);
             ui->tableModels->setCellWidget(row_id, COL_COLOR, ti_color);
             ui->tableModels->setCellWidget(row_id, COL_DELETE, ti_remove);
         }
@@ -226,6 +256,8 @@ void CModelsWidget::onModelColorButton()
     data::CColor4f colModel; // Our color model
     colModel.setColor(selectedColor.redF(),selectedColor.greenF(),selectedColor.blueF(), selectedColor.alphaF());
 	VPL_SIGNAL(SigSetModelColor).invoke(index,colModel);
+
+	modelToRegion(index-data::Storage::ImportedModel::Id, COL_COLOR);
 }
 
 
@@ -279,6 +311,8 @@ void CModelsWidget::onModelItemChanged(QTableWidgetItem *item)
             spModel->setLabel(item->text().toStdString());
             m_bMyChange = true;
             APP_STORAGE.invalidate(spModel.getEntryPtr(), data::CModel::MESH_NOT_CHANGED);
+
+			modelToRegion(storage_id - data::Storage::ImportedModel::Id, COL_NAME);
         }
         break;
 
@@ -299,6 +333,17 @@ void CModelsWidget::onModelItemChanged(QTableWidgetItem *item)
             }
         }
         break;
+
+	// Cut visibility changed
+	case COL_CUT:
+		{
+			if (Qt::ItemIsEnabled == (item->flags() & Qt::ItemIsEnabled))
+			{
+				bool bVisible = item->checkState() == Qt::Checked;
+				VPL_SIGNAL(SigSetModelCutVisibility).invoke(storage_id,bVisible);				
+			}
+		}
+		break;
 
     default:
         break;
@@ -330,4 +375,203 @@ int CModelsWidget::getSelectedModelStorageId()
         return -1;
 
     return storage_id;
+}
+
+/**
+ * \brief	Query if this object is region linked.
+ *
+ * \return	true if region linked, false if not.
+ */
+
+bool CModelsWidget::isRegionLinked(int id)
+{
+	data::CObjectPtr<data::CRegionColoring> spColoring(APP_STORAGE.getEntry(data::Storage::RegionColoring::Id));
+	return m_bModelsLinked && id >= 0 && id < MAX_IMPORTED_MODELS && id < spColoring->getNumOfRegions();
+}
+
+/**
+ * \brief	Model to region.
+ *
+ * \param	id  	The identifier.
+ * \param	what	The what.
+ */
+void CModelsWidget::modelToRegion(int id, int what)
+{
+	if(!m_bModelsLinked)
+		return;
+
+	data::CObjectPtr<data::CRegionColoring> spColoring(APP_STORAGE.getEntry(data::Storage::RegionColoring::Id));
+
+	// Model id is higher than number of regions
+	if(id >= spColoring->getNumOfRegions())
+		return;
+
+	// Get model pointer
+	data::CObjectPtr<data::CModel> spModel(APP_STORAGE.getEntry(id + data::Storage::ImportedModel::Id));
+	
+	switch(what)
+	{
+	case COL_NAME:
+		spColoring->getRegionInfo(id).setName(spModel->getLabel());
+		break;
+
+	case COL_COLOR:
+		{
+			data::CColor4f mc(spModel->getColor());
+			data::CRegionColoring::tColor rc(mc.getR()*255, mc.getG()*255, mc.getB()*255, mc.getA()*255);
+			spColoring->setColor(id, rc);
+		}
+		break;
+
+	default:
+		break;
+	}
+
+	// Invalidate coloring
+	APP_STORAGE.invalidate(spColoring.getEntryPtr());
+}
+
+/**
+ * \brief	Models to regions.
+ */
+
+void CModelsWidget::modelsToRegions()
+{
+	if(!m_bModelsLinked)
+		return;
+
+	data::CObjectPtr<data::CRegionColoring> spColoring(APP_STORAGE.getEntry(data::Storage::RegionColoring::Id));
+
+	// For all models
+	for(int i = 0; i < MAX_IMPORTED_MODELS; ++i)
+	{
+		int storage_id(i + data::Storage::ImportedModel::Id);
+
+		// Model id is higher than number of regions
+		if(i >= spColoring->getNumOfRegions())
+			break;;
+
+		// Get model pointer
+		data::CObjectPtr<data::CModel> spModel(APP_STORAGE.getEntry(storage_id));
+
+		// Not valid model
+		if(!spModel->hasData())
+			continue;
+
+		// Set label and color
+		spColoring->getRegionInfo(i).setName(spModel->getLabel());
+		data::CColor4f mc(spModel->getColor());
+		data::CRegionColoring::tColor rc(mc.getR()*255, mc.getG()*255, mc.getB()*255, mc.getA()*255);
+		spColoring->setColor(i, rc);
+	}
+
+	// Invalidate coloring
+	APP_STORAGE.invalidate(spColoring.getEntryPtr());
+}
+
+
+void CModelsWidget::on_checkBoxIOApplyDICOM_clicked()
+{
+	bool bUse = ui->checkBoxIOApplyDICOM->isChecked();
+	QSettings settings;
+	settings.setValue("STLUseDICOMCoord",bUse);
+}
+
+void CModelsWidget::tableModelsContextMenu(QPoint p)
+{
+	QPoint pos = ui->tableModels->mapToGlobal(p);
+	QTableWidgetItem* pItem = ui->tableModels->itemAt(p);
+	if (NULL!=pItem)
+	{
+		const int row = pItem->row();
+		QPushButton *pushButton = qobject_cast<QPushButton *>(ui->tableModels->cellWidget(row, COL_COLOR));
+		if (pushButton == NULL)
+		{
+			return;
+		}
+
+		int storage_id = pushButton->property("StorageID").toInt();	
+	    if(storage_id < data::Storage::ImportedModel::Id || storage_id >= data::Storage::ImportedModel::Id + MAX_IMPORTED_MODELS)
+			return;
+
+		QMenu contextMenu;
+		QAction* moveAct = contextMenu.addAction(tr("Adjust Position..."));
+		QAction* centerAct = contextMenu.addAction(tr("Center Position"));
+		const QAction* win=contextMenu.exec(pos);
+		if (NULL==win)
+			return;
+		if (win==moveAct)
+		{
+			data::CObjectPtr<data::CModel> spModel(APP_STORAGE.getEntry(storage_id));
+			osg::Matrix mx = spModel->getTransformationMatrix();
+
+			data::CObjectPtr<data::CDensityData> spVolume( APP_STORAGE.getEntry(data::Storage::PatientData::Id) );
+			const double sX = spVolume->getXSize()*spVolume->getDX();
+			const double sY = spVolume->getYSize()*spVolume->getDY();
+			const double sZ = spVolume->getZSize()*spVolume->getDZ();
+
+			QDialog dlg(this,Qt::WindowTitleHint | Qt::WindowSystemMenuHint | Qt::WindowCloseButtonHint);
+			dlg.setWindowTitle(tr("Position"));
+			QGridLayout layout;
+			QDoubleSpinBox spinX, spinY, spinZ;
+			spinX.setSuffix(tr(" mm"));
+			spinY.setSuffix(tr(" mm"));
+			spinZ.setSuffix(tr(" mm"));
+			spinX.setSingleStep(spVolume->getDX()/2);
+			spinY.setSingleStep(spVolume->getDY()/2);
+			spinZ.setSingleStep(spVolume->getDZ()/2);
+			spinX.setMinimum(-sX);
+			spinY.setMinimum(-sY);
+			spinZ.setMinimum(-sZ);			
+			spinX.setMaximum(+sX);
+			spinY.setMaximum(+sY);
+			spinZ.setMaximum(+sZ);
+			osg::Vec3 pos = mx.getTrans();
+			spinX.setValue(pos[0]);
+			spinY.setValue(pos[1]);
+			spinZ.setValue(pos[2]);
+			layout.addWidget(new QLabel(tr("X:")),0,0);    
+			layout.addWidget(&spinX,0,1);
+			layout.addWidget(new QLabel(tr("Y:")),1,0);
+			layout.addWidget(&spinY,1,1);
+			layout.addWidget(new QLabel(tr("Z:")),2,0);
+			layout.addWidget(&spinZ,2,1);
+			QDialogButtonBox box(QDialogButtonBox::Ok|QDialogButtonBox::Cancel);
+			layout.addWidget(&box,3,0,1,2);
+			QObject::connect(&box, SIGNAL(accepted()), &dlg, SLOT(accept()));
+			QObject::connect(&box, SIGNAL(rejected()), &dlg, SLOT(reject()));
+			dlg.setLayout(&layout);
+
+			if (QDialog::Accepted==dlg.exec())
+			{
+				MainWindow::getInstance()->getModelManager()->createAndStoreSnapshot();
+				pos[0] = spinX.value();
+				pos[1] = spinY.value();
+				pos[2] = spinZ.value();
+				mx.setTrans(pos);
+				spModel->setTransformationMatrix(mx);
+				APP_STORAGE.invalidate( spModel.getEntryPtr() );
+			}
+		}
+		if (win==centerAct)
+		{
+			data::CObjectPtr<data::CModel> spModel(APP_STORAGE.getEntry(storage_id));
+			osg::Matrix mx = spModel->getTransformationMatrix();
+			data::CMesh* pMesh=spModel->getMesh();
+			if (NULL!=pMesh && pMesh->n_vertices() > 0)
+			{
+				MainWindow::getInstance()->getModelManager()->createAndStoreSnapshot();
+				data::CObjectPtr<data::CDensityData> spVolume( APP_STORAGE.getEntry(data::Storage::PatientData::Id) );
+				const double sX = spVolume->getXSize()*spVolume->getDX();
+				const double sY = spVolume->getYSize()*spVolume->getDY();
+				const double sZ = spVolume->getZSize()*spVolume->getDZ();
+
+				data::CMesh::Point min, max;
+				pMesh->calc_bounding_box(min,max);
+				mx.setTrans(-min[0]-((max[0]-min[0])/2)+sX/2,-min[1]-((max[1]-min[1])/2)+sY/2,-min[2]-((max[2]-min[2])/2)+sZ/2);
+				spModel->setTransformationMatrix(mx);
+				APP_STORAGE.invalidate( spModel.getEntryPtr() );
+			}			
+		}
+	}
 }

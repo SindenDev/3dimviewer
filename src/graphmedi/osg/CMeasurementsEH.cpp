@@ -191,7 +191,12 @@ bool CMeasurementsEH::handleDensity( const osgGA::GUIEventAdapter& ea, osgGA::GU
 	osg::Matrix unOrthoMatrix(osg::Matrix::inverse( m_scene->getOrthoTransformMatrix() ) );
 
 	// Get density volume from storage
-	data::CObjectPtr< data::CDensityData > pVolume( APP_STORAGE.getEntry(VPL_SIGNAL(SigGetActiveDataSet).invoke2()) );
+    int datasetId = VPL_SIGNAL(SigGetActiveDataSet).invoke2();
+    if (datasetId == data::CUSTOM_DATA)
+    {
+        return false;
+    }
+    data::CObjectPtr< data::CDensityData > pVolume( APP_STORAGE.getEntry(datasetId) );
 
 	// Get CONVERSION OBJECT
 	data::CCoordinatesConv CoordConv = VPL_SIGNAL(SigGetActiveConvObject).invoke2();
@@ -280,7 +285,12 @@ bool CMeasurementsEH::handleDensityUnderCursor( const osgGA::GUIEventAdapter& ea
     osg::Matrix unOrthoMatrix(osg::Matrix::inverse( m_scene->getOrthoTransformMatrix() ) );
 
     // Get density volume from storage
-    data::CObjectPtr< data::CDensityData > pVolume( APP_STORAGE.getEntry(VPL_SIGNAL(SigGetActiveDataSet).invoke2()) );
+    int datasetId = VPL_SIGNAL(SigGetActiveDataSet).invoke2();
+    if (datasetId == data::CUSTOM_DATA)
+    {
+        return false;
+    }
+    data::CObjectPtr< data::CDensityData > pVolume(APP_STORAGE.getEntry(datasetId));
 
     // Get CONVERSION OBJECT
     data::CCoordinatesConv CoordConv = VPL_SIGNAL(SigGetActiveConvObject).invoke2();

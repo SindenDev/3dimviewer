@@ -4,45 +4,45 @@
 <context>
     <name>CDemoPlugin</name>
     <message>
-        <location filename="../cdemoplugin.cpp" line="35"/>
+        <location filename="../cdemoplugin.cpp" line="34"/>
         <source>Pick Value</source>
         <translation>Hodnota v místě</translation>
     </message>
     <message>
-        <location filename="../cdemoplugin.cpp" line="36"/>
+        <location filename="../cdemoplugin.cpp" line="35"/>
         <source>Click the button and then select any point the volume data.</source>
         <translation>Zmáčkněte tlačítko a kliknutím zadejte bod uvnitř dat.</translation>
     </message>
     <message>
-        <location filename="../cdemoplugin.cpp" line="41"/>
+        <location filename="../cdemoplugin.cpp" line="40"/>
         <source>Stroke Drawing Mode</source>
         <translation>Kreslení čáry</translation>
     </message>
     <message>
-        <location filename="../cdemoplugin.cpp" line="42"/>
-        <location filename="../cdemoplugin.cpp" line="49"/>
+        <location filename="../cdemoplugin.cpp" line="41"/>
+        <location filename="../cdemoplugin.cpp" line="48"/>
         <source>Click the button, then press Shift and start drawing using mouse.</source>
         <translation>Vyberte kreslící mód, stlačte Shift a začněte kreslit.</translation>
     </message>
     <message>
-        <location filename="../cdemoplugin.cpp" line="48"/>
+        <location filename="../cdemoplugin.cpp" line="47"/>
         <source>Polygon Drawing Mode</source>
         <translation>Kreslení polygonu</translation>
     </message>
     <message>
+        <location filename="../cdemoplugin.cpp" line="54"/>
         <location filename="../cdemoplugin.cpp" line="55"/>
-        <location filename="../cdemoplugin.cpp" line="56"/>
         <source>Show Regions</source>
         <translation>Zobrazit regiony</translation>
     </message>
     <message>
-        <location filename="../cdemoplugin.cpp" line="66"/>
-        <location filename="../cdemoplugin.cpp" line="117"/>
+        <location filename="../cdemoplugin.cpp" line="65"/>
+        <location filename="../cdemoplugin.cpp" line="116"/>
         <source>Demo Plugin</source>
         <translation>Ukázkový plugin</translation>
     </message>
     <message>
-        <location filename="../cdemoplugin.cpp" line="83"/>
+        <location filename="../cdemoplugin.cpp" line="82"/>
         <source>Demo Plugin ToolBar</source>
         <translation>Lišta demo pluginu</translation>
     </message>

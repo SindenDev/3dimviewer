@@ -111,7 +111,12 @@ void scene::CSceneVolumeRendering::setRenderer(PSVR::PSVolumeRendering *pRendere
 void scene::CSceneVolumeRendering::updateFromStorage()
 {
     // Get the active dataset
-    data::CObjectPtr<data::CDensityData> spData( APP_STORAGE.getEntry(VPL_SIGNAL(SigGetActiveDataSet).invoke2()) );
+    int datasetId = VPL_SIGNAL(SigGetActiveDataSet).invoke2();
+    if (datasetId == data::CUSTOM_DATA)
+    {
+        return;
+    }
+    data::CObjectPtr<data::CDensityData> spData(APP_STORAGE.getEntry(datasetId));
 
     // Get sizes
     double sx = spData->getXSize() * spData->getDX() * 0.5;

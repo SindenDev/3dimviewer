@@ -32,8 +32,6 @@
 #include <OpenMesh/Tools/Decimater/ModEdgeLengthT.hh>
 #include <OpenMesh/Tools/Decimater/ModIndependentSetsT.hh>
 
-std::map<data::CMesh *, CDecimator *> decimationProgress;
-
 ////////////////////////////////////////////////////////////
 //
 
@@ -53,8 +51,10 @@ bool CDecimator::Reduce(data::CMesh &mesh, int final_vert_number, int final_tri_
     decimater.add(modHandle3);
     decimater.add(progressModuleHandle);
 
-    decimationProgress[&mesh] = this;
     decimater.initialize();
+
+	CDecimatorProgressModule<OpenMesh::Decimater::DecimaterT<data::CMesh> > & meh = decimater.module(progressModuleHandle);
+	meh.setDecimator(this);
 
     int start_tri_number = mesh.n_faces();
     int target = start_tri_number - final_tri_number;
@@ -84,10 +84,12 @@ bool CDecimator::Reduce(data::CMesh &mesh, int final_vert_number, int final_tri_
     //decimater.add(modHandle2);
     decimater.add(modHandle3);
     //decimater.add(modHandle4);
-    decimater.add(progressModuleHandle);
-
-    decimationProgress[&mesh] = this;
+    decimater.add(progressModuleHandle);	
+	
     decimater.initialize();
+
+	CDecimatorProgressModule<data::CMesh> & meh = decimater.module(progressModuleHandle);
+	meh.setDecimator(this);
 
     int start_tri_number = mesh.n_faces();
     int target = start_tri_number - final_tri_number;

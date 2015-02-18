@@ -56,6 +56,7 @@
 #include <osg/CSceneOSG.h>
 #include <osg/CMeasurementsEH.h>
 #include <drawing/CISEventHandler.h>
+#include <osg/CModelCutVisualizer.h>
 
 #include <osgQt/GraphicsWindowQt>
 
@@ -73,6 +74,8 @@
 #include <CPluginManager.h>
 #include <CCustomUI.h>
 #include <CModelVisualizer.h>
+#include <Signals.h>
+#include <data/CModelCut.h>
 
 #ifdef __APPLE__
 #include <tr1/array>
@@ -101,6 +104,9 @@ public:
     //! Returns pointer to the only instance of MainWindow
     static MainWindow* getInstance() { return m_pMainWindow; } 
 
+    //! Returns pointer to model manager
+    data::CModelManager* getModelManager() { return &m_ModelManager; }
+
 #ifdef WIN32 // Windows need nonunicode paths to be in ACP
     static std::string     wcs2ACP(const std::wstring &filename);
 #endif
@@ -117,7 +123,9 @@ public:
             if (NULL!=pMainWindow)
             {
                 QFileInfo inf(pMainWindow->m_wsProjectPath);
-                QString absPath = inf.dir().absolutePath();
+				QString absPath = pMainWindow->m_wsProjectPath;
+				if (!inf.isDir())
+					absPath = inf.dir().absolutePath();
                 if (!absPath.isEmpty())
                     lastUsed = absPath;
             }
@@ -141,6 +149,8 @@ public:
         if (!wsPatientName.isEmpty())
         {
             wsPatientName.replace("^"," ");
+			wsPatientName.replace("/"," ");
+			wsPatientName.replace("\\"," ");
             int idxGroup = wsPatientName.indexOf('=');
             if (idxGroup>0)
                 wsPatientName = wsPatientName.left(idxGroup);
@@ -191,6 +201,11 @@ private:
     //! Model manager.
     data::CModelManager             m_ModelManager;
 
+	//! Used model color
+	data::CColor4f					m_modelColor;
+
+	//! Used model label
+	std::string						m_modelLabel;
     //! Model visualizers
 #ifdef __APPLE__
     std::tr1::array
@@ -231,6 +246,11 @@ private:
 
     //! Event handlers - measurement on YZ scene
     osg::ref_ptr< scene::CMeasurementsYZEH > m_measurementsYZEH;
+
+	//! Cuts through model
+	osg::ref_ptr<osg::CModelCutVisualizerSliceXY> m_importedModelCutSliceXY[MAX_IMPORTED_MODELS];
+	osg::ref_ptr<osg::CModelCutVisualizerSliceXZ> m_importedModelCutSliceXZ[MAX_IMPORTED_MODELS];
+	osg::ref_ptr<osg::CModelCutVisualizerSliceYZ> m_importedModelCutSliceYZ[MAX_IMPORTED_MODELS];
 
     //! HACK: We need a permanent placeholder and parent for windows in central area for proper sizes during workspace switching
     QWidget*                m_centralWidget;
@@ -302,6 +322,12 @@ private:
     //! Setup dock widgets for osg scenes
     void            setupDockWindows();
 
+// model cut
+	//! Set Model Cut Visibility
+	void			setModelCutVisibilitySignal(int id, bool bShow);
+	//! Get Model Cut Visibility
+	bool			getModelCutVisibilitySignal(int id);
+
 // settings
     //! load application settings (excluding workspace related)
     void            loadAppSettings();
@@ -342,6 +368,8 @@ private:
     std::vector<int> getVersionList();
     //! Any of saved entries changed since last save?
     bool            isDirty();
+	// Find usable model storage id
+	int findPossibleModelId();
 
 // undo
     //! Enabler for undo/redo
@@ -363,6 +391,9 @@ protected:
     //! Mouse drop event handling
     virtual void dropEvent(QDropEvent* event);
     bool canAcceptEvent(QDropEvent* event);
+
+protected:
+    void onVREnabledChange(bool value);
 
 // slots
 private slots:
@@ -386,6 +417,8 @@ private slots:
     //! Load STL model (doesn't drop other data)
     bool            openSTL(const QString &wsFileName);
     //! Save DICOM series (copy files)
+    bool            saveOriginalDICOM();
+	//! Save DICOM series (save loaded volume)
     bool            saveDICOM();
     //! Save volumetric data
     bool            saveVLMAs();
@@ -552,6 +585,11 @@ private slots:
     void            onDockWidgetToggleView(bool);
 
 	void			fullscreen(bool);
+
+// texture filters
+	void			setTextureFilterEqualize(bool);
+	void			setTextureFilterSharpen(bool);
+	void			aboutToShowViewFilterMenu();
 };
 
 

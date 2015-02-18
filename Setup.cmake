@@ -13,8 +13,13 @@ if( MSVC90 )
          "Additional directory containing prebuilt 3rd party libraries like VPL, OpenMesh, OSG, Qt, etc." )
 endif( MSVC90 )
 if( MSVC10 )
-    set( TRIDIM_3RDPARTY_DIR "${CMAKE_SOURCE_DIR}/3rdParty_VS2010" CACHE PATH
-         "Directory containing prebuilt 3rd party libraries." )
+    if(CMAKE_CL_64)
+    	set( TRIDIM_3RDPARTY_DIR "${CMAKE_SOURCE_DIR}/3rdParty_VS2010_x64" CACHE PATH
+        	 "Directory containing prebuilt 3rd party libraries." )
+    else(CMAKE_CL_64)
+    	set( TRIDIM_3RDPARTY_DIR "${CMAKE_SOURCE_DIR}/3rdParty_VS2010" CACHE PATH
+        	 "Directory containing prebuilt 3rd party libraries." )
+    endif(CMAKE_CL_64)
     set( TRIDIM_MOOQ_DIR "D:" CACHE PATH
          "Additional directory containing prebuilt 3rd party libraries like VPL, OpenMesh, OSG, Qt, etc." )
 endif( MSVC10 )
@@ -29,6 +34,17 @@ if( MSVC11 )
     set( TRIDIM_MOOQ_DIR "D:" CACHE PATH
          "Additional directory containing prebuilt 3rd party libraries like VPL, OpenMesh, OSG, Qt, etc." )
 endif( MSVC11 )
+if( MSVC12 )
+    if(CMAKE_CL_64)
+    	set( TRIDIM_3RDPARTY_DIR "${CMAKE_SOURCE_DIR}/3rdParty_VS2013_x64" CACHE PATH
+        	 "Directory containing prebuilt 3rd party libraries." )
+    else(CMAKE_CL_64)
+    	set( TRIDIM_3RDPARTY_DIR "${CMAKE_SOURCE_DIR}/3rdParty_VS2013" CACHE PATH
+        	 "Directory containing prebuilt 3rd party libraries." )
+    endif(CMAKE_CL_64)
+    set( TRIDIM_MOOQ_DIR "D:" CACHE PATH
+         "Additional directory containing prebuilt 3rd party libraries like VPL, OpenMesh, OSG, Qt, etc." )
+endif( MSVC12 )
 #if( APPLE )
 #    set( TRIDIM_3RDPARTY_DIR "/opt/local" CACHE PATH
 #         "Directory containing prebuilt 3rd party libraries." )

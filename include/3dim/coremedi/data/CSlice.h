@@ -459,7 +459,7 @@ protected:
 
 private:
     //! Applies current selected filter on m_DensityData and returns backup of original data
-    vpl::img::CDImage* applyFilterAndGetBackup();
+    vpl::img::CDImage* applyFilterAndGetBackup(bool bEqualizeSlice, int min, int max);
 
     //! Restores m_DensityData and deletes backup
     void restoreFromBackupAndFree(vpl::img::CDImage* pBackup);

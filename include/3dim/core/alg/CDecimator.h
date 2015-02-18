@@ -41,9 +41,6 @@
 // forward declaration
 class CDecimator;
 
-// global list containing progress of decimation
-extern std::map<data::CMesh *, CDecimator *> decimationProgress;
-
 ////////////////////////////////////////////////////////////
 //! Tri mesh decimating algorithm implementation class.
 //! Implements Volume error metrics polygonal surface simplification.
@@ -83,21 +80,27 @@ public:
         : tBase(decimater, true)
     {
         m_decimator = NULL;
+		m_lastCount = 0;
+		m_cancel = false;
     }
     
     ~CDecimatorProgressModule()
     {
-        decimationProgress.erase(&(this->mesh()));
+        
     }
 
-    virtual void initialize()
+    virtual void initialize() override
     {
-        m_decimator = decimationProgress[&(this->mesh())];
+        m_decimator = NULL;
         m_cancel = false;
         m_lastCount = this->mesh().n_faces();
     }
+	virtual void setDecimator(CDecimator *decimater)
+	{
+		m_decimator = decimater;
+	}
 
-    virtual float collapse_priority(const OpenMesh::Decimater::CollapseInfoT<data::CMesh>& collapseInfo)
+    virtual float collapse_priority(const OpenMesh::Decimater::CollapseInfoT<data::CMesh>& collapseInfo) override
     {
         if (m_cancel)
         {
@@ -109,9 +112,9 @@ public:
         }
     }
 
-    virtual void postprocess_collapse(const OpenMesh::Decimater::CollapseInfoT<data::CMesh> &collapseInfo)
+    virtual void postprocess_collapse(const OpenMesh::Decimater::CollapseInfoT<data::CMesh> &collapseInfo) override
     {
-        if (!m_cancel && !m_decimator->makeProgress(2))
+        if (!m_cancel && NULL!=m_decimator && !m_decimator->makeProgress(2))
         {
             m_cancel = true;
         }

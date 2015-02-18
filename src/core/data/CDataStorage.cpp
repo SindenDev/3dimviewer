@@ -92,6 +92,7 @@ CPtrWrapper<CStorageEntry> CDataStorage::getEntry(int Id, int Flags)
 {
     if( !checkId(Id) )
     {
+		VPL_LOG_INFO("CDataStorage::getEntry(): checkId failed, Id = " << Id);
         throw Storage::CUnknowEntry();
     }
 

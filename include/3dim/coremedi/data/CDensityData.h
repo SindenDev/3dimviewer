@@ -172,6 +172,9 @@ public:
     //! Does object contain relevant data?
     bool hasData() { return (getXSize() != INIT_SIZE || getYSize() != INIT_SIZE || getZSize() != INIT_SIZE); }
 
+	//! Get checksum of voxel data
+	unsigned int getDataCheckSum() const;
+
     //! Deserialize
     template < class tpSerializer >
     void deserialize( vpl::mod::CChannelSerializer<tpSerializer> & Reader )

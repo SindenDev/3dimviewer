@@ -117,7 +117,13 @@ void CCoordinatesConv::init()
 void CAuxCoordinatesConv::update(const CChangedEntries& Changes)
 {
     // Find parent volume data that has been changed
-    CObjectPtr<CDensityData> spData( APP_STORAGE.getEntry(VPL_SIGNAL(SigGetActiveDataSet).invoke2()) );
+    int datasetId = VPL_SIGNAL(SigGetActiveDataSet).invoke2();
+    if (datasetId == CUSTOM_DATA)
+    {
+        return;
+    }
+
+    CObjectPtr<CDensityData> spData(APP_STORAGE.getEntry(datasetId));
 
     // Initialize the conversion
     setVoxel(spData->getDX(), spData->getDY(), spData->getDZ());

@@ -1,5 +1,4 @@
 //////////////////////////////////////////////////////////////////////////////
-// $Id$
 //
 // This file comes from BSB software and was modified for 
 // 
@@ -28,6 +27,7 @@ namespace data
 	enum EDataSet
 	{
 		PATIENT_DATA    = 101,
+        CUSTOM_DATA     = 151,
 		AUX_DATA        = 201
 	};
 }
@@ -48,6 +48,12 @@ namespace data
 #define CORE_STORAGE_IMAGE_LOADER_INFO_ID 600
 #define CORE_STORAGE_APP_SETTINGS_ID 900
 #define CORE_STORAGE_SAVED_ENTRIES_ID 2000
+
+#define CORE_STORAGE_IMPORTED_MODEL_CUTSLICE_XY_ID 1520
+#define CORE_STORAGE_IMPORTED_MODEL_CUTSLICE_XZ_ID 1540
+#define CORE_STORAGE_IMPORTED_MODEL_CUTSLICE_YZ_ID 1560
+
+#define CORE_STORAGE_VOLUME_TRANSFORMATION_ID 1910
 
 // storage_ids_core_H_included
 #endif

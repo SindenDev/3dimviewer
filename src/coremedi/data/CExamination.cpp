@@ -51,6 +51,7 @@
 #include "data/CAppSettings.h"
 #include <data/CRegionData.h>
 #include <data/CRegionColoring.h>
+#include <data/CVolumeTransformation.h>
 
 
 #include <VPL/Base/Logging.h>
@@ -179,6 +180,9 @@ void CExamination::init()
     // All drawings dummy
     STORABLE_FACTORY.registerObject(AllDrawings::Id, AllDrawings::Type::create);
 
+    // Volume transformation
+    STORABLE_FACTORY.registerObject(VolumeTransformation::Id, VolumeTransformation::Type::create, CEntryDeps());
+
     // Application settings
     STORABLE_FACTORY.registerObject(AppSettings::Id, AppSettings::Type::create );
 
@@ -216,17 +220,18 @@ void CExamination::init()
 
     APP_STORAGE.getEntry(ImageLoaderInfo::Id);
     APP_STORAGE.getEntry(AllDrawings::Id);
+    APP_STORAGE.getEntry(VolumeTransformation::Id);
     APP_STORAGE.getEntry(UndoManager::Id);
 
     APP_STORAGE.getEntry(SavedEntries::Id);
 
     // init volume undo
     {
-        data::CObjectPtr<data::CDensityData> spVolume( APP_STORAGE.getEntry(Storage::PatientData::Id) );
+        data::CObjectPtr<data::CDensityData> spVolume(APP_STORAGE.getEntry(Storage::PatientData::Id));
         spVolume->initVolumeUndo(Storage::PatientData::Id);
     }
     {
-        data::CObjectPtr<data::CDensityData> spVolume( APP_STORAGE.getEntry(Storage::AuxData::Id) );
+        data::CObjectPtr<data::CDensityData> spVolume(APP_STORAGE.getEntry(Storage::AuxData::Id));
         spVolume->initVolumeUndo(Storage::AuxData::Id);
     }
 }
@@ -237,7 +242,7 @@ void CExamination::init()
 const SDensityWindow &CExamination::getDensityWindow()
 {
     // Get pointer to the density window
-    CObjectPtr<CDensityWindow> spWindow( APP_STORAGE.getEntry(Storage::DensityWindow::Id) );
+    CObjectPtr<CDensityWindow> spWindow(APP_STORAGE.getEntry(Storage::DensityWindow::Id));
     return spWindow->getParams();
 }
 
@@ -249,19 +254,25 @@ SDensityWindow CExamination::estimateDensityWindow()
     static const vpl::img::tDensityPixel AlmostAir = -800;
 
     // Get pointer to the active data set
-    CObjectPtr<CDensityData> spVolume( APP_STORAGE.getEntry(getActiveDataSet()) );
+    int datasetId = getActiveDataSet();
+    if (datasetId == CUSTOM_DATA)
+    {
+        return SDensityWindow();
+    }
+
+    CObjectPtr<CDensityData> spVolume(APP_STORAGE.getEntry(datasetId));
 
     // Estimate optimal density window
     int iCount = 0;
     double dSum = 0.0, dSumSqr = 0.0;
     vpl::tSize k = spVolume->getZSize() / 2;
-    for( vpl::tSize j = 0; j < spVolume->getYSize(); ++j )
+    for (vpl::tSize j = 0; j < spVolume->getYSize(); ++j)
     {
-        for( vpl::tSize i = 0; i < spVolume->getXSize(); ++i )
+        for (vpl::tSize i = 0; i < spVolume->getXSize(); ++i)
         {
             vpl::img::tDensityPixel Value = spVolume->at(i, j, k);
-//            if( Value != spVolume->at(0, 0, 0) )
-            if( Value > AlmostAir )
+            //if (Value != spVolume->at(0, 0, 0))
+            if (Value > AlmostAir)
             {
                 dSum += Value;
                 dSumSqr += double(Value) * Value;
@@ -289,9 +300,9 @@ SDensityWindow CExamination::estimateDensityWindow()
 void CExamination::setDensityWindow(int Center, int Width)
 {
     // Get pointer to the density window
-    CObjectPtr<CDensityWindow> spWindow( APP_STORAGE.getEntry(Storage::DensityWindow::Id, Storage::NO_UPDATE) );
+    CObjectPtr<CDensityWindow> spWindow(APP_STORAGE.getEntry(Storage::DensityWindow::Id, Storage::NO_UPDATE));
 
-    if( spWindow->getCenter() == Center && spWindow->getWidth() == Width )
+    if (spWindow->getCenter() == Center && spWindow->getWidth() == Width)
     {
         return;
     }
@@ -309,7 +320,7 @@ void CExamination::setDensityWindow(int Center, int Width)
 void CExamination::setColoring(data::CColoringFunc4b *pFunc)
 {
     // Get pointer to the density window
-    CObjectPtr<CDensityWindow> spWindow( APP_STORAGE.getEntry(Storage::DensityWindow::Id, Storage::NO_UPDATE) );
+    CObjectPtr<CDensityWindow> spWindow(APP_STORAGE.getEntry(Storage::DensityWindow::Id, Storage::NO_UPDATE));
 
     // Update the density window
     spWindow->setColoring(pFunc);
@@ -324,7 +335,7 @@ void CExamination::setColoring(data::CColoringFunc4b *pFunc)
 int CExamination::getColoringType()
 {
     // Get pointer to the density window
-    CObjectPtr<CDensityWindow> spWindow( APP_STORAGE.getEntry(Storage::DensityWindow::Id, Storage::NO_UPDATE) );
+    CObjectPtr<CDensityWindow> spWindow(APP_STORAGE.getEntry(Storage::DensityWindow::Id, Storage::NO_UPDATE));
 
     // Update the density window
     return spWindow->getColoringType();
@@ -335,7 +346,7 @@ int CExamination::getColoringType()
 
 int CExamination::getActiveDataSet()
 {
-    CObjectPtr<CActiveDataSet> spDataSet( APP_STORAGE.getEntry(Storage::ActiveDataSet::Id) );
+    CObjectPtr<CActiveDataSet> spDataSet(APP_STORAGE.getEntry(Storage::ActiveDataSet::Id));
 
     return spDataSet->getId();
 }
@@ -345,16 +356,16 @@ int CExamination::getActiveDataSet()
 
 void CExamination::setActiveDataSet(int Id)
 {
-    if( Id < PATIENT_DATA || Id > AUX_DATA )
+    if (Id < PATIENT_DATA || Id > AUX_DATA)
     {
         return;
     }
 
     // Get active data set
-    CObjectPtr<CActiveDataSet> spDataSet( APP_STORAGE.getEntry(Storage::ActiveDataSet::Id, Storage::NO_UPDATE) );
+    CObjectPtr<CActiveDataSet> spDataSet(APP_STORAGE.getEntry(Storage::ActiveDataSet::Id, Storage::NO_UPDATE));
 
     // Any change?
-    if( spDataSet->getId() == Id )
+    if (spDataSet->getId() == Id)
     {
         return;
     }
@@ -370,7 +381,13 @@ void CExamination::setActiveDataSet(int Id)
 
 int CExamination::getActiveConv()
 {
-    CObjectPtr<CActiveDataSet> spDataSet( APP_STORAGE.getEntry(Storage::ActiveDataSet::Id) );
+    CObjectPtr<CActiveDataSet> spDataSet(APP_STORAGE.getEntry(Storage::ActiveDataSet::Id));
+
+    int datasetId = spDataSet->getId();
+    if (datasetId == CUSTOM_DATA)
+    {
+        return -1;
+    }
 
     return spDataSet->getId() + 1;
 }
@@ -380,8 +397,13 @@ int CExamination::getActiveConv()
 
 CCoordinatesConv CExamination::getActiveConvObject()
 {
-    CObjectPtr<CCoordinatesConv> spConv( APP_STORAGE.getEntry(getActiveConv()) );
+    int activeConvId = getActiveConv();
+    if (activeConvId == -1)
+    {
+        return CCoordinatesConv();
+    }
 
+    CObjectPtr<CCoordinatesConv> spConv(APP_STORAGE.getEntry(activeConvId));
     return CCoordinatesConv(*spConv);
 }
 
@@ -390,7 +412,7 @@ CCoordinatesConv CExamination::getActiveConvObject()
 
 CCoordinatesConv CExamination::getPatientConvObject()
 {
-    CObjectPtr<CCoordinatesConv> spConv( APP_STORAGE.getEntry(Storage::PatientConv::Id) );
+    CObjectPtr<CCoordinatesConv> spConv(APP_STORAGE.getEntry(Storage::PatientConv::Id));
     return CCoordinatesConv(*spConv);
 }
 
@@ -399,7 +421,7 @@ CCoordinatesConv CExamination::getPatientConvObject()
 
 CCoordinatesConv CExamination::getAuxConvObject()
 {
-    CObjectPtr<CCoordinatesConv> spConv( APP_STORAGE.getEntry(Storage::AuxConv::Id) );
+    CObjectPtr<CCoordinatesConv> spConv(APP_STORAGE.getEntry(Storage::AuxConv::Id));
     return CCoordinatesConv(*spConv);
 }
 
@@ -408,9 +430,9 @@ CCoordinatesConv CExamination::getAuxConvObject()
 
 void CExamination::enableRegionColoring(bool bEnable)
 {
-    CObjectPtr<CRegionData> spRegionData( APP_STORAGE.getEntry(Storage::RegionData::Id, Storage::NO_UPDATE) );
+    CObjectPtr<CRegionData> spRegionData(APP_STORAGE.getEntry(Storage::RegionData::Id, Storage::NO_UPDATE));
 
-    if( spRegionData->isColoringEnabled() == bEnable )
+    if (spRegionData->isColoringEnabled() == bEnable)
     {
         return;
     }
@@ -425,7 +447,7 @@ void CExamination::enableRegionColoring(bool bEnable)
 
 bool CExamination::isRegionColoringEnabled()
 {
-    CObjectPtr<CRegionData> spRegionData( APP_STORAGE.getEntry(Storage::RegionData::Id, Storage::NO_UPDATE) );
+    CObjectPtr<CRegionData> spRegionData(APP_STORAGE.getEntry(Storage::RegionData::Id, Storage::NO_UPDATE));
 
     return spRegionData->isColoringEnabled();
 }
@@ -435,7 +457,7 @@ bool CExamination::isRegionColoringEnabled()
 
 void CExamination::setRegionColor(int i, const CColor4b& Color)
 {
-    CObjectPtr<CRegionColoring> spColoring( APP_STORAGE.getEntry(Storage::RegionColoring::Id, Storage::NO_UPDATE) );
+    CObjectPtr<CRegionColoring> spColoring(APP_STORAGE.getEntry(Storage::RegionColoring::Id, Storage::NO_UPDATE));
 
     spColoring->setColor(i, Color);
 
@@ -447,7 +469,7 @@ void CExamination::setRegionColor(int i, const CColor4b& Color)
 
 CColor4b CExamination::getRegionColor(int i)
 {
-    CObjectPtr<CRegionColoring> spColoring( APP_STORAGE.getEntry(Storage::RegionColoring::Id) );
+    CObjectPtr<CRegionColoring> spColoring(APP_STORAGE.getEntry(Storage::RegionColoring::Id));
     return spColoring->getColor(i);
 }
 
@@ -456,11 +478,11 @@ CColor4b CExamination::getRegionColor(int i)
 
 void CExamination::setSlicePositionXY(int Position)
 {
-//    CObjectPtr<COrthoSliceXY> spSlice( APP_STORAGE.getEntryPtr(Storage::SliceXY::Id) );
-    CObjectPtr<COrthoSliceXY> spSlice( APP_STORAGE.getEntry(Storage::SliceXY::Id, Storage::NO_UPDATE) );
+    //CObjectPtr<COrthoSliceXY> spSlice(APP_STORAGE.getEntryPtr(Storage::SliceXY::Id));
+    CObjectPtr<COrthoSliceXY> spSlice(APP_STORAGE.getEntry(Storage::SliceXY::Id, Storage::NO_UPDATE));
 
     // Check the current position
-    if( spSlice->getPosition() == Position )
+    if (spSlice->getPosition() == Position)
     {
         return;
     }
@@ -477,11 +499,11 @@ void CExamination::setSlicePositionXY(int Position)
 
 void CExamination::setSlicePositionXZ(int Position)
 {
-//    CObjectPtr<COrthoSliceXZ> spSlice( APP_STORAGE.getEntryPtr(Storage::SliceXZ::Id) );
-    CObjectPtr<COrthoSliceXZ> spSlice( APP_STORAGE.getEntry(Storage::SliceXZ::Id, Storage::NO_UPDATE) );
+    //CObjectPtr<COrthoSliceXZ> spSlice(APP_STORAGE.getEntryPtr(Storage::SliceXZ::Id));
+    CObjectPtr<COrthoSliceXZ> spSlice(APP_STORAGE.getEntry(Storage::SliceXZ::Id, Storage::NO_UPDATE));
 
     // Check the current position
-    if( spSlice->getPosition() == Position )
+    if (spSlice->getPosition() == Position)
     {
         return;
     }
@@ -498,11 +520,11 @@ void CExamination::setSlicePositionXZ(int Position)
 
 void CExamination::setSlicePositionYZ(int Position)
 {
-//    CObjectPtr<COrthoSliceYZ> spSlice( APP_STORAGE.getEntryPtr(Storage::SliceYZ::Id) );
-    CObjectPtr<COrthoSliceYZ> spSlice( APP_STORAGE.getEntry(Storage::SliceYZ::Id, Storage::NO_UPDATE) );
+    //CObjectPtr<COrthoSliceYZ> spSlice(APP_STORAGE.getEntryPtr(Storage::SliceYZ::Id));
+    CObjectPtr<COrthoSliceYZ> spSlice(APP_STORAGE.getEntry(Storage::SliceYZ::Id, Storage::NO_UPDATE));
 
     // Check the current position
-    if( spSlice->getPosition() == Position )
+    if (spSlice->getPosition() == Position)
     {
         return;
     }
@@ -520,16 +542,16 @@ void CExamination::setSlicePositionYZ(int Position)
 void CExamination::setSliceModeXY(int Mode)
 {
     // Is the mode valid?
-    if( Mode < COrthoSlice::MODE_SLICE || Mode > COrthoSlice::MODE_RTG )
+    if (Mode < COrthoSlice::MODE_SLICE || Mode > COrthoSlice::MODE_RTG)
     {
         return;
     }
 
-//    CObjectPtr<COrthoSliceXY> spSlice( APP_STORAGE.getEntryPtr(Storage::SliceXY::Id) );
-    CObjectPtr<COrthoSliceXY> spSlice( APP_STORAGE.getEntry(Storage::SliceXY::Id, Storage::NO_UPDATE) );
+    //CObjectPtr<COrthoSliceXY> spSlice( APP_STORAGE.getEntryPtr(Storage::SliceXY::Id) );
+    CObjectPtr<COrthoSliceXY> spSlice(APP_STORAGE.getEntry(Storage::SliceXY::Id, Storage::NO_UPDATE));
 
     // Check the current mode
-    if( spSlice->getMode() == Mode )
+    if (spSlice->getMode() == Mode)
     {
         return;
     }
@@ -547,16 +569,16 @@ void CExamination::setSliceModeXY(int Mode)
 void CExamination::setSliceModeXZ(int Mode)
 {
     // Is the mode valid?
-    if( Mode < COrthoSlice::MODE_SLICE || Mode > COrthoSlice::MODE_RTG )
+    if (Mode < COrthoSlice::MODE_SLICE || Mode > COrthoSlice::MODE_RTG)
     {
         return;
     }
 
-//    CObjectPtr<COrthoSliceXZ> spSlice( APP_STORAGE.getEntryPtr(Storage::SliceXZ::Id) );
-    CObjectPtr<COrthoSliceXZ> spSlice( APP_STORAGE.getEntry(Storage::SliceXZ::Id, Storage::NO_UPDATE) );
+    //CObjectPtr<COrthoSliceXZ> spSlice( APP_STORAGE.getEntryPtr(Storage::SliceXZ::Id) );
+    CObjectPtr<COrthoSliceXZ> spSlice(APP_STORAGE.getEntry(Storage::SliceXZ::Id, Storage::NO_UPDATE));
 
     // Check the current mode
-    if( spSlice->getMode() == Mode )
+    if (spSlice->getMode() == Mode)
     {
         return;
     }
@@ -574,16 +596,16 @@ void CExamination::setSliceModeXZ(int Mode)
 void CExamination::setSliceModeYZ(int Mode)
 {
     // Is the mode valid?
-    if( Mode < COrthoSlice::MODE_SLICE || Mode > COrthoSlice::MODE_RTG )
+    if (Mode < COrthoSlice::MODE_SLICE || Mode > COrthoSlice::MODE_RTG)
     {
         return;
     }
 
-//    CObjectPtr<COrthoSliceYZ> spSlice( APP_STORAGE.getEntryPtr(Storage::SliceYZ::Id) );
-    CObjectPtr<COrthoSliceYZ> spSlice( APP_STORAGE.getEntry(Storage::SliceYZ::Id, Storage::NO_UPDATE) );
+    //CObjectPtr<COrthoSliceYZ> spSlice( APP_STORAGE.getEntryPtr(Storage::SliceYZ::Id) );
+    CObjectPtr<COrthoSliceYZ> spSlice(APP_STORAGE.getEntry(Storage::SliceYZ::Id, Storage::NO_UPDATE));
 
     // Check the current mode
-    if( spSlice->getMode() == Mode )
+    if (spSlice->getMode() == Mode)
     {
         return;
     }
@@ -604,9 +626,14 @@ bool CExamination::loadDensityData(const std::string& ssFilename,
                                    EDataSet Id
                                    )
 {
+    if (Id == CUSTOM_DATA)
+    {
+        return false;
+    }
+
     // Open input file channel
     vpl::mod::CFileChannel Channel(vpl::mod::CH_IN, ssFilename);
-    if( !Channel.connect() )
+    if (!Channel.connect())
     {
         return false;
     }
@@ -615,7 +642,7 @@ bool CExamination::loadDensityData(const std::string& ssFilename,
     // CDensityData Data;
     vpl::img::CDensityVolume Data;
 
-    if( !vpl::mod::read(Data, Channel, Progress) )
+    if (!vpl::mod::read(Data, Channel, Progress))
     {
         return false;
     }
@@ -623,7 +650,7 @@ bool CExamination::loadDensityData(const std::string& ssFilename,
     // RESIZE VOLUME SO THAT (DIMENSION_k mod VOLUME_MULTIPLE == 0)
     //correctVolumeSize(Data, VOLUME_MULTIPLE);
 
-    CObjectPtr<CDensityData> spVolume( APP_STORAGE.getEntry(Id) );
+    CObjectPtr<CDensityData> spVolume(APP_STORAGE.getEntry(Id));
 
     // Use the data
     spVolume->makeRef(Data);
@@ -633,10 +660,10 @@ bool CExamination::loadDensityData(const std::string& ssFilename,
     spVolume->mirrorMargin();
 
     // Notify all interested windows
-//    APP_STORAGE.invalidate(spVolume.getEntryPtr(), data::Storage::FORCE_UPDATE);
-    APP_STORAGE.invalidate(spVolume.getEntryPtr() );
+    //APP_STORAGE.invalidate(spVolume.getEntryPtr(), data::Storage::FORCE_UPDATE);
+    APP_STORAGE.invalidate(spVolume.getEntryPtr());
 
-    onDataLoad( Id );
+    onDataLoad(Id);
 
     // O.K.
     return true;
@@ -647,9 +674,14 @@ bool CExamination::loadDensityDataU(const vpl::sys::tString& ssFilename,
                                     EDataSet Id
                                     )
 {
+    if (Id == CUSTOM_DATA)
+    {
+        return false;
+    }
+
     // Open input file channel
     vpl::mod::CFileChannelU Channel(vpl::mod::CH_IN, ssFilename);
-    if( !Channel.connect() )
+    if (!Channel.connect())
     {
         return false;
     }
@@ -658,7 +690,7 @@ bool CExamination::loadDensityDataU(const vpl::sys::tString& ssFilename,
     // CDensityData Data;
     vpl::img::CDensityVolume Data;
 
-    if( !vpl::mod::read(Data, Channel, Progress) )
+    if (!vpl::mod::read(Data, Channel, Progress))
     {
         return false;
     }
@@ -666,7 +698,7 @@ bool CExamination::loadDensityDataU(const vpl::sys::tString& ssFilename,
     // RESIZE VOLUME SO THAT (DIMENSION_k mod VOLUME_MULTIPLE == 0)
     //correctVolumeSize(Data, VOLUME_MULTIPLE);
 
-    CObjectPtr<CDensityData> spVolume( APP_STORAGE.getEntry(Id) );
+    CObjectPtr<CDensityData> spVolume(APP_STORAGE.getEntry(Id));
 
     // Use the data
     spVolume->makeRef(Data);
@@ -678,10 +710,10 @@ bool CExamination::loadDensityDataU(const vpl::sys::tString& ssFilename,
     // Notify all interested windows
     //APP_STORAGE.invalidate(spVolume.getEntryPtr(), data::Storage::FORCE_UPDATE);
     //APP_STORAGE.lockInvalidation();
-    APP_STORAGE.invalidate(spVolume.getEntryPtr() );
+    APP_STORAGE.invalidate(spVolume.getEntryPtr());
     //APP_STORAGE.unlockInvalidation();
 
-    onDataLoad( Id );
+    onDataLoad(Id);
 
     // O.K.
     return true;
@@ -728,7 +760,7 @@ bool CExamination::loadDensityDataU(const vpl::sys::tString& ssFilename,
 struct SCompareImagePosition
 {
     //! Compares the position of two images.
-    bool operator() (const vpl::img::CDicomSlicePtr& p1, const vpl::img::CDicomSlicePtr& p2)
+    bool operator()(const vpl::img::CDicomSlicePtr& p1, const vpl::img::CDicomSlicePtr& p2)
     {
         return p1->getPosition() < p2->getPosition();
     }
@@ -748,6 +780,11 @@ CExamination::ELoadState CExamination::loadDicomData( data::CSerieInfo * serie,
                                   bool bCompatibilityMode
                                   )
 {
+    if (Id == CUSTOM_DATA)
+    {
+        return ELS_FAILED;
+    }
+
     // Get number of dicom files to load
     int total_dicom_files = serie->getNumOfDicomFiles();
 
@@ -755,7 +792,7 @@ CExamination::ELoadState CExamination::loadDicomData( data::CSerieInfo * serie,
     int total_dicom_slices = serie->getNumOfSlices();
 
     // No dicom files
-    if( total_dicom_slices <= 0 )
+    if (total_dicom_slices <= 0)
     {
         return ELS_FAILED;
     }
@@ -767,7 +804,7 @@ CExamination::ELoadState CExamination::loadDicomData( data::CSerieInfo * serie,
     vpl::img::CDicomSlice RepSlice;
 
     // Preload one of the slices
-    if( !serie->loadDicomFile( total_dicom_files / 2, RepSlice ) )
+    if (!serie->loadDicomFile(total_dicom_files / 2, RepSlice))
     {
         return ELS_FAILED;
     }
@@ -796,11 +833,11 @@ CExamination::ELoadState CExamination::loadDicomData( data::CSerieInfo * serie,
     int counterMax = 2 * total_dicom_slices + 1;
     int counter = 0;
     int failures = 0;
-    for( int i = 0; i < total_dicom_files; ++i )
+    for (int i = 0; i < total_dicom_files; ++i)
     {
         // Load the dicom file including the image data
         tDicomSlices aux;
-        if( !serie->loadDicomFile( i, aux, true, bCompatibilityMode ) )
+        if (!serie->loadDicomFile(i, aux, true, bCompatibilityMode))
         {
             return ELS_FAILED;
         }
@@ -808,16 +845,16 @@ CExamination::ELoadState CExamination::loadDicomData( data::CSerieInfo * serie,
         // Process all frames
         tDicomSlices::iterator it = aux.begin();
         tDicomSlices::iterator itEnd = aux.end();
-        for( ; it != itEnd; ++it, ++counter )
+        for (; it != itEnd; ++it, ++counter)
         {
-            vpl::img::CDicomSlicePtr pSlice( *it );
+            vpl::img::CDicomSlicePtr pSlice(*it);
 
             // Normalize the image orientation
             pSlice->m_ImageOrientationX.normalize();
             pSlice->m_ImageOrientationY.normalize();
 
             // Verify the image orientation
-            if( !(XAxis == pSlice->m_ImageOrientationX) || !(YAxis == pSlice->m_ImageOrientationY) )
+            if (!(XAxis == pSlice->m_ImageOrientationX) || !(YAxis == pSlice->m_ImageOrientationY))
             {
                 ++failures;
                 VPL_LOG_INFO("Warning: Differently oriented slice was found");
@@ -837,7 +874,7 @@ CExamination::ELoadState CExamination::loadDicomData( data::CSerieInfo * serie,
             slices.push_back(pSlice);
 
             // Progress incrementation
-            if( !Progress(counter, counterMax) )
+            if (!Progress(counter, counterMax))
             {
                 return ELS_FAILED;
             }
@@ -846,7 +883,7 @@ CExamination::ELoadState CExamination::loadDicomData( data::CSerieInfo * serie,
 
     // Check the number of wrongly oriented slices
     int failuresMax = total_dicom_slices / 10;
-    if( failures > failuresMax )
+    if (failures > failuresMax)
     {
         VPL_LOG_INFO("Warning: Cannot load DICOM datasets with varying image orientation");
         return ELS_FAILED;
@@ -861,18 +898,18 @@ CExamination::ELoadState CExamination::loadDicomData( data::CSerieInfo * serie,
     // Correct the minimal and maximal position
     // - This is due to the fact that we have observed that dicom datasets may contain
     //   a wrongly positioned slice sometimes!
-    if( slices.size() > 2 )
+    if (slices.size() > 2)
     {
-        double d1 = vpl::math::getAbs( slices[0]->getPosition() - slices[1]->getPosition() );
-        double d2 = 2.0 * vpl::math::getAbs( slices[1]->getPosition() - slices[2]->getPosition() );
-        if( d1 > d2 )
+        double d1 = vpl::math::getAbs(slices[0]->getPosition() - slices[1]->getPosition());
+        double d2 = 2.0 * vpl::math::getAbs(slices[1]->getPosition() - slices[2]->getPosition());
+        if (d1 > d2)
         {
             ++counter;
             slices.pop_front();
             VPL_LOG_INFO("Warning: Wrongly positioned slice was found");
         }
     }
-    if( slices.size() > 2 )
+    if (slices.size() > 2)
     {
         double d1 = vpl::math::getAbs( slices[slices.size() - 1]->getPosition() - slices[slices.size() - 2]->getPosition() );
         double d2 = 2.0 * vpl::math::getAbs( slices[slices.size() - 2]->getPosition() - slices[slices.size() - 3]->getPosition() );
@@ -897,20 +934,20 @@ CExamination::ELoadState CExamination::loadDicomData( data::CSerieInfo * serie,
     // Find optimal slice thickness
     typedef std::vector<double> tRank;
     double dThickness = RepSlice.getThickness();
-    if( total_dicom_slices > 1 )
+    if (total_dicom_slices > 1)
     {
         // Position differences of neighbouring slices
         tRank DiffRank;
-        for( int j = 0; j < total_dicom_slices - 1; ++j )
+        for (int j = 0; j < total_dicom_slices - 1; ++j)
         {
-            DiffRank.push_back( vpl::math::getAbs( slices[j]->getPosition() - slices[j+1]->getPosition() ) );
+            DiffRank.push_back(vpl::math::getAbs(slices[j]->getPosition() - slices[j + 1]->getPosition()));
         }
         
         // Create ranking
         std::sort(DiffRank.begin(), DiffRank.end());
         
         // Choose the optimal thickness as a median value
-//        dThickness = DiffRank[total_dicom_slices / 2 - 1];
+        //dThickness = DiffRank[total_dicom_slices / 2 - 1];
         dThickness = DiffRank[(total_dicom_slices - 1) / 2];
     }
 
@@ -936,54 +973,54 @@ CExamination::ELoadState CExamination::loadDicomData( data::CSerieInfo * serie,
 
     vpl::tSize alignedSizeX = orig_size_x + (VOLUME_MULTIPLE - orig_size_x % VOLUME_MULTIPLE) % VOLUME_MULTIPLE;
     vpl::tSize alignedSizeY = orig_size_y + (VOLUME_MULTIPLE - orig_size_y % VOLUME_MULTIPLE) % VOLUME_MULTIPLE;
-    vpl::tSize alignedSizeZ = orig_size_z + (VOLUME_MULTIPLE - orig_size_z % VOLUME_MULTIPLE) % VOLUME_MULTIPLE;    
+    vpl::tSize alignedSizeZ = orig_size_z + (VOLUME_MULTIPLE - orig_size_z % VOLUME_MULTIPLE) % VOLUME_MULTIPLE;
     if (subsampling != vpl::img::CVector3d(1.0, 1.0, 1.0))
     {
         alignedSizeX = orig_size_x;
         alignedSizeY = orig_size_y;
         alignedSizeZ = orig_size_z;
     }
-    vpl::img::CDensityVolume AuxData( alignedSizeX, alignedSizeY, alignedSizeZ );
+    vpl::img::CDensityVolume AuxData(alignedSizeX, alignedSizeY, alignedSizeZ);
 
     // Create a volume of corresponding size
-    AuxData.fillEntire( vpl::img::CPixelTraits<vpl::img::tDensityPixel>::getPixelMin() );
+    AuxData.fillEntire(vpl::img::CPixelTraits<vpl::img::tDensityPixel>::getPixelMin());
 
     // Set the voxel size
-    AuxData.setDX( RepSlice.getDX() );
-    AuxData.setDY( RepSlice.getDY() );
-    AuxData.setDZ( dThickness );
+    AuxData.setDX(RepSlice.getDX());
+    AuxData.setDY(RepSlice.getDY());
+    AuxData.setDZ(dThickness);
 
     // Create a set of all possible slice positions
     typedef std::vector<int> tInserted;
     int size_p = orig_size_z;
-    tInserted Inserted( size_p, 0 );
+    tInserted Inserted(size_p, 0);
 
     // Insert all slices into the temporary volume
     tSliceQueue::iterator it = slices.begin();
     tSliceQueue::iterator itEnd = slices.end();
-    for( ; it != itEnd; ++it, ++counter )
+    for (; it != itEnd; ++it, ++counter)
     {
-        vpl::img::CDicomSlicePtr pSlice( *it );
+        vpl::img::CDicomSlicePtr pSlice(*it);
         
         // Estimate the slice position
 //        int slice_position = static_cast<int>( (pSlice->getPosition() - min_position) * dInvThickness );
-        int slice_position = static_cast<int>( (pSlice->getPosition() - min_position) * dInvThickness + 0.5 );
-        if( slice_position < 0 || slice_position >= orig_size_z )
+        int slice_position = static_cast<int>((pSlice->getPosition() - min_position) * dInvThickness + 0.5);
+        if (slice_position < 0 || slice_position >= orig_size_z)
         {
             continue;
         }
 
         // Check if any similar slice was already inserted?
-        if( Inserted[slice_position] == 0 )
+        if (Inserted[slice_position] == 0)
         {
             // Add current slice to the volume
-            AuxData.setPlaneXY( slice_position, *pSlice );
+            AuxData.setPlaneXY(slice_position, *pSlice);
 
             // Update the set of already loaded slices
             Inserted[slice_position] = 1;
 
             // Enforce deallocation of the data
-            pSlice->vpl::img::CDImage::resize( 0, 0, 0 );
+            pSlice->vpl::img::CDImage::resize(0, 0, 0);
         }
         else
         {
@@ -991,7 +1028,7 @@ CExamination::ELoadState CExamination::loadDicomData( data::CSerieInfo * serie,
         }
 
         // Update the progress bar
-        if( !Progress( counter, counterMax ) )
+        if (!Progress(counter, counterMax))
         {
             return ELS_FAILED;
         }
@@ -1003,22 +1040,22 @@ CExamination::ELoadState CExamination::loadDicomData( data::CSerieInfo * serie,
     
     // Find leftmost and rightmost correctly imported slice
     int LeftmostSlice = 0;
-    for( ; LeftmostSlice < size_p && Inserted[LeftmostSlice] == 0; ++LeftmostSlice );
-    
+    for (; LeftmostSlice < size_p && Inserted[LeftmostSlice] == 0; ++LeftmostSlice);
+
     int RightmostSlice = size_p - 1;
-    for( ; RightmostSlice >= 0 && Inserted[RightmostSlice] == 0; --RightmostSlice );
+    for (; RightmostSlice >= 0 && Inserted[RightmostSlice] == 0; --RightmostSlice);
 
     // Is an interpolation possible?
-    if( LeftmostSlice >= RightmostSlice )
+    if (LeftmostSlice >= RightmostSlice)
     {
         VPL_LOG_INFO("Warning: Cannot interpolate missing slices");
     }
 
     // Interpolate the missing data
     int LeftNeighbour = LeftmostSlice;
-    for( int z = LeftmostSlice + 1; z < RightmostSlice; ++z )
+    for (int z = LeftmostSlice + 1; z < RightmostSlice; ++z)
     {
-        if( Inserted[z] != 0 )
+        if (Inserted[z] != 0)
         {
             LeftNeighbour = z;
             continue;
@@ -1026,12 +1063,12 @@ CExamination::ELoadState CExamination::loadDicomData( data::CSerieInfo * serie,
 
         // Find the closest right neighbour
         int RightNeighbour = z + 1;
-        for( ; RightNeighbour < RightmostSlice && Inserted[RightNeighbour] == 0; ++RightNeighbour );
+        for (; RightNeighbour < RightmostSlice && Inserted[RightNeighbour] == 0; ++RightNeighbour);
 
         // Estimate interpolation coeeficients
         int Distance = RightNeighbour - LeftNeighbour;
         int DistLeft = z - LeftNeighbour;
-        if( Distance <= 0 || DistLeft <= 0 )
+        if (Distance <= 0 || DistLeft <= 0)
         {
             continue;
         }
@@ -1040,9 +1077,9 @@ CExamination::ELoadState CExamination::loadDicomData( data::CSerieInfo * serie,
         double dLeftWeight = 1.0 - dRightWeight;
 
         // Interpolate from neighbours
-        for( int y = 0; y < orig_size_y; ++y )
+        for (int y = 0; y < orig_size_y; ++y)
         {
-            for( int x = 0; x < orig_size_x; ++x )
+            for (int x = 0; x < orig_size_x; ++x)
             {
                 double dValue = dLeftWeight * AuxData(x, y, LeftNeighbour) + dRightWeight * AuxData(x, y, RightNeighbour);
                 AuxData(x, y, z) = vpl::img::tDensityPixel(dValue);
@@ -1059,22 +1096,22 @@ CExamination::ELoadState CExamination::loadDicomData( data::CSerieInfo * serie,
     CDensityData Data;
 
     // Is the transformation necessary?
-    if( vpl::math::getAbs(1.0 - XAxis.x()) < 0.001
+    if (vpl::math::getAbs(1.0 - XAxis.x()) < 0.001
         && vpl::math::getAbs(1.0 - YAxis.y()) < 0.001
-        && vpl::math::getAbs(1.0 - ZAxis.z()) < 0.001 )
+        && vpl::math::getAbs(1.0 - ZAxis.z()) < 0.001)
     {
         // Just a reference to the existing data
-        Data.makeRef( AuxData );
-        
-        // Set dicom meta data
-        Data.takeDicomData( RepSlice );
+        Data.makeRef(AuxData);
 
-        Data.setImagePosition( RepSlice.m_ImagePosition.getX(), RepSlice.m_ImagePosition.getY(), min_position);
-        
+        // Set dicom meta data
+        Data.takeDicomData(RepSlice);
+
+        Data.setImagePosition(RepSlice.m_ImagePosition.getX(), RepSlice.m_ImagePosition.getY(), min_position);
+
         // Set the voxel size
-        Data.setDX( RepSlice.getDX() );
-        Data.setDY( RepSlice.getDY() );
-        Data.setDZ( dThickness );
+        Data.setDX(RepSlice.getDX());
+        Data.setDY(RepSlice.getDY());
+        Data.setDZ(dThickness);
         
         goto lFinishLoading;
     }
@@ -1083,11 +1120,11 @@ CExamination::ELoadState CExamination::loadDicomData( data::CSerieInfo * serie,
     // BEGIN - THE TRANSFORMATION
     {
         // Calculate the correct Z axis as the difference of position of two neighbouring slices
-        if( total_dicom_slices > 1 )
+        if (total_dicom_slices > 1)
         {
-            vpl::img::CVector3D NewZAxis( slices[slices.size() / 2 - 1]->m_ImagePosition, slices[slices.size() / 2]->m_ImagePosition );
+            vpl::img::CVector3D NewZAxis(slices[slices.size() / 2 - 1]->m_ImagePosition, slices[slices.size() / 2]->m_ImagePosition);
             NewZAxis.normalize();
-            if( vpl::img::CVector3D::dotProduct(ZAxis, NewZAxis) < 0 )
+            if (vpl::img::CVector3D::dotProduct(ZAxis, NewZAxis) < 0)
             {
                 NewZAxis *= -1;
             }
@@ -1095,10 +1132,10 @@ CExamination::ELoadState CExamination::loadDicomData( data::CSerieInfo * serie,
         }
 
         // Recalculate position of all slices after projection on the Z axis
-        for( int i = 0; i < total_dicom_slices; ++i )
+        for (int i = 0; i < total_dicom_slices; ++i)
         {
             // Vector from the origin to the slice position
-            vpl::img::CVector3D PositionVector( vpl::img::CPoint3D(0, 0, 0), slices[i]->m_ImagePosition );
+            vpl::img::CVector3D PositionVector(vpl::img::CPoint3D(0, 0, 0), slices[i]->m_ImagePosition);
 
             // Calculate the projection
             double dPosition = vpl::img::CVector3D::dotProduct(ZAxis, PositionVector);
@@ -1115,13 +1152,13 @@ CExamination::ELoadState CExamination::loadDicomData( data::CSerieInfo * serie,
         max_position = slices[slices.size() - 1]->getPosition();
 
         // Find the optimal slice thickness again
-        if( total_dicom_slices > 1 )
+        if (total_dicom_slices > 1)
         {
             // Position differences of neighbouring slices
             tRank DiffRank;
-            for( int j = 0; j < total_dicom_slices - 1; ++j )
+            for (int j = 0; j < total_dicom_slices - 1; ++j)
             {
-                DiffRank.push_back( vpl::math::getAbs( slices[j]->getPosition() - slices[j+1]->getPosition() ) );
+                DiffRank.push_back(vpl::math::getAbs(slices[j]->getPosition() - slices[j + 1]->getPosition()));
             }
             
             // Create ranking
@@ -1133,7 +1170,7 @@ CExamination::ELoadState CExamination::loadDicomData( data::CSerieInfo * serie,
         }
 
         // Check the thickness
-        if( dThickness <= 0.0 )
+        if (dThickness <= 0.0)
         {
             return ELS_FAILED;
         }
@@ -1176,7 +1213,7 @@ CExamination::ELoadState CExamination::loadDicomData( data::CSerieInfo * serie,
         double Rminz = Temp(2), Rmaxz = Temp(2);
 
         // All remaining corners
-        for( int i = 1; i < 8; ++i )
+        for (int i = 1; i < 8; ++i)
         {
             OrigSize(0) = (orig_size_x - 1) * Corners[i][0] * RepSlice.getDX();
             OrigSize(1) = (orig_size_y - 1) * Corners[i][1] * RepSlice.getDY();
@@ -1202,9 +1239,9 @@ CExamination::ELoadState CExamination::loadDicomData( data::CSerieInfo * serie,
         OrigSize(1) = 0;
         OrigSize(2) = 0;
         Temp.mult(OrigSize, Transform);
-        if( OrigSize(0) > OrigSize(1) )
+        if (OrigSize(0) > OrigSize(1))
         {
-            if( OrigSize(0) > OrigSize(2) )
+            if (OrigSize(0) > OrigSize(2))
             {
                 Voxel(0) = RepSlice.getDX();
             }
@@ -1215,7 +1252,7 @@ CExamination::ELoadState CExamination::loadDicomData( data::CSerieInfo * serie,
         }
         else
         {
-            if( OrigSize(1) > OrigSize(2) )
+            if (OrigSize(1) > OrigSize(2))
             {
                 Voxel(1) = RepSlice.getDX();
             }
@@ -1229,9 +1266,9 @@ CExamination::ELoadState CExamination::loadDicomData( data::CSerieInfo * serie,
         OrigSize(1) = 1;
         OrigSize(2) = 0;
         Temp.mult(OrigSize, Transform);
-        if( OrigSize(0) >= OrigSize(1) )
+        if (OrigSize(0) >= OrigSize(1))
         {
-            if( OrigSize(0) >= OrigSize(2) )
+            if (OrigSize(0) >= OrigSize(2))
             {
                 Voxel(0) = RepSlice.getDY();
             }
@@ -1242,7 +1279,7 @@ CExamination::ELoadState CExamination::loadDicomData( data::CSerieInfo * serie,
         }
         else
         {
-            if( OrigSize(1) >= OrigSize(2) )
+            if (OrigSize(1) >= OrigSize(2))
             {
                 Voxel(1) = RepSlice.getDY();
             }
@@ -1256,9 +1293,9 @@ CExamination::ELoadState CExamination::loadDicomData( data::CSerieInfo * serie,
         OrigSize(1) = 0;
         OrigSize(2) = 1;
         Temp.mult(OrigSize, Transform);
-        if( OrigSize(0) >= OrigSize(1) )
+        if (OrigSize(0) >= OrigSize(1))
         {
-            if( OrigSize(0) > OrigSize(2) )
+            if (OrigSize(0) > OrigSize(2))
             {
                 Voxel(0) = dThickness;
             }
@@ -1269,7 +1306,7 @@ CExamination::ELoadState CExamination::loadDicomData( data::CSerieInfo * serie,
         }
         else
         {
-            if( OrigSize(1) > OrigSize(2) )
+            if (OrigSize(1) > OrigSize(2))
             {
                 Voxel(1) = dThickness;
             }
@@ -1291,7 +1328,7 @@ CExamination::ELoadState CExamination::loadDicomData( data::CSerieInfo * serie,
         try {
             inverse(InvTransform);
         }
-        catch( ... )
+        catch (...)
         {
             return ELS_FAILED;
         }
@@ -1326,7 +1363,7 @@ CExamination::ELoadState CExamination::loadDicomData( data::CSerieInfo * serie,
 
         // Interpolate the volume data
         counterMax += Data.getZSize();
-        for( int z = 0; z < Data.getZSize(); ++z, ++counter )
+        for (int z = 0; z < Data.getZSize(); ++z, ++counter)
         {
             // Four slice corners
             vpl::math::CDVector3 A, B, C, D;
@@ -1373,7 +1410,7 @@ CExamination::ELoadState CExamination::loadDicomData( data::CSerieInfo * serie,
             vpl::img::CPoint3D bc(b(0), b(1), b(2));
 
             // Add slice to the volume
-            for( int j = 0; j < Data.getYSize(); ++j )
+            for (int j = 0; j < Data.getYSize(); ++j)
             {
                 // Calculate step in the X axis
                 vpl::img::CVector3D step_adbc;
@@ -1388,9 +1425,9 @@ CExamination::ELoadState CExamination::loadDicomData( data::CSerieInfo * serie,
                 vpl::tSize dst_index=Data.getIdx(0,j,z);
 
                 // Actual row voxels cycle
-                for( int i = 0; i < Data.getXSize(); ++i, dst_index += Data.getXOffset() )
+                for (int i = 0; i < Data.getXSize(); ++i, dst_index += Data.getXOffset())
                 {
-                    if( AuxData.checkPosition(int(adbc.x()), int(adbc.y()), int(adbc.z())) )
+                    if (AuxData.checkPosition(int(adbc.x()), int(adbc.y()), int(adbc.z())))
                     {
                         // Source voxel value
                         Data.set(dst_index,AuxData.interpolate(adbc));
@@ -1406,7 +1443,7 @@ CExamination::ELoadState CExamination::loadDicomData( data::CSerieInfo * serie,
             }
 
             // Update the progress bar
-            if( !Progress( counter, counterMax ) )
+            if (!Progress(counter, counterMax))
             {
                 return ELS_FAILED;
             }
@@ -1428,10 +1465,10 @@ lFinishLoading:
     // SET APPLICATION DATA
 
     // get the volume object from storage
-    CObjectPtr<CDensityData> spVolume( APP_STORAGE.getEntry(Id) );
+    CObjectPtr<CDensityData> spVolume(APP_STORAGE.getEntry(Id));
 
     // Use the data
-    spVolume->makeRef( Data );
+    spVolume->makeRef(Data);
 
     // Fill the margin
     spVolume->mirrorMargin();
@@ -1440,13 +1477,13 @@ lFinishLoading:
     spVolume->takeDicomData( RepSlice );
 
     spVolume->setImagePosition( Data.m_ImagePosition.getX(), Data.m_ImagePosition.getY(), Data.m_ImagePosition.getZ());
-    spVolume->setImageSubSampling( subsampling );
+    spVolume->setImageSubSampling(subsampling);
 
     // Notify all interested windows
 //    APP_STORAGE.invalidate( spVolume.getEntryPtr(), Storage::FORCE_UPDATE );
-    APP_STORAGE.invalidate( spVolume.getEntryPtr() );
+    APP_STORAGE.invalidate(spVolume.getEntryPtr());
 
-    this->onDataLoad( Id );
+    this->onDataLoad(Id);
 
     // OK
     return shouldFit ? ELS_OK : ELS_WARNING_GPU_MEMORY;
@@ -1458,8 +1495,13 @@ lFinishLoading:
 
 bool CExamination::setLimits(SVolumeOfInterest Limits, EDataSet Id, bool bForce)
 {
-    CObjectPtr<CVolumeOfInterest> spLimits( APP_STORAGE.getEntry(Id + 2) );
-    CObjectPtr<CDensityData> spVolume( APP_STORAGE.getEntry(Id) );
+    if (Id == CUSTOM_DATA)
+    {
+        return false;
+    }
+
+    CObjectPtr<CVolumeOfInterest> spLimits(APP_STORAGE.getEntry(Id + 2));
+    CObjectPtr<CDensityData> spVolume(APP_STORAGE.getEntry(Id));
 
     correctLimits(Limits, spVolume->getSize(), VOLUME_MULTIPLE);
 
@@ -1467,12 +1509,12 @@ bool CExamination::setLimits(SVolumeOfInterest Limits, EDataSet Id, bool bForce)
 //    Limits.normalize();
 
     // Any changes?
-    if( spLimits->getMinX() == Limits.m_MinX
+    if (spLimits->getMinX() == Limits.m_MinX
         && spLimits->getMaxX() == Limits.m_MaxX
         && spLimits->getMinY() == Limits.m_MinY
         && spLimits->getMaxY() == Limits.m_MaxY
         && spLimits->getMinZ() == Limits.m_MinZ
-        && spLimits->getMaxZ() == Limits.m_MaxZ )
+        && spLimits->getMaxZ() == Limits.m_MaxZ)
     {
         if (!bForce)
             return false;
@@ -1516,16 +1558,21 @@ bool CExamination::saveDensityData(const std::string & ssFilename,
                                    EDataSet Id
                                    )
 {
-    // Open output file channel
-    vpl::mod::CFileChannel Channel(vpl::mod::CH_OUT, ssFilename);
-    if( !Channel.connect() )
+    if (Id == CUSTOM_DATA)
     {
         return false;
     }
 
-    CObjectPtr<CDensityData> spVolume( APP_STORAGE.getEntry(Id) );
+    // Open output file channel
+    vpl::mod::CFileChannel Channel(vpl::mod::CH_OUT, ssFilename);
+    if (!Channel.connect())
+    {
+        return false;
+    }
 
-    vpl::img::CDensityVolume * ptrVolume = dynamic_cast< vpl::img::CDensityVolume *  >(spVolume.get() );
+    CObjectPtr<CDensityData> spVolume(APP_STORAGE.getEntry(Id));
+
+    vpl::img::CDensityVolume *ptrVolume = dynamic_cast< vpl::img::CDensityVolume *>(spVolume.get());
 
     // Save the data as a density volume (without dicom obtained info).
     return vpl::mod::write(*ptrVolume, Channel, Progress);
@@ -1540,16 +1587,21 @@ bool CExamination::saveDensityDataU(const vpl::sys::tString & ssFilename,
                                     EDataSet Id
                                     )
 {
-    // Open output file channel
-    vpl::mod::CFileChannelU Channel(vpl::mod::CH_OUT, ssFilename);
-    if( !Channel.connect() )
+    if (Id == CUSTOM_DATA)
     {
         return false;
     }
 
-    CObjectPtr<CDensityData> spVolume( APP_STORAGE.getEntry(Id) );
+    // Open output file channel
+    vpl::mod::CFileChannelU Channel(vpl::mod::CH_OUT, ssFilename);
+    if (!Channel.connect())
+    {
+        return false;
+    }
 
-    vpl::img::CDensityVolume * ptrVolume = dynamic_cast< vpl::img::CDensityVolume *  >(spVolume.get() );
+    CObjectPtr<CDensityData> spVolume(APP_STORAGE.getEntry(Id));
+
+    vpl::img::CDensityVolume * ptrVolume = dynamic_cast<vpl::img::CDensityVolume *>(spVolume.get());
 
     // Save the data as a density volume (without dicom obtained info).
     return vpl::mod::write(*ptrVolume, Channel, Progress);
@@ -1560,9 +1612,7 @@ bool CExamination::saveDensityDataU(const vpl::sys::tString & ssFilename,
 //
 
 void CExamination::onDataLoad( EDataSet Id )
-{
-}
-
+{ }
 
 bool CExamination::subsample(data::CDensityData &densityData, ESubsamplingType subsamplingType, vpl::img::CVector3d& subsampling)
 {
@@ -1680,10 +1730,10 @@ void CExamination::correctVolumeSize(vpl::img::CDVolume &densityData, vpl::tSize
     vpl::tSize sizeZ = densityData.getZSize();
     vpl::tSize correctX = densityData.getXSize() + (multiple - densityData.getXSize() % multiple) % multiple;
     vpl::tSize correctY = densityData.getYSize() + (multiple - densityData.getYSize() % multiple) % multiple;
-    vpl::tSize correctZ = densityData.getZSize() + (multiple - densityData.getZSize() % multiple) % multiple;    
+    vpl::tSize correctZ = densityData.getZSize() + (multiple - densityData.getZSize() % multiple) % multiple;
     if (correctX == sizeX && correctY==sizeY && correctZ == sizeZ)
         return;
-    
+
     data::CDensityData auxData;
     auxData.resize(correctX, correctY, correctZ);
     auxData.fillEntire(vpl::img::CPixelTraits<vpl::img::tDensityPixel>::getPixelMin());

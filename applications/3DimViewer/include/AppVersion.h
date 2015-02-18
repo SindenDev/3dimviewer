@@ -24,8 +24,8 @@
 #define _3DIMAPPVERSION_H
 
 #define VER_MAJOR               2
-#define VER_MINOR               1
-#define VER_BUILD               3
+#define VER_MINOR               2
+#define VER_BUILD               4
 
 #define STR_HELPER(x) #x
 #define STR(x) STR_HELPER(x)

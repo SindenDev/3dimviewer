@@ -12,6 +12,10 @@
 //#include <bluedent/osg/dbout.h> // this dependency is not allowed
 #include <VPL/System/Stopwatch.h>
 
+// Eigen vectors computation
+#include <VPL/Math/Vector.h>
+#include <VPL/Math/MatrixFunctions.h>
+
 // ati drivers (13.251.9001.1001 2014-07-04) end up with heap corruption when drawing extremely short lines, therefore drop them
 #define OUTPUT_PRECISION 0.001
 
@@ -364,6 +368,75 @@ int CMeshOctree::calculateNodeCount(int numOfLevels)
 {
     return (static_cast<int>(pow(8.0f, numOfLevels)) - 1) / (8 - 1);
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+//!\brief   Gets a near points to the given point.
+//!
+//!\param   point               The point.
+//!\param   maximal_distance    The maximal distance from point to the points.
+//!
+//!\return  null if it fails, else the near points.
+////////////////////////////////////////////////////////////////////////////////////////////////////
+const std::vector<CMeshOctreeNode *>& CMeshOctree::getNearPoints(const osg::Vec3 &point, double maximal_distance)
+{
+	osg::Vec3 hdist(maximal_distance/2.0, maximal_distance/2.0, maximal_distance/2.0);
+	osg::BoundingBox bb(point-hdist, point+hdist);
+
+	return getIntersectedNodes(bb);
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+//!\brief   Gets a near points handles.
+//!
+//!\param   point               The point.
+//!\param   maximal_distance    The maximal distance.
+//!\param [in,out]  handles     The handles.
+//!\param [in,out]  mesh        If non-null, the mesh.
+//!
+//!\return  The nearest point handle index in the output vector.
+////////////////////////////////////////////////////////////////////////////////////////////////////
+size_t CMeshOctree::getNearPointsHandles(const osg::Vec3 &point, double maximal_distance, std::vector<data::CMesh::VertexHandle> &handles, data::CMesh *mesh)
+{
+	handles.clear();
+
+	const std::vector<CMeshOctreeNode *> &nodes(getNearPoints(point, maximal_distance));
+
+	double distsq(maximal_distance*maximal_distance);
+
+	size_t nearest_id(0);
+	double dist_nearestsq(std::numeric_limits<double>::max());
+
+	// For all returned nodes
+	std::vector<CMeshOctreeNode *>::const_iterator itn(nodes.begin()), itnEnd(nodes.end());
+	size_t counter(0);
+	for(; itn != itnEnd; ++itn, ++counter)
+	{
+		// For all node points
+		std::vector<data::CMesh::VertexHandle>::const_iterator itvh((*itn)->vertices.begin()), itvhEnd((*itn)->vertices.end());
+		for(; itvh != itvhEnd; ++itvh)
+		{
+			// Get point coordinates
+			data::CMesh::Point mp = mesh->point(*itvh);
+
+			// Check distance
+			double dx(point[0]-mp[0]), dy(point[1]-mp[1]), dz(point[2]-mp[2]);
+			double dsq(dx*dx + dy*dy + dz*dz);
+			if(dsq < distsq)
+				handles.push_back(*itvh);
+
+			// Compare current nearest point with current point distance
+			if(dsq < dist_nearestsq)
+			{
+				// Store id and squared distance
+				nearest_id = counter;
+				dist_nearestsq = dsq;
+			}
+		}
+	}
+
+	return counter;
+}
+
 
 ////////////////////////////////////////////////////////////
 /*!
@@ -908,7 +981,7 @@ void CMeshCutter::performCut(data::CMesh *source, const std::vector<CMeshOctreeN
             {
                 const std::vector<osg::Vec3>&  newVertices = vLists[t].at(l);
                 // input list can contain >2 vertices that are to be connected
-                for (unsigned int i = 0; i < std::min(2,(int)newVertices.size()); i++)
+                for (unsigned int i = 0; i < std::min<unsigned int>(2,(unsigned int)newVertices.size()); i++)
                 {
                     // ati drivers (13.251.9001.1001 2014-07-04) end up with heap corruption when drawing extremely short lines, therefore drop them
                     if (i>0 && (newVertices[i]-m_vertices->back()).length()<OUTPUT_PRECISION)
@@ -982,7 +1055,7 @@ void CMeshCutter::operator()(const osg::Vec3 &v1, const osg::Vec3 &v2, const osg
     // add new vertices to geometry
     const int startIndex = m_vertices->size();
     // input list can contain >2 vertices to be connected
-    for (unsigned int i = 0; i < std::min(2,(int)newVertices.size()); i++)
+    for (unsigned int i = 0; i < std::min<unsigned int>(2,(unsigned int)newVertices.size()); i++)
     {
         // ati drivers (13.251.9001.1001 2014-07-04) end up with heap corruption when drawing extremely short lines, therefore drop them
         if (i>0 && (newVertices[i]-m_vertices->back()).length()<OUTPUT_PRECISION)
@@ -1047,7 +1120,7 @@ void CMeshCutter::operator()(const osg::Vec3 &v1, const osg::Vec3 &v2, const osg
     // add new vertices to geometry
     const int startIndex = m_vertices->size();
     // input list can contain >2 vertices to be connected
-    for (unsigned int i = 0; i < std::min(2,(int)newVertices.size()); i++)
+    for (unsigned int i = 0; i < std::min<unsigned int>(2,(unsigned int)newVertices.size()); i++)
     {
         // ati drivers (13.251.9001.1001 2014-07-04) end up with heap corruption when drawing extremely short lines, therefore drop them
         if (i>0 && (newVertices[i]-m_vertices->back()).length()<OUTPUT_PRECISION)
@@ -1365,6 +1438,11 @@ double CMesh::max_edge_length(data::CMesh::FaceHandle fh)
     return vpl::math::getMax<double>(lengths[0], lengths[1], lengths[2]);
 }
 
+double CMesh::triangle_height(data::CMesh::FaceHandle fh, data::CMesh::EdgeHandle eh)
+{
+    return 2.0 * area(fh) / calc_edge_length(eh);
+}
+
 //! return shortest edge
 data::CMesh::EdgeHandle CMesh::min_edge(data::CMesh::FaceHandle fh)
 {
@@ -1467,6 +1545,35 @@ data::CMesh::Normal CMesh::calc_face_normal(data::CMesh::FaceHandle fh)
     return PolyMesh::calc_face_normal(fh);
 }
 
+//! Finds edge by two vertices
+data::CMesh::EdgeHandle CMesh::find_edge(const data::CMesh::VertexHandle &vh0, const data::CMesh::VertexHandle &vh1)
+{
+    if (vh0 == vh1 || !vh0.is_valid() || !vh1.is_valid())
+    {
+        return data::CMesh::InvalidEdgeHandle;
+    }
+
+    data::CMesh::HalfedgeHandle heh = find_halfedge(vh0, vh1);
+    if (!heh.is_valid())
+    {
+        heh = find_halfedge(vh1, vh0);
+    }
+    if (!heh.is_valid())
+    {
+        return data::CMesh::InvalidEdgeHandle;
+    }
+
+    return edge_handle(heh);
+}
+
+/**
+ * \brief   Calculates the axis aligned bounding box.
+ *
+ * \param [in,out]  min The minimum.
+ * \param [in,out]  max The maximum.
+ *
+ * \return  true if it succeeds, false if it fails.
+ */
 bool CMesh::calc_bounding_box(data::CMesh::Point &min, data::CMesh::Point &max)
 {
     bool first = true;
@@ -1557,6 +1664,192 @@ void CMesh::transform( const osg::Matrix &tm )
 
         set_point(v_it, p);
     }
+}
+
+/**
+ * \brief   Calculates the oriented bounding box.
+ *
+ * \param [in,out]  tm  The transformation matrix .
+ * \param [in,out]  min The minimum.
+ * \param [in,out]  max The maximum.
+ *
+ * \return  true if it succeeds, false if it fails.
+ */
+bool CMesh::calc_oriented_bounding_box(osg::Matrix &tm, osg::Vec3 &extent)
+{
+	Point average;
+
+	// Compute average vertex
+	if(!calc_average_vertex(average))
+		return false;
+
+	// Get doubled parameters
+	double	axx(average[0]*average[0]), 
+			axy(average[0]*average[1]),
+			axz(average[0]*average[2]),
+			ayy(average[1]*average[1]),
+			ayz(average[1]*average[2]),
+			azz(average[2]*average[2]);
+
+	// Compute covariance matrix parameters
+	double cxx(0.0), cxy(0.0), cxz(0.0), cyy(0.0), cyz(0.0), czz(0.0);
+	CMesh::VertexIter vit(this->vertices_begin()), vitEnd(this->vertices_end());
+	for ( ; vit != vitEnd; ++vit)
+	{
+		// Get point reference
+		const Point &p(this->point(vit.handle()));
+
+		cxx += p[0]*p[0] - axx; 
+		cxy += p[0]*p[1] - axy;
+		cxz += p[0]*p[2] - axz;
+		cyy += p[1]*p[1] - ayy;
+		cyz += p[1]*p[2] - ayz;
+		czz += p[2]*p[2] - azz;
+	}
+
+	// Build covariance matrix
+	vpl::math::CDMatrix cm(3, 3);
+	cm(0, 0) = cxx; cm(0, 1) = cxy; cm(0, 2) = cxz;
+	cm(1, 0) = cxy; cm(1, 1) = cyy; cm(1, 2) = cyz;
+	cm(2, 0) = cxz; cm(2, 1) = cyz; cm(2, 2) = czz;
+
+
+	// Compute bb
+	return calc_obb_from_cm(cm, tm, extent);
+}
+
+
+bool CMesh::calc_oriented_bb_triangles(osg::Matrix &tm, osg::Vec3 &extent)
+{
+    CMesh::Point tsides[3], mu(0.0, 0.0, 0.0);
+
+    double am(0.0);
+
+    // Compute covariance matrix parameters
+    double cxx(0.0), cxy(0.0), cxz(0.0), cyy(0.0), cyz(0.0), czz(0.0);
+
+    // For all triangles
+    CMesh::FaceIter fit(this->faces_sbegin()), fitEnd(this->faces_end());
+    for(; fit != fitEnd; ++fit)
+    {
+        // Number of face vertices
+        int nfv(0);
+
+        // Face mean point
+        Point mui(0.0, 0.0, 0.0);
+
+        // For all face vertices
+        CMesh::FaceVertexIter vit(this->fv_iter(fit));
+        for(; vit; ++vit, ++nfv)
+        {
+            if(nfv < 3)
+            {
+                tsides[nfv] = this->point(vit.handle());
+                mui += tsides[nfv];
+            }
+        }
+
+        // Compute triangle area
+        double ai(((tsides[1]-tsides[0]) % (tsides[2]-tsides[0])).length() * 0.5);
+        am += ai;
+
+        // Compute average point
+        mui /= 3.0;
+        mu += mui*ai;
+
+        const CMesh::Point &p(tsides[0]), &q(tsides[1]), &r(tsides[2]);
+
+        // Modify covariance matrix 
+        cxx += ( 9.0*mui[0]*mui[0] + p[0]*p[0] + q[0]*q[0] + r[0]*r[0] )*(ai/12.0);
+        cxy += ( 9.0*mui[0]*mui[1] + p[0]*p[1] + q[0]*q[1] + r[0]*r[1] )*(ai/12.0);
+        cxz += ( 9.0*mui[0]*mui[2] + p[0]*p[2] + q[0]*q[2] + r[0]*r[2] )*(ai/12.0);
+        cyy += ( 9.0*mui[1]*mui[1] + p[1]*p[1] + q[1]*q[1] + r[1]*r[1] )*(ai/12.0);
+        cyz += ( 9.0*mui[1]*mui[2] + p[1]*p[2] + q[1]*q[2] + r[1]*r[2] )*(ai/12.0);
+        czz += ( 9.0*mui[2]*mui[2] + p[2]*p[2] + q[2]*q[2] + r[2]*r[2] )*(ai/12.0);
+    }
+
+    // divide out the am fraction from the average position and covariance terms
+    mu /= am;
+    cxx /= am; cxy /= am; cxz /= am; cyy /= am; cyz /= am; czz /= am;
+
+    // now subtract off the E[x]*E[x], E[x]*E[y], ... terms
+    cxx -= mu[0]*mu[0]; cxy -= mu[0]*mu[1]; cxz -= mu[0]*mu[2];
+    cyy -= mu[1]*mu[1]; cyz -= mu[1]*mu[2]; czz -= mu[2]*mu[2];
+
+    // Build covariance matrix
+    vpl::math::CDMatrix cm(3, 3);
+    cm(0, 0) = cxx; cm(0, 1) = cxy; cm(0, 2) = cxz;
+    cm(1, 0) = cxy; cm(1, 1) = cyy; cm(1, 2) = cyz;
+    cm(2, 0) = cxz; cm(2, 1) = cyz; cm(2, 2) = czz;
+
+
+    // Compute bb
+    return calc_obb_from_cm(cm, tm, extent);
+}
+
+
+/**
+ * \brief   Calculates the oriented bounding box from covariance matrix.
+ * 			Based on:
+ * 			http://jamesgregson.blogspot.cz/2011/03/latex-test.html
+ *
+ * \param   cm          The input covariance matrix.
+ * \param [in,out]  tm  The output matrix to transform aligned bb.
+ * \param [in,out]  min The minimum of aligned bb.
+ * \param [in,out]  max The maximum of aligned bb.
+ *
+ * \return  true if it succeeds, false if it fails.
+ */
+bool CMesh::calc_obb_from_cm(vpl::math::CDMatrix &cm, osg::Matrix &tm, osg::Vec3 &extent)
+{
+	// Eigenvalues output
+	vpl::math::CDVector ev(3);
+
+	// Compute eigen values and vectors
+	vpl::math::eig(cm, ev);
+
+	// find the right, up and forward vectors from the eigenvectors
+	osg::Vec3 r( cm(0,0), cm(1,0), cm(2,0) );
+	osg::Vec3 u( cm(0,1), cm(1,1), cm(2,1) );
+	osg::Vec3 f( cm(0,2), cm(1,2), cm(2,2) );
+	r.normalize(); u.normalize(), f.normalize();
+
+	// set the rotation matrix using the eigven vectors
+    tm.set(	  r[0], r[1], r[2], 0,
+        u[0], u[1], u[2], 0,
+        f[0], f[1], f[2], 0,
+        0.0, 0.0, 0.0, 1.0);
+
+	// now build the bounding box extents in the rotated frame
+	osg::Vec3 minim(1e10, 1e10, 1e10), maxim(-1e10, -1e10, -1e10);
+	CMesh::VertexIter vit(this->vertices_begin()), vitEnd(this->vertices_end());
+	for ( ; vit != vitEnd; ++vit)
+	{
+		// Get point reference
+		const Point &p(this->point(vit.handle()));
+		const osg::Vec3 op(p[0], p[1], p[2]);
+
+		// Compute transformed point
+		osg::Vec3 pp(r*op, u*op, f*op);
+
+		// Get minimum and maximum
+		for(int i = 0; i < 3; ++i)
+		{
+			minim[i] = vpl::math::getMin(pp[i], minim[i]);
+            maxim[i] = vpl::math::getMax(pp[i], maxim[i]);
+		}
+	}
+
+	// The center of the OBB is the average of the minimum and maximum
+	osg::Vec3 center((maxim+minim)*0.5);
+
+	// Modify transformation matrix
+	tm.setTrans(center[0], center[1], center[2]);
+
+	// the extents is half of the difference between the minimum and maximum
+	extent = (maxim-minim)*0.5;
+
+	return true;
 }
 
 } // namespace data

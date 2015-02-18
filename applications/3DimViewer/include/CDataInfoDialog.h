@@ -33,13 +33,13 @@ class CDataInfoDialog : public QDialog
 {
     Q_OBJECT    
 public:
-    explicit CDataInfoDialog(int model_storage_id, QWidget *parent = NULL);
+    explicit CDataInfoDialog(QWidget *parent = NULL);
     ~CDataInfoDialog();
     // reformats dicom formated date and time to locale based format
     static QString formatDicomDateAndTime(const QString& wsDate, const QString& wsTime);
-protected:
+public:
     void AddRowIfNotEmpty(const QString& param, const QString& value, const QColor& color = QColor(QColor::Invalid));
-    void AddRow(const QString &param, const QString &value, const QColor& color = QColor(QColor::Invalid));
+    void AddRow(const QString &param, const QString &value, const QColor& color = QColor(QColor::Invalid), int alignment = Qt::AlignCenter);
 private:
     Ui::CDataInfoDialog *ui;
 };

@@ -64,7 +64,9 @@ public:
         NoFilter = 0,
         Sharpen,
         Blur,
-        SmoothSharpen
+        SmoothSharpen,
+		Equalize,
+		DetectEdges
     };
     //! Get default clear color
     const ETextureFilter & getFilter() { return m_filter; }
