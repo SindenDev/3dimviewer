@@ -28,7 +28,11 @@
 
 using namespace osgGA;
 
+#ifdef __APPLE__
+#define SCROLL_STEP 0.035
+#else
 #define SCROLL_STEP 0.2
+#endif
 
 // Constructor
 OrthoManipulator::OrthoManipulator()
@@ -239,7 +243,7 @@ void OrthoManipulator::move(osg::Vec2 direction)
 //! Zoom
 void OrthoManipulator::zoom(double ammount)
 {
-	osg::Vec2 window_size(_right - _left, _top - _bottom);
+	osg::Vec2 window_size((_right - _left), (_top - _bottom));
 
 	osg::Vec2 center((_right + _left)/2, (_top + _bottom) / 2);
 
@@ -252,6 +256,7 @@ void OrthoManipulator::zoom(double ammount)
 	window_size[0] += zoom_step[0];
 	window_size[1] += zoom_step[1];
 
+   
 	window_size /= 2;
 
 	_left = center[0] - window_size[0];

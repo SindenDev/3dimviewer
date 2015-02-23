@@ -189,6 +189,29 @@ void CDensityData::clearDicomData()
 	m_sScanOptions.clear();
 }
 
+////////////////////////////////////////////////////////////
+
+unsigned int CDensityData::getDataCheckSum() const
+{
+	const int sizeX = getXSize();
+	const int sizeY = getYSize();
+	const int sizeZ = getZSize();
+	unsigned int sum = 0;
+	for (int z = 0; z < sizeZ; ++z)
+	{
+		for (int y = 0; y < sizeY; ++y)
+		{
+			vpl::tSize idxX = getIdx(0, y, z);
+			for (int x = 0; x < sizeX; ++x, idxX += getXOffset())
+			{
+				sum += at(idxX);
+			}
+		}
+	} 
+	return sum;
+}
+
+
 } // namespace data
 
 ///////////////////////////////////////////////////////////////////////////////

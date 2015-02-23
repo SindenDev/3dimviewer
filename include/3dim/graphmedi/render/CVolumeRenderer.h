@@ -374,14 +374,14 @@ public:
         }
         return id;
     }
-    
+
     //! activates specified custom shader
     virtual void useCustomShader(unsigned int shaderId)
     {
         m_currentShader = shaderId;
         internalUseCustomShader(shaderId);
     }
-    
+
     //! deletes specified custom shader
     virtual void deleteCustomShader(unsigned int shaderId)
     {
@@ -392,7 +392,14 @@ public:
         internalDeleteCustomShader(shaderId);
         m_shaderUpdateCallbacks.erase(shaderId);
     }
-    
+
+    //! returns active custom volume and custom shadr IDs
+    void getActiveCustomIds(int &volumeId, int &shaderId)
+    {
+        volumeId = m_currentVolume;
+        shaderId = m_currentShader;
+    }
+
     //! returns list of lookup tables
     std::map<std::string, CLookupTable> &getLookupTables()
     {
@@ -411,6 +418,17 @@ protected:
     }
 
 public:
+    //! initializes VR if it is possible
+    virtual bool init() = 0;
+    //! returns flag if VR is enabled
+    virtual bool isEnabled() const = 0;
+    //! enables/disables VR
+    virtual void enable(bool bEnable = true) = 0;
+    //! disables VR
+    void disable() { enable(false); }
+
+    //! returns flag if custom shader is really used a displayed
+    virtual bool isCustomShaderActive() = 0;
     //! forces renderer to redraw itself
     virtual void redraw(bool bEraseBackground = false) = 0;
     //! returns current size of renderer's window

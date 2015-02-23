@@ -43,8 +43,6 @@ ADD_3DIM_LIB_TARGET( ${TRIDIM_CORE_LIB} )
 ADD_3DIM_LIB_TARGET( ${TRIDIM_COREMEDI_LIB} )
 ADD_3DIM_LIB_TARGET( ${TRIDIM_GRAPH_LIB} )
 ADD_3DIM_LIB_TARGET( ${TRIDIM_GRAPHMEDI_LIB} )
-ADD_3DIM_LIB_TARGET( ${TRIDIM_ADVQT_LIB} )
-#ADD_3DIM_LIB_TARGET( ${TRIDIM_PLUGIN_LIB} )
 ADD_3DIM_LIB_TARGET( ${TRIDIM_GUIQT_LIB} )
 ADD_3DIM_LIB_TARGET( ${TRIDIM_GUIQTMEDI_LIB} )
 
@@ -92,10 +90,8 @@ add_dependencies( DemoPlugin
                   ${TRIDIM_COREMEDI_LIB}
                   ${TRIDIM_GRAPH_LIB}
                   ${TRIDIM_GRAPHMEDI_LIB}
-                  ${TRIDIM_ADVQT_LIB}
                   ${TRIDIM_GUIQT_LIB}
                   ${TRIDIM_GUIQTMEDI_LIB}
-#                  ${TRIDIM_PLUGIN_LIB}
                   )
 
 # Add libraries

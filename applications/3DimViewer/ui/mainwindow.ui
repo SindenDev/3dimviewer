@@ -41,6 +41,7 @@
     <addaction name="actionLoad_STL_Model"/>
     <addaction name="menuRecent"/>
     <addaction name="separator"/>
+    <addaction name="actionSave_Original_DICOM_Series"/>
     <addaction name="actionSave_DICOM_Series"/>
     <addaction name="actionSave_Volumetric_Data"/>
     <addaction name="actionSave_STL_Model"/>
@@ -153,9 +154,17 @@
     <property name="title">
      <string>Filtering</string>
     </property>
+    <widget class="QMenu" name="menuViewFilter">
+     <property name="title">
+      <string>View</string>
+     </property>
+     <addaction name="actionViewSharpen"/>
+     <addaction name="actionViewEqualize"/>
+    </widget>
     <addaction name="actionGaussian_Filter"/>
     <addaction name="actionMedian_Filter"/>
     <addaction name="action3D_Anisotropic_Filter"/>
+    <addaction name="menuViewFilter"/>
    </widget>
    <widget class="QMenu" name="menuMeasurements">
     <property name="title">
@@ -1114,6 +1123,33 @@
    </property>
    <property name="statusTip">
     <string>Shows/Hides the models list.</string>
+   </property>
+  </action>
+  <action name="actionViewEqualize">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Equalize</string>
+   </property>
+  </action>
+  <action name="actionViewSharpen">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Sharpen</string>
+   </property>
+  </action>
+  <action name="actionSave_Original_DICOM_Series">
+   <property name="text">
+    <string>Save Original DICOM Series...</string>
+   </property>
+   <property name="toolTip">
+    <string>Saves original DICOM Series to a given directory.</string>
+   </property>
+   <property name="statusTip">
+    <string>Saves original DICOM Series to a given directory.</string>
    </property>
   </action>
  </widget>

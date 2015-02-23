@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>210</width>
-    <height>398</height>
+    <width>280</width>
+    <height>373</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -28,6 +28,11 @@
      </column>
      <column>
       <property name="text">
+       <string>Cut</string>
+      </property>
+     </column>
+     <column>
+      <property name="text">
        <string>Color</string>
       </property>
      </column>
@@ -36,6 +41,28 @@
        <string>Remove</string>
       </property>
      </column>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="groupBox">
+     <property name="title">
+      <string>Load/Save</string>
+     </property>
+     <layout class="QVBoxLayout" name="verticalLayout_2">
+      <item>
+       <widget class="QCheckBox" name="checkBoxIOApplyDICOM">
+        <property name="toolTip">
+         <string>Transform according to original DICOM coordinates for later use in other software.</string>
+        </property>
+        <property name="statusTip">
+         <string>Transform according to original DICOM coordinates for later use in other software.</string>
+        </property>
+        <property name="text">
+         <string>Use DICOM coordinates</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
     </widget>
    </item>
   </layout>

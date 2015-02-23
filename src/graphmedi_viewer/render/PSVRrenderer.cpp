@@ -627,6 +627,11 @@ PSVolumeRendering::~PSVolumeRendering()
 
 ///////////////////////////////////////////////////////////////////////////////
 // renderer plugin interface implementation
+bool PSVolumeRendering::isCustomShaderActive()
+{
+    return (getShader() == CUSTOM);
+}
+
 QSize PSVolumeRendering::getWindowSize()
 {
     return m_pCanvas->size();
@@ -749,6 +754,7 @@ void PSVolumeRendering::internalUseCustomShader(unsigned int shaderId)
 {
     m_customShaderId = shaderId;
     setShader(CUSTOM);
+    enable();
 }
 
 void PSVolumeRendering::setParameter(unsigned int shaderId, std::string name, int value)
@@ -1327,15 +1333,7 @@ void PSVolumeRendering::enable(bool bEnable)
     if (m_pCanvas)
     {
         m_pCanvas->Refresh(false);
-    }    
-}
-
-///////////////////////////////////////////////////////////////////////////////
-//
-
-void PSVolumeRendering::disable() 
-{
-    enable(false);
+    }
 }
 
 
@@ -2047,6 +2045,18 @@ bool PSVolumeRendering::internalCanStart()
     {
         m_Error |= UNSUPPORTED_SHADER_MODEL;
         VPL_LOG_INFO("Error: Unsupported graphic hardware (OpenGL 2.1 required)!");
+		if (!glewIsSupported("GL_VERSION_2_1"))
+			VPL_LOG_INFO("GL_VERSION_2_1 not supported");
+		if (!glewIsSupported("GL_ARB_shading_language_100"))
+			VPL_LOG_INFO("GL_ARB_shading_language_100 not supported");
+		if (!glewIsSupported("GL_ARB_vertex_buffer_object"))
+			VPL_LOG_INFO("GL_ARB_vertex_buffer_object not supported");
+		if (!glewIsSupported("GL_ARB_vertex_array_object"))
+			VPL_LOG_INFO("GL_ARB_vertex_array_object not supported");
+		if (!glewIsSupported("GL_EXT_framebuffer_object"))
+			VPL_LOG_INFO("GL_EXT_framebuffer_object not supported");
+		if (!glTexImage3D || !glCreateShader || !glGetUniformLocation || !glFramebufferTexture2DEXT || !glGenBuffers)
+			VPL_LOG_INFO("Some gl functions missing");
         return false;
     }
     if( sizeof(tCoords) != (3 * sizeof(float)) )
@@ -3514,17 +3524,6 @@ void PSVolumeRendering::renderVolume()
 
         // Initialize the renderer if required.
         init();
-        if( testFlag(INIT_INVALID) )
-        {
-            if (!internalInitRendering())
-            {
-                m_FailureCounter++;
-            }
-            else
-            {
-                m_FailureCounter = 0;
-            }
-        }
 
         // Is rendering correctly initialized?
         if( !testFlag(INITIALIZED) )
@@ -3890,25 +3889,37 @@ bool PSVolumeRendering::init()
     tLock Lock(*this);
 
     // Already initialized?
-    if( m_Flags & INITIALIZED )
+    if (testFlag(INITIALIZED))
     {
         return true;
     }
 
-    // not yet initialized but we do not need to continue, because the other thread should init in a moment
-    if (m_Flags & INIT_INVALID)
+    // already
+    if (!testFlag(INIT_INVALID))
     {
-        return false;
-    }
-    
-    // Initial test
-    if( !canStart() )
-    {
-        return false;
+        // Initial test
+        if (!canStart())
+        {
+            return false;
+        }
+
+        //setAndSignalFlag(INIT_INVALID);
+        setFlag(INIT_INVALID);
     }
 
-//    setAndSignalFlag(INIT_INVALID);
-    setFlag(INIT_INVALID);
+    if (testFlag(INIT_INVALID))
+    {
+        if (!internalInitRendering())
+        {
+            m_FailureCounter++;
+            return false;
+        }
+        else
+        {
+            m_FailureCounter = 0;
+        }
+    }
+
     return true;
 }
 

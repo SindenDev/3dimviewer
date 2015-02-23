@@ -124,7 +124,7 @@ class CISScene3DEH
 {
 public:
 	//! Constructor
-	CISScene3DEH( OSGCanvas * canvas, scene::CScene3D * scene );
+	CISScene3DEH( OSGCanvas * canvas, scene::CScene3DBase * scene );
 };
 
 

@@ -46,7 +46,6 @@ macro( INCLUDE_BASIC_HEADERS )
     ${CMAKE_SOURCE_DIR}/include/3dim/core${TRIDIM_LIBRARY_EXT}/
     ${CMAKE_SOURCE_DIR}/include/3dim/graph/
     ${CMAKE_SOURCE_DIR}/include/3dim/graph${TRIDIM_LIBRARY_EXT}/
-    ${CMAKE_SOURCE_DIR}/include/3dim/adv/
     )
 endmacro( INCLUDE_BASIC_HEADERS )
 
@@ -102,8 +101,6 @@ endif( BUILDING_QT_APP )
 # Names of all 3Dim libraries and plugins
 
 # 3Dim libraries
-#set( TRIDIM_ADV_LIB 3DimAdv )
-set( TRIDIM_ADVQT_LIB 3DimAdvQt )
 set( TRIDIM_CORE_LIB 3DimCore )
 set( TRIDIM_COREMEDI_LIB 3DimCoreMedi )
 set( TRIDIM_GRAPH_LIB 3DimGraph )

@@ -152,6 +152,9 @@ public:
 
 // implementing CVolumeRenderer interface
 public:
+    //! returns flag if custom shader is really used a displayed
+    virtual bool isCustomShaderActive();
+
     // window
     virtual QSize getWindowSize();
 
@@ -217,16 +220,13 @@ public:
     virtual void redraw(bool bEraseBackground = false);
 
     //! Enables the rendering.
-    void enable(bool bEnable = true);
-
-    //! Disables the srendering.
-    void disable();
+    virtual void enable(bool bEnable = true);
 
     //! Reloads current shader from file
     void reloadShader();
     
     //! Returns true of the rendering is enabled.
-    bool isEnabled() const { return m_Enabled; }
+    virtual bool isEnabled() const { return m_Enabled; }
 
     //! Checks the shader model, graphic memory, etc.
     bool canStart();
@@ -234,7 +234,7 @@ public:
     //! Initializes the volume rendering.
     //! - This method must be called once at the begining!
     //! - A valid pointer to the GL canvas must be already set!
-    bool init();
+    virtual bool init();
 
     //! Resets initialization failure counter
     void resetFailureCounter();

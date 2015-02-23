@@ -297,7 +297,7 @@ class CMeasurements3DEH
 {
 public:
 	//! Constructor
-	CMeasurements3DEH( OSGCanvas * canvas, scene::CScene3D * scene ) : CMeasurementsEH( canvas, scene ) 
+    CMeasurements3DEH(OSGCanvas * canvas, scene::CSceneOSG * scene) : CMeasurementsEH(canvas, scene)
 	{
 		// Connect on dummy
 		APP_STORAGE.connect( data::Storage::SceneManipulatorDummy::Id, this);
@@ -395,6 +395,29 @@ protected:
 
 };
 	
+///////////////////////////////////////////////////////////////////////////////
+//! CLASS CMeasurements3DEH - modified class observes trackball movement
+
+class CMeasurementsRtgEH 
+	: public CMeasurementsEH, public data::CObjectObserver< data::CSceneManipulatorDummy >
+{
+public:
+	//! Constructor
+    CMeasurementsRtgEH(OSGCanvas * canvas, scene::CSceneOSG * scene) : CMeasurementsEH(canvas, scene)
+	{
+		m_ip.addDesiredRule(new osg::CNodeTypeIntersectionDesired<osgUtil::LineSegmentIntersector::Intersection, osg::Geode>);
+		// Connect on dummy
+		APP_STORAGE.connect( data::Storage::SceneManipulatorDummy::Id, this);
+	}
+protected:
+	//! Clear gizmos when object has changed
+	void objectChanged(data::CSceneManipulatorDummy *pData)
+	{
+		m_scene->clearGizmos();
+	}
+};
+
+
 
 } // namespace osgGA
 

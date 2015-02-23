@@ -28,6 +28,7 @@
 
 #define DEFAULT_BACKGROUND_COLOR        qRgb(51,51,102) 
 #define DEFAULT_LOGGING                 true
+#define DEFAULT_MODEL_REGION_LINK		false
 #define DEFAULT_SAVE_PATH_MODE          0
 #define DEFAULT_STYLESHEET              ""
 

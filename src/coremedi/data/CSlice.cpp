@@ -27,10 +27,11 @@
 #include <data/CDensityWindow.h>
 #include <data/CRegionColoring.h>
 #include <data/CAppSettings.h>
+#include <data/CDensityData.h>
 
 #include <VPL/Image/ImageFunctions.h>
 #include <VPL/Image/ImageFiltering.h>
-
+#include <VPL/Image/VolumeHistogram.h>
 
 namespace data
 {
@@ -159,7 +160,7 @@ void CSlice::estimateTextureSize(vpl::tSize& Width, vpl::tSize& Height)
 //
 
 //! Applies current selected filter on m_DensityData and returns backup of original data
-vpl::img::CDImage* CSlice::applyFilterAndGetBackup()
+vpl::img::CDImage* CSlice::applyFilterAndGetBackup(bool bEqualizeSlice, int rmin, int rmax)
 {
     CObjectPtr<CAppSettings> spAppSettings( APP_STORAGE.getEntry(Storage::AppSettings::Id) );
     CAppSettings::ETextureFilter filter=spAppSettings->getFilter();
@@ -206,6 +207,97 @@ vpl::img::CDImage* CSlice::applyFilterAndGetBackup()
         Filter(tmp,m_DensityData);
         return pDataWithMargin;
     }
+	if (filter==CAppSettings::Equalize)
+	{
+		if (bEqualizeSlice)
+		{
+			data::CObjectPtr<data::CDensityData> spVolume( APP_STORAGE.getEntry(data::Storage::PatientData::Id) );
+			const vpl::img::tDensityPixel VOXEL_MIN = vpl::img::CPixelTraits<vpl::img::tDensityPixel>::getPixelMin();
+			const vpl::img::tDensityPixel VOXEL_MAX = vpl::img::CPixelTraits<vpl::img::tDensityPixel>::getPixelMax();
+			vpl::img::CDImageHistogram histogram(VOXEL_MIN, VOXEL_MAX);
+			//vpl::img::CDVolumeHistogram histogram(VOXEL_MIN, VOXEL_MAX);
+			if (histogram(m_DensityData))
+			{
+				// Compute the cumulative histogram
+				histogram.cumulate();
+				// Get the number of samples
+				vpl::img::CDVolumeHistogram::tBin Max = histogram.getCount(histogram.getSize() - 1);
+				if( Max > 0 )
+				{
+					vpl::img::CDImage *pDataWithMargin = new vpl::img::CDImage(m_DensityData.getSize(),5);
+					*pDataWithMargin = m_DensityData;
+					pDataWithMargin->mirrorMargin();
+
+					int dwmin = rmin;
+					int dwmax = rmax;
+
+					// Histogram equalization
+					int countZero = 0;
+					{	// we don't care about differences in values below some value, make them all zero
+						vpl::tSize Index = histogram.getIndex(rmin);
+						countZero = histogram.getCount(Index);
+					}
+
+					double dNorm = double(dwmax - dwmin) / double(Max - countZero);
+#pragma omp parallel for
+					for( vpl::tSize j = 0; j < m_DensityData.getYSize(); ++j )
+					{
+						for( vpl::tSize i = 0; i < m_DensityData.getXSize(); ++i )
+						{
+							vpl::tSize Index = histogram.getIndex(m_DensityData(i, j));
+							m_DensityData(i, j) = (dNorm * std::max(0,histogram.getCount(Index)-countZero) + dwmin);
+						}
+					}
+					return pDataWithMargin;
+				}			
+			}
+
+		}
+		else
+		{
+			// TODO: compute the histogram once and cache it somewhere
+			data::CObjectPtr<data::CDensityData> spVolume( APP_STORAGE.getEntry(data::Storage::PatientData::Id) );
+			const vpl::img::tDensityPixel VOXEL_MIN = vpl::img::CPixelTraits<vpl::img::tDensityPixel>::getPixelMin();
+			const vpl::img::tDensityPixel VOXEL_MAX = vpl::img::CPixelTraits<vpl::img::tDensityPixel>::getPixelMax();
+			vpl::img::CDVolumeHistogram histogram(VOXEL_MIN, VOXEL_MAX);
+			if (histogram(*spVolume.get()))
+			{
+				// Compute the cumulative histogram
+				histogram.cumulate();
+				// Get the number of samples
+				vpl::img::CDVolumeHistogram::tBin Max = histogram.getCount(histogram.getSize() - 1);
+				if( Max > 0 )
+				{
+					vpl::img::CDImage *pDataWithMargin = new vpl::img::CDImage(m_DensityData.getSize(),5);
+					*pDataWithMargin = m_DensityData;
+					pDataWithMargin->mirrorMargin();
+
+					data::CObjectPtr<data::CDensityWindow> spWindow(APP_STORAGE.getEntry(data::Storage::DensityWindow::Id)); // for coloring info
+					int dwmin = spWindow->getMin();
+					int dwmax = spWindow->getMax();
+
+					// Histogram equalization
+					int countZero = 0;
+					{	// we don't care about differences in values below -500, make them all zero
+						vpl::tSize Index = histogram.getIndex(-500);
+						countZero = histogram.getCount(Index);
+					}
+
+					double dNorm = double(dwmax - dwmin) / double(Max - countZero); //double dNorm = double(VOXEL_MAX - VOXEL_MIN) / double(Max);
+	#pragma omp parallel for
+					for( vpl::tSize j = 0; j < m_DensityData.getYSize(); ++j )
+					{
+						for( vpl::tSize i = 0; i < m_DensityData.getXSize(); ++i )
+						{
+							vpl::tSize Index = histogram.getIndex(m_DensityData(i, j));
+							m_DensityData(i, j) = (dNorm * std::max(0,histogram.getCount(Index)-countZero) + dwmin);
+						}
+					}
+					return pDataWithMargin;
+				}			
+			}
+		}
+	}
     return NULL;
 }
 
@@ -266,7 +358,7 @@ bool CSlice::updateRGBData(bool bSizeChanged)
     // Get the density window
     CObjectPtr<CDensityWindow> spDensityWindow( APP_STORAGE.getEntry(Storage::DensityWindow::Id) );
 
-    vpl::img::CDImage *pBackup = applyFilterAndGetBackup();
+    vpl::img::CDImage *pBackup = applyFilterAndGetBackup(false,0,0);
 
     // Is region coloring enabled?
     if( m_DensityData.getXSize() != m_RegionData.getXSize() || m_DensityData.getYSize() != m_RegionData.getYSize() )
@@ -403,7 +495,7 @@ bool CSlice::updateRGBData2(bool bSizeChanged)
     // Normalization
     double dNorm = 255.0 / ((Max-Min) + 0.001);
 
-    vpl::img::CDImage *pBackup = applyFilterAndGetBackup();
+    vpl::img::CDImage *pBackup = applyFilterAndGetBackup(true,Min,Max);
 
     // Prepare the RGB data
     for( vpl::tSize j = 0; j < m_DensityData.getYSize(); ++j )
@@ -448,7 +540,7 @@ void CSlice::updateTexture(bool bRecreateImage)
     // Change the data
     m_spImage->setImage(m_RGBData.getXSize(),
                         m_RGBData.getYSize(),
-                        0,
+                        1,
                         4,
                         GL_RGBA,
                         GL_UNSIGNED_BYTE, 

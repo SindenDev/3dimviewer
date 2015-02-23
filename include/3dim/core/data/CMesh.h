@@ -11,6 +11,7 @@
 
 #include <VPL/Module/Serializer.h>
 #include <VPL/Math/Base.h>
+#include <VPL/Math/Matrix.h>
 
 #include <data/CSerializableData.h>
 
@@ -364,6 +365,12 @@ public:
         return vpl::math::getMax<double>((p0 - p1).length(), (p1 - p2).length(), (p2 - p0).length());
     }
 
+    double triangle_height(data::CMesh::FaceHandle fh, data::CMesh::EdgeHandle eh);
+    double triangle_height(const data::CMesh::Point& p0, const data::CMesh::Point& p1, const data::CMesh::Point& p2)
+    {
+        return 2.0 * area(p0, p1, p2) / (p0 - p1).length();
+    }
+
     //! return shortest/longest edge
     data::CMesh::EdgeHandle min_edge(data::CMesh::FaceHandle fh);
     data::CMesh::EdgeHandle max_edge(data::CMesh::FaceHandle fh);
@@ -381,8 +388,14 @@ public:
     }
     data::CMesh::Normal calc_face_normal(data::CMesh::FaceHandle fh);
 
-    //! calculates bounding box of mesh
+    //! calculates axis aligned bounding box of mesh
     bool calc_bounding_box(data::CMesh::Point &min, data::CMesh::Point &max);
+
+	//! Calculate oriented bounding box
+	bool calc_oriented_bounding_box(osg::Matrix &tm, osg::Vec3 &extent);
+
+    //! Calculate oriented bounding box from triangles
+    bool calc_oriented_bb_triangles(osg::Matrix &tm, osg::Vec3 &extent);
 
     //! calculates average vertex of model
     bool calc_average_vertex(data::CMesh::Point &average);
@@ -392,6 +405,13 @@ public:
 
 	//! Do complete transform by matrix
 	void transform(const osg::Matrix &tm);
+
+    //! Finds edge by two vertices
+    data::CMesh::EdgeHandle find_edge(const data::CMesh::VertexHandle &vh0, const data::CMesh::VertexHandle &vh1);
+
+protected:
+	// Compute oriented bounding box from the covariance matrix
+	bool calc_obb_from_cm(vpl::math::CDMatrix &cm, osg::Matrix &tm, osg::Vec3 &extent);
 
 private:
 	//! Serialize property 
@@ -690,6 +710,8 @@ public:
 //    std::vector<CMeshOctreeNode *> getIntersectedNodes(osg::Plane plane);
     const std::vector<CMeshOctreeNode *>& getIntersectedNodes(osg::Plane plane);
     const std::vector<CMeshOctreeNode *>& getIntersectedNodes(osg::BoundingBox boundingBox);
+	const std::vector<CMeshOctreeNode *>& getNearPoints(const osg::Vec3 &point, double maximal_distance);
+	size_t getNearPointsHandles(const osg::Vec3 &point, double maximal_distance, std::vector<data::CMesh::VertexHandle> &handles, data::CMesh *mesh);
 
 private:
     void intersect(CMeshOctreeNode &node, osg::Plane plane);

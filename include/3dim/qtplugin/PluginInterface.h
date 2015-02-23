@@ -51,6 +51,10 @@ class QAction;
 
 #include "CPluginInfo.h"
 
+#ifndef PLUG_APP_SIGNATURE
+	#define PLUG_APP_SIGNATURE	"OpenSource"
+#endif
+
 class PluginInterface;
 
 ///////////////////////////////////////////////////////////////////////////////

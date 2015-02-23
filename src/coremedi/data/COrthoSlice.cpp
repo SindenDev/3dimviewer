@@ -57,7 +57,13 @@ void COrthoSlice::init()
 void COrthoSliceXY::update(const CChangedEntries& Changes)
 {
     // Get the density data
-    CObjectPtr<CDensityData> spVolume( APP_STORAGE.getEntry(VPL_SIGNAL(SigGetActiveDataSet).invoke2()) );
+    int datasetId = VPL_SIGNAL(SigGetActiveDataSet).invoke2();
+    if (datasetId == CUSTOM_DATA)
+    {
+        return;
+    }
+
+    CObjectPtr<CDensityData> spVolume(APP_STORAGE.getEntry(datasetId));
 
     // Modify the slice position
     bool bDataChanged = Changes.hasChanged(Storage::ActiveDataSet::Id);
@@ -240,7 +246,13 @@ void COrthoSliceXY::updateRTG(const CDensityData& Volume)
 void COrthoSliceXZ::update(const CChangedEntries& Changes)
 {
     // Get the density data
-    CObjectPtr<CDensityData> spVolume( APP_STORAGE.getEntry(VPL_SIGNAL(SigGetActiveDataSet).invoke2()) );
+    int datasetId = VPL_SIGNAL(SigGetActiveDataSet).invoke2();
+    if (datasetId == CUSTOM_DATA)
+    {
+        return;
+    }
+
+    CObjectPtr<CDensityData> spVolume(APP_STORAGE.getEntry(datasetId));
 
     // Modify the slice position
     bool bDataChanged = Changes.hasChanged(Storage::ActiveDataSet::Id);
@@ -424,7 +436,13 @@ void COrthoSliceXZ::updateRTG(const CDensityData& Volume)
 void COrthoSliceYZ::update(const CChangedEntries& Changes)
 {
     // Get the density data
-    CObjectPtr<CDensityData> spVolume( APP_STORAGE.getEntry(VPL_SIGNAL(SigGetActiveDataSet).invoke2()) );
+    int datasetId = VPL_SIGNAL(SigGetActiveDataSet).invoke2();
+    if (datasetId == CUSTOM_DATA)
+    {
+        return;
+    }
+
+    CObjectPtr<CDensityData> spVolume(APP_STORAGE.getEntry(datasetId));
 
     // Modify the slice position
     bool bDataChanged = Changes.hasChanged(Storage::ActiveDataSet::Id);

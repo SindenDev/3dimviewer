@@ -1,12 +1,38 @@
 ================================================================================
-- $Id: ChangeLog.txt 1356 2011-10-30 13:39:48Z spanel $
 -
 - 3DimViewer
 - A lightweight 3D DICOM viewer.
 -
-- Copyright (c) 2008-2014 by 3Dim Laboratory s.r.o.
+- Copyright (c) 2008-2015 by 3Dim Laboratory s.r.o.
 -
 ================================================================================
+
+3DimViewer Version 2.2 (2015/01/30): 
+  - Migrated from MDSTK to VPL library - https://bitbucket.org/3dimlab/vpl
+  - Faster model creation    
+  - Support for multiple models
+  - Support for model-region pairing
+  - Added model-slice intersection visualization
+  - Sampling factors when loading DICOM dataset
+  - More information shown in DICOM load dialog, grouping by patient and series
+  - VLM format includes basic metadata now
+  - Support added for PLY format
+  - Model shading control
+  - Fullscreen button  
+  - Better handling of mouse modes
+  - Can pass dicom as command line argument
+  - Can save volumetric data in DICOM format
+  - Models can be saved with offset of original DICOM data
+  - Drag and drop support
+  - Set slices position on double click
+  - Slice texture filters - sharpen/equalize
+  - DICOM tags shown in data info dialog
+  - More information logged in application log   
+  - Updated plugin interface, support for plugin help files
+  - Qt5 support
+  - Visual Studio 2013 support
+  - Compatibility with OSG 3.3
+  - Bugfixes
 
 3DimViewer Version 2.1 (2014/03/13):
   - Mac OS X support.

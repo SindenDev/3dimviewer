@@ -1,8 +1,0 @@
-#!/bin/sh
-# 3DimViewer file associations
-
-# Add .vlm file association
-defaults write com.apple.LaunchServices LSHandlers -array-add "<dict><key>LSHandlerContentTag</key><string>vlm</string><key>LSHandlerContentTagClass</key><string>public.filename-extension</string><key>LSHandlerRoleAll</key><string>com.3dimlaboratory.3DimViewer</string></dict>"
-
-# Restart the daemon
-/System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/LaunchServices.framework/Versions/A/Support/lsregister -kill -domain local -domain system -domain user

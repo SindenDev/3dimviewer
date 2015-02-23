@@ -43,8 +43,10 @@
 #include <data/CUndoManager.h>
 #include <data/CRegionData.h>
 #include <data/CImageLoaderInfo.h>
+#include <data/CVolumeTransformation.h>
 
 #include <VPL/Module/Progress.h>
+#include <VPL/Module/Serialization.h>
 #include <VPL/Image/VolumeFiltering.h>
 #include <VPL/Image/VolumeFunctions.h>
 
@@ -90,6 +92,17 @@
 #include <sys/param.h>
 #include <sys/mount.h>
 #endif
+
+// for dicom save
+#include "dcmtk/config/osconfig.h"
+#include "dcmtk/ofstd/ofconapp.h"
+#include "dcmtk/dcmdata/dcuid.h"
+#include "dcmtk/dcmdata/dcfilefo.h"
+#include "dcmtk/dcmdata/dcdict.h"
+#include "dcmtk/dcmdata/dcdeftag.h"
+#include "dcmtk/dcmjpeg/djencode.h"
+#include "dcmtk/dcmjpeg/djrplol.h"
+#include "dcmtk/dcmdata/dcmetinf.h"
 
 //#undef USE_PSVR
 
@@ -386,6 +399,9 @@ MainWindow::MainWindow(QWidget *parent, CPluginManager* pPlugins) :
 
     APP_MODE.getContinuousDensityMeasureSignal().connect(this, &MainWindow::densityMeasureHandler);
 
+	VPL_SIGNAL(SigSetModelCutVisibility).connect(this, &MainWindow::setModelCutVisibilitySignal);
+	VPL_SIGNAL(SigGetModelCutVisibility).connect(this, &MainWindow::getModelCutVisibilitySignal);
+
     // set threading mode
     if (1==nThreadingMode)
     {
@@ -395,8 +411,8 @@ MainWindow::MainWindow(QWidget *parent, CPluginManager* pPlugins) :
         m_OrthoYZSlice->enableMultiThreaded();
     }
 
-#ifdef _WIN32
     {
+#ifdef _WIN32
         QDir myDir = QCoreApplication::applicationDirPath();
         QStringList list = myDir.entryList(QStringList("*.exe"));
         int cntOther = 0;
@@ -408,18 +424,19 @@ MainWindow::MainWindow(QWidget *parent, CPluginManager* pPlugins) :
         if (cntOther>0)
         {
             ui->menuModel->addAction(tr("Process model"),this,SLOT(processSurfaceModelExtern()));
-            QMenu* pMenu = ui->menuModel->addMenu(tr("Visualization"));
-            pMenu->addAction(tr("Smooth"),this,SLOT(modelVisualizationSmooth()));
-            pMenu->addAction(tr("Flat"),this,SLOT(modelVisualizationFlat()));
-            pMenu->addAction(tr("Wire"),this,SLOT(modelVisualizationWire()));
         }
-    }
 #endif
+        QMenu* pMenu = ui->menuModel->addMenu(tr("Visualization"));
+        pMenu->addAction(tr("Smooth"),this,SLOT(modelVisualizationSmooth()));
+        pMenu->addAction(tr("Flat"),this,SLOT(modelVisualizationFlat()));
+        pMenu->addAction(tr("Wire"),this,SLOT(modelVisualizationWire()));
+    }
     // disable actions which are meant to be disabled :)
     ui->action3D_View->setEnabled(false); // always visible
     ui->actionUndo->setEnabled(false); // viewer doesn't have actions that could be undone/redone
     ui->actionRedo->setEnabled(false);
     ui->actionSave_DICOM_Series->setEnabled(false);
+	ui->actionSave_Original_DICOM_Series->setEnabled(false);
     ui->actionSave_Volumetric_Data->setEnabled(false);
     if (!findPluginByID("Gauge"))
     {
@@ -450,10 +467,14 @@ MainWindow::MainWindow(QWidget *parent, CPluginManager* pPlugins) :
         }
     }
 
+	connect(ui->menuViewFilter,SIGNAL(aboutToShow()),this,SLOT(aboutToShowViewFilterMenu()));
+	connect(ui->actionViewEqualize, SIGNAL(toggled(bool)), this, SLOT(setTextureFilterEqualize(bool)));
+	connect(ui->actionViewSharpen, SIGNAL(toggled(bool)), this, SLOT(setTextureFilterSharpen(bool)));
+
     // timer for OSG widget repaint - needed for eventqueue to work properly
     m_timer.setInterval(150);
     connect(&m_timer, SIGNAL(timeout()), this, SLOT(show_frame()));
-    m_timer.start();
+    m_timer.start();	
 
 	// first event will open files from command line etc
     QTimer::singleShot(0, this, SLOT(firstEvent()));
@@ -495,9 +516,10 @@ void MainWindow::connectActions()
     // Loading, Saving etc
     connect(ui->actionExit, SIGNAL(triggered()), this, SLOT(close()));
     connect(ui->actionLoad_Patient_Dicom_data, SIGNAL(triggered()), this, SLOT(openDICOM()));
-    connect(ui->actionImport_DICOM_Data_from_ZIP_archive, SIGNAL(triggered()), this, SLOT(openDICOMZIP()));    
+    connect(ui->actionImport_DICOM_Data_from_ZIP_archive, SIGNAL(triggered()), this, SLOT(openDICOMZIP()));
     connect(ui->actionLoad_Patient_VLM_Data, SIGNAL(triggered()), this, SLOT(openVLM()));
     connect(ui->actionLoad_STL_Model, SIGNAL(triggered()), this, SLOT(openSTL()));
+    connect(ui->actionSave_Original_DICOM_Series, SIGNAL(triggered()), this, SLOT(saveOriginalDICOM()));
     connect(ui->actionSave_DICOM_Series, SIGNAL(triggered()), this, SLOT(saveDICOM()));
     connect(ui->actionSave_Volumetric_Data, SIGNAL(triggered()), this, SLOT(saveVLMAs()));
     connect(ui->actionSave_STL_Model, SIGNAL(triggered()), this, SLOT(saveSTL()));
@@ -574,6 +596,16 @@ void MainWindow::connectActions()
     // Undo and redo
     connect(ui->actionUndo, SIGNAL(triggered()), this, SLOT(performUndo()));
     connect(ui->actionRedo, SIGNAL(triggered()), this, SLOT(performRedo()));
+
+    // other signals
+    VPL_SIGNAL(SigVREnabledChange).connect(this, &MainWindow::onVREnabledChange);
+}
+
+void MainWindow::onVREnabledChange(bool value)
+{
+    ui->actionVolume_Rendering->blockSignals(true);
+    ui->actionVolume_Rendering->setChecked(value);
+    ui->actionVolume_Rendering->blockSignals(false);
 }
 
 void MainWindow::createToolBars()
@@ -1380,7 +1412,20 @@ bool MainWindow::openDICOM(const QString& fileName, const QString& realName)
     CVolumeLimiterDialog vlDlg(this);
     vlDlg.setVolume(spData.get(), true);
     if (QDialog::Accepted==vlDlg.exec())
-        m_Examination.setLimits(vlDlg.getLimits(), data::PATIENT_DATA);
+	{
+		const data::SVolumeOfInterest limits = vlDlg.getLimits();
+        m_Examination.setLimits(limits, data::PATIENT_DATA);
+
+        // set volume transformation
+        {
+			osg::Matrix transformationMatrix = osg::Matrix::identity();
+			transformationMatrix *= osg::Matrix::translate(-limits.m_MinX * spData->getDX(), -limits.m_MinY * spData->getDY(), -limits.m_MinZ * spData->getDZ());
+
+            data::CObjectPtr<data::CVolumeTransformation> spVolumeTransformation(APP_STORAGE.getEntry(data::Storage::VolumeTransformation::Id));
+            spVolumeTransformation->setTransformation(transformationMatrix);
+            APP_STORAGE.invalidate(spVolumeTransformation.getEntryPtr());
+        }
+	}
 
     // Change the application title
     if (spData->m_sPatientName.empty())
@@ -1414,7 +1459,8 @@ void MainWindow::postOpen(const QString& filename, bool bDicomData)
 {
     undoRedoEnabler();
     fixBadSliceSliderPos();
-    ui->actionSave_DICOM_Series->setEnabled(bDicomData);
+	ui->actionSave_Original_DICOM_Series->setEnabled(bDicomData);
+    ui->actionSave_DICOM_Series->setEnabled(true);
     ui->actionSave_Volumetric_Data->setEnabled(true);
     setProperty("SegmentationChanged",false);
     m_wsProjectPath = filename;
@@ -1491,6 +1537,29 @@ bool MainWindow::openVLM()
     return openVLM(fileName);
 }
 
+
+//! File Channel implementation with seek support
+class CFileChannelEx : public vpl::mod::CFileChannelU
+{
+protected:
+	vpl::tSize m_savedPos;
+public:
+	CFileChannelEx(int Type, const vpl::sys::tString& sFileName) : CFileChannelU(Type,sFileName), m_savedPos(0)	{ }
+	vpl::tSize fileSize() {
+		if (NULL==m_File)
+			return 0;
+		size_t pos = ftell(m_File);
+		fseek(m_File,0,SEEK_END);
+		size_t end = ftell(m_File);
+		fseek(m_File,pos,SEEK_SET);
+		return end;
+	}	
+	void seek(vpl::tSize pos, int mode)	{	if (NULL!=m_File) fseek(m_File,pos,mode);	}
+	void saveCurPos()	{	m_savedPos = NULL==m_File ? 0 : ftell(m_File);	}
+	void restorePos()	{	if (NULL!=m_File) fseek(m_File,m_savedPos,SEEK_SET); }
+};
+
+
 bool MainWindow::openVLM(const QString &wsFileName)
 {
     // 2012/03/12: Modified by Majkl (Linux compatible code)
@@ -1507,10 +1576,76 @@ bool MainWindow::openVLM(const QString &wsFileName)
     try 
     {
         APP_STORAGE.reset();        
+#if(0)
         bResult = m_Examination.loadDensityDataU(vpl::sys::tStringConv::fromUtf8(ansiName),
                                                 ProgressFunc,
                                                 data::PATIENT_DATA
                                                 );
+#else
+		// Open input file channel
+		CFileChannelEx Channel(vpl::mod::CH_IN, vpl::sys::tStringConv::fromUtf8(ansiName));
+		if( Channel.connect() )
+		{
+			// Try to load the data
+			data::CObjectPtr<data::CDensityData> spVolume( APP_STORAGE.getEntry(data::PATIENT_DATA) );
+			spVolume->clearDicomData();
+
+			try {
+				Channel.saveCurPos();
+				const int fileSize = Channel.fileSize();
+				bool bNewVlm = false; // recognize newer VLM by search of a DensityData sequence in the last 2kB of file
+#define BUF_SIZE	2048
+				if (fileSize>BUF_SIZE) 
+				{
+					Channel.seek(fileSize-BUF_SIZE,SEEK_SET);
+					char buffer[BUF_SIZE];
+					if (BUF_SIZE == Channel.read(buffer,BUF_SIZE))
+					{
+						char* start = (char*)memchr(buffer,'D',BUF_SIZE);
+						while(!bNewVlm && NULL!=start && start-buffer<BUF_SIZE)
+						{
+							int rem = BUF_SIZE - (start - buffer);
+							bNewVlm = 0==strncmp(start,"DensityData",rem);
+							if (bNewVlm)
+								break;
+							start = (char*)memchr(start+1,'D',rem-1);
+
+						}						
+					}
+					Channel.restorePos();
+				}
+#undef BUF_SIZE
+				if(!bNewVlm || !vpl::mod::read(*spVolume.get(), Channel, ProgressFunc) ) // try to load vlm with metadata
+				{
+					Channel.restorePos();
+					{
+						vpl::img::CDensityVolume VolumeData;
+						if( !vpl::mod::read(VolumeData, Channel, ProgressFunc) ) // try to load voxel data only
+						{
+							return false;
+						}					
+						else
+						{
+							spVolume->makeRef(VolumeData);
+							spVolume->clearDicomData();
+							// Fill the margin
+							spVolume->mirrorMargin();
+						}					
+					}
+				}
+			}
+			catch( const vpl::base::CException Exception )
+			{
+				return false;	
+			}
+
+			APP_STORAGE.invalidate(spVolume.getEntryPtr() );
+			m_Examination.onDataLoad( data::PATIENT_DATA );
+
+			// O.K.
+			bResult = true;
+		}
+#endif
     }
     catch( const vpl::base::CFullException& /*Exception*/ )
     {
@@ -1555,10 +1690,30 @@ bool MainWindow::saveVLMAs()
     bool bResult = false;
     try {
          vpl::mod::CProgress::tProgressFunc ProgressFunc(&progress, &CProgress::Entry);
+#if(0)	 // saves volumetric data only
          bResult = m_Examination.saveDensityDataU(vpl::sys::tStringConv::fromUtf8(ansiName),
                                                  ProgressFunc,
                                                  data::PATIENT_DATA
                                                  );
+#else	 // save volumetric data with metadata (in format compatible with m_Examination.loadDensityDataU)
+		 bResult = false;
+		 vpl::mod::CFileChannelU Channel(vpl::mod::CH_OUT, vpl::sys::tStringConv::fromUtf8(ansiName));
+		 if( Channel.connect() )
+		 {
+			 data::CObjectPtr<data::CDensityData> spVolume( APP_STORAGE.getEntry(data::PATIENT_DATA) );
+			 // because vlm doesn't save data::CVolumeTransformation, we apply it on the tag saved in the patient data
+			 const vpl::img::CVector3D pos(spVolume->m_ImagePosition);
+			 data::CObjectPtr<data::CVolumeTransformation> spVolumeTransformation(APP_STORAGE.getEntry(data::Storage::VolumeTransformation::Id));
+			 osg::Matrix volTransform = spVolumeTransformation->getTransformation();
+			 osg::Vec3 offLoad = - volTransform.getTrans();
+			 spVolume->m_ImagePosition += vpl::img::CVector3D(offLoad[0],offLoad[1],offLoad[2]);
+			 // serialization
+			 bResult = vpl::mod::write(*spVolume, Channel, ProgressFunc);
+			 // restore original image position value
+			 spVolume->m_ImagePosition = pos;
+		 }
+
+#endif
     }
     catch( const vpl::base::CFullException& /*Exception*/ )
     {
@@ -1579,11 +1734,12 @@ bool MainWindow::saveVLMAs()
     return true;
 }
 
+
 // save dicom series (copy source files to a directory of your choice)
-bool MainWindow::saveDICOM()
+bool MainWindow::saveOriginalDICOM()
 {
     QSettings settings;
-    QString previousDir=settings.value("dstDICOMdir").toString();
+	QString previousDir = getSaveLoadPath("dstDICOMdir");
     if (previousDir.isEmpty())
         previousDir=settings.value("DICOMdir").toString();
 
@@ -1594,55 +1750,394 @@ bool MainWindow::saveDICOM()
 
     settings.setValue("dstDICOMdir",fileName);
 
-    // get list of loaded dicoms
-    data::CObjectPtr<data::CImageLoaderInfo> spInfo( APP_STORAGE.getEntry( data::Storage::ImageLoaderInfo::Id ) );
-    if ( spInfo->getNumOfFiles() < 1 )
-    {
+	// get list of loaded dicoms
+	data::CObjectPtr<data::CImageLoaderInfo> spInfo( APP_STORAGE.getEntry( data::Storage::ImageLoaderInfo::Id ) );
+	if ( spInfo->getNumOfFiles() < 1 )
+	{
+		return false;
+	}
+
+	// handle name collisions
+	std::vector<QString> fileList;
+	for ( int i = 0; i < spInfo->getNumOfFiles(); i++ )
+	{
+		QString srcName = QString::fromStdString(vpl::sys::tStringConv::toUtf8(spInfo->getList()[i]));
+		QFileInfo inputFileInfo( srcName );
+		QString dstName = inputFileInfo.baseName() + "." + inputFileInfo.completeSuffix();
+		int k = 0;
+		for(int j = 0; j < i; j++)
+		{
+			if (0==dstName.compare(fileList[j],Qt::CaseInsensitive))
+			{
+				dstName = inputFileInfo.baseName() + QString::number(k) + "." + inputFileInfo.completeSuffix();
+				j = 0; k++;
+			}
+		}
+		fileList.push_back(dstName);
+	}
+	Q_ASSERT(spInfo->getNumOfFiles() == fileList.size());
+
+	bool ok = true;
+	// Copy files
+	for ( int i = 0; i < spInfo->getNumOfFiles() && ok; i++ )
+	{
+		QString srcName = QString::fromStdString(vpl::sys::tStringConv::toUtf8(spInfo->getList()[i]));
+		QFileInfo inputFileInfo( srcName );
+		QString dstName = fileName + "/" + fileList[i]; // (fileName + "/") + inputFileInfo.baseName() + "." + inputFileInfo.completeSuffix();
+		while (!QFile::copy(srcName,dstName) && ok)
+		{
+			if (QMessageBox::No==QMessageBox::question(this,QCoreApplication::applicationName(),tr("Failed to copy file %1. Retry?").arg(inputFileInfo.baseName() + "." + inputFileInfo.completeSuffix()),QMessageBox::Yes,QMessageBox::No))
+			{
+				ok = false;
+				break;
+			}
+		}
+	}
+	//
+	if (ok)
+	{
+		postSave(fileName);
+	}
+	return ok;
+}
+
+// save dicom series (copy source files to a directory of your choice)
+bool MainWindow::saveDICOM()
+{	
+	data::CObjectPtr<data::CDensityData> spData( APP_STORAGE.getEntry(data::Storage::PatientData::Id) );    
+	const int sizeX = spData->getXSize();
+	const int sizeY = spData->getYSize();
+	const int sizeZ = spData->getZSize();
+	const double dX = spData->getDX();
+	const double dY = spData->getDY();
+	const double dZ = spData->getDZ();
+
+	QString SeriesID(spData->m_sSeriesUid.c_str());	
+	if (SeriesID.isEmpty())
+		SeriesID = "cs" + QString::number(spData->getDataCheckSum());
+	
+	// show dialog with options
+    bool bSaveSegmented = false;
+	bool bSaveCompressed = false;
+	bool bSaveActive = false;
+	{
+		data::CObjectPtr<data::CRegionColoring> spColoring(APP_STORAGE.getEntry(data::Storage::RegionColoring::Id));
+		const int activeRegion(spColoring->getActiveRegion());
+		data::CRegionColoring::tColor color;
+		if (activeRegion>=0)
+		{
+			color = spColoring->getColor( activeRegion );
+		}
+		QColor  qcolor(color.getR(), color.getG(), color.getB());
+
+        QDialog dlg(NULL,Qt::WindowTitleHint | Qt::WindowSystemMenuHint | Qt::WindowCloseButtonHint);
+        dlg.setWindowTitle(tr("Save DICOM"));
+        //dlg.setMinimumSize(500,300);
+		dlg.setSizeGripEnabled(true);
+        QGridLayout* pLayout = new QGridLayout();
+        dlg.setLayout(pLayout);
+		QRadioButton rbCurrent(tr("Save all data"));
+		rbCurrent.setChecked(true);
+        pLayout->addWidget(&rbCurrent,0,0);
+        QRadioButton rbSegmented(tr("Save all segmented areas"));
+        pLayout->addWidget(&rbSegmented,1,0);
+		QRadioButton rbActiveOnly(tr("Save active region only"));
+        pLayout->addWidget(&rbActiveOnly,2,0);
+		QLabel labelRegion;
+		labelRegion.setMinimumWidth(32);
+		labelRegion.setMaximumWidth(32);
+		labelRegion.setStyleSheet(QString("background-color: %1").arg(qcolor.name()));
+		pLayout->addWidget(&labelRegion,2,1);
+		QCheckBox cbCompress(tr("Compress"));
+		pLayout->addWidget(&cbCompress,3,0);
+		QDialogButtonBox* pButtonBox = new QDialogButtonBox;
+		pButtonBox->setStandardButtons(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
+        pButtonBox->setCenterButtons(true);
+        connect(pButtonBox, SIGNAL(accepted()), &dlg, SLOT(accept()));
+		connect(pButtonBox, SIGNAL(rejected()), &dlg, SLOT(reject()));
+        pLayout->addWidget(pButtonBox,4,0,1,2);
+		if (QDialog::Accepted!=dlg.exec())
+			return false;
+		bSaveSegmented = rbSegmented.isChecked() || rbActiveOnly.isChecked();
+		bSaveCompressed = cbCompress.isChecked();
+		bSaveActive = rbActiveOnly.isChecked();
+	}
+
+	if (bSaveSegmented)
+	{
+		QObject* pPlugin=findPluginByID("RegionControl");
+		if (NULL!=pPlugin)
+		{
+			PluginLicenseInterface *iPlugin = qobject_cast<PluginLicenseInterface *>(pPlugin);
+			if (iPlugin)
+			{
+				if (!iPlugin->canExport(SeriesID))
+				{
+					QMessageBox::warning(this,QCoreApplication::applicationName(),tr("Segmented areas can't be exported with the current product license."));
+					return false;
+				}
+			}
+		}
+	}
+
+    QSettings settings;
+	QString previousDir = getSaveLoadPath("dstDICOMdir");
+    if (previousDir.isEmpty())
+        previousDir=settings.value("DICOMdir").toString();
+
+    // get DICOM data destination directory
+    QString fileName = QFileDialog::getExistingDirectory(this,tr("Please, choose a directory where to save current DICOM dataset..."),previousDir);
+    if (fileName.isEmpty())
         return false;
-    }
 
-    // handle name collisions
-    std::vector<QString> fileList;
-    for ( int i = 0; i < spInfo->getNumOfFiles(); i++ )
-    {
-        QString srcName = QString::fromStdString(vpl::sys::tStringConv::toUtf8(spInfo->getList()[i]));
-        QFileInfo inputFileInfo( srcName );
-        QString dstName = inputFileInfo.baseName() + "." + inputFileInfo.completeSuffix();
-        int k = 0;
-        for(int j = 0; j < i; j++)
-        {
-            if (0==dstName.compare(fileList[j],Qt::CaseInsensitive))
+	// check directory contents and show warning if it contains any previously saved dicom files
+	{
+		QDir dir(fileName);
+		QStringList extensions;
+		extensions.push_back("*.dcm");
+		extensions.push_back("*.dicom");
+		QStringList lstDicom = dir.entryList(extensions, QDir::Files);
+		if (!lstDicom.empty())
+		{
+			if (QMessageBox::Yes!=QMessageBox::warning(this,QCoreApplication::applicationName(),tr("Specified directory already contains DICOM files! Do you really want to continue?"),QMessageBox::Yes,QMessageBox::No))
+				return false;
+		}
+	}
+
+    settings.setValue("dstDICOMdir",fileName);
+
+    // Show simple progress dialog
+    CProgress progress(this);
+    progress.setLabelText(tr("Saving DICOM data, please wait..."));
+    progress.show();
+
+#ifdef WIN32
+	// path in ACP
+	std::wstring uniName = (const wchar_t*)fileName.utf16();
+	std::string ansiName = wcs2ACP(uniName);
+#else // UTF8
+	std::string ansiName = fileName.toStdString();
+#endif
+
+#ifdef __APPLE__
+	std::auto_ptr<qint16> ptr(new qint16[2*sizeX*sizeY]);
+#else
+    std::unique_ptr<qint16> ptr(new qint16[2*sizeX*sizeY]);
+#endif
+
+	// TODO: check whether the top 3 slices are not empty ones (used for volume size alignment)
+
+	char uid[128]={};
+	char studyUIDStr[128]={};
+	char seriesUIDStr[128]={};
+	dcmGenerateUniqueIdentifier(uid, SITE_INSTANCE_UID_ROOT);
+	dcmGenerateUniqueIdentifier(studyUIDStr, SITE_STUDY_UID_ROOT);
+	dcmGenerateUniqueIdentifier(seriesUIDStr, SITE_SERIES_UID_ROOT);
+
+    DJEncoderRegistration::registerCodecs(); // register JPEG codecs
+
+	bool bOk = true;
+	for(int z=0; z<sizeZ && bOk; z++)
+	{
+		if (!progress.Entry(z,sizeZ))
+		{
+			bOk = false;
+			break;
+		}
+
+		// prepare pixel data
+        if (bSaveSegmented)
+        {			
+            data::CObjectPtr< data::CRegionData > rVolume( APP_STORAGE.getEntry( data::Storage::RegionData::Id ) );
+            if (rVolume->getSize()==spData->getSize())
             {
-                dstName = inputFileInfo.baseName() + QString::number(k) + "." + inputFileInfo.completeSuffix();
-                j = 0; k++;
+				if (bSaveActive)
+				{
+					data::CObjectPtr<data::CRegionColoring> spColoring(APP_STORAGE.getEntry(data::Storage::RegionColoring::Id));
+					const int activeRegion(spColoring->getActiveRegion());
+					qint16* pData = ptr.get();
+					for(int y=0;y<sizeY;y++)
+					{
+						for(int x=0;x<sizeX;x++)
+						{
+							if (rVolume->at(x,y,z)==activeRegion)
+								*pData = std::max(spData->at(x,y,z)+1024,0);
+							else
+								*pData = 0;
+							pData++;
+						}
+					}
+				}
+				else
+				{
+					qint16* pData = ptr.get();
+					for(int y=0;y<sizeY;y++)
+					{
+						for(int x=0;x<sizeX;x++)
+						{
+							if (rVolume->at(x,y,z)!=0)
+								*pData = std::max(spData->at(x,y,z)+1024,0);
+							else
+								*pData = 0;
+							pData++;
+						}
+					}
+				}
             }
         }
-        fileList.push_back(dstName);
-    }
-    Q_ASSERT(spInfo->getNumOfFiles() == fileList.size());
-
-    bool ok = true;
-    // Copy files
-    for ( int i = 0; i < spInfo->getNumOfFiles() && ok; i++ )
-    {
-        QString srcName = QString::fromStdString(vpl::sys::tStringConv::toUtf8(spInfo->getList()[i]));
-        QFileInfo inputFileInfo( srcName );
-        QString dstName = fileName + "/" + fileList[i]; // (fileName + "/") + inputFileInfo.baseName() + "." + inputFileInfo.completeSuffix();
-        while (!QFile::copy(srcName,dstName) && ok)
+        else // all data
         {
-            if (QMessageBox::No==QMessageBox::question(this,QCoreApplication::applicationName(),tr("Failed to copy file %1. Retry?").arg(inputFileInfo.baseName() + "." + inputFileInfo.completeSuffix()),QMessageBox::Yes,QMessageBox::No))
-            {
-                ok = false;
-                break;
+			qint16* pData = ptr.get();
+			for(int y=0;y<sizeY;y++)
+			{
+				for(int x=0;x<sizeX;x++)
+				{
+					*pData=std::max(spData->at(x,y,z)+1024,0);
+					pData++;
+				}
+			}
+        }
+
+		// create dicom structures
+		DcmFileFormat fileFormat; 
+		DcmDataset *pDataset = fileFormat.getDataset();
+
+		{	// set dicom tags		
+			pDataset->putAndInsertString(DCM_SOPInstanceUID, uid);
+			pDataset->putAndInsertString(DCM_SOPClassUID, UID_SecondaryCaptureImageStorage);
+
+			if (spData->m_sStudyUid.empty())
+				pDataset->putAndInsertString(DCM_StudyInstanceUID,studyUIDStr);
+			else
+				pDataset->putAndInsertString(DCM_StudyInstanceUID, spData->m_sStudyUid.c_str());				
+
+			if (spData->m_sSeriesUid.empty())
+				pDataset->putAndInsertString(DCM_SeriesInstanceUID,seriesUIDStr);
+			else
+				pDataset->putAndInsertString(DCM_SeriesInstanceUID, spData->m_sSeriesUid.c_str());
+		
+			pDataset->putAndInsertString(DCM_Manufacturer, "3Dim Laboratory");
+			{
+				app::CProductInfo info=app::getProductInfo();
+				std::string product=QString("%1 %2.%3.%4").arg(QCoreApplication::applicationName()).arg(info.getVersion().getMajorNum()).arg(info.getVersion().getMinorNum()).arg(info.getVersion().getBuildNum()).toStdString();
+				pDataset->putAndInsertString(DCM_ManufacturerModelName, product.c_str());
+			}
+
+			pDataset->putAndInsertString( DCM_PatientName,  spData->m_sPatientName.c_str() );
+			pDataset->putAndInsertString( DCM_PatientID,  spData->m_sPatientId.c_str() );
+			pDataset->putAndInsertString( DCM_PatientSex,  spData->m_sPatientSex.c_str() );
+			pDataset->putAndInsertString( DCM_PatientPosition,  spData->m_sPatientPosition.c_str() );
+			pDataset->putAndInsertString( DCM_PatientComments,  spData->m_sPatientDescription.c_str() );
+			pDataset->putAndInsertString( DCM_PatientBirthDate,  spData->m_sPatientBirthday.c_str() );
+
+			pDataset->putAndInsertString( DCM_SeriesDescription,  spData->m_sSeriesDescription.c_str() );
+			pDataset->putAndInsertString( DCM_StudyDescription,  spData->m_sStudyDescription.c_str() );
+
+			pDataset->putAndInsertString( DCM_SeriesDate,  spData->m_sSeriesDate.c_str() );
+			pDataset->putAndInsertString( DCM_SeriesTime,  spData->m_sSeriesTime.c_str() );
+
+			pDataset->putAndInsertString( DCM_StudyDate,  spData->m_sStudyDate.c_str() );
+
+			pDataset->putAndInsertString( DCM_Modality,  spData->m_sModality.c_str() );
+			pDataset->putAndInsertString( DCM_ScanOptions,  spData->m_sScanOptions.c_str() );
+				
+			pDataset->putAndInsertString(DCM_ImageOrientationPatient,"1.000000\0.000000\0.000000\0.000000\1.000000\0.000000");
+
+			std::stringstream spacing;
+			spacing << std::fixed << std::setprecision(6) << dX << "\\" << dY;
+			std::string sspacing = spacing.str();
+			pDataset->putAndInsertString(DCM_PixelSpacing,sspacing.c_str());
+			pDataset->putAndInsertUint16(DCM_Rows,sizeY);
+			pDataset->putAndInsertUint16(DCM_Columns,sizeX);
+			pDataset->putAndInsertUint16(DCM_PixelRepresentation,0); // 1 signed, 0 unsigned
+			//pDataset->putAndInsertUint16(DCM_NumberOfFrames,1);
+			pDataset->putAndInsertUint16(DCM_SamplesPerPixel,1); // count of channels			
+			pDataset->putAndInsertString( DCM_PhotometricInterpretation,  "MONOCHROME2" );
+			//pDataset->putAndInsertUint16(DCM_PlanarConfiguration,0);
+			pDataset->putAndInsertUint16(DCM_BitsAllocated,16);
+			pDataset->putAndInsertUint16(DCM_BitsStored,16);
+			pDataset->putAndInsertUint16(DCM_HighBit, 15);								
+			pDataset->putAndInsertString(DCM_RescaleIntercept, "-1024");
+			pDataset->putAndInsertString(DCM_RescaleSlope, "1");
+			//pDataset->putAndInsertString(DCM_WindowCenter, "0");
+			//pDataset->putAndInsertString(DCM_WindowWidth, "1000");
+			{
+				data::CObjectPtr<data::CVolumeTransformation> spVolumeTransformation(APP_STORAGE.getEntry(data::Storage::VolumeTransformation::Id));
+				osg::Matrix volTransform = spVolumeTransformation->getTransformation();
+				osg::Vec3 offLoad = - volTransform.getTrans();
+
+				std::stringstream pos;				
+				pos << std::fixed << std::setprecision(6) << spData->m_ImagePosition.x() + offLoad[0] << "\\" << spData->m_ImagePosition.y() + offLoad[1] << "\\" << spData->m_ImagePosition.z() + offLoad[2] + z * dZ;
+				std::string spos = pos.str();
+				pDataset->putAndInsertString( DCM_ImagePositionPatient,  spos.c_str() );
+			}
+			{
+				std::stringstream thickness;
+				thickness << dZ;
+				pDataset->putAndInsertString(DCM_SliceThickness,thickness.str().c_str());				
+			}
+			pDataset->putAndInsertUint16(DCM_InstanceNumber,z);
+
+			pDataset->putAndInsertUint16Array(DCM_PixelData, (Uint16*)ptr.get(), sizeX*sizeY); 
+		}
+
+		// data compression
+		E_TransferSyntax xfer = EXS_Unknown;
+		if(bSaveCompressed)
+        {
+            DJ_RPLossless params; // codec parameters, we use the defaults        			
+            // this causes the lossless JPEG version of the dataset to be created
+        #if defined(PACKAGE_VERSION_NUMBER) && (PACKAGE_VERSION_NUMBER == 361)
+            pDataset->chooseRepresentation(EXS_JPEGProcess14SV1, &params);
+        #else
+            pDataset->chooseRepresentation(EXS_JPEGProcess14SV1TransferSyntax, &params);
+        #endif
+
+            // check if everything went well
+        #if defined(PACKAGE_VERSION_NUMBER) && (PACKAGE_VERSION_NUMBER == 361)
+            if (pDataset->canWriteXfer(EXS_JPEGProcess14SV1))
+			{
+				xfer = EXS_JPEGProcess14SV1;
+        #else
+            if (pDataset->canWriteXfer(EXS_JPEGProcess14SV1TransferSyntax))
+			{
+				xfer = EXS_JPEGProcess14SV1TransferSyntax;
+        #endif
             }
         }
-    }
-    //
-    if (ok)
-    {
-        postSave(fileName);
-    }
-    return ok;
+			
+		{	// save file
+			std::stringstream ss;
+			ss << ansiName << "/" << z << ".dcm";
+			std::string curFile = ss.str();
+
+			if (xfer == EXS_Unknown)
+				xfer = EXS_LittleEndianExplicit;
+			OFCondition status = fileFormat.saveFile(curFile.c_str(), xfer);
+			if (status.bad())
+				bOk = false;
+		}
+	}
+    DJEncoderRegistration::cleanup(); // deregister JPEG codecs
+
+	if (bOk)
+	{
+		// update license info
+		if (bSaveSegmented)
+		{
+			QObject* pPlugin=findPluginByID("RegionControl");
+			if (NULL!=pPlugin)
+			{
+				PluginLicenseInterface *iPlugin = qobject_cast<PluginLicenseInterface *>(pPlugin);
+				if (iPlugin)
+				{
+					iPlugin->wasExported(SeriesID);
+				}
+			}
+		}
+		postSave(fileName);
+	}
+	return bOk;
 }
 
 bool MainWindow::openSTL()
@@ -1736,29 +2231,16 @@ bool MainWindow::openSTL(const QString& fileName)
     }
 
     bool result = false;
+	int loadedID = 0;
 
     // don't use osg for stl models as it doesn't merge vertices
     std::string extensions = "stl stla stlb ply obj";
     if (extensions.find(extension) == std::string::npos)
     {
         // Find unused id
-        int id = 0;
-        while(id<MAX_IMPORTED_MODELS)
-        {
-            data::CObjectPtr<data::CModel> spModel( APP_STORAGE.getEntry(data::Storage::ImportedModel::Id+id, data::Storage::NO_UPDATE) );
-            if (!spModel->hasData()) 
-                break;
-            ++id;
-        }
-        // Is it free model id?
-        if (id == MAX_IMPORTED_MODELS)
-        {
-            showMessageBox(QMessageBox::Critical,tr("The maximum number of loadable models reached!"));
-            return false;
-        }
-
-        // Finalize id
-        id += data::Storage::ImportedModel::Id;
+        int id(findPossibleModelId());
+		if(id < 0)
+			return false;
 
         // see if we can load the file using osg
         osg::ref_ptr<osg::Node> model(osgDB::readNodeFile(ansiName));
@@ -1779,6 +2261,7 @@ bool MainWindow::openSTL(const QString& fileName)
                 data::CObjectPtr< data::CModel > pModel( APP_STORAGE.getEntry( id ) );
                 data::CMesh *pMesh = new data::CMesh;
                 pModel->setMesh(pMesh);
+				pModel->clearAllProperties();
             }
             // for every geode that we found
             for(int g = 0; g < geodes.size(); g++)
@@ -1930,12 +2413,14 @@ bool MainWindow::openSTL(const QString& fileName)
                 if (pMesh->n_faces()>0)
                 {
                     //pModel->setMesh(pMesh);
-                    pModel->setLabel(ansiName);
+                    pModel->setLabel(m_modelLabel);
+					pModel->setColor(m_modelColor);
                     pModel->setVisibility(true);
 
                     pModel->setTransformationMatrix(osg::Matrix::identity());
                     APP_STORAGE.invalidate(pModel.getEntryPtr());                        
 
+					loadedID = id;
                     result = true;
                 }
             }
@@ -1957,32 +2442,35 @@ bool MainWindow::openSTL(const QString& fileName)
         else
         {
             // Find unused id
-            int id = 0;
-            while(id<MAX_IMPORTED_MODELS)
-            {
-                data::CObjectPtr<data::CModel> spModel( APP_STORAGE.getEntry(data::Storage::ImportedModel::Id+id, data::Storage::NO_UPDATE) );
-                if (!spModel->hasData()) 
-                    break;
-                ++id;
-            }
-            // Is it free model id?
-            if (id == MAX_IMPORTED_MODELS)
-            {
-                showMessageBox(QMessageBox::Critical,tr("The maximum number of loadable models reached!"));
-                return false;
-            }
-
-            // Finalize id
-            id += data::Storage::ImportedModel::Id;
-
+            int id(findPossibleModelId());
+			if(id < 0)
+				return false;
+			loadedID = id;
             data::CObjectPtr<data::CModel> spModel( APP_STORAGE.getEntry(id) );
             spModel->setMesh(pMesh);
+			spModel->setLabel(m_modelLabel);
+			spModel->setColor(m_modelColor);
             spModel->setVisibility(true);
-            APP_STORAGE.invalidate(spModel.getEntryPtr());            
+			spModel->clearAllProperties();
+			spModel->setTransformationMatrix(osg::Matrix::identity());
+            APP_STORAGE.invalidate(spModel.getEntryPtr());         			
         }
     }
     if (result)
+	{
+		QSettings settings;
+		const bool bUseDicom = settings.value("STLUseDICOMCoord",false).toBool();
+		if (loadedID>0 && bUseDicom)
+		{
+			data::CObjectPtr<data::CModel> spModel( APP_STORAGE.getEntry(loadedID) );
+			data::CObjectPtr<data::CVolumeTransformation> spVolumeTransformation(APP_STORAGE.getEntry(data::Storage::VolumeTransformation::Id));
+			data::CObjectPtr<data::CDensityData> spVolume( APP_STORAGE.getEntry(data::Storage::PatientData::Id) );
+			vpl::img::CVector3D pos = spVolume->m_ImagePosition;
+			spModel->setTransformationMatrix(osg::Matrix::translate(-pos.getX(),-pos.getY(),-pos.getZ()) * spVolumeTransformation->getTransformation());
+			APP_STORAGE.invalidate(spModel.getEntryPtr());         			
+		}
         addToRecentFiles(fileName);
+	}
     QApplication::restoreOverrideCursor();
     return result;
 }
@@ -1993,8 +2481,29 @@ bool MainWindow::saveSTL()
     int storage_id(m_modelsPanel->getSelectedModelStorageId());
     if(storage_id == -1)
     {
-        showMessageBox(QMessageBox::Critical, tr("No model selected!"));
-        return false;
+		int nValid = 0;
+		int firstID = 0;
+		for(int i = 0; i < MAX_IMPORTED_MODELS; ++i)
+		{
+			data::CObjectPtr<data::CModel> spModel( APP_STORAGE.getEntry(data::Storage::ImportedModel::Id + i, data::Storage::NO_UPDATE) );
+			if (spModel->hasData()) 
+			{
+				if (0==firstID)
+					firstID = data::Storage::ImportedModel::Id + i;
+				nValid++;
+			}
+		}
+		if (1==nValid && firstID>0)
+		{
+			// use the only existing model
+			storage_id = firstID;
+		}
+		else
+		{
+			showMessageBox(QMessageBox::Critical, tr("No model selected!"));
+			showModelsListPanel(true);
+			return false;
+		}
     }
 
     data::CObjectPtr<data::CModel> spModel( APP_STORAGE.getEntry(storage_id) );
@@ -2007,7 +2516,31 @@ bool MainWindow::saveSTL()
         return false;
     }
 
+	data::CObjectPtr<data::CDensityData> spVolume( APP_STORAGE.getEntry(data::Storage::PatientData::Id) );
+	QString SeriesID(spVolume->m_sSeriesUid.c_str());	
+	if (SeriesID.isEmpty())
+		SeriesID = "cs" + QString::number(spVolume->getDataCheckSum());
+	spVolume.release();
+
+	if (!spModel->getProperty("Licensed").empty())
+	{
+		QObject* pPlugin=findPluginByID("ModelCreate");
+		if (NULL!=pPlugin)
+		{
+			PluginLicenseInterface *iPlugin = qobject_cast<PluginLicenseInterface *>(pPlugin);
+			if (iPlugin)
+			{
+				if (!iPlugin->canExport(SeriesID))
+				{
+					QMessageBox::warning(this,QCoreApplication::applicationName(),tr("Data can't be exported with the current product license."));
+					return false;
+				}
+			}
+		}
+	}
+
     QSettings settings;
+	const bool bUseDicom = settings.value("STLUseDICOMCoord",false).toBool();
     QString previousDir = getSaveLoadPath("STLdir");
     previousDir = appendSaveNameHint(previousDir,".stl");
     QString selectedFilter;
@@ -2033,6 +2566,47 @@ bool MainWindow::saveSTL()
     if (0==selectedFilter.compare(tr("ASCII Polygon file format (*.ply)"),Qt::CaseInsensitive))
         wopt = OpenMesh::IO::Options::Default;
 
+	data::CObjectPtr<data::CVolumeTransformation> spVolumeTransformation(APP_STORAGE.getEntry(data::Storage::VolumeTransformation::Id));
+	osg::Matrix volTransform = spVolumeTransformation->getTransformation();	
+	if (bUseDicom)
+	{		
+		// apply transformation matrix
+		data::CObjectPtr<data::CDensityData> spVolume( APP_STORAGE.getEntry(data::Storage::PatientData::Id) );
+        vpl::img::CVector3D pos = spVolume->m_ImagePosition;
+		osg::Matrix modelMx = spModel->getTransformationMatrix();		
+		osg::Matrix exportMatrix = modelMx * osg::Matrix::inverse(osg::Matrix::translate(-pos.getX(),-pos.getY(),-pos.getZ()) * volTransform);
+		if (!exportMatrix.isIdentity())
+		{
+			pMesh = new data::CMesh(*pMesh);
+			for (data::CMesh::VertexIter vit = pMesh->vertices_begin(); vit != pMesh->vertices_end(); ++vit)
+			{
+				data::CMesh::Point point = pMesh->point(vit.handle());
+				osg::Vec3 vertex(point[0], point[1], point[2]);
+				vertex = vertex * exportMatrix;
+				point = data::CMesh::Point(vertex[0], vertex[1], vertex[2]);
+				pMesh->point(vit.handle()) = point;
+			}
+		}
+	}
+	else
+	{		
+		// apply transformation matrix
+		osg::Matrix modelMx = spModel->getTransformationMatrix();
+		osg::Matrix exportMatrix = modelMx; //* osg::Matrix::inverse(volTransform);
+		if (!exportMatrix.isIdentity())
+		{
+			pMesh = new data::CMesh(*pMesh);
+			for (data::CMesh::VertexIter vit = pMesh->vertices_begin(); vit != pMesh->vertices_end(); ++vit)
+			{
+				data::CMesh::Point point = pMesh->point(vit.handle());
+				osg::Vec3 vertex(point[0], point[1], point[2]);
+				vertex = vertex * exportMatrix;
+				point = data::CMesh::Point(vertex[0], vertex[1], vertex[2]);
+				pMesh->point(vit.handle()) = point;
+			}
+		}
+	}
+	
     bool result = true;
     if (!OpenMesh::IO::write_mesh(*pMesh, ansiName, wopt))
     {
@@ -2040,7 +2614,25 @@ bool MainWindow::saveSTL()
         showMessageBox(QMessageBox::Critical, tr("Failed to save binary STL model!"));
     }
     else
+	{
         addToRecentFiles(fileName);
+
+		if (!spModel->getProperty("Licensed").empty())
+		{
+			// update license info
+			QObject* pPlugin=findPluginByID("ModelCreate");
+			if (NULL!=pPlugin)
+			{
+				PluginLicenseInterface *iPlugin = qobject_cast<PluginLicenseInterface *>(pPlugin);
+				if (iPlugin)
+				{
+					iPlugin->wasExported(SeriesID);
+				}
+			}
+		}
+	}
+	if (pMesh != spModel->getMesh())
+		delete pMesh;
     QApplication::restoreOverrideCursor();
     return result;
 }
@@ -2269,93 +2861,123 @@ void MainWindow::showModelsListPanel(bool bShow)
 
 void MainWindow::createOSGStuff()
 {
-    m_3DView = new CVolumeRendererWindow();
-    m_3DView->hide();
-    m_Scene3D = new scene::CScene3D(m_3DView);
-    m_Scene3D->setRenderer(&m_3DView->getRenderer());
-    m_3DView->setScene(m_Scene3D.get());
+	// 3D view
+	{
+		m_3DView = new CVolumeRendererWindow();
+		m_3DView->hide();
+		m_Scene3D = new scene::CScene3D(m_3DView);
+		m_Scene3D->setRenderer(&m_3DView->getRenderer());
+		m_3DView->setScene(m_Scene3D.get());
 
-    // Initialize the model manager
-    for(int i = 0; i < MAX_IMPORTED_MODELS; ++i)
-    {
-        m_modelVisualizers[i] = new osg::CModelVisualizerEx(data::Storage::ImportedModel::Id + i);
+		// Initialize the model manager
+		for(int i = 0; i < MAX_IMPORTED_MODELS; ++i)
+		{
+			m_modelVisualizers[i] = new osg::CModelVisualizerEx(data::Storage::ImportedModel::Id + i);
 
-        osg::ref_ptr<osg::MatrixTransform> pModelTransform = new osg::MatrixTransform();
-        pModelTransform->addChild(m_modelVisualizers[i]);
+			osg::ref_ptr<osg::MatrixTransform> pModelTransform = new osg::MatrixTransform();
+			pModelTransform->addChild(m_modelVisualizers[i]);
     
-        m_Scene3D->anchorToScene(pModelTransform.get(), true);
-        m_modelVisualizers[i]->setCanvas(m_3DView);
-    }
+			m_Scene3D->anchorToScene(pModelTransform.get(), true);
+			m_modelVisualizers[i]->setCanvas(m_3DView);
+		}
     
-    //m_modelVisualizer->setModelVisualization(osg::CModelVisualizerEx::EMV_FLAT);
+		//m_modelVisualizer->setModelVisualization(osg::CModelVisualizerEx::EMV_FLAT);
 
-    if( m_3DView->getRenderer().isError() )
-    {
-        showMessageBox(QMessageBox::Critical,tr("VR Error!"));
-    }
+		if( m_3DView->getRenderer().isError() )
+		{
+			showMessageBox(QMessageBox::Critical,tr("VR Error!"));
+		}
 
-    // Drawing event handler
-    m_draw3DEH = new osgGA::CISScene3DEH( m_3DView, m_Scene3D.get() );
-    m_3DView->addEventHandler( m_draw3DEH.get() );
+		// Drawing event handler
+		m_draw3DEH = new osgGA::CISScene3DEH( m_3DView, m_Scene3D.get() );
+		m_3DView->addEventHandler( m_draw3DEH.get() );
 
-    // Window drawing event handler
-    m_drawW3DEH = new osgGA::CISWindowEH(m_3DView, m_Scene3D.get());
+		// Window drawing event handler
+		m_drawW3DEH = new osgGA::CISWindowEH(m_3DView, m_Scene3D.get());
 
-    // Modify drawing EH osg::StateSet 
-    m_drawW3DEH->setLineFlags( osg::CLineGeode::USE_RENDER_BIN | osg::CLineGeode::DISABLE_DEPTH_TEST );
-    m_drawW3DEH->setZ( 0.5 );
+		// Modify drawing EH osg::StateSet 
+		m_drawW3DEH->setLineFlags( osg::CLineGeode::USE_RENDER_BIN | osg::CLineGeode::DISABLE_DEPTH_TEST );
+		m_drawW3DEH->setZ( 0.5 );
 
-    m_3DView->addEventHandler( m_drawW3DEH.get() );
+		m_3DView->addEventHandler( m_drawW3DEH.get() );
 
-    // Measurements EH
-    m_measurements3DEH = new scene::CMeasurements3DEH( m_3DView, m_Scene3D.get() );
-    m_measurements3DEH->setHandleDensityUnderCursor(true);
-    m_3DView->addEventHandler( m_measurements3DEH.get() );
+		// Measurements EH
+		m_measurements3DEH = new scene::CMeasurements3DEH( m_3DView, m_Scene3D.get() );
+		m_measurements3DEH->setHandleDensityUnderCursor(true);
+		m_3DView->addEventHandler( m_measurements3DEH.get() );
+	}
 
     // XY Slice
-    m_OrthoXYSlice = new OSGOrtho2DCanvas();
-    m_OrthoXYSlice->hide();
-    m_SceneXY = new scene::CSceneXY(m_OrthoXYSlice);
-    m_OrthoXYSlice->setScene(m_SceneXY.get());
-    m_OrthoXYSlice->centerAndScale();
-    m_OrthoXYSlice->getManipulator()->m_sigUpDown.connect( m_SceneXY, &scene::CSceneXY::sliceUpDown );
-    // Drawing event handler
-    m_drawXYEH = new osgGA::CISSceneXYEH( m_OrthoXYSlice, m_SceneXY.get() );
-    m_OrthoXYSlice->addEventHandler( m_drawXYEH.get() );
-    // Measurements event handler
-    m_measurementsXYEH = new scene::CMeasurementsXYEH( m_OrthoXYSlice, m_SceneXY.get() );
-    m_measurementsXYEH->setHandleDensityUnderCursor(true);
-    m_OrthoXYSlice->addEventHandler( m_measurementsXYEH.get() );
+	{
+		m_OrthoXYSlice = new OSGOrtho2DCanvas();
+		m_OrthoXYSlice->hide();
+		m_SceneXY = new scene::CSceneXY(m_OrthoXYSlice);
+		m_OrthoXYSlice->setScene(m_SceneXY.get());
+		m_OrthoXYSlice->centerAndScale();
+		m_OrthoXYSlice->getManipulator()->m_sigUpDown.connect( m_SceneXY, &scene::CSceneXY::sliceUpDown );
+		// Drawing event handler
+		m_drawXYEH = new osgGA::CISSceneXYEH( m_OrthoXYSlice, m_SceneXY.get() );
+		m_OrthoXYSlice->addEventHandler( m_drawXYEH.get() );
+		// Measurements event handler
+		m_measurementsXYEH = new scene::CMeasurementsXYEH( m_OrthoXYSlice, m_SceneXY.get() );
+		m_measurementsXYEH->setHandleDensityUnderCursor(true);
+		m_OrthoXYSlice->addEventHandler( m_measurementsXYEH.get() );
+		for(int i = 0; i < MAX_IMPORTED_MODELS; ++i)
+		{
+			m_importedModelCutSliceXY[i] = new osg::CModelCutVisualizerSliceXY(data::Storage::ImportedModelCutSliceXY::Id + i, m_OrthoXYSlice);
+			m_importedModelCutSliceXY[i]->setVisibility(false);
+			m_importedModelCutSliceXY[i]->setColor(osg::Vec4(1.0,1.0,0.0,1.0));
+			m_SceneXY->addChild(m_importedModelCutSliceXY[i]);
+		}
+	}
 
     // XZ Slice
-    m_OrthoXZSlice = new OSGOrtho2DCanvas();
-    m_OrthoXZSlice->hide();
-    m_SceneXZ = new scene::CSceneXZ(m_OrthoXZSlice);
-    m_OrthoXZSlice->setScene(m_SceneXZ.get());
-    m_OrthoXZSlice->centerAndScale();
-    m_OrthoXZSlice->getManipulator()->m_sigUpDown.connect( m_SceneXZ, &scene::CSceneXZ::sliceUpDown );
-    // Drawing event handler
-    m_drawXZEH = new osgGA::CISSceneXZEH( m_OrthoXZSlice, m_SceneXZ.get() );
-    m_OrthoXZSlice->addEventHandler( m_drawXZEH.get() );
-    // Measurements event handler
-    m_measurementsXZEH = new scene::CMeasurementsXZEH( m_OrthoXZSlice, m_SceneXZ.get() );
-    m_measurementsXZEH->setHandleDensityUnderCursor(true);
-    m_OrthoXZSlice->addEventHandler( m_measurementsXZEH.get() );
+	{
+		m_OrthoXZSlice = new OSGOrtho2DCanvas();
+		m_OrthoXZSlice->hide();
+		m_SceneXZ = new scene::CSceneXZ(m_OrthoXZSlice);
+		m_OrthoXZSlice->setScene(m_SceneXZ.get());
+		m_OrthoXZSlice->centerAndScale();
+		m_OrthoXZSlice->getManipulator()->m_sigUpDown.connect( m_SceneXZ, &scene::CSceneXZ::sliceUpDown );
+		// Drawing event handler
+		m_drawXZEH = new osgGA::CISSceneXZEH( m_OrthoXZSlice, m_SceneXZ.get() );
+		m_OrthoXZSlice->addEventHandler( m_drawXZEH.get() );
+		// Measurements event handler
+		m_measurementsXZEH = new scene::CMeasurementsXZEH( m_OrthoXZSlice, m_SceneXZ.get() );
+		m_measurementsXZEH->setHandleDensityUnderCursor(true);
+		m_OrthoXZSlice->addEventHandler( m_measurementsXZEH.get() );
+		for(int i = 0; i < MAX_IMPORTED_MODELS; ++i)
+		{
+			m_importedModelCutSliceXZ[i] = new osg::CModelCutVisualizerSliceXZ(data::Storage::ImportedModelCutSliceXZ::Id + i, m_OrthoXZSlice);
+			m_importedModelCutSliceXZ[i]->setVisibility(false);
+			m_importedModelCutSliceXZ[i]->setColor(osg::Vec4(1.0,1.0,0.0,1.0));
+			m_SceneXZ->addChild(m_importedModelCutSliceXZ[i]);
+		}
+	}
 
     // YZ Slice
-    m_OrthoYZSlice = new OSGOrtho2DCanvas();
-    m_OrthoYZSlice->hide();
-    m_SceneYZ = new scene::CSceneYZ(m_OrthoYZSlice);
-    m_OrthoYZSlice->setScene(m_SceneYZ.get());
-    m_OrthoYZSlice->centerAndScale();
-    m_OrthoYZSlice->getManipulator()->m_sigUpDown.connect( m_SceneYZ, &scene::CSceneYZ::sliceUpDown );
-    // Drawing event handler
-    m_drawYZEH = new osgGA::CISSceneYZEH( m_OrthoYZSlice, m_SceneYZ.get() );
-    m_OrthoYZSlice->addEventHandler( m_drawYZEH.get() );
-    // Measurements event handler
-    m_measurementsYZEH = new scene::CMeasurementsYZEH( m_OrthoYZSlice, m_SceneYZ.get() );
-    m_measurementsYZEH->setHandleDensityUnderCursor(true);
-    m_OrthoYZSlice->addEventHandler( m_measurementsYZEH.get() );
+	{
+		m_OrthoYZSlice = new OSGOrtho2DCanvas();
+		m_OrthoYZSlice->hide();
+		m_SceneYZ = new scene::CSceneYZ(m_OrthoYZSlice);
+		m_OrthoYZSlice->setScene(m_SceneYZ.get());
+		m_OrthoYZSlice->centerAndScale();
+		m_OrthoYZSlice->getManipulator()->m_sigUpDown.connect( m_SceneYZ, &scene::CSceneYZ::sliceUpDown );
+		// Drawing event handler
+		m_drawYZEH = new osgGA::CISSceneYZEH( m_OrthoYZSlice, m_SceneYZ.get() );
+		m_OrthoYZSlice->addEventHandler( m_drawYZEH.get() );
+		// Measurements event handler
+		m_measurementsYZEH = new scene::CMeasurementsYZEH( m_OrthoYZSlice, m_SceneYZ.get() );
+		m_measurementsYZEH->setHandleDensityUnderCursor(true);
+		m_OrthoYZSlice->addEventHandler( m_measurementsYZEH.get() );
+		for(int i = 0; i < MAX_IMPORTED_MODELS; ++i)
+		{
+			m_importedModelCutSliceYZ[i] = new osg::CModelCutVisualizerSliceYZ(data::Storage::ImportedModelCutSliceYZ::Id + i, m_OrthoYZSlice);
+			m_importedModelCutSliceYZ[i]->setVisibility(false);
+			m_importedModelCutSliceYZ[i]->setColor(osg::Vec4(1.0,1.0,0.0,1.0));
+			m_SceneYZ->addChild(m_importedModelCutSliceYZ[i]);
+		}
+	}
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -2534,22 +3156,9 @@ void MainWindow::showSurfaceModel(bool bShow)
 void MainWindow::createSurfaceModel()
 {
     // Find unused id
-    int id = 0;
-    while(id<MAX_IMPORTED_MODELS)
-    {
-        data::CObjectPtr<data::CModel> spModel( APP_STORAGE.getEntry(data::Storage::ImportedModel::Id+id, data::Storage::NO_UPDATE) );
-        if (!spModel->hasData()) 
-            break;
-        ++id;
-    }
-    // Is it free model id?
-    if (id == MAX_IMPORTED_MODELS)
-    {
-        showMessageBox(QMessageBox::Critical,tr("The maximum number of loadable models reached!"));
-    }
-
-    // Finalize id
-    id += data::Storage::ImportedModel::Id;
+	int id(findPossibleModelId());
+	if(id < 0)
+		return;
 
     CProgress progress(this);
     progress.setLabelText(tr("Creating surface model, please wait..."));
@@ -2561,6 +3170,7 @@ void MainWindow::createSurfaceModel()
         if (NULL!=pMesh && pMesh->n_vertices() > 1000000)
         {
             spModel->setMesh(new data::CMesh());
+			spModel->clearAllProperties();
             APP_STORAGE.invalidate( spModel.getEntryPtr() );
         }
     }
@@ -2623,6 +3233,9 @@ void MainWindow::createSurfaceModel()
 
     data::CObjectPtr<data::CModel> spModel( APP_STORAGE.getEntry(id) );
     spModel->setMesh(pMesh);
+	spModel->setLabel(m_modelLabel);
+	spModel->setColor(m_modelColor);
+	spModel->clearAllProperties();
     spModel->setVisibility(true);
     APP_STORAGE.invalidate(spModel.getEntryPtr());
 
@@ -2670,7 +3283,7 @@ void MainWindow::showPreferencesDialog()
 
 void MainWindow::showDataProperties()
 {
-    CDataInfoDialog dlg(m_modelsPanel->getSelectedModelStorageId(), this);
+    CDataInfoDialog dlg(this);
     dlg.exec();    
 }
 
@@ -2689,7 +3302,7 @@ void MainWindow::showAbout()
     msgBox.setWindowTitle(tr("About ") + QCoreApplication::applicationName());
     msgBox.setText(product + "\n"
                    + tr("Lightweight 3D DICOM viewer.\n\n")
-                   + QObject::trUtf8("Copyright %1 2008-2014 by 3Dim Laboratory s.r.o.").arg(QChar(169)) + "\n" 
+                   + QObject::trUtf8("Copyright %1 2008-%2 by 3Dim Laboratory s.r.o.").arg(QChar(169)).arg(QDate::currentDate().year()) + "\n" 
                    + tr("http://www.3dim-laboratory.cz/")
                    );
     msgBox.setDetailedText(tr(
@@ -3163,6 +3776,17 @@ void MainWindow::saveAppSettings()
 
 void MainWindow::firstEvent()
 {
+	{
+		app::CProductInfo info=app::getProductInfo();
+		const std::string& versionNote = info.getNote();
+		if (!versionNote.empty())
+		{
+			if (0==strcmp(versionNote.c_str(),app::DEV_NOTE.c_str()))
+				setWindowTitle(windowTitle() + " - " + tr("ONLY for internal testing and not for distribution!"));       // "This build is for internal testing purposes only and not for distribution!"
+			else
+				setWindowTitle(windowTitle() + " - " + tr("ONLY for testing!"));            // "This build is for testing purposes only!"
+		}
+	}
 	// open file from command line
     QString wsVLMName = qApp->property("OpenVLM").toString();
     if (!wsVLMName.isEmpty())
@@ -3806,6 +4430,7 @@ void MainWindow::processSurfaceModelExtern()
                 if (OpenMesh::IO::read_mesh(*mesh, ansiOut, ropt) && mesh->n_vertices()>0)
                 {
                     spModel->setMesh(mesh);
+					spModel->clearAllProperties();
                     APP_STORAGE.invalidate(spModel.getEntryPtr());
                 }
                 else
@@ -3867,6 +4492,125 @@ void MainWindow::fullscreen(bool on)
 		if (0!=(this->property("StateFlags4FS").toInt()&Qt::WindowMaximized))			
 			this->showMaximized();
 	}
+}
+
+/**
+ * \brief	Searches for the first possible model identifier. As a side-effect stores used region color and name (if model-region link exists).
+ *
+ * \return	The found possible model identifier.
+ */
+int MainWindow::findPossibleModelId()
+{
+	int id(-1);
+	m_modelColor = data::CColor4f(1.0, 1.0, 0.0);
+	m_modelLabel = std::string("Model");
+
+	QSettings settings;
+	if(settings.value("ModelRegionLinkEnabled", QVariant(false)).toBool())
+	{
+		// Get active region
+		data::CObjectPtr<data::CRegionColoring> spColoring(APP_STORAGE.getEntry(data::Storage::RegionColoring::Id));
+		int active_region(spColoring->getActiveRegion());
+
+		if(active_region >= 0 && active_region < MAX_IMPORTED_MODELS)
+		{
+			// Store id
+			id = active_region;
+
+			// Store label and color
+			m_modelLabel = spColoring->getRegionInfo(active_region).getName();
+			data::CRegionColoring::tColor rc(spColoring->getColor(active_region));
+			m_modelColor = data::CColor4f(rc.getR()/255.0f, rc.getG()/255.0f, rc.getB()/255.0f, rc.getA()/255.0f);
+		}
+	}
+
+	// Id not found yet
+	if(id < 0)
+	{
+		id = 0;
+		while(id<MAX_IMPORTED_MODELS)
+		{
+			data::CObjectPtr<data::CModel> spModel( APP_STORAGE.getEntry(data::Storage::ImportedModel::Id+id, data::Storage::NO_UPDATE) );
+			if (!spModel->hasData()) 
+				break;
+			++id;
+		}
+		// Is it free model id?
+		if (id == MAX_IMPORTED_MODELS)
+		{
+			showMessageBox(QMessageBox::Critical,tr("The maximum number of loadable models reached!"));
+			return -1;
+		}
+	}
+
+	// Finalize id
+	id += data::Storage::ImportedModel::Id;
+
+	return id;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
+void MainWindow::setModelCutVisibilitySignal(int id, bool bShow)
+{
+	if (id>=data::Storage::ImportedModel::Id && id < data::Storage::ImportedModel::Id + MAX_IMPORTED_MODELS)
+	{
+		m_importedModelCutSliceXY[id - data::Storage::ImportedModel::Id]->setVisibility(bShow, true);
+		m_importedModelCutSliceXZ[id - data::Storage::ImportedModel::Id]->setVisibility(bShow, true);
+		m_importedModelCutSliceYZ[id - data::Storage::ImportedModel::Id]->setVisibility(bShow, true);
+	}
+}
+
+bool MainWindow::getModelCutVisibilitySignal(int id)
+{
+	if (id>=data::Storage::ImportedModel::Id && id < data::Storage::ImportedModel::Id + MAX_IMPORTED_MODELS)
+	{
+		return m_importedModelCutSliceXY[id - data::Storage::ImportedModel::Id]->isVisible();
+	}
+	return false;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
+void MainWindow::aboutToShowViewFilterMenu()
+{
+	QMenu* pMenu = qobject_cast<QMenu*>(sender());
+	data::CObjectPtr<data::CAppSettings> settings( APP_STORAGE.getEntry(data::Storage::AppSettings::Id) );
+	ui->actionViewEqualize->blockSignals(true);
+	ui->actionViewSharpen->blockSignals(true);
+	ui->actionViewEqualize->setChecked(data::CAppSettings::Equalize==settings->getFilter());
+	ui->actionViewSharpen->setChecked(data::CAppSettings::Sharpen==settings->getFilter());
+	ui->actionViewEqualize->blockSignals(false);
+	ui->actionViewSharpen->blockSignals(false);
+}
+
+void MainWindow::setTextureFilterEqualize(bool on)
+{
+	data::CObjectPtr<data::CAppSettings> settings( APP_STORAGE.getEntry(data::Storage::AppSettings::Id) );
+	settings->setFilter(on?data::CAppSettings::Equalize:data::CAppSettings::NoFilter);
+	APP_STORAGE.invalidate(settings.getEntryPtr());	
+	// invalidata all slices
+	data::CObjectPtr<data::COrthoSliceXY> spSliceXY( APP_STORAGE.getEntry(data::Storage::SliceXY::Id) );
+	APP_STORAGE.invalidate(spSliceXY.getEntryPtr(), data::COrthoSlice::MODE_CHANGED );
+	data::CObjectPtr<data::COrthoSliceXZ> spSliceXZ( APP_STORAGE.getEntry(data::Storage::SliceXZ::Id) );
+	APP_STORAGE.invalidate(spSliceXZ.getEntryPtr(), data::COrthoSlice::MODE_CHANGED );
+	data::CObjectPtr<data::COrthoSliceYZ> spSliceYZ( APP_STORAGE.getEntry(data::Storage::SliceYZ::Id) );
+	APP_STORAGE.invalidate(spSliceYZ.getEntryPtr(), data::COrthoSlice::MODE_CHANGED );
+}
+
+
+void MainWindow::setTextureFilterSharpen(bool on)
+{
+	data::CObjectPtr<data::CAppSettings> settings( APP_STORAGE.getEntry(data::Storage::AppSettings::Id) );
+	settings->setFilter(on?data::CAppSettings::Sharpen:data::CAppSettings::NoFilter);
+	APP_STORAGE.invalidate(settings.getEntryPtr());	
+	// invalidata all slices
+	data::CObjectPtr<data::COrthoSliceXY> spSliceXY( APP_STORAGE.getEntry(data::Storage::SliceXY::Id) );
+	APP_STORAGE.invalidate(spSliceXY.getEntryPtr(), data::COrthoSlice::MODE_CHANGED );
+	data::CObjectPtr<data::COrthoSliceXZ> spSliceXZ( APP_STORAGE.getEntry(data::Storage::SliceXZ::Id) );
+	APP_STORAGE.invalidate(spSliceXZ.getEntryPtr(), data::COrthoSlice::MODE_CHANGED );
+	data::CObjectPtr<data::COrthoSliceYZ> spSliceYZ( APP_STORAGE.getEntry(data::Storage::SliceYZ::Id) );
+	APP_STORAGE.invalidate(spSliceYZ.getEntryPtr(), data::COrthoSlice::MODE_CHANGED );
 }
 
 ///////////////////////////////////////////////////////////////////////////////

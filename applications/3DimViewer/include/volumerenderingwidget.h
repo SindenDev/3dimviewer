@@ -107,7 +107,9 @@ protected:
         SkinSurface
     };
 
-    void    vrDataRemapChange(float expand, float offset);
+    void vrDataRemapChange(float expand, float offset);
+    int lutCodeToVrLut(int index);
+    int vrLutToLutCode(int index);
 };
 
 #endif // VOLUMERENDERINGWIDGET_H

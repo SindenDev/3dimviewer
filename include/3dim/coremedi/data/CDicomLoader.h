@@ -121,6 +121,23 @@ int loadDicomDCTk( const vpl::sys::tString &dir,
                    bool bIgnoreBitsStoredTag = false
                    );
 
+//! Loads a RTG from a given dicom file.
+struct sExtendedTags
+{
+	double fDistanceSourceToDetector;
+	double fDistanceSourceToPatient;
+	double fEstimatedRadiographicMagnificationFactor;
+	double fGridFocalDistance;
+};
+
+bool loadDicomDCTk2D(const vpl::sys::tString &dir,
+                    const std::string &filename,
+                    vpl::img::CDicomSlice &slice,
+					sExtendedTags& tags,
+                    bool bLoadImageData,
+					int nDesiredBits
+                    );
+
 //! Retrieves data from dicom file tags
 bool getDicomFileInfo( const vpl::sys::tString &dir, const std::string &filename, int& nFrames);
 

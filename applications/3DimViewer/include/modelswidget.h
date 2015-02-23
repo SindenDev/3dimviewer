@@ -42,6 +42,7 @@ class CModelsWidget : public QWidget, public data::CObjectObserver<data::CModel>
     {
         COL_NAME = 0,
         COL_VISIBLE,
+		COL_CUT,
         COL_COLOR,
         COL_DELETE,
         COL_COUNT
@@ -66,6 +67,15 @@ private:
     //! Update table
     void updateTable();
 
+	//! Is region linked to the model?
+	bool isRegionLinked(int id);
+
+	//! Mirror model settings to the coloring
+	void modelToRegion(int id, int what);
+
+	//! Mirror all models to the coloring
+	void modelsToRegions();
+
 private slots:
     //! On model color button clicked
     void onModelColorButton();
@@ -76,6 +86,12 @@ private slots:
     //! On model item changed
     void onModelItemChanged(QTableWidgetItem *item);
 
+	//! Checkbox for DICOM coordinates use
+	void on_checkBoxIOApplyDICOM_clicked();
+
+	//! Context menu handler for models table
+	void tableModelsContextMenu(QPoint p);
+
 private:
     // GUI
     Ui::ModelsWidget *ui;
@@ -83,6 +99,8 @@ private:
     vpl::mod::tSignalConnection m_Connection;
     //! Was this my change?
     bool m_bMyChange;
+	//! Are models linked to the regions?
+	bool m_bModelsLinked;
 };
 
 // modelswidget_H_included
