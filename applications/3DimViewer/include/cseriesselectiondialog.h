@@ -26,7 +26,7 @@
 #include <QDialog>
 #include <QStyledItemDelegate>
 #include <QPainter>
-#include <data/CDicomLoader.h>
+#include <data/CSeries.h>
 
 namespace Ui {
 class CSeriesSelectionDialog;

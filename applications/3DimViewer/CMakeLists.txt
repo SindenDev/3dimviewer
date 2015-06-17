@@ -177,6 +177,7 @@ INCLUDE_DIRECTORIES( ${CMAKE_CURRENT_BINARY_DIR} )
 # Add 3Dim libraries to the project
 ADD_3DIM_LIB_TARGET( ${TRIDIM_CORE_LIB} )
 ADD_3DIM_LIB_TARGET( ${TRIDIM_COREMEDI_LIB} )
+ADD_3DIM_LIB_TARGET( ${TRIDIM_GEOMETRY_LIB} ) 
 ADD_3DIM_LIB_TARGET( ${TRIDIM_GRAPH_LIB} )
 ADD_3DIM_LIB_TARGET( ${TRIDIM_GRAPHMEDI_LIB} )
 ADD_3DIM_LIB_TARGET( ${TRIDIM_GUIQT_LIB} )
@@ -256,6 +257,7 @@ set_target_properties( 3DimViewer PROPERTIES
 add_dependencies( 3DimViewer
                   ${TRIDIM_GUIQT_LIB}
                   ${TRIDIM_GUIQTMEDI_LIB}
+                  ${TRIDIM_GEOMETRY_LIB}
                   ${TRIDIM_GRAPH_LIB}
                   ${TRIDIM_GRAPHMEDI_LIB}
                   ${TRIDIM_CORE_LIB}
@@ -266,6 +268,7 @@ add_dependencies( 3DimViewer
 target_link_libraries( 3DimViewer
                        ${TRIDIM_GUIQT_LIB}
                        ${TRIDIM_GUIQTMEDI_LIB}
+                       ${TRIDIM_GEOMETRY_LIB}
                        ${TRIDIM_GRAPH_LIB}
                        ${TRIDIM_GRAPHMEDI_LIB}
                        ${TRIDIM_CORE_LIB}

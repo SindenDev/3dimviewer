@@ -226,7 +226,7 @@ public:
     virtual int getType() const { return ColoringFunc::REGION_COLORING; }
 
     //! Does object contain relevant data?
-    virtual bool hasData(){ return false; }
+    virtual bool hasData(){ return true; }
 
     //! Returns reference to the region info.
     CRegionInfo& getRegionInfo(int i)
@@ -327,8 +327,12 @@ public:
 	template < class tpSerializer >
 	void serialize(vpl::mod::CChannelSerializer<tpSerializer> & Writer)
 	{
+		Writer.beginWrite( *this );
+
+		Writer.write( (vpl::sys::tUInt32) 1 ); // version
+
 		m_Colors.serialize( Writer );
-		
+				
 		// Write regions vector size
 		Writer.write( (vpl::sys::tUInt32)m_Regions.size() );
 
@@ -337,15 +341,22 @@ public:
 		for( it = m_Regions.begin(); it != itEnd; ++it )
 			it->serialize( Writer );
 
-		m_DummyRegion.serialize( Writer );
+		//m_DummyRegion.serialize( Writer );
 		Writer.write( (vpl::sys::tInt32)m_Active );
-		m_DummyColor.serialize( Writer );
+		//m_DummyColor.serialize( Writer );
+
+		Writer.endWrite(*this);
 	}
 
 	//! Deserialize
 	template < class tpSerializer >
 	void deserialize(vpl::mod::CChannelSerializer<tpSerializer> & Reader)
 	{
+		Reader.beginRead(*this);
+
+		vpl::sys::tUInt32 ver = 0;
+		Reader.read( ver ); // version
+
 		m_Colors.deserialize( Reader );
 
 		// Read and set regions vector size
@@ -358,11 +369,13 @@ public:
 		for( it = m_Regions.begin(); it != itEnd; ++it )
 			it->deserialize( Reader );
 
-		m_DummyRegion.deserialize( Reader );
+		//m_DummyRegion.deserialize( Reader );
         vpl::sys::tInt32 active = 0;
 		Reader.read( active );
         m_Active = active;
-		m_DummyColor.deserialize( Reader );
+		//m_DummyColor.deserialize( Reader );
+
+		Reader.endRead( *this );
 	}
 
     //! Colorize whole slice image
@@ -408,6 +421,11 @@ protected:
     //! Dummy color.
     tColor m_DummyColor;
 };
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+//!\brief	Serialization wrapper. 
+////////////////////////////////////////////////////////////////////////////////////////////////////
+DECLARE_SERIALIZATION_WRAPPER( CRegionColoring )
 
 namespace Storage
 {

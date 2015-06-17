@@ -26,7 +26,7 @@
 ////////////////////////////////////////////////////////////
 // Includes
 
-#include <data/CMesh.h>
+#include <geometry/base/CMesh.h>
 
 // VPL
 #include <VPL/Image/DensityVolume.h>
@@ -50,7 +50,7 @@ public:
     ~CSmoothing() {}
 
     //! Smooth input mesh using G. Taubin - Signal processing polygonal surface fairing
-    bool Smooth(data::CMesh &mesh, int loops);
+    bool Smooth(geometry::CMesh &mesh, int loops);
 
     //! Set parameter of smoothing distance weighting, for Gauss weighting, squared variance.
     void SetWeightingSquaredVarance(double _set_value)               { m_squared_smooth_factor = _set_value; };

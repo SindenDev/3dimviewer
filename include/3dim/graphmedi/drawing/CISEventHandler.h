@@ -174,6 +174,11 @@ public:
     //! Destructor
     ~CISWindowEH();
 
+    void setPointDistanceLimit(float limit)
+    {
+        m_pointDistanceLimit = limit;
+    }
+
 protected:
     //! handle events
     virtual bool handle(const osgGA::GUIEventAdapter &ea, osgGA::GUIActionAdapter &aa, osg::Object *, osg::NodeVisitor *);
@@ -201,6 +206,8 @@ protected:
     virtual void stopDraw(const CMousePoint &point);
 
 protected:
+    float m_pointDistanceLimit;
+
     //! Current handling mode
     data::CDrawingOptions::EDrawingMode m_handlingMode;
 

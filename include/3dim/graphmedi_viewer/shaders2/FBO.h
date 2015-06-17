@@ -27,12 +27,16 @@ namespace shader
 {
 
 const char OSRT[] =
-"varying vec3 worldCoords; \n"
+"varying vec4 fragWorldPosition; \n"
 " \n"
 "void main() \n"
 "{ \n"
-"    gl_FragData[0] = vec4(gl_TexCoord[0].stp, 0.0); \n"
-"    gl_FragData[1] = vec4(worldCoords.xyz, 0.0); \n"
+"    vec4 wPos = fragWorldPosition; \n"
+"    vec4 vPos = gl_ModelViewMatrix * wPos; \n"
+"    vec4 pPos = gl_ProjectionMatrix * vPos; \n"
+"    pPos /= pPos.w; \n"
+" \n"
+"    gl_FragData[0] = vec4(pPos.xyz, 0.0); \n"
 "} \n";
 
 } // namespace shader

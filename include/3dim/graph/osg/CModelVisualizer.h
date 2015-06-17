@@ -27,6 +27,7 @@
 #include <osg/COnOffNode.h>
 #include <app/Signals.h>
 #include <osg/PolygonMode>
+#include <osg/CPseudoMaterial.h>
 
 #include "CObjectObserverOSG.h"
 
@@ -64,6 +65,10 @@ public:
 
     //! Storage observer type.
     typedef scene::CObjectObserverOSG<T> tObserver;
+
+    //! Materials
+    osg::ref_ptr<osg::CPseudoMaterial> m_materialRegular;
+    osg::ref_ptr<osg::CPseudoMaterial> m_materialSelected;
 
 public:
     //! Constructor

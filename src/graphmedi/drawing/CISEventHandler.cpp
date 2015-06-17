@@ -443,13 +443,14 @@ void CISEventHandler::stopDraw(const CMousePoint &point)
 //=============================================================================
 // Constructor
 CISWindowEH::CISWindowEH(OSGCanvas *canvas, scene::CSceneBase *scene)
-: CSceneWindowDrawEH(canvas, scene)
-, m_handlingMode(data::CDrawingOptions::DRAW_NOTHING)
-, m_handlerType(data::CDrawingOptions::HANDLER_WINDOW)
-, m_lineColor(osg::Vec4( 1.0, 0.0, 0.0, 1.0))
-, m_lineWidth(1.0)
-, bDrawing(false)
-, m_pointsWindow(NULL)
+    : CSceneWindowDrawEH(canvas, scene)
+    , m_handlingMode(data::CDrawingOptions::DRAW_NOTHING)
+    , m_handlerType(data::CDrawingOptions::HANDLER_WINDOW)
+    , m_lineColor(osg::Vec4(1.0, 0.0, 0.0, 1.0))
+    , m_lineWidth(1.0)
+    , bDrawing(false)
+    , m_pointsWindow(NULL)
+    , m_pointDistanceLimit(1.0)
 {
     m_conAppModeChanged = APP_MODE.getModeChangedSignal().connect(this, &CISWindowEH::OnModeChanged);
 
@@ -574,6 +575,11 @@ void CISWindowEH::OnMouseDrag(const osgGA::CMousePoint &point)
 
     osg::Vec3 pointWindow = osg::Vec3(point.m_pointWindow, 0.0f);
     osg::Vec3 pointScene = point.m_point;
+
+    if ((pointWindow - m_pointsWindow->back()).length() < m_pointDistanceLimit)
+    {
+        return;
+    }
 
     switch (m_handlingMode)
     {

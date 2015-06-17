@@ -84,12 +84,13 @@ VPL_DECLARE_SIGNAL_1(304, void, data::CColoringFunc4b*, SigSetColoring);
 VPL_DECLARE_SIGNAL_0(305, int, SigGetColoringType);
 
 // Surface models
-VPL_DECLARE_SIGNAL_2(401, void, int, data::CMesh *, SigSetModel);
+VPL_DECLARE_SIGNAL_2(401, void, int, geometry::CMesh *, SigSetModel);
 VPL_DECLARE_SIGNAL_2(402, void, int, const data::CColor4f&, SigSetModelColor);
 VPL_DECLARE_SIGNAL_2(403, void, int, bool, SigSetModelVisibility);
 VPL_DECLARE_SIGNAL_1(404, data::CColor4f, int, SigGetModelColor);
 VPL_DECLARE_SIGNAL_1(405, bool, int, SigGetModelVisibility);
 VPL_DECLARE_SIGNAL_1(406, void, bool, SigTransparencyNeededChange);
+VPL_DECLARE_SIGNAL_1(407, void, int, SigSelectModel);
 
 // World position
 VPL_DECLARE_SIGNAL_0(501, osg::Vec3f, SigGetXYWorld);

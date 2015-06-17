@@ -23,6 +23,7 @@
 #include <data/CDicomLoader.h>
 #include <data/DicomTagUtils.h>
 #include <data/CDicom.h>
+#include <data/CSeries.h>
 
 // VPL
 #include <VPL/Base/ScopedPtr.h>
@@ -930,7 +931,7 @@ void readOrientTagDCTk(DcmDataset * dataset,
 
 //=============================================================================
 
-bool loadDicomDCTk( const vpl::sys::tString &dir, const std::string &filename, vpl::img::CDicomSlice &slice, bool bLoadImageData )
+bool loadDicomDCTk(const vpl::sys::tString &dir, const std::string &filename, vpl::img::CDicomSlice &slice, sExtendedTags& tags, bool bLoadImageData)
 {
 	vpl::sys::CFileBrowserU browser;
 	vpl::sys::tString oldDir = browser.getDirectory();
@@ -1141,7 +1142,7 @@ bool loadDicomDCTk( const vpl::sys::tString &dir, const std::string &filename, v
         }
 
         // Read all required DICOM tags
-        readTagsDCTk( dataset, slice );
+        readTagsDCTk(dataset, slice);
     }
 
     // Any failure?
@@ -1158,7 +1159,7 @@ bool loadDicomDCTk( const vpl::sys::tString &dir, const std::string &filename, v
 }
 
 //=============================================================================
-int loadDicomDCTk( const vpl::sys::tString &dir, const std::string &filename, tDicomSlices &slices, bool bLoadImageData, bool bIgnoreBitsStoredTag )
+int loadDicomDCTk(const vpl::sys::tString &dir, const std::string &filename, tDicomSlices &slices, sExtendedTags& tags, bool bLoadImageData, bool bIgnoreBitsStoredTag)
 {
 	vpl::sys::CFileBrowserU browser;
 	vpl::sys::tString oldDir = browser.getDirectory();
@@ -1257,7 +1258,7 @@ int loadDicomDCTk( const vpl::sys::tString &dir, const std::string &filename, tD
 
         // Parse all required tags and prepare a slice prototype
         vpl::img::CDicomSlice slicetags;
-        readTagsDCTk( dataset, slicetags );
+        readTagsDCTk(dataset, slicetags);
         slicetags.m_ImageOrientationY = ImageOrientationY;
         slicetags.m_ImageOrientationX = ImageOrientationX;
         slicetags.m_ImagePosition.setXYZ( 0, 0, 0 );
@@ -1603,9 +1604,13 @@ bool loadDicomDCTk2D(const vpl::sys::tString &dir, const std::string &filename, 
 			#define	TAG_DISTANCE_SOURCE_TO_PATIENT				DcmTag( DcmTagKey( 0x0018, 0x1111 ), DcmVR( EVR_DS ))
 			#define	TAG_ESTIMATED_RADIOGRAPHIC_MAGNIFICATION	DcmTag( DcmTagKey( 0x0018, 0x1114 ), DcmVR( EVR_DS ))
 			#define	TAG_GRID_FOCAL_DISTANCE						DcmTag( DcmTagKey( 0x0018, 0x704c ), DcmVR( EVR_DS ))
-			DcmStack dist;
+            #define	TAG_PATIENTS_AGE			                DcmTag( DcmTagKey( 0x0010, 0x1010 ), DcmVR( EVR_AS ))
+            #define	TAG_PATIENTS_SIZE			                DcmTag( DcmTagKey( 0x0010, 0x1020 ), DcmVR( EVR_DS ))
+            #define	TAG_PATIENTS_WEIGHT			                DcmTag( DcmTagKey( 0x0010, 0x1030 ), DcmVR( EVR_DS ))
+
+            DcmStack dist;
 			OFCondition	status;
-			DcmTag tag = TAG_DISTANCE_SOURCE_TO_DETECTOR;			
+			DcmTag tag = TAG_DISTANCE_SOURCE_TO_DETECTOR;
 			status = dataset->findAndGetElements(tag, dist);
 			if (status.bad() || dist.empty())
 			{
@@ -1616,8 +1621,9 @@ bool loadDicomDCTk2D(const vpl::sys::tString &dir, const std::string &filename, 
 				double fDist = 0;
 				status = elem->getFloat64(fDist, 0);
 				tags.fDistanceSourceToDetector = fDist;
-			}			
-			tag = TAG_DISTANCE_SOURCE_TO_PATIENT;			
+			}
+
+			tag = TAG_DISTANCE_SOURCE_TO_PATIENT;
 			status = dataset->findAndGetElements(tag, dist);
 			if (status.bad() || dist.empty())
 			{
@@ -1628,8 +1634,9 @@ bool loadDicomDCTk2D(const vpl::sys::tString &dir, const std::string &filename, 
 				double fDist = 0;
 				status = elem->getFloat64(fDist, 0);
 				tags.fDistanceSourceToPatient = fDist;
-			}			
-			tag = TAG_ESTIMATED_RADIOGRAPHIC_MAGNIFICATION;			
+			}
+
+			tag = TAG_ESTIMATED_RADIOGRAPHIC_MAGNIFICATION;
 			status = dataset->findAndGetElements(tag, dist);
 			if (status.bad() || dist.empty())
 			{
@@ -1640,8 +1647,9 @@ bool loadDicomDCTk2D(const vpl::sys::tString &dir, const std::string &filename, 
 				double fDist = 0;
 				status = elem->getFloat64(fDist, 0);
 				tags.fEstimatedRadiographicMagnificationFactor = fDist;
-			}		
-			tag = TAG_GRID_FOCAL_DISTANCE;			
+			}
+
+			tag = TAG_GRID_FOCAL_DISTANCE;
 			status = dataset->findAndGetElements(tag, dist);
 			if (status.bad() || dist.empty())
 			{
@@ -1652,9 +1660,50 @@ bool loadDicomDCTk2D(const vpl::sys::tString &dir, const std::string &filename, 
 				double fDist = 0;
 				status = elem->getFloat64(fDist, 0);
 				tags.fGridFocalDistance = fDist;
-			}	
+			}
 
-			tag = DcmTag( DcmTagKey( 0x0028, 0x0106 ), DcmVR( EVR_US ));			
+            // patient age
+            tag = TAG_PATIENTS_AGE;
+            status = dataset->findAndGetElements(tag, dist);
+            if (status.bad() || dist.empty())
+            { }
+            else
+            {
+                DcmElement * elem = dynamic_cast<DcmElement *>(dist.elem(0));
+                Uint32 iDist = 0;
+                status = elem->getUint32(iDist, 0);
+                tags.iPatientAge = iDist;
+            }
+
+            // patient height
+            tag = TAG_PATIENTS_SIZE;
+            status = dataset->findAndGetElements(tag, dist);
+            if (status.bad() || dist.empty())
+            {
+            }
+            else
+            {
+                DcmElement * elem = dynamic_cast<DcmElement *>(dist.elem(0));
+                double fDist = 0;
+                status = elem->getFloat64(fDist, 0);
+                tags.fPatientHeight = fDist;
+            }
+
+            // patient weight
+            tag = TAG_PATIENTS_WEIGHT;
+            status = dataset->findAndGetElements(tag, dist);
+            if (status.bad() || dist.empty())
+            {
+            }
+            else
+            {
+                DcmElement * elem = dynamic_cast<DcmElement *>(dist.elem(0));
+                double fDist = 0;
+                status = elem->getFloat64(fDist, 0);
+                tags.fPatientWeight = fDist;
+            }
+
+            tag = DcmTag(DcmTagKey(0x0028, 0x0106), DcmVR(EVR_US));
 			status = dataset->findAndGetElements(tag, dist);
 			if (status.bad() || dist.empty())
 			{
@@ -1769,7 +1818,7 @@ bool loadDicomDCTk2D(const vpl::sys::tString &dir, const std::string &filename, 
 				{
 					pixelMin = 0;
 					if (bitsUsed!=0)
-						pixelMax = 1<<bitsUsed - 1;
+						pixelMax = (1<<bitsUsed) - 1;
 					else
 						pixelMax = 65535;
 				}
@@ -1777,7 +1826,7 @@ bool loadDicomDCTk2D(const vpl::sys::tString &dir, const std::string &filename, 
 				{
 					pixelMin = -32768;
 					if (bitsUsed!=0)
-						pixelMax = 1<<bitsUsed - 1;
+						pixelMax = (1<<bitsUsed) - 1;
 					else
 						pixelMax = 32767;
 				}
@@ -1785,7 +1834,7 @@ bool loadDicomDCTk2D(const vpl::sys::tString &dir, const std::string &filename, 
 				{
 					pixelMin = 0;
 					if (bitsUsed!=0)
-						pixelMax = 1<<bitsUsed - 1;
+						pixelMax = (1<<bitsUsed) - 1;
 					else
 						pixelMax = 255;
 				}
@@ -1793,7 +1842,7 @@ bool loadDicomDCTk2D(const vpl::sys::tString &dir, const std::string &filename, 
 				{
 					pixelMin = -128;
 					if (bitsUsed!=0)
-						pixelMax = 1<<bitsUsed - 1;
+						pixelMax = (1<<bitsUsed) - 1;
 					else
 						pixelMax = 127;
 				}
@@ -1801,7 +1850,7 @@ bool loadDicomDCTk2D(const vpl::sys::tString &dir, const std::string &filename, 
 				{
 					pixelMin = 0;
 					if (bitsUsed!=0)
-						pixelMax = 1<<bitsUsed - 1;
+						pixelMax = (1<<bitsUsed) - 1;
 					else
 						pixelMax = 0x7FFFFFFF;
 				}
@@ -1822,7 +1871,7 @@ bool loadDicomDCTk2D(const vpl::sys::tString &dir, const std::string &filename, 
 
 			int dstMax = 32767;
 			if (nDesiredBits>0)
-				dstMax = 1<<nDesiredBits - 1;
+				dstMax = (1<<nDesiredBits) - 1;
 #pragma omp parallel for
             for (vpl::tSize y = 0; y < ySize; y++)
             {

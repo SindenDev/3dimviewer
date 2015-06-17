@@ -277,7 +277,7 @@ void CModelsWidget::onModelRemoveButton()
 
     // Get model
     data::CObjectPtr<data::CModel> spModel(APP_STORAGE.getEntry(index));
-
+	spModel->createAndStoreSnapshot();
     // Reset model
     spModel->init();
     APP_STORAGE.invalidate(spModel.getEntryPtr());
@@ -557,7 +557,7 @@ void CModelsWidget::tableModelsContextMenu(QPoint p)
 		{
 			data::CObjectPtr<data::CModel> spModel(APP_STORAGE.getEntry(storage_id));
 			osg::Matrix mx = spModel->getTransformationMatrix();
-			data::CMesh* pMesh=spModel->getMesh();
+			geometry::CMesh* pMesh=spModel->getMesh();
 			if (NULL!=pMesh && pMesh->n_vertices() > 0)
 			{
 				MainWindow::getInstance()->getModelManager()->createAndStoreSnapshot();
@@ -566,7 +566,7 @@ void CModelsWidget::tableModelsContextMenu(QPoint p)
 				const double sY = spVolume->getYSize()*spVolume->getDY();
 				const double sZ = spVolume->getZSize()*spVolume->getDZ();
 
-				data::CMesh::Point min, max;
+				geometry::CMesh::Point min, max;
 				pMesh->calc_bounding_box(min,max);
 				mx.setTrans(-min[0]-((max[0]-min[0])/2)+sX/2,-min[1]-((max[1]-min[1])/2)+sY/2,-min[2]-((max[2]-min[2])/2)+sZ/2);
 				spModel->setTransformationMatrix(mx);

@@ -56,6 +56,11 @@ private slots:
 
     void on_buttonPickHi_clicked();
 
+	void on_pushButtonCreateSurfaceModel_clicked();
+
+	void on_pushButtonSetToActiveRegion_clicked();
+
+	void firstEvent();
 private:
     Ui::SegmentationWidget *ui;
 

@@ -33,6 +33,7 @@ void data::CModel::init()
     clear();
     m_transformationMatrix = osg::Matrix::identity();
 	m_properties.clear();
+    m_bSelected = false;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -46,6 +47,7 @@ void data::CModel::update(const data::CChangedEntries& Changes)
         clear();
         m_transformationMatrix = osg::Matrix::identity();
 		m_properties.clear();
+        m_bSelected = false;
     }
 
 /*
@@ -88,15 +90,15 @@ void data::CModel::restore(CSnapshot *snapshot)
     }
 
     data::CObjectPtr<data::CModel> spModel(APP_STORAGE.getEntry(storageId));
-    data::CMesh *mesh = getMesh();
+    geometry::CMesh *mesh = getMesh();
     if (mesh == NULL)
     {
-        mesh = new data::CMesh;
+        mesh = new geometry::CMesh;
         setMesh(mesh);
     }
     mesh->clear();
 
-    std::vector<data::CMesh::VertexHandle> vertices;
+    std::vector<geometry::CMesh::VertexHandle> vertices;
     for (int v = 0; v < meshSnapshot->vertexCount; ++v)
     {
         vertices.push_back(mesh->add_vertex(meshSnapshot->vertices[v]));
@@ -116,12 +118,14 @@ void data::CModel::restore(CSnapshot *snapshot)
     }
     for (int t = 0; t < meshSnapshot->indexCount / 3; ++t)
     {
-        data::CMesh::VertexHandle i0 = vertices[meshSnapshot->indices[t * 3 + 0]];
-        data::CMesh::VertexHandle i1 = vertices[meshSnapshot->indices[t * 3 + 1]];
-        data::CMesh::VertexHandle i2 = vertices[meshSnapshot->indices[t * 3 + 2]];
+        geometry::CMesh::VertexHandle i0 = vertices[meshSnapshot->indices[t * 3 + 0]];
+        geometry::CMesh::VertexHandle i1 = vertices[meshSnapshot->indices[t * 3 + 1]];
+        geometry::CMesh::VertexHandle i2 = vertices[meshSnapshot->indices[t * 3 + 2]];
 
         mesh->add_face(i0, i1, i2);
     }
+	if (mesh->n_vertices()>0)
+		spModel->setVisibility(true);
 
     // invalidate
     APP_STORAGE.invalidate(spModel.getEntryPtr());
@@ -131,22 +135,22 @@ data::CSnapshot *data::CModel::getSnapshot(CSnapshot *snapshot)
 {
     CMeshSnapshot *s = new CMeshSnapshot(this);
 
-    data::CMesh *mesh = getMesh();
+    geometry::CMesh *mesh = getMesh();
     if (mesh == NULL || mesh->n_vertices() == 0)
     {
         return s;
     }
 
     s->vertexCount = mesh->n_vertices();
-    s->vertices = new data::CMesh::Point[s->vertexCount];
-    std::map<data::CMesh::VertexHandle, int> vertexMap;
+    s->vertices = new geometry::CMesh::Point[s->vertexCount];
+    std::map<geometry::CMesh::VertexHandle, int> vertexMap;
     OpenMesh::VPropHandleT<int> vProp_VertexFlag;
     if (mesh->get_property_handle(vProp_VertexFlag, "property_vertex_flags"))
     {
         s->propertyVertexFlags = new int[s->vertexCount];
     }
     int v = 0;
-    for (data::CMesh::VertexIter vit = mesh->vertices_begin(); vit != mesh->vertices_end(); ++vit)
+    for (geometry::CMesh::VertexIter vit = mesh->vertices_begin(); vit != mesh->vertices_end(); ++vit)
     {
         vertexMap[vit.handle()] = v;
         s->vertices[v] = mesh->point(vit.handle());
@@ -160,9 +164,9 @@ data::CSnapshot *data::CModel::getSnapshot(CSnapshot *snapshot)
     s->indexCount = mesh->n_faces() * 3;
     s->indices = new int[s->indexCount];
     int i = 0;
-    for (data::CMesh::FaceIter fit = mesh->faces_begin(); fit != mesh->faces_end(); ++fit)
+    for (geometry::CMesh::FaceIter fit = mesh->faces_begin(); fit != mesh->faces_end(); ++fit)
     {
-        for (data::CMesh::FaceVertexIter fvit = mesh->fv_begin(fit.handle()); fvit != mesh->fv_end(fit.handle()); ++fvit)
+        for (geometry::CMesh::FaceVertexIter fvit = mesh->fv_begin(fit.handle()); fvit != mesh->fv_end(fit.handle()); ++fvit)
         {
             s->indices[i] = vertexMap[fvit.handle()];
             i++;
@@ -191,12 +195,12 @@ void data::CModel::getUpDownSurfaceAreas( float &up_area, float &down_area )
 	osg::Vec3 shift_vector(m_transformationMatrix.getTrans());
 	osg_zaxis -= shift_vector;
 	osg_zaxis.normalize();
-	data::CMesh::Normal om_zaxis(osg_zaxis[0], osg_zaxis[1], osg_zaxis[2]);
+	geometry::CMesh::Normal om_zaxis(osg_zaxis[0], osg_zaxis[1], osg_zaxis[2]);
 
-	for (data::CMesh::FaceIter fit = m_spModel->faces_begin(); fit != m_spModel->faces_end(); ++fit)
+	for (geometry::CMesh::FaceIter fit = m_spModel->faces_begin(); fit != m_spModel->faces_end(); ++fit)
 	{
 		// Calculate projection of the face normal to the reoriented z-axis
-		data::CMesh::Normal normal(m_spModel->normal(fit.handle()));
+		geometry::CMesh::Normal normal(m_spModel->normal(fit.handle()));
 		float dp(normal|om_zaxis);
 
 		// Calculate face area
@@ -233,6 +237,6 @@ data::CMeshSnapshot::~CMeshSnapshot()
 
 long data::CMeshSnapshot::getDataSize()
 {
-    return sizeof(CMeshSnapshot) + (sizeof(data::CMesh::Point) + sizeof(int)) * vertexCount + sizeof(int) * indexCount;
+    return sizeof(CMeshSnapshot) + (sizeof(geometry::CMesh::Point) + sizeof(int)) * vertexCount + sizeof(int) * indexCount;
 }
 

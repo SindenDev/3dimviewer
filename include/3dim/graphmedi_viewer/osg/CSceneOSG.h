@@ -297,7 +297,7 @@ public:
     CSceneXY(OSGCanvas * canvas);
 
     //! Move slice up/down event handler. True means up.
-    void sliceUpDown(bool direction);
+    void sliceUpDown(int direction);
 
 protected:
     // Widgets
@@ -312,7 +312,7 @@ public:
     CSceneXZ(OSGCanvas * canvas);
 
     //! Move slice up/down event handler. True means up.
-    void sliceUpDown(bool direction);
+    void sliceUpDown(int direction);
 };
 
 
@@ -324,7 +324,7 @@ public:
     CSceneYZ(OSGCanvas * canvas);
 
     //! Move slice up/down event handler. True means up.
-    void sliceUpDown(bool direction);
+    void sliceUpDown(int direction);
 };
 
 

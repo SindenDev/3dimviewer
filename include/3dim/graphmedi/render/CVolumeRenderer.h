@@ -453,6 +453,8 @@ public:
     virtual void setParameter(unsigned int shaderId, std::string name, osg::Vec3 value) = 0;
     //! sets osg::Vec4 parameter of custom shader
     virtual void setParameter(unsigned int shaderId, std::string name, osg::Vec4 value) = 0;
+    //! sets osg::Matrix parameter of custom shader
+    virtual void setParameter(unsigned int shaderId, std::string name, osg::Matrix value) = 0;
     //! sets array-of-ints parameter of custom shader
     virtual void setParameter(unsigned int shaderId, std::string name, int *value, int count) = 0;
     //! sets array-of-floats parameter of custom shader
@@ -463,6 +465,8 @@ public:
     virtual void setParameter(unsigned int shaderId, std::string name, osg::Vec3 *value, int count) = 0;
     //! sets array-of-osg::Vec4 parameter of custom shader
     virtual void setParameter(unsigned int shaderId, std::string name, osg::Vec4 *value, int count) = 0;
+    //! sets array-of-osg::Matrix parameter of custom shader
+    virtual void setParameter(unsigned int shaderId, std::string name, osg::Matrix *value, int count) = 0;
 
     //! returns data of custom volume
     virtual void getDataFromCustomVolume(unsigned int volumeId, vpl::img::CVolume<bool> &volume) = 0;

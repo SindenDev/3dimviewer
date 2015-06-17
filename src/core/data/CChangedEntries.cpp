@@ -66,9 +66,34 @@ bool CChangedEntries::checkExactFlagsAll(int Value, int Mask, tFilter Filter) co
     {
         return false;
     }
+	// special case when testing for invalidation without flags
+	if (Value == Mask && Value == 0) 
+	{
+		tChanges::const_iterator itEnd = m_Changes.end();
+		if (Filter.size() == 0)
+		{
+			for( tChanges::const_iterator it = m_Changes.begin(); it != itEnd; ++it )
+			{
+				if (0!=it->second)
+					return false;
+			}
+		}
+		else
+		{
+			for( tChanges::const_iterator it = m_Changes.begin(); it != itEnd; ++it )
+			{
+				if (Filter.find(it->first) != Filter.end())
+				{
+					if (0!=it->second)
+						return false;
+				}
+			}
+		}
+		return true;
+	}
 
+	// normal test
     int Flags = 0x7fffffff;
-
     tChanges::const_iterator itEnd = m_Changes.end();
     if (Filter.size() == 0)
     {
@@ -88,7 +113,16 @@ bool CChangedEntries::checkExactFlagsAll(int Value, int Mask, tFilter Filter) co
         }
     }
 
-    return ((Flags & Mask) == Value);
+	// NOTE: original implementation doesn't work always correctly -> fixed by additional masking by Value
+#if(0)
+    return ((Flags & Mask) == Value);	
+#else
+	if (0==Value)
+		return ((Flags & Mask) == Value);
+	else
+		return ((Flags & Mask & Value) == Value); // mask by Value because default Mask is 0x7fffffff
+#endif
+
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -100,9 +134,34 @@ bool CChangedEntries::checkExactFlagsAny(int Value, int Mask, tFilter Filter) co
     {
         return false;
     }
+	// special case when testing for invalidation without flags
+	if (Value == Mask && Value == 0) 
+	{
+		tChanges::const_iterator itEnd = m_Changes.end();
+		if (Filter.size() == 0)
+		{
+			for( tChanges::const_iterator it = m_Changes.begin(); it != itEnd; ++it )
+			{
+				if (0==it->second)
+					return true;
+			}
+		}
+		else
+		{
+			for( tChanges::const_iterator it = m_Changes.begin(); it != itEnd; ++it )
+			{
+				if (Filter.find(it->first) != Filter.end())
+				{
+					if (0==it->second)
+						return true;
+				}
+			}
+		}
+		return false;
+	}
 
+	// normal test
     int Flags = 0;
-
     tChanges::const_iterator itEnd = m_Changes.end();
     if (Filter.size() == 0)
     {
@@ -122,7 +181,15 @@ bool CChangedEntries::checkExactFlagsAny(int Value, int Mask, tFilter Filter) co
         }
     }
 
-    return ((Flags & Mask) == Value);
+	// NOTE: original implementation doesn't work always correctly -> fixed by additional masking by Value
+#if(0)
+    return ((Flags & Mask) == Value);	
+#else
+	if (0==Value)
+		return ((Flags & Mask) == Value);	
+	else
+		return ((Flags & Mask & Value) == Value); // mask by Value because default Mask is 0x7fffffff
+#endif
 }
 
 ///////////////////////////////////////////////////////////////////////////////

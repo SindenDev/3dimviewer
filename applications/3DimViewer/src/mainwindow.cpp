@@ -49,6 +49,7 @@
 #include <VPL/Module/Serialization.h>
 #include <VPL/Image/VolumeFiltering.h>
 #include <VPL/Image/VolumeFunctions.h>
+#include <VPL/Image/Filters/Anisotropic.h>
 
 #include <render/PSVRosg.h>
 
@@ -74,6 +75,7 @@
 #include <dialogs/cprogress.h>
 #include <CCustomUI.h>
 #include <C3DimApplication.h>
+#include <CFilterDialog.h>
 
 #include <zlib.h>
 #include <zip/unzip.h>
@@ -418,7 +420,7 @@ MainWindow::MainWindow(QWidget *parent, CPluginManager* pPlugins) :
         int cntOther = 0;
         foreach(QString file,list)
         {
-            if (0!=file.compare("3DimViewer.exe",Qt::CaseInsensitive) && 0!=file.compare("3DimViewerd.exe",Qt::CaseInsensitive))
+            if (0!=file.compare("3DimViewer.exe",Qt::CaseInsensitive) && 0!=file.compare("3DimViewerd.exe",Qt::CaseInsensitive) && !file.contains("unins",Qt::CaseInsensitive))
                 cntOther++;
         }
         if (cntOther>0)
@@ -427,9 +429,12 @@ MainWindow::MainWindow(QWidget *parent, CPluginManager* pPlugins) :
         }
 #endif
         QMenu* pMenu = ui->menuModel->addMenu(tr("Visualization"));
-        pMenu->addAction(tr("Smooth"),this,SLOT(modelVisualizationSmooth()));
-        pMenu->addAction(tr("Flat"),this,SLOT(modelVisualizationFlat()));
-        pMenu->addAction(tr("Wire"),this,SLOT(modelVisualizationWire()));
+        QAction* pSmooth = pMenu->addAction(tr("Smooth"),this,SLOT(modelVisualizationSmooth()));
+		pSmooth->setObjectName("smoothShading");
+        QAction* pFlat = pMenu->addAction(tr("Flat"),this,SLOT(modelVisualizationFlat()));
+		pFlat->setObjectName("flatShading");
+        QAction* pWire = pMenu->addAction(tr("Wire"),this,SLOT(modelVisualizationWire()));
+		pWire->setObjectName("noShading");
     }
     // disable actions which are meant to be disabled :)
     ui->action3D_View->setEnabled(false); // always visible
@@ -470,6 +475,8 @@ MainWindow::MainWindow(QWidget *parent, CPluginManager* pPlugins) :
 	connect(ui->menuViewFilter,SIGNAL(aboutToShow()),this,SLOT(aboutToShowViewFilterMenu()));
 	connect(ui->actionViewEqualize, SIGNAL(toggled(bool)), this, SLOT(setTextureFilterEqualize(bool)));
 	connect(ui->actionViewSharpen, SIGNAL(toggled(bool)), this, SLOT(setTextureFilterSharpen(bool)));
+
+	loadShortcuts();
 
     // timer for OSG widget repaint - needed for eventqueue to work properly
     m_timer.setInterval(150);
@@ -559,6 +566,9 @@ void MainWindow::connectActions()
     connect(ui->actionSegmentation_Panel, SIGNAL(triggered(bool)), this, SLOT(showSegmentationPanel(bool)));
     connect(ui->actionVolume_Rendering_Panel, SIGNAL(triggered(bool)), this, SLOT(showVRPanel(bool)));
 	connect(ui->actionModels_List_Panel, SIGNAL(triggered(bool)), this, SLOT(showModelsListPanel(bool)));
+	connect(ui->actionClose_Active_Panel, SIGNAL(triggered()), this, SLOT(closeActivePanel()));
+	connect(ui->actionPrevious_Panel, SIGNAL(triggered()), this, SLOT(prevPanel()));
+	connect(ui->actionNext_Panel, SIGNAL(triggered()), this, SLOT(nextPanel()));
 
     // Information Widgets
     connect(ui->actionShow_Information_Widgets, SIGNAL(triggered(bool)), this, SLOT(showInformationWidgets(bool)));
@@ -634,6 +644,8 @@ void MainWindow::createToolBars()
     ui->visibilityToolBar->addAction(ui->actionCoronal_Slice);
     ui->visibilityToolBar->addAction(ui->actionSagittal_Slice);
 
+	QAction *pPanels = ui->panelsToolBar->addAction(QIcon(":/icons/page.png"),tr("Panels"),this, SLOT(showPanelsMenu()));
+	pPanels->setToolTip(tr("Change panel visibility"));
     ui->panelsToolBar->addAction(ui->actionDensity_Window);
     ui->panelsToolBar->addAction(ui->actionOrtho_Slices_Panel);
     ui->panelsToolBar->addAction(ui->actionVolume_Rendering_Panel);
@@ -774,9 +786,9 @@ void MainWindow::setUpWorkspace()
             newCenter->addTab(&m_wndYZView,m_wndYZView.windowTitle());
 
             m_wnd3DView.setTitleBarWidget(new CCustomDockWidgetTitle(DWT_BUTTONS_NONE|DWT_SLIDER_VR));
-            m_wndXYView.setTitleBarWidget(new CCustomDockWidgetTitle(DWT_BUTTONS_NONE));
-            m_wndXZView.setTitleBarWidget(new CCustomDockWidgetTitle(DWT_BUTTONS_NONE));
-            m_wndYZView.setTitleBarWidget(new CCustomDockWidgetTitle(DWT_BUTTONS_NONE));
+            m_wndXYView.setTitleBarWidget(new CCustomDockWidgetTitle(DWT_BUTTONS_NONE|DWT_SLIDER_XY));
+            m_wndXZView.setTitleBarWidget(new CCustomDockWidgetTitle(DWT_BUTTONS_NONE|DWT_SLIDER_XZ));
+            m_wndYZView.setTitleBarWidget(new CCustomDockWidgetTitle(DWT_BUTTONS_NONE|DWT_SLIDER_YZ));
 
             //setCentralWidget(newCenter);
             if (m_realCentralWidget)
@@ -808,9 +820,9 @@ void MainWindow::setUpWorkspace()
             horizontalTop->addWidget(&m_wnd3DView);
             m_wnd3DView.show();
 
-            m_wndXYView.setTitleBarWidget(new CCustomDockWidgetTitle);
-            m_wndXZView.setTitleBarWidget(new CCustomDockWidgetTitle);
-            m_wndYZView.setTitleBarWidget(new CCustomDockWidgetTitle);
+            m_wndXYView.setTitleBarWidget(new CCustomDockWidgetTitle(DWT_BUTTONS_MAXIMIZE|DWT_SLIDER_XY));
+            m_wndXZView.setTitleBarWidget(new CCustomDockWidgetTitle(DWT_BUTTONS_MAXIMIZE|DWT_SLIDER_XZ));
+            m_wndYZView.setTitleBarWidget(new CCustomDockWidgetTitle(DWT_BUTTONS_MAXIMIZE|DWT_SLIDER_YZ));
             m_wnd3DView.setTitleBarWidget(new CCustomDockWidgetTitle(DWT_BUTTONS_MAXIMIZE|DWT_SLIDER_VR));
 
             horizontalTop->setStretchFactor(0,1);
@@ -859,9 +871,9 @@ void MainWindow::setUpWorkspace()
             addDockWidget(Qt::LeftDockWidgetArea, &m_wndYZView);
             m_wndYZView.show();
 
-            m_wndYZView.setTitleBarWidget(new CCustomDockWidgetTitle(DWT_BUTTONS_CLOSE));
-            m_wndXYView.setTitleBarWidget(new CCustomDockWidgetTitle(DWT_BUTTONS_CLOSE));
-            m_wndXZView.setTitleBarWidget(new CCustomDockWidgetTitle(DWT_BUTTONS_CLOSE));
+            m_wndYZView.setTitleBarWidget(new CCustomDockWidgetTitle(DWT_BUTTONS_CLOSE|DWT_SLIDER_YZ));
+            m_wndXYView.setTitleBarWidget(new CCustomDockWidgetTitle(DWT_BUTTONS_CLOSE|DWT_SLIDER_XY));
+            m_wndXZView.setTitleBarWidget(new CCustomDockWidgetTitle(DWT_BUTTONS_CLOSE|DWT_SLIDER_XZ));
             m_wnd3DView.setTitleBarWidget(new CCustomDockWidgetTitle(DWT_BUTTONS_NONE|DWT_SLIDER_VR));
         }
         break;
@@ -884,6 +896,7 @@ void MainWindow::createPanels()
     dockDWP->setFeatures(QDockWidget::DockWidgetClosable|QDockWidget::DockWidgetMovable ); // QDockWidget::DockWidgetFloatable
     dockDWP->setObjectName("Density Window Panel");
     dockDWP->setWidget(m_densityWindowPanel);
+	dockDWP->setProperty("Icon",":/icons/density_window.png");
     addDockWidget(Qt::RightDockWidgetArea, dockDWP);
 
     m_orthoSlicesPanel = new COrthoSlicesWidget();
@@ -892,6 +905,7 @@ void MainWindow::createPanels()
     dockOrtho->setFeatures(QDockWidget::DockWidgetClosable|QDockWidget::DockWidgetMovable );
     dockOrtho->setObjectName("Ortho Slices Panel");
     dockOrtho->setWidget(m_orthoSlicesPanel);
+	dockOrtho->setProperty("Icon",":/icons/ortho_slices_window.png");
     tabifyDockWidget(dockDWP, dockOrtho);
 
     m_segmentationPanel = new CSegmentationWidget();
@@ -900,6 +914,7 @@ void MainWindow::createPanels()
     dockSeg->setFeatures(QDockWidget::DockWidgetClosable|QDockWidget::DockWidgetMovable);
     dockSeg->setObjectName("Tissue Segmentation Panel");
     dockSeg->setWidget(m_segmentationPanel);
+	dockSeg->setProperty("Icon",":/icons/segmentation_window.png");
     tabifyDockWidget(dockDWP, dockSeg);
 
     m_volumeRenderingPanel = new CVolumeRenderingWidget();
@@ -909,6 +924,7 @@ void MainWindow::createPanels()
     dockVR->setFeatures(QDockWidget::DockWidgetClosable|QDockWidget::DockWidgetMovable);
     dockVR->setObjectName("Volume Rendering Panel");
     dockVR->setWidget(m_volumeRenderingPanel);
+	dockVR->setProperty("Icon",":/icons/volume_rendering_window2.png");
     dockVR->hide();
 //    dockVR->setProperty("Icon",":/icons/");
     tabifyDockWidget(dockDWP, dockVR);
@@ -919,6 +935,7 @@ void MainWindow::createPanels()
     dockModels->setFeatures(QDockWidget::DockWidgetClosable|QDockWidget::DockWidgetMovable);
     dockModels->setObjectName("Models Panel");
     dockModels->setWidget(m_modelsPanel);
+	dockModels->setProperty("Icon",":/icons/resources/models.png");
     tabifyDockWidget(dockDWP, dockModels);
 
     m_helpView = new QWebView();
@@ -929,6 +946,7 @@ void MainWindow::createPanels()
     dockHelp->setObjectName("Help View");
     dockHelp->setWidget(m_helpView);
     dockHelp->hide();
+	dockHelp->setProperty("Icon",":/icons/3dim.ico");
     tabifyDockWidget(dockDWP, dockHelp);
 
 
@@ -937,12 +955,14 @@ void MainWindow::createPanels()
     connect(dockSeg, SIGNAL(visibilityChanged(bool)), this, SLOT(dockWidgetVisiblityChanged(bool)));
     connect(dockVR, SIGNAL(visibilityChanged(bool)), this, SLOT(dockWidgetVisiblityChanged(bool)));
 	connect(dockModels, SIGNAL(visibilityChanged(bool)), this, SLOT(dockWidgetVisiblityChanged(bool)));
+	connect(dockHelp, SIGNAL(visibilityChanged(bool)), this, SLOT(dockWidgetVisiblityChanged(bool)));
 
     connect(dockDWP,SIGNAL(dockLocationChanged(Qt::DockWidgetArea)),this,SLOT(dockLocationChanged(Qt::DockWidgetArea))); 
     connect(dockOrtho,SIGNAL(dockLocationChanged(Qt::DockWidgetArea)),this,SLOT(dockLocationChanged(Qt::DockWidgetArea)));
     connect(dockSeg,SIGNAL(dockLocationChanged(Qt::DockWidgetArea)),this,SLOT(dockLocationChanged(Qt::DockWidgetArea)));
     connect(dockVR,SIGNAL(dockLocationChanged(Qt::DockWidgetArea)),this,SLOT(dockLocationChanged(Qt::DockWidgetArea)));
 	connect(dockModels,SIGNAL(dockLocationChanged(Qt::DockWidgetArea)),this,SLOT(dockLocationChanged(Qt::DockWidgetArea)));
+	connect(dockHelp,SIGNAL(dockLocationChanged(Qt::DockWidgetArea)),this,SLOT(dockLocationChanged(Qt::DockWidgetArea)));
 }
 
 QSizeF MainWindow::getRelativeSize(QWidget* widget)
@@ -1340,6 +1360,7 @@ bool MainWindow::openDICOM(const QString& fileName, const QString& realName)
     // 2012/03/12: Modified by Majkl (Linux compatible code)
 //    std::string str = fileNameIn.toUtf8();
     std::string str = fileNameIn.toStdString();
+    data::sExtendedTags tags = { };
 
     {
         // Show simple progress dialog
@@ -1387,6 +1408,7 @@ bool MainWindow::openDICOM(const QString& fileName, const QString& realName)
         progress.setLabelText(tr("Loading input DICOM dataset, please wait..."));
         vpl::mod::CProgress::tProgressFunc ProgressFunc(&progress, &CProgress::Entry);
         if( !m_Examination.loadDicomData(current_serie.get(),
+                                         tags,
                                          ProgressFunc,
                                          data::PATIENT_DATA,
                                          data::CExamination::EST_MANUAL,
@@ -1668,7 +1690,7 @@ bool MainWindow::openVLM(const QString &wsFileName)
 bool MainWindow::saveVLMAs()
 {
     QSettings settings;
-    QString previousDir=settings.value("VLMdir").toString();
+    QString previousDir = getSaveLoadPath("VLMdir");
     previousDir = appendSaveNameHint(previousDir,".vlm");
     QString fileName = QFileDialog::getSaveFileName(this,tr("Choose an output file..."),previousDir,tr("Volume Data (*.vlm)"));
     if (fileName.isEmpty())
@@ -2259,7 +2281,7 @@ bool MainWindow::openSTL(const QString& fileName)
             if (nDrawables>0)
             {
                 data::CObjectPtr< data::CModel > pModel( APP_STORAGE.getEntry( id ) );
-                data::CMesh *pMesh = new data::CMesh;
+                geometry::CMesh *pMesh = new geometry::CMesh;
                 pModel->setMesh(pMesh);
 				pModel->clearAllProperties();
             }
@@ -2283,9 +2305,9 @@ bool MainWindow::openSTL(const QString& fileName)
                             // Open model interface
                             data::CObjectPtr< data::CModel > pModel( APP_STORAGE.getEntry( id ) );
                             // get destination mesh
-                            data::CMesh *pMesh = pModel->getMesh();
+                            geometry::CMesh *pMesh = pModel->getMesh();
                             // get vertices
-                            std::vector<data::CMesh::VertexHandle> omVertices;
+                            std::vector<geometry::CMesh::VertexHandle> omVertices;
                             omVertices.reserve(nVertices);
                             //std::vector<osg::Vec3> dbgVertices;
                             for(int i = 0; i<nVertices; i++)
@@ -2294,7 +2316,7 @@ bool MainWindow::openSTL(const QString& fileName)
                                 vert = vert * geodes[g].matrix; // apply transformation matrix
                                 //dbgVertices.push_back(vert);
                                 Q_ASSERT(!vert.isNaN());
-                                data::CMesh::Point vx;
+                                geometry::CMesh::Point vx;
                                 vx[0] = vert[0];
                                 vx[1] = vert[1];
                                 vx[2] = vert[2];
@@ -2407,7 +2429,7 @@ bool MainWindow::openSTL(const QString& fileName)
             if (nDrawables>0)
             {
                 data::CObjectPtr< data::CModel > pModel( APP_STORAGE.getEntry( id ) );
-                data::CMesh *pMesh = pModel->getMesh();
+                geometry::CMesh *pMesh = pModel->getMesh();
                 pMesh->delete_isolated_vertices();
                 pMesh->garbage_collection();
                 if (pMesh->n_faces()>0)
@@ -2429,7 +2451,7 @@ bool MainWindow::openSTL(const QString& fileName)
 
     if (!result)
     {
-        data::CMesh *pMesh = new data::CMesh;
+        geometry::CMesh *pMesh = new geometry::CMesh;
         OpenMesh::IO::Options ropt;
         ropt += OpenMesh::IO::Options::Binary;
         result=true;
@@ -2509,7 +2531,7 @@ bool MainWindow::saveSTL()
     data::CObjectPtr<data::CModel> spModel( APP_STORAGE.getEntry(storage_id) );
 
     // Check the model
-    data::CMesh *pMesh = spModel->getMesh();
+    geometry::CMesh *pMesh = spModel->getMesh();
     if (!pMesh || !(pMesh->n_vertices() > 0) )
     {
         showMessageBox(QMessageBox::Critical, tr("No STL data!"));
@@ -2577,13 +2599,13 @@ bool MainWindow::saveSTL()
 		osg::Matrix exportMatrix = modelMx * osg::Matrix::inverse(osg::Matrix::translate(-pos.getX(),-pos.getY(),-pos.getZ()) * volTransform);
 		if (!exportMatrix.isIdentity())
 		{
-			pMesh = new data::CMesh(*pMesh);
-			for (data::CMesh::VertexIter vit = pMesh->vertices_begin(); vit != pMesh->vertices_end(); ++vit)
+			pMesh = new geometry::CMesh(*pMesh);
+			for (geometry::CMesh::VertexIter vit = pMesh->vertices_begin(); vit != pMesh->vertices_end(); ++vit)
 			{
-				data::CMesh::Point point = pMesh->point(vit.handle());
+				geometry::CMesh::Point point = pMesh->point(vit.handle());
 				osg::Vec3 vertex(point[0], point[1], point[2]);
 				vertex = vertex * exportMatrix;
-				point = data::CMesh::Point(vertex[0], vertex[1], vertex[2]);
+				point = geometry::CMesh::Point(vertex[0], vertex[1], vertex[2]);
 				pMesh->point(vit.handle()) = point;
 			}
 		}
@@ -2595,13 +2617,13 @@ bool MainWindow::saveSTL()
 		osg::Matrix exportMatrix = modelMx; //* osg::Matrix::inverse(volTransform);
 		if (!exportMatrix.isIdentity())
 		{
-			pMesh = new data::CMesh(*pMesh);
-			for (data::CMesh::VertexIter vit = pMesh->vertices_begin(); vit != pMesh->vertices_end(); ++vit)
+			pMesh = new geometry::CMesh(*pMesh);
+			for (geometry::CMesh::VertexIter vit = pMesh->vertices_begin(); vit != pMesh->vertices_end(); ++vit)
 			{
-				data::CMesh::Point point = pMesh->point(vit.handle());
+				geometry::CMesh::Point point = pMesh->point(vit.handle());
 				osg::Vec3 vertex(point[0], point[1], point[2]);
 				vertex = vertex * exportMatrix;
-				point = data::CMesh::Point(vertex[0], vertex[1], vertex[2]);
+				point = geometry::CMesh::Point(vertex[0], vertex[1], vertex[2]);
 				pMesh->point(vit.handle()) = point;
 			}
 		}
@@ -3166,10 +3188,10 @@ void MainWindow::createSurfaceModel()
 
     {   // if there is already an existing model which is large, free it to save memory
         data::CObjectPtr<data::CModel> spModel( APP_STORAGE.getEntry(id) );
-        data::CMesh* pMesh=spModel->getMesh();
+        geometry::CMesh* pMesh=spModel->getMesh();
         if (NULL!=pMesh && pMesh->n_vertices() > 1000000)
         {
-            spModel->setMesh(new data::CMesh());
+            spModel->setMesh(new geometry::CMesh());
 			spModel->clearAllProperties();
             APP_STORAGE.invalidate( spModel.getEntryPtr() );
         }
@@ -3185,7 +3207,7 @@ void MainWindow::createSurfaceModel()
         Hi = m_segmentationPanel->getHi();
     }
 
-    data::CMesh* pMesh = new data::CMesh;
+    geometry::CMesh* pMesh = new geometry::CMesh;
 
     CMarchingCubes mc;
     mc.registerProgressFunc(vpl::mod::CProgress::tProgressFunc(&progress, &CProgress::Entry));
@@ -3236,8 +3258,27 @@ void MainWindow::createSurfaceModel()
 	spModel->setLabel(m_modelLabel);
 	spModel->setColor(m_modelColor);
 	spModel->clearAllProperties();
+	spModel->setProperty("Created","1");
     spModel->setVisibility(true);
     APP_STORAGE.invalidate(spModel.getEntryPtr());
+
+	// if model-region linking is not enabled, hide previously created models on creation of a new one
+	QSettings settings;
+	bool bModelsLinked = settings.value("ModelRegionLinkEnabled", QVariant(false)).toBool();
+	if (!bModelsLinked)
+	{
+		for(int i = 0; i < MAX_IMPORTED_MODELS; ++i)
+		{
+			if (data::Storage::ImportedModel::Id + i == id) continue;
+			data::CObjectPtr<data::CModel> spModel( APP_STORAGE.getEntry(data::Storage::ImportedModel::Id + i) );
+			if (spModel->isShown())
+			{
+				std::string created = spModel->getProperty("Created");
+				if (!created.empty())
+					VPL_SIGNAL(SigSetModelVisibility).invoke(data::Storage::ImportedModel::Id + i, false);
+			}
+		}
+	}
 
     bool bAnyVisible(false);
     for(int i = 0; i < MAX_IMPORTED_MODELS; ++i)
@@ -3254,8 +3295,8 @@ void MainWindow::createSurfaceModel()
 // Preferences, Properties, Help
 
 void MainWindow::showPreferencesDialog()
-{
-    CPreferencesDialog dlg(m_localeDir, this, Qt::WindowTitleHint | Qt::WindowSystemMenuHint | Qt::WindowCloseButtonHint);
+{	
+    CPreferencesDialog dlg(m_localeDir, ui->menuBar, this, Qt::WindowTitleHint | Qt::WindowSystemMenuHint | Qt::WindowCloseButtonHint);
     if (QDialog::Accepted==dlg.exec())
     {
         if (dlg.colorsChanged())
@@ -3273,6 +3314,10 @@ void MainWindow::showPreferencesDialog()
             m_OrthoXZSlice->setBackgroundColor(osgColor);
             m_OrthoYZSlice->setBackgroundColor(osgColor);
         }
+		if (dlg.shortcutsChanged())
+		{
+			saveShortcuts();
+		}
         if (dlg.needsRestart())
         {
             showMessageBox(QMessageBox::Information,tr("You must restart the application to apply the changes."));
@@ -3323,7 +3368,8 @@ void MainWindow::showAbout()
 
 void MainWindow::loadHelp()
 {
-    Q_ASSERT(m_helpView);
+    if (!m_helpView)
+		return;
     // is anything loaded?
     QUrl currentUrl=m_helpView->url();
     QString urlPath=currentUrl.path();
@@ -3365,125 +3411,290 @@ void MainWindow::showHelp()
 ///////////////////////////////////////////////////////////////////////////////
 // Filters
 
+void MainWindow::mixVolumes(vpl::img::CDensityVolume* main, vpl::img::CDensityVolume* temp, int mixing) const // 0-100
+{
+	if (NULL == main || NULL == temp || main == temp) return;
+	const vpl::tSize xSize = main->getXSize();
+	const vpl::tSize ySize = main->getYSize();
+	const vpl::tSize zSize = main->getZSize();
+#pragma omp parallel for
+	for(int z = 0; z < zSize; z++)
+	{
+		for(int y = 0; y < ySize; y++)
+		{
+			for(int x = 0; x < xSize; x++)
+			{
+				main->at(x,y,z) = (main->at(x,y,z)*(100-mixing) + temp->at(x,y,z)*mixing)/100;
+			}
+		}
+	}
+}
+
+// Slice filtering method for CFilterDialog
+void gaussianSliceFilter(int slice, int strength, QImage& result)
+{
+	QApplication::setOverrideCursor(QCursor(Qt::WaitCursor));
+
+	data::CObjectPtr<data::CActiveDataSet> spDataSet( APP_STORAGE.getEntry(data::Storage::ActiveDataSet::Id) );
+    data::CObjectPtr<data::CDensityData> spVolume( APP_STORAGE.getEntry(spDataSet->getId()) );
+	const vpl::tSize xSize=spVolume->getXSize();
+	const vpl::tSize ySize=spVolume->getYSize();
+	const vpl::tSize zSize=spVolume->getZSize();
+	
+	QImage img(xSize,ySize, QImage::Format_Indexed8);
+	QVector<QRgb> my_table;
+	for(int i = 0; i < 256; i++) 
+		my_table.push_back(qRgb(i,i,i));
+	img.setColorTable(my_table);
+
+	int minDensity = data::CDensityWindow::getMinDensity();
+	int maxDensity = data::CDensityWindow::getMaxDensity();
+	{
+#pragma omp parallel for
+		for(int y=0;y<ySize;y++)
+		{
+			vpl::img::CVolumeGauss3Filter<vpl::img::CDensityVolume> Filter; // getResponse can't run in parallel, therefore instance for each thread
+			uchar* scanLine = const_cast<uchar*>(img.constScanLine(y));		// to avoid deep copy
+			for(int x=0;x<xSize;x++)
+			{
+				int val = Filter.getResponse(*spVolume,x,y,slice); 
+				if (strength<100)
+				{
+					int oval = spVolume->at(x,y,slice);
+					val = (val * strength + (100-strength) * oval)/100;
+				}
+				scanLine[x] = std::min(255,std::max(0,(int)val-minDensity)/(std::max(1,maxDensity-minDensity)/255));
+			}
+		}
+	}
+	result = img;
+
+	QApplication::restoreOverrideCursor();
+}
+
+
 void MainWindow::filterGaussian()
 {
-    // Show simple progress dialog
-    CProgress progress(this);
-    progress.setLabelText(tr("Filtering volumetric data, please wait..."));
-    progress.show();
+	CFilterDialog dlg(this,tr("Gaussian Filter"));
+	dlg.setFilter(&gaussianSliceFilter);
+	if (QDialog::Accepted==dlg.exec())
+	{
+	// Show simple progress dialog
+		CProgress progress(this);
+		progress.setLabelText(tr("Filtering volumetric data, please wait..."));
+		progress.show();
 
-    // Input and output data
-    data::CObjectPtr<data::CDensityData> spVolume( APP_STORAGE.getEntry(m_Examination.getActiveDataSet()) );
-    vpl::img::CDensityVolume::tSmartPtr spFiltered = new vpl::img::CDensityVolume(*spVolume);
+		// Input and output data
+		data::CObjectPtr<data::CDensityData> spVolume( APP_STORAGE.getEntry(m_Examination.getActiveDataSet()) );
+		vpl::img::CDensityVolume::tSmartPtr spFiltered = new vpl::img::CDensityVolume(*spVolume);
 
-    // Gaussian filtering
-    vpl::img::CVolumeGauss3Filter<vpl::img::CDensityVolume> Filter;
-    Filter.registerProgressFunc(vpl::mod::CProgress::tProgressFunc(&progress, &CProgress::Entry));
-    // initialize kernel (before multiple threads kick in)
-    float tmpPixel = float(Filter.getResponse(*spVolume.get(), 0, 0, 0));
-    spFiltered->at(0, 0, 0) = tmpPixel;
-    //
-    bool bResult = Filter(*spVolume, *spFiltered);
+		// Median filtering
+		vpl::img::CVolumeGauss3Filter<vpl::img::CDensityVolume> Filter;
+		Filter.registerProgressFunc(vpl::mod::CProgress::tProgressFunc(&progress, &CProgress::Entry));
+		// initialize kernel (before multiple threads kick in)
+		float tmpPixel = float(Filter.getResponse(*spVolume.get(), 0, 0, 0));
+		spFiltered->at(0, 0, 0) = tmpPixel;
+		bool bResult = Filter(*spVolume, *spFiltered);
 
-    // Destroy the progress dialog
-    progress.hide();
+		// Destroy the progress dialog
+		progress.hide();
 
-    // Show the result
-    if( bResult )
-    {
-        // Create reference to the new data
-//        spVolume->create(*spFiltered);
-        spVolume->makeRef(*spFiltered);
-    }
-    else
-    {
-        showMessageBox(QMessageBox::Critical,tr("Filtering aborted!"));
-    }
+		// Show the result
+		if( bResult )
+		{
+			// Create reference to the new data
+			//spVolume->makeRef(*spFiltered);
+			mixVolumes(spVolume.get(),spFiltered.get(),dlg.getStrength());
+		}
+		else
+		{
+			showMessageBox(QMessageBox::Critical,tr("Filtering aborted!"));
+		}
 
-     // Force data deallocation
-//    spFiltered->create(0, 0, 0, 0);
+		// Update the data
+		APP_STORAGE.invalidate(spVolume.getEntryPtr());
+	}
+}
 
-    // Update the data
-    APP_STORAGE.invalidate(spVolume.getEntryPtr());
+// Slice filtering method for CFilterDialog
+void anisotropicSliceFilter(int slice, int strength, QImage& result)
+{
+	QApplication::setOverrideCursor(QCursor(Qt::WaitCursor));
+
+	static const double dKappa = 150.0;
+	static const int iNumOfIters = 5.0;
+
+	data::CObjectPtr<data::CActiveDataSet> spDataSet( APP_STORAGE.getEntry(data::Storage::ActiveDataSet::Id) );
+    data::CObjectPtr<data::CDensityData> spVolume( APP_STORAGE.getEntry(spDataSet->getId()) );
+	const vpl::tSize xSize=spVolume->getXSize();
+	const vpl::tSize ySize=spVolume->getYSize();
+	const vpl::tSize zSize=spVolume->getZSize();
+	
+	QImage img(xSize,ySize, QImage::Format_Indexed8);
+	QVector<QRgb> my_table;
+	for(int i = 0; i < 256; i++) 
+		my_table.push_back(qRgb(i,i,i));
+	img.setColorTable(my_table);
+
+	int minDensity = data::CDensityWindow::getMinDensity();
+	int maxDensity = data::CDensityWindow::getMaxDensity();
+
+    vpl::img::CAnisotropicFilter<vpl::img::CDImage> Filter2D(dKappa, iNumOfIters);
+	vpl::img::CDImage src(xSize,ySize,5);
+	src.fillEntire(0);
+	for(int y=0;y<ySize;y++)
+		for(int x=0;x<xSize;x++)
+			src.at(x,y) = spVolume->at(x,y,slice);
+	
+    vpl::img::CDImage Filtered(src);
+    src.mirrorMargin();
+    Filter2D(src, Filtered);
+
+	{
+#pragma omp parallel for
+		for(int y=0;y<ySize;y++)
+		{
+			uchar* scanLine = const_cast<uchar*>(img.constScanLine(y));		// to avoid deep copy
+			for(int x=0;x<xSize;x++)
+			{
+				int val = Filtered.at(x,y);
+				if (strength<100)
+				{
+					int oval = spVolume->at(x,y,slice);
+					val = (val * strength + (100-strength) * oval)/100;
+				}
+				scanLine[x] = std::min(255,std::max(0,(int)val-minDensity)/(std::max(1,maxDensity-minDensity)/255));
+			}
+		}
+	}
+	result = img;
+
+	QApplication::restoreOverrideCursor();
+}
+
+
+void MainWindow::filterAnisotropic()
+{
+	CFilterDialog dlg(this,tr("Anisotropic Filter"));
+	dlg.setFilter(&anisotropicSliceFilter);
+	if (QDialog::Accepted==dlg.exec())
+	{
+		static const double dKappa = 150.0;
+		static const int iNumOfIters = 5.0;
+
+		// Show simple progress dialog
+		CProgress progress(this);
+		progress.setLabelText(tr("Filtering volumetric data, please wait..."));
+		progress.show();
+
+		// Input and output data
+		data::CObjectPtr<data::CDensityData> spVolume( APP_STORAGE.getEntry(m_Examination.getActiveDataSet()) );
+		vpl::img::CDensityVolume::tSmartPtr spFiltered = new vpl::img::CDensityVolume(*spVolume);
+
+		// Anisotropic filtering
+		vpl::img::CVolumeAnisotropicFilter<vpl::img::CDensityVolume> Filter(dKappa, iNumOfIters);
+		Filter.registerProgressFunc(vpl::mod::CProgress::tProgressFunc(&progress, &CProgress::Entry));
+		bool bResult = Filter(*spVolume, *spFiltered);
+
+		// Destroy the progress dialog
+		progress.hide();
+
+		// Show the result
+		if( bResult )
+		{
+			//spVolume->makeRef(*spFiltered);
+			mixVolumes(spVolume.get(),spFiltered.get(),dlg.getStrength());
+		}
+		else
+		{
+			showMessageBox(QMessageBox::Critical,tr("Filtering aborted!"));
+		}
+		// Update the data
+		APP_STORAGE.invalidate(spVolume.getEntryPtr());
+	}
+}
+
+// Slice filtering method for CFilterDialog
+void medianSliceFilter(int slice, int strength, QImage& result)
+{
+	QApplication::setOverrideCursor(QCursor(Qt::WaitCursor));
+
+	data::CObjectPtr<data::CActiveDataSet> spDataSet( APP_STORAGE.getEntry(data::Storage::ActiveDataSet::Id) );
+    data::CObjectPtr<data::CDensityData> spVolume( APP_STORAGE.getEntry(spDataSet->getId()) );
+	const vpl::tSize xSize=spVolume->getXSize();
+	const vpl::tSize ySize=spVolume->getYSize();
+	const vpl::tSize zSize=spVolume->getZSize();
+	
+	QImage img(xSize,ySize, QImage::Format_Indexed8);
+	QVector<QRgb> my_table;
+	for(int i = 0; i < 256; i++) 
+		my_table.push_back(qRgb(i,i,i));
+	img.setColorTable(my_table);
+
+	int minDensity = data::CDensityWindow::getMinDensity();
+	int maxDensity = data::CDensityWindow::getMaxDensity();
+	{
+#pragma omp parallel for
+		for(int y=0;y<ySize;y++)
+		{
+			// Median filtering
+			vpl::img::CVolumeMedianFilter<vpl::img::CDensityVolume> Filter(5); // getResponse can't run in parallel, therefore instance for each thread
+			uchar* scanLine = const_cast<uchar*>(img.constScanLine(y));		// to avoid deep copy
+			for(int x=0;x<xSize;x++)
+			{
+				int val = Filter.getResponse(*spVolume,x,y,slice); 
+				if (strength<100)
+				{
+					int oval = spVolume->at(x,y,slice);
+					val = (val * strength + (100-strength) * oval)/100;
+				}
+				scanLine[x] = std::min(255,std::max(0,(int)val-minDensity)/(std::max(1,maxDensity-minDensity)/255));
+			}
+		}
+	}
+	result = img;
+
+	QApplication::restoreOverrideCursor();
 }
 
 void MainWindow::filterMedian()
 {
-    // Show simple progress dialog
-    CProgress progress(this);
-    progress.setLabelText(tr("Filtering volumetric data, please wait..."));
-    progress.show();
+	CFilterDialog dlg(this, tr("Median Filter"));
+	dlg.setFilter(&medianSliceFilter);
+	if (QDialog::Accepted==dlg.exec())
+	{
+	// Show simple progress dialog
+		CProgress progress(this);
+		progress.setLabelText(tr("Filtering volumetric data, please wait..."));
+		progress.show();
 
-    // Input and output data
-    data::CObjectPtr<data::CDensityData> spVolume( APP_STORAGE.getEntry(m_Examination.getActiveDataSet()) );
-    vpl::img::CDensityVolume::tSmartPtr spFiltered = new vpl::img::CDensityVolume(*spVolume);
+		// Input and output data
+		data::CObjectPtr<data::CDensityData> spVolume( APP_STORAGE.getEntry(m_Examination.getActiveDataSet()) );
+		vpl::img::CDensityVolume::tSmartPtr spFiltered = new vpl::img::CDensityVolume(*spVolume);
 
-    // Median filtering
-    vpl::img::CVolumeMedianFilter<vpl::img::CDensityVolume> Filter(3);
-    Filter.registerProgressFunc(vpl::mod::CProgress::tProgressFunc(&progress, &CProgress::Entry));
-    bool bResult = Filter(*spVolume, *spFiltered);
+		// Median filtering
+		vpl::img::CVolumeMedianFilter<vpl::img::CDensityVolume> Filter(3);
+		Filter.registerProgressFunc(vpl::mod::CProgress::tProgressFunc(&progress, &CProgress::Entry));
+		bool bResult = Filter(*spVolume, *spFiltered);
 
-    // Destroy the progress dialog
-    progress.hide();
+		// Destroy the progress dialog
+		progress.hide();
 
-    // Show the result
-    if( bResult )
-    {
-        // Create reference to the new data
-//        spVolume->create(*spFiltered);
-        spVolume->makeRef(*spFiltered);
-    }
-    else
-    {
-        showMessageBox(QMessageBox::Critical,tr("Filtering aborted!"));
-    }
+		// Show the result
+		if( bResult )
+		{
+			// Create reference to the new data
+			//spVolume->makeRef(*spFiltered);
+			mixVolumes(spVolume.get(),spFiltered.get(),dlg.getStrength());
+		}
+		else
+		{
+			showMessageBox(QMessageBox::Critical,tr("Filtering aborted!"));
+		}
 
-     // Force data deallocation
-//    spFiltered->create(0, 0, 0, 0);
-
-    // Update the data
-    APP_STORAGE.invalidate(spVolume.getEntryPtr());
-}
-
-void MainWindow::filterAnisotropic()
-{
-    static const double dKappa = 150.0;
-    static const int iNumOfIters = 5.0;
-
-    // Show simple progress dialog
-    CProgress progress(this);
-    progress.setLabelText(tr("Filtering volumetric data, please wait..."));
-    progress.show();
-
-    // Input and output data
-    data::CObjectPtr<data::CDensityData> spVolume( APP_STORAGE.getEntry(m_Examination.getActiveDataSet()) );
-    vpl::img::CDensityVolume::tSmartPtr spFiltered = new vpl::img::CDensityVolume(*spVolume);
-
-    // Anisotropic filtering
-    vpl::img::CVolumeAnisotropicFilter<vpl::img::CDensityVolume> Filter(dKappa, iNumOfIters);
-    Filter.registerProgressFunc(vpl::mod::CProgress::tProgressFunc(&progress, &CProgress::Entry));
-    bool bResult = Filter(*spVolume, *spFiltered);
-
-    // Destroy the progress dialog
-    progress.hide();
-
-    // Show the result
-    if( bResult )
-    {
-        // Create reference to the new data
-//        spVolume->create(*spFiltered);
-        spVolume->makeRef(*spFiltered);
-    }
-    else
-    {
-        showMessageBox(QMessageBox::Critical,tr("Filtering aborted!"));
-    }
-
-     // Force data deallocation
-//    spFiltered->create(0, 0, 0, 0);
-
-    // Update the data
-    APP_STORAGE.invalidate(spVolume.getEntryPtr());
+		// Update the data
+		APP_STORAGE.invalidate(spVolume.getEntryPtr());
+	}
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -3709,8 +3920,13 @@ void MainWindow::loadAppSettings()
 
     renderer.enable(settings.value("VREnabled",false).toBool());
     renderer.setQuality(settings.value("VRQuality", renderer.getQuality()).toInt());
-    renderer.setShader(settings.value("VRShader", renderer.getShader()).toInt());
-    renderer.setLut(settings.value("VRLUT", renderer.getLut()).toInt());
+
+	int savedShader = settings.value("VRShader", renderer.getShader()).toInt();
+	if (PSVR::PSVolumeRendering::CUSTOM!=savedShader) // don't restore custom shader (it is used for segmentation data visualization only)
+	{
+		renderer.setShader(settings.value("VRShader", renderer.getShader()).toInt());
+		renderer.setLut(settings.value("VRLUT", renderer.getLut()).toInt());
+	}
 
     VPL_SIGNAL(SigSetPlaneXYVisibility).invoke(settings.value("ShowXYSlice", false /*VPL_SIGNAL(SigGetPlaneXYVisibility).invoke2()*/).toBool());
     VPL_SIGNAL(SigSetPlaneXZVisibility).invoke(settings.value("ShowZXSlice", false /*VPL_SIGNAL(SigGetPlaneXZVisibility).invoke2()*/).toBool());
@@ -3763,9 +3979,11 @@ void MainWindow::saveAppSettings()
 
     settings.setValue("VREnabled", renderer.isEnabled());
     settings.setValue("VRQuality", renderer.getQuality());
-    settings.setValue("VRShader", renderer.getShader());
-    settings.setValue("VRLUT", renderer.getLut());
-
+	if (PSVR::PSVolumeRendering::CUSTOM!=renderer.getShader()) // don't save vr shader info when custom shader is selected
+	{
+		settings.setValue("VRShader", renderer.getShader());
+		settings.setValue("VRLUT", renderer.getLut());
+	}
     settings.setValue("ShowXYSlice",VPL_SIGNAL(SigGetPlaneXYVisibility).invoke2());
     settings.setValue("ShowZXSlice",VPL_SIGNAL(SigGetPlaneXZVisibility).invoke2());
     settings.setValue("ShowYZSlice",VPL_SIGNAL(SigGetPlaneYZVisibility).invoke2());
@@ -3929,6 +4147,18 @@ void  MainWindow::saveScreenshot(OSGCanvas* pCanvas)
             pImage->save(baseFileName,0,SCREENSHOT_SAVE_QUALITY);
         }
         delete pImage;
+    }
+}
+
+void  MainWindow::copyScreenshotToClipboard(OSGCanvas* pCanvas)
+{
+    QImage* pImage = canvasScreenShotToQImage(pCanvas,100,true);
+    if (NULL!=pImage)
+    {
+        QClipboard *clipboard = QApplication::clipboard();
+        if (clipboard)
+            clipboard->setImage(*pImage);
+		delete pImage;
     }
 }
 
@@ -4190,6 +4420,24 @@ void MainWindow::onPanelContextMenu(const QPoint & pos)
     }
 }
 
+void MainWindow::showPanelsMenu()
+{
+	QMenu* pMenu = new QMenu(this);
+    QList<QDockWidget*> dws = MainWindow::getInstance()->findChildren<QDockWidget*>();
+    qSort(dws.begin(),dws.end(),dockWidgetNameCompare);
+    foreach (QDockWidget * dw, dws)
+    {
+        if (dw->toggleViewAction()->isEnabled())
+            pMenu->addAction(dw->toggleViewAction());            
+    }
+    if (NULL!=pMenu)
+    {
+        QAction* pAct = pMenu->exec(QCursor::pos());
+        delete pMenu;
+    }
+}
+
+
 void MainWindow::onDockWidgetToggleView(bool bShown)
 {
     if (bShown)
@@ -4241,6 +4489,16 @@ bool MainWindow::canAcceptEvent(QDropEvent* event)
             QString suffix = fi.isDir()?"":fi.suffix().toLower();
             if (!suffix.isEmpty() && modelFormats.contains(suffix,Qt::CaseInsensitive))
                 return true;
+			{ // check for numeric extension or dicom files without extension
+				int i = 0 , len = suffix.length();
+				for(; i<len; i++)
+				{
+					if (!suffix[i].isDigit())
+						break;
+				}
+				if (i==len) 
+					return true;
+			}
         }
     }
     return false;
@@ -4317,7 +4575,7 @@ void MainWindow::processSurfaceModelExtern()
 
     {   // Check the model
         data::CObjectPtr<data::CModel> spModel( APP_STORAGE.getEntry(model_id) );        
-        data::CMesh *pMesh = spModel->getMesh();
+        geometry::CMesh *pMesh = spModel->getMesh();
         if (!pMesh || !(pMesh->n_vertices() > 0) )
         {
             showMessageBox(QMessageBox::Critical, tr("No STL data!"));
@@ -4369,7 +4627,7 @@ void MainWindow::processSurfaceModelExtern()
     {
         QApplication::setOverrideCursor(QCursor(Qt::WaitCursor));
         data::CObjectPtr<data::CModel> spModel(APP_STORAGE.getEntry(model_id));
-        data::CMesh* pMesh = spModel->getMesh();
+        geometry::CMesh* pMesh = spModel->getMesh();
 
         // will write to temp file
         QString fileName = QDir::tempPath();
@@ -4426,7 +4684,7 @@ void MainWindow::processSurfaceModelExtern()
             {
                 OpenMesh::IO::Options ropt;
                 ropt += OpenMesh::IO::Options::Binary;
-                data::CMesh *mesh = new data::CMesh;
+                geometry::CMesh *mesh = new geometry::CMesh;
                 if (OpenMesh::IO::read_mesh(*mesh, ansiOut, ropt) && mesh->n_vertices()>0)
                 {
                     spModel->setMesh(mesh);
@@ -4611,6 +4869,243 @@ void MainWindow::setTextureFilterSharpen(bool on)
 	APP_STORAGE.invalidate(spSliceXZ.getEntryPtr(), data::COrthoSlice::MODE_CHANGED );
 	data::CObjectPtr<data::COrthoSliceYZ> spSliceYZ( APP_STORAGE.getEntry(data::Storage::SliceYZ::Id) );
 	APP_STORAGE.invalidate(spSliceYZ.getEntryPtr(), data::COrthoSlice::MODE_CHANGED );
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
+void MainWindow::loadShortcuts()
+{
+	QSettings settings;
+	settings.beginGroup("Shortcuts");
+	QList<QMenu*> lst = ui->menuBar->findChildren<QMenu*>();
+	foreach(QMenu* m, lst)
+	{
+		if (m->parent()==ui->menuBar)
+			loadShortcutsForMenu(m, settings);
+	}
+}
+
+void MainWindow::loadShortcutsForMenu(QMenu* menu, QSettings& settings)
+{
+	if (NULL==menu) return;
+	if (!menu->actions().empty())
+	{
+		settings.beginGroup(menu->objectName());
+		foreach(QAction* a, menu->actions())
+		{
+			if (!a->isSeparator())
+			{
+				if (NULL!=a->menu())
+				{
+					loadShortcutsForMenu(a->menu(),settings);
+				}
+				else
+				{
+					QString src = a->objectName();
+					if (src.isEmpty())
+					{
+						//qDebug() << a->text();
+						src = a->text();
+					}
+					if (!src.isEmpty())
+					{
+						QVariant res = settings.value(src,QVariant());
+						if (res.isValid())
+						{
+							QKeySequence ks(res.toString()); // TODO: check whether the action is used
+							a->setShortcut(ks);
+							a->setProperty("Shortcut","Custom");
+						}
+					}
+				}
+			}
+		}
+		settings.endGroup();
+	}
+}
+
+void MainWindow::saveShortcutsForMenu(QMenu* menu, QSettings& settings)
+{
+	if (NULL==menu) return;
+	if (!menu->actions().empty())
+	{
+		settings.beginGroup(menu->objectName());
+		foreach(QAction* a, menu->actions())
+		{
+			if (!a->isSeparator())
+			{
+				if (NULL!=a->menu())
+				{
+					saveShortcutsForMenu(a->menu(),settings);
+				}
+				else
+				{
+					if (0==a->property("Shortcut").toString().compare("Custom",Qt::CaseInsensitive))
+					{
+						QString key = a->objectName();
+						if (key.isEmpty())
+							key = a->text();
+						if (!key.isEmpty())
+							settings.setValue(key,a->shortcut().toString());
+					}
+				}
+			}
+		}
+		settings.endGroup();
+	}
+}
+
+void MainWindow::saveShortcuts()
+{
+	QSettings settings;
+	settings.beginGroup("Shortcuts");
+	QList<QMenu*> lst = ui->menuBar->findChildren<QMenu*>();
+	foreach(QMenu* m, lst)
+	{
+		if (m->parent()==ui->menuBar)
+			saveShortcutsForMenu(m, settings);
+	}
+}
+
+bool MainWindow::isDockWidgetVisible(QDockWidget* pDW)
+{
+	if (NULL==pDW)
+		return false;
+	if (NULL==pDW->widget())
+		return pDW->isVisible();
+	if (!pDW->widget()->visibleRegion().isEmpty())
+		return true;
+	// test above can fail even when the dock widget is visible, therefore we
+	// enumerate all children and test their visibility
+	QList<QWidget*> children = pDW->findChildren<QWidget*>();
+	bool bAnyChildVisible = false;
+	foreach(QWidget* pChild, children)
+	{
+		if (!pChild->visibleRegion().isEmpty())
+		{
+			bAnyChildVisible  = true;
+			break;
+		}
+	}
+	return bAnyChildVisible;
+}
+
+QDockWidget *MainWindow::getActivePanel()
+{
+	QWidget* pWidget = QApplication::focusWidget();
+	if (NULL==pWidget)
+		pWidget = QApplication::activeWindow();
+	if (NULL!=pWidget)
+	{
+		QDockWidget* pDW=getParentDockWidget(pWidget);		
+		if (NULL!=pDW)
+		{			
+			if (!isDockWidgetVisible(pDW))
+			{
+				//qDebug() << "active widget not visible " << pDW->windowTitle();
+				QList<QDockWidget*> tabbed = tabifiedDockWidgets(pDW);
+				pDW = NULL;
+				foreach(QDockWidget* pDWT, tabbed)
+					if (isDockWidgetVisible(pDWT))
+					{
+						//qDebug() << "replacing by visible " << pDWT->windowTitle();
+						pDW = pDWT;
+						break;
+					}
+			}
+			if (NULL!=pDW)
+			{
+                if (NULL!=pDW->widget() && NULL!=qobject_cast<OSGCanvas*>(pDW->widget()))
+				{
+					// find dockwidget to close
+				}
+				else
+				{
+					return pDW;
+				}
+			}
+		}
+	}
+	// enumerate all dockwidgets and check their visibility
+	QList<QDockWidget *> dockWidgets = findChildren<QDockWidget *>();
+	std::list<QDockWidget*> lstVisible;
+	foreach(QDockWidget* pDW, dockWidgets)
+	{
+        if (isDockWidgetVisible(pDW) && !(NULL!=pDW->widget() && NULL!=qobject_cast<OSGCanvas*>(pDW->widget())))
+			lstVisible.push_back(pDW);
+	}
+	if (lstVisible.size()==1)
+	{
+		//qDebug() << "found one visible";
+		return lstVisible.front();
+	}
+	else if (lstVisible.size()>0)
+	{
+		//qDebug() << "found more visible, use cursor pos";
+		QPoint mousePos = QCursor::pos();
+		for(auto it = lstVisible.begin(); it!=lstVisible.end(); ++it)
+		{								
+			QRect globalRect;
+			globalRect = QRect((*it)->mapToGlobal((*it)->rect().topLeft()),
+			(*it)->mapToGlobal((*it)->rect().bottomRight()));
+			if (globalRect.contains(mousePos))
+			{
+				return (*it);
+			}
+		}
+	}
+	return NULL;
+}
+
+void	MainWindow::prevPanel()
+{
+	QDockWidget* pActive = getActivePanel();
+	if (NULL!=pActive)
+	{
+		QList<QTabBar*> tabs = findChildren<QTabBar*>();
+		foreach (QTabBar * tabBar, tabs)
+		{
+            for (int i = 0; i < tabBar->count(); i++)
+            {
+                // match widgets and tabs
+                if (tabBar->tabText(i)==pActive->windowTitle())
+                {
+					i = (i-1+tabBar->count())%tabBar->count();
+					tabBar->setCurrentIndex(i);
+					return;
+				}
+			}
+		}
+	}
+}
+
+void	MainWindow::nextPanel()
+{
+	QDockWidget* pActive = getActivePanel();
+	if (NULL!=pActive)
+	{
+		QList<QTabBar*> tabs = findChildren<QTabBar*>();
+		foreach (QTabBar * tabBar, tabs)
+		{
+            for (int i = 0; i < tabBar->count(); i++)
+            {
+                // match widgets and tabs
+                if (tabBar->tabText(i)==pActive->windowTitle())
+                {
+					i = (i+1)%tabBar->count();
+					tabBar->setCurrentIndex(i);
+					return;
+				}
+			}
+		}
+	}
+}
+
+void MainWindow::closeActivePanel()
+{
+	QDockWidget* pActive = getActivePanel();
+	if (NULL!=pActive)
+		pActive->hide();
 }
 
 ///////////////////////////////////////////////////////////////////////////////

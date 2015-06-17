@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>251</width>
-    <height>180</height>
+    <height>233</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -19,14 +19,23 @@
   <property name="minimumSize">
    <size>
     <width>251</width>
-    <height>180</height>
+    <height>233</height>
    </size>
   </property>
   <property name="windowTitle">
    <string>Tissue Segmentation</string>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
-   <property name="margin">
+   <property name="leftMargin">
+    <number>0</number>
+   </property>
+   <property name="topMargin">
+    <number>0</number>
+   </property>
+   <property name="rightMargin">
+    <number>0</number>
+   </property>
+   <property name="bottomMargin">
     <number>0</number>
    </property>
    <item>
@@ -43,7 +52,7 @@
         <x>0</x>
         <y>0</y>
         <width>251</width>
-        <height>180</height>
+        <height>233</height>
        </rect>
       </property>
       <layout class="QVBoxLayout" name="verticalLayout_2">
@@ -87,28 +96,6 @@
             </property>
            </widget>
           </item>
-          <item row="0" column="1">
-           <widget class="QSpinBox" name="lowSpinBox">
-            <property name="minimumSize">
-             <size>
-              <width>60</width>
-              <height>0</height>
-             </size>
-            </property>
-            <property name="toolTip">
-             <string>Adjusts lower threshold.</string>
-            </property>
-            <property name="statusTip">
-             <string>Adjusts lower threshold.</string>
-            </property>
-            <property name="minimum">
-             <number>-1500</number>
-            </property>
-            <property name="maximum">
-             <number>7000</number>
-            </property>
-           </widget>
-          </item>
           <item row="1" column="0">
            <widget class="QSlider" name="highThresholdSlider">
             <property name="toolTip">
@@ -144,6 +131,28 @@
             </property>
             <property name="statusTip">
              <string>Adjusts higher threshold.</string>
+            </property>
+            <property name="minimum">
+             <number>-1500</number>
+            </property>
+            <property name="maximum">
+             <number>7000</number>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="1">
+           <widget class="QSpinBox" name="lowSpinBox">
+            <property name="minimumSize">
+             <size>
+              <width>60</width>
+              <height>0</height>
+             </size>
+            </property>
+            <property name="toolTip">
+             <string>Adjusts lower threshold.</string>
+            </property>
+            <property name="statusTip">
+             <string>Adjusts lower threshold.</string>
             </property>
             <property name="minimum">
              <number>-1500</number>
@@ -250,6 +259,29 @@
             </property>
             <property name="checked">
              <bool>false</bool>
+            </property>
+           </widget>
+          </item>
+          <item row="3" column="0" colspan="3">
+           <widget class="QPushButton" name="pushButtonSetToActiveRegion">
+            <property name="text">
+             <string>Set to Active Region</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <widget class="QGroupBox" name="groupBox_2">
+         <property name="title">
+          <string>Model Creation</string>
+         </property>
+         <layout class="QVBoxLayout" name="verticalLayout_3">
+          <item>
+           <widget class="QPushButton" name="pushButtonCreateSurfaceModel">
+            <property name="text">
+             <string>Create Surface Model</string>
             </property>
            </widget>
           </item>

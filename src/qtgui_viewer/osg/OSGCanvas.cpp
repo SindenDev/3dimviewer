@@ -182,8 +182,10 @@ OSGCanvas::OSGCanvas(QWidget *parent, const osg::Vec4 &bgColor):
 
 void OSGCanvas::init(QWidget *parent, const osg::Vec4 &bgColor)
 {
+	m_customCursor = NULL;
     m_lastRenderingTime = 0;
     m_bRestoreModeOnMouseRelease = false;
+	m_bShortcut = false;
     
     QSize size(100,100);
     // creating OSGwxGraphicsWindow object for scene OpenGL display
@@ -308,6 +310,15 @@ void OSGCanvas::setScene(osg::Node * scene)
     }
 }
 
+osg::Node *	OSGCanvas::getScene() 
+{
+    if( m_view.get() )
+    {
+        return m_view->getSceneData();
+    }
+	return NULL;
+}
+
 void OSGCanvas::addEventHandler(osgGA::GUIEventHandler * handler)
 {
     if( !handler || !(m_view.get()) ) return;
@@ -369,14 +380,16 @@ void OSGCanvas::restoreMouseMode(bool bForce)
     {
         APP_MODE.restore();
         if (0!=(APP_MODE.get() & scene::CAppMode::COMMAND_MODE))
-            APP_MODE.setDefault();
+            APP_MODE.setDefault();		
         APP_MODE.enableHighlight(true);
+		m_bShortcut = false;
     }
     m_bRestoreModeOnMouseRelease = false;
 }
 
 void OSGCanvas::keyPressEvent( QKeyEvent* event )
 {
+	m_bShortcut = false;
     switch (event->key())
     {
     case Qt::Key_Control: 
@@ -425,8 +438,10 @@ void OSGCanvas::keyReleaseEvent( QKeyEvent* event )
         }
         else
         {
-            APP_MODE.restore(); // does nothing when there is no stored mode
-            m_bRestoreModeOnMouseRelease = false;
+			if (!m_bShortcut)
+				restoreMouseMode();
+            //APP_MODE.restore(); // does nothing when there is no stored mode
+            //m_bRestoreModeOnMouseRelease = false;
         }
     }            
     XGLWidget::keyReleaseEvent(event);
@@ -440,6 +455,7 @@ void OSGCanvas::wheelEvent ( QWheelEvent * event )
 
 void OSGCanvas::mouseReleaseEvent ( QMouseEvent * event )
 {
+	m_bShortcut = false;
     XGLWidget::mouseReleaseEvent(event);
     if (APP_MODE.isTempMode() && m_bRestoreModeOnMouseRelease)
     {
@@ -450,6 +466,7 @@ void OSGCanvas::mouseReleaseEvent ( QMouseEvent * event )
 
 void OSGCanvas::mouseMoveEvent ( QMouseEvent * event )
 {
+	m_bShortcut = false;
     XGLWidget::mouseMoveEvent(event);
     if (Qt::NoButton!=event->buttons())
         Refresh(false);
@@ -460,16 +477,31 @@ void OSGCanvas::enterEvent ( QEvent * event )
     XGLWidget::enterEvent(event);
     if (!hasFocus())
         setFocus(Qt::MouseFocusReason);
+	APP_MODE.getWindowEnterLeaveSignal().invoke(this,false);
     // call refresh so the osg items can receive the information too
     Refresh(false);
 }
 
 void OSGCanvas::leaveEvent ( QEvent * event )
 {
+	APP_MODE.getWindowEnterLeaveSignal().invoke(this,true);
     XGLWidget::leaveEvent(event);
     // call refresh so the osg items can receive the information too
     Refresh(false);
 }
+
+bool OSGCanvas::event(QEvent *event)
+{
+	if (QEvent::ShortcutOverride == event->type()) // when this event comes and keyPress does not, a shortcut was used - we check this in keyRelease
+	{
+		//QKeyEvent *ke = dynamic_cast<QKeyEvent*>(event);
+		//qDebug() << ke->key() << " " << ke->modifiers();
+		m_bShortcut = true;
+	}
+
+    return XGLWidget::event(event);
+}
+
 
 void OSGCanvas::setCursorX(int appmode)
 {
@@ -499,8 +531,13 @@ void OSGCanvas::setCursorX(int appmode)
     case scene::CAppMode::COMMAND_DENSITY_MEASURE:
     case scene::CAppMode::COMMAND_DISTANCE_MEASURE:
     case scene::CAppMode::COMMAND_DRAW_WINDOW:
-    case scene::CAppMode::COMMAND_DRAW_GEOMETRY:
         setCursor(Qt::CrossCursor); // cross instead of pencil
+        break;
+    case scene::CAppMode::COMMAND_DRAW_GEOMETRY:
+		if(NULL!=m_customCursor)
+			setCursor(*m_customCursor);
+		else
+			setCursor(Qt::CrossCursor); // cross instead of pencil
         break;
     default:
         setCursor(QCursor());

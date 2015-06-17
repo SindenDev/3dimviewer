@@ -1,5 +1,6 @@
 ///////////////////////////////////////////////////////////////////////////////
-// $Id: cdemopluginpanel.h 1591 2012-03-15 08:44:09Z spanel $
+// 
+// Copyright 2008-2015 3Dim Laboratory s.r.o.
 //
 
 #ifndef CDEMOPLUGINPANEL_H

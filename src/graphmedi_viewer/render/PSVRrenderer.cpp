@@ -22,7 +22,6 @@
 
 #include <configure.h>
 
-
 #define USE_VAORECT // there's a bug in that code - find it if you want to use it
 
 // Check predefined type of volume rendering algorithm
@@ -62,15 +61,15 @@
 
 
 #ifdef __APPLE__
-  #define glGenVertexArraysX    glGenVertexArraysAPPLE
-  #define glBindVertexArrayX    glBindVertexArrayAPPLE
-  #define glDeleteVertexArraysX glDeleteVertexArraysAPPLE
-  #define glIsVertexArrayX      glIsVertexArrayAPPLE
+    #define glGenVertexArraysX    glGenVertexArraysAPPLE
+    #define glBindVertexArrayX    glBindVertexArrayAPPLE
+    #define glDeleteVertexArraysX glDeleteVertexArraysAPPLE
+    #define glIsVertexArrayX      glIsVertexArrayAPPLE
 #else
-  #define glGenVertexArraysX    glGenVertexArrays
-  #define glBindVertexArrayX    glBindVertexArray
-  #define glDeleteVertexArraysX glDeleteVertexArrays
-  #define glIsVertexArrayX      glIsVertexArray
+    #define glGenVertexArraysX    glGenVertexArrays
+    #define glBindVertexArrayX    glBindVertexArray
+    #define glDeleteVertexArraysX glDeleteVertexArrays
+    #define glIsVertexArrayX      glIsVertexArray
 #endif
 
 namespace PSVR
@@ -81,7 +80,7 @@ namespace PSVR
 //! - Returns false on failure.
 bool createShaderProgram(const char * frag, GLuint * shader, GLuint * program)
 {
-    if( !frag || !shader || !program )
+    if (!frag || !shader || !program)
     {
         return false;
     }
@@ -90,11 +89,11 @@ bool createShaderProgram(const char * frag, GLuint * shader, GLuint * program)
     glShaderSource(*shader, 1, &frag, NULL);
     glCompileShader(*shader);
 
-    if( glGetShaderiv )
+    if (glGetShaderiv)
     {
         GLint Result = GL_FALSE;
         glGetShaderiv(*shader, GL_COMPILE_STATUS, &Result);
-        if( Result != GL_TRUE )
+        if (Result != GL_TRUE)
         {
             VPL_LOG_INFO("Error: Cannot compile fragment shader!");
 
@@ -113,23 +112,33 @@ bool createShaderProgram(const char * frag, GLuint * shader, GLuint * program)
     glAttachShader(*program, *shader);
     glLinkProgram(*program);
 
-    if( glGetError() != GL_NO_ERROR )
+    if (glGetProgramiv)
     {
-        VPL_LOG_INFO("Error: Cannot link shader program!");
-        return false;
+        GLint Result = GL_FALSE;
+        glGetProgramiv(*program, GL_LINK_STATUS, &Result);
+        if (Result != GL_TRUE)
+        {
+            VPL_LOG_INFO("Error: Cannot link shader program!");
+
+            GLchar buffer[2048 + 1];
+            GLsizei length;
+            GLsizei size = 2048;
+            glGetProgramInfoLog(*program, size, &length, buffer);
+
+            VPL_LOG_INFO("glGetProgramInfoLog():" << std::endl << buffer);
+
+            return false;
+        }
     }
 
     return true;
 }
 
-
 ///////////////////////////////////////////////////////////////////////////////
-//
-
 // Creates shader program from a given string.
 bool createShaderProgram(const char * frag, const char * vert, GLuint * FragShader, GLuint * VertShader, GLuint * program)
 {
-    if( !frag || !vert || !FragShader || !VertShader || !program )
+    if (!frag || !vert || !FragShader || !VertShader || !program)
     {
         return false;
     }
@@ -138,11 +147,11 @@ bool createShaderProgram(const char * frag, const char * vert, GLuint * FragShad
     glShaderSource(*FragShader, 1, &frag, NULL);
     glCompileShader(*FragShader);
 
-    if( glGetShaderiv )
+    if (glGetShaderiv)
     {
         GLint Result = GL_FALSE;
         glGetShaderiv(*FragShader, GL_COMPILE_STATUS, &Result);
-        if( Result != GL_TRUE )
+        if (Result != GL_TRUE)
         {
             VPL_LOG_INFO("Error: Cannot compile fragment shader!");
 
@@ -161,11 +170,11 @@ bool createShaderProgram(const char * frag, const char * vert, GLuint * FragShad
     glShaderSource(*VertShader, 1, &vert, NULL);
     glCompileShader(*VertShader);
 
-    if( glGetShaderiv )
+    if (glGetShaderiv)
     {
         GLint Result = GL_FALSE;
         glGetShaderiv(*VertShader, GL_COMPILE_STATUS, &Result);
-        if( Result != GL_TRUE )
+        if (Result != GL_TRUE)
         {
             VPL_LOG_INFO("Error: Cannot compile vertex shader!");
 
@@ -183,45 +192,36 @@ bool createShaderProgram(const char * frag, const char * vert, GLuint * FragShad
     *program = glCreateProgram();
     glAttachShader(*program, *FragShader);
     glAttachShader(*program, *VertShader);
-
     glLinkProgram(*program);
 
-    if( glGetProgramiv )
+    if (glGetProgramiv)
     {
         GLint Result = GL_FALSE;
         glGetProgramiv(*program, GL_LINK_STATUS, &Result);
-        if( Result != GL_TRUE )
+        if (Result != GL_TRUE)
         {
             VPL_LOG_INFO("Error: Cannot link shader program!");
-            
+
             GLchar buffer[2048 + 1];
             GLsizei length;
             GLsizei size = 2048;
             glGetProgramInfoLog(*program, size, &length, buffer);
-            
+
             VPL_LOG_INFO("glGetProgramInfoLog():" << std::endl << buffer);
-            
+
             return false;
         }
     }
 
-/*    if( glGetError() != GL_NO_ERROR )
-    {
-        VPL_LOG_INFO("Error: Cannot link shader program!");
-        return false;
-    }*/
-
     return true;
 }
 
-
 ///////////////////////////////////////////////////////////////////////////////
 //
-
 char * readShader(const char * Filename)
 {
     FILE * pFile = fopen(Filename, "rb");
-    if( !pFile )
+    if (!pFile)
     {
         return NULL;
     }
@@ -235,20 +235,18 @@ char * readShader(const char * Filename)
     return buffer;
 }
 
-
 ///////////////////////////////////////////////////////////////////////////////
 //
-
 bool loadShaderProgram(const char * filename, unsigned * shader, unsigned * program)
 {
-    if( !filename || !shader || !program )
+    if (!filename || !shader || !program)
     {
         return false;
     }
 
     *shader = glCreateShader(GL_FRAGMENT_SHADER);
     const GLchar * shaderfile = readShader(filename);
-    if( !shaderfile )
+    if (!shaderfile)
     {
         VPL_LOG_INFO("Error: Cannot find shader program (" << filename << ")!");
         return false;
@@ -257,11 +255,11 @@ bool loadShaderProgram(const char * filename, unsigned * shader, unsigned * prog
     free((void*)shaderfile);
     glCompileShader(*shader);
 
-    if( glGetShaderiv )
+    if (glGetShaderiv)
     {
         GLint Result = GL_FALSE;
         glGetShaderiv(*shader, GL_COMPILE_STATUS, &Result);
-        if( Result != GL_TRUE )
+        if (Result != GL_TRUE)
         {
             VPL_LOG_INFO("Error: Cannot compile fragment shader (" << filename << ")!");
 
@@ -279,22 +277,34 @@ bool loadShaderProgram(const char * filename, unsigned * shader, unsigned * prog
     *program = glCreateProgram();
     glAttachShader(*program, *shader);
     glLinkProgram(*program);
-    if( glGetError() != GL_NO_ERROR )
+
+    if (glGetProgramiv)
     {
-        VPL_LOG_INFO("Error: Cannot link shader program(" << filename << ")!");
-        return false;
+        GLint Result = GL_FALSE;
+        glGetProgramiv(*program, GL_LINK_STATUS, &Result);
+        if (Result != GL_TRUE)
+        {
+            VPL_LOG_INFO("Error: Cannot link shader program!");
+
+            GLchar buffer[2048 + 1];
+            GLsizei length;
+            GLsizei size = 2048;
+            glGetProgramInfoLog(*program, size, &length, buffer);
+
+            VPL_LOG_INFO("glGetProgramInfoLog():" << std::endl << buffer);
+
+            return false;
+        }
     }
 
     return true;
 }
 
-
 ///////////////////////////////////////////////////////////////////////////////
 //
-
 bool loadShaderProgram(const char * fragfilename, const char * vertfilename, unsigned * fragshader, unsigned * vertshader, unsigned * program)
 {
-    if( !fragfilename || !vertfilename || !fragshader || !vertshader || !program )
+    if (!fragfilename || !vertfilename || !fragshader || !vertshader || !program)
     {
         return false;
     }
@@ -305,7 +315,7 @@ bool loadShaderProgram(const char * fragfilename, const char * vertfilename, uns
     }
 
     const GLchar * shaderfile = readShader(fragfilename);
-    if( !shaderfile )
+    if (!shaderfile)
     {
         VPL_LOG_INFO("Error: Cannot find shader program (" << fragfilename << ")!");
         return false;
@@ -314,11 +324,11 @@ bool loadShaderProgram(const char * fragfilename, const char * vertfilename, uns
     free((void*)shaderfile);
     glCompileShader(*fragshader);
 
-    if( glGetShaderiv )
+    if (glGetShaderiv)
     {
         GLint Result = GL_FALSE;
         glGetShaderiv(*fragshader, GL_COMPILE_STATUS, &Result);
-        if( Result != GL_TRUE )
+        if (Result != GL_TRUE)
         {
             VPL_LOG_INFO("Error: Cannot compile fragment shader (" << fragfilename << ")!");
 
@@ -338,7 +348,7 @@ bool loadShaderProgram(const char * fragfilename, const char * vertfilename, uns
         *vertshader = glCreateShader(GL_VERTEX_SHADER);
     }
     shaderfile = readShader(vertfilename);
-    if( !shaderfile )
+    if (!shaderfile)
     {
         VPL_LOG_INFO("Error: Cannot find shader program (" << vertfilename << ")!");
         return false;
@@ -347,11 +357,11 @@ bool loadShaderProgram(const char * fragfilename, const char * vertfilename, uns
     free((void*)shaderfile);
     glCompileShader(*vertshader);
 
-    if( glGetShaderiv )
+    if (glGetShaderiv)
     {
         GLint Result = GL_FALSE;
         glGetShaderiv(*vertshader, GL_COMPILE_STATUS, &Result);
-        if( Result != GL_TRUE )
+        if (Result != GL_TRUE)
         {
             VPL_LOG_INFO("Error: Cannot compile vertex shader (" << vertfilename << ")!");
 
@@ -373,19 +383,30 @@ bool loadShaderProgram(const char * fragfilename, const char * vertfilename, uns
     glAttachShader(*program, *fragshader);
     glAttachShader(*program, *vertshader);
     glLinkProgram(*program);
-    if( glGetError() != GL_NO_ERROR )
+
+    if (glGetProgramiv)
     {
-        VPL_LOG_INFO("Error: Cannot link shader program (" << fragfilename << ")!");
-        return false;
+        GLint Result = GL_FALSE;
+        glGetProgramiv(*program, GL_LINK_STATUS, &Result);
+        if (Result != GL_TRUE)
+        {
+            VPL_LOG_INFO("Error: Cannot link shader program!");
+
+            GLchar buffer[2048 + 1];
+            GLsizei length;
+            GLsizei size = 2048;
+            glGetProgramInfoLog(*program, size, &length, buffer);
+
+            VPL_LOG_INFO("glGetProgramInfoLog():" << std::endl << buffer);
+
+            return false;
+        }
     }
 
     return true;
 }
 
-
 ///////////////////////////////////////////////////////////////////////////////
-//
-
 //! sqrt(2)/2
 const double Sqrt3Div2 = 0.866025404;
 
@@ -411,13 +432,13 @@ namespace conf
 
     // Rendering parameters for different quality levels.
     /////////////////////////////////////////////////////
-    
+
     //! Rendering resolution.
     const int RenderingSize[PSVolumeRendering::QUALITY_LEVELS]     = { 128, 256, 512, 1024 };
 
     //! 3D texture sampling step.
     const float TextureSampling[PSVolumeRendering::QUALITY_LEVELS] = { 0.7f, 0.6f, 0.5f, 0.4f };
-//    const float TextureSampling[PSVolumeRendering::QUALITY_LEVELS] = { 0.5f, 0.5f, 0.5f, 0.5f };
+    //const float TextureSampling[PSVolumeRendering::QUALITY_LEVELS] = { 0.5f, 0.5f, 0.5f, 0.5f };
 
     //! Input volume data sub-sampling coefficient.
     const float DataSampling[PSVolumeRendering::QUALITY_LEVELS]    = { 0.25f, 0.25f, 0.5f, 1.0f };
@@ -439,35 +460,26 @@ namespace conf
          1.0f,  1.0f, 0.0f,   -1.0f,  1.0f, 0.0f,   -1.0f, -1.0f, 0.0f,
         -1.0f, -1.0f, 0.0f,    1.0f, -1.0f, 0.0f,    1.0f,  1.0f, 0.0f
     };
-
-    static const float rectTexCoords[] = { 
-        1.0f, 1.0f, 0.0f,    0.0f, 1.0f, 0.0f,    0.0f, 0.0f, 0.0f,
-        0.0f, 0.0f, 0.0f,    1.0f, 0.0f, 0.0f,    1.0f, 1.0f, 0.0f
-    };
 }
 
-
 ///////////////////////////////////////////////////////////////////////////////
-//
-
 //! OpenGL variables used by the renderer.
 struct PSVolumeRendering::PSVolumeRenderingData
 {
     GLuint VolumeTexture, AuxVolumeTexture, CustomAuxVolumeTexture, LookUpTexture;
 
-    GLuint BicKerTexture, NoiseTexture, FBOTexture, FBOWorldCoords, RTTexture, DEPTexture;
-    GLuint OffScreenFramebuffer, ResizeFramebuffer;
+    GLuint BicKerTexture, NoiseTexture, RTTexture, DEPTexture, RaysStartEnd;
+    GLuint OffScreenFramebuffer0, OffScreenFramebuffer1, ResizeFramebuffer;
     
     GLuint GeometryDepthTexture;
 
     GLuint shaderFBO, PshaderFBO, shaderResize, PshaderResize;
     GLuint shaderRayCast[SHADERS_COUNT - 1], PshaderRayCast[SHADERS_COUNT - 1];
-    GLuint vertexShader;
+    GLuint vertexShader, fsQuadVS;
 
     GLuint VAOBox[conf::NumOfBatches], VAORect;
-    GLuint VBOBox[2 * conf::NumOfBatches], VBORect[2];
+    GLuint VBOBox[conf::NumOfBatches], VBORect;
 };
-
 
 //! Parameters of the rendering.
 struct PSVolumeRendering::PSVolumeRenderingParams
@@ -481,7 +493,7 @@ struct PSVolumeRendering::PSVolumeRenderingParams
 
     //! Real voxel size.
     float dX, dY, dZ;
-    
+
     //! Real volume size (num. of voxels * real voxel size).
     float RealXSize, RealYSize, RealZSize;
 
@@ -516,7 +528,7 @@ struct PSVolumeRendering::PSVolumeRenderingParams
 
     //! Cutting plane...
     float planeA, planeB, planeC, planeD, planeDeltaNear, planeDeltaFar;
-    
+
     ////////////////////////////////////////////////////////////////////////////
     // Volume rendering state variables
 
@@ -531,13 +543,14 @@ struct PSVolumeRendering::PSVolumeRenderingParams
 
     //! Currently selected color LUT.
     int selectedLut;
+
+    //! Inverted matrices for object-space position reconstruction of VR box
+    float invProjectionMatrix[16];
+    float invModelViewMatrix[16];
 };
 
-
 ///////////////////////////////////////////////////////////////////////////////
-//
-
-// constructor - initialize main variables
+//! constructor - initialize main variables
 PSVolumeRendering::PSVolumeRendering()
     : m_GlewInit(0)
     , m_maximumVolumeSize(-1)
@@ -553,7 +566,7 @@ PSVolumeRendering::PSVolumeRendering()
     , m_spVolumeData(NULL)
     , m_customShaderId(0)
 {
-	memset(m_spGLData,0,sizeof(PSVolumeRenderingData));
+    memset(m_spGLData, 0, sizeof(PSVolumeRenderingData));
 
     m_Thread.resume();
 
@@ -603,27 +616,24 @@ PSVolumeRendering::PSVolumeRendering()
 
     // Prepare the box bounding volume data
     prepareBox(conf::NumOfQuads);
-//    prepareBox(1);
+    //prepareBox(1);
 
     // create default lookup tables
     createLookupTables();
 }
 
-
 ///////////////////////////////////////////////////////////////////////////////
 //
-
 PSVolumeRendering::~PSVolumeRendering()
 {
     // Do not accept any changes
-//    m_Thread.terminate(true);
+    //m_Thread.terminate(true);
 
     // Stop the rendering
     release();
 
-	cleanup(); // we need that the destruction callback are called before destruction of this object
+    cleanup(); // we need that the destruction callback are called before destruction of this object
 }
-
 
 ///////////////////////////////////////////////////////////////////////////////
 // renderer plugin interface implementation
@@ -737,7 +747,7 @@ void PSVolumeRendering::internalDeleteCustomShader(unsigned int shaderId)
     {
         useCustomShader(0);
     }
-    
+
     std::vector<unsigned int> shaders = m_programShaders[shaderId];
     for (std::size_t i = 0; i < shaders.size(); ++i)
     {
@@ -785,6 +795,11 @@ void PSVolumeRendering::setParameter(unsigned int shaderId, std::string name, os
 {
     GLint pos = glGetUniformLocation(shaderId, name.c_str());
     glUniform4f(pos, value.x(), value.y(), value.z(), value.w());
+}
+
+void PSVolumeRendering::setParameter(unsigned int shaderId, std::string name, osg::Matrix value)
+{
+    setParameter(shaderId, name, &value, 1);
 }
 
 void PSVolumeRendering::setParameter(unsigned int shaderId, std::string name, int *value, int count)
@@ -838,6 +853,21 @@ void PSVolumeRendering::setParameter(unsigned int shaderId, std::string name, os
         temp[i * 4 + 3] = value[i][3];
     }
     glUniform4fv(pos, count, temp);
+    delete temp;
+}
+
+void PSVolumeRendering::setParameter(unsigned int shaderId, std::string name, osg::Matrix *value, int count)
+{
+    GLint pos = glGetUniformLocation(shaderId, name.c_str());
+    float *temp = new float[16 * count];
+    for (int m = 0; m < count; ++m)
+    {
+        for (int i = 0; i < 16; i++)
+        {
+            temp[m * 16 + i] = value[m].ptr()[i];
+        }
+    }
+    glUniformMatrix4fv(pos, count, false, temp);
     delete temp;
 }
 
@@ -1247,24 +1277,24 @@ void PSVolumeRendering::resetLookupTables()
 
 void PSVolumeRendering::updateLookupTables()
 {
-    updateLookupTable(m_lookupTables["MIP_SOFT"], m_internalLookupTables[MIP_SOFT]);
-    updateLookupTable(m_lookupTables["MIP_HARD"], m_internalLookupTables[MIP_HARD]);
-    updateLookupTable(m_lookupTables["XRAY_SOFT"], m_internalLookupTables[XRAY_SOFT]);
-    updateLookupTable(m_lookupTables["XRAY_HARD"], m_internalLookupTables[XRAY_HARD]);
-    updateLookupTable(m_lookupTables["SHA_AIR"], m_internalLookupTables[SHA_AIR]);
-    updateLookupTable(m_lookupTables["SHA_TRAN"], m_internalLookupTables[SHA_TRAN]);
-    updateLookupTable(m_lookupTables["SHA_BONE0"], m_internalLookupTables[SHA_BONE0]);
-    updateLookupTable(m_lookupTables["SHA_BONE1"], m_internalLookupTables[SHA_BONE1]);
-    updateLookupTable(m_lookupTables["SHA_BONE2"], m_internalLookupTables[SHA_BONE2]);
-    updateLookupTable(m_lookupTables["SURFACE_SKIN"], m_internalLookupTables[SURFACE_SKIN]);
-    updateLookupTable(m_lookupTables["SURFACE_BONE"], m_internalLookupTables[SURFACE_BONE]);
+    updateLookupTable(m_lookupTables["MIP_SOFT"],       m_internalLookupTables[MIP_SOFT],       m_skipConditions[MIP_SOFT]);
+    updateLookupTable(m_lookupTables["MIP_HARD"],       m_internalLookupTables[MIP_HARD],       m_skipConditions[MIP_HARD]);
+    updateLookupTable(m_lookupTables["XRAY_SOFT"],      m_internalLookupTables[XRAY_SOFT],      m_skipConditions[XRAY_SOFT]);
+    updateLookupTable(m_lookupTables["XRAY_HARD"],      m_internalLookupTables[XRAY_HARD],      m_skipConditions[XRAY_HARD]);
+    updateLookupTable(m_lookupTables["SHA_AIR"],        m_internalLookupTables[SHA_AIR],        m_skipConditions[SHA_AIR]);
+    updateLookupTable(m_lookupTables["SHA_TRAN"],       m_internalLookupTables[SHA_TRAN],       m_skipConditions[SHA_TRAN]);
+    updateLookupTable(m_lookupTables["SHA_BONE0"],      m_internalLookupTables[SHA_BONE0],      m_skipConditions[SHA_BONE0]);
+    updateLookupTable(m_lookupTables["SHA_BONE1"],      m_internalLookupTables[SHA_BONE1],      m_skipConditions[SHA_BONE1]);
+    updateLookupTable(m_lookupTables["SHA_BONE2"],      m_internalLookupTables[SHA_BONE2],      m_skipConditions[SHA_BONE2]);
+    updateLookupTable(m_lookupTables["SURFACE_SKIN"],   m_internalLookupTables[SURFACE_SKIN],   m_skipConditions[SURFACE_SKIN]);
+    updateLookupTable(m_lookupTables["SURFACE_BONE"],   m_internalLookupTables[SURFACE_BONE],   m_skipConditions[SURFACE_BONE]);
 
     setLut(getLut());
 }
 
-void PSVolumeRendering::updateLookupTable(CLookupTable &lookupTable, unsigned short *internalLookupTable)
+void PSVolumeRendering::updateLookupTable(CLookupTable &lookupTable, unsigned short *internalLookupTable, float &skipCondition)
 {
-    for (int i = 0; i < LUT_1D_SIZE; ++i)
+    for (int i = LUT_1D_SIZE - 1; i >= 0; --i)
     {
         double position = double(i) / double(LUT_1D_SIZE);
         osg::Vec4 color = lookupTable.color(position);
@@ -1273,6 +1303,11 @@ void PSVolumeRendering::updateLookupTable(CLookupTable &lookupTable, unsigned sh
         internalLookupTable[4 * i + 1] = static_cast<unsigned short>(color.g() * 65535.0);
         internalLookupTable[4 * i + 2] = static_cast<unsigned short>(color.b() * 65535.0);
         internalLookupTable[4 * i + 3] = static_cast<unsigned short>((1.0 - color.a()) * 65535.0);
+
+        if (color.a() > 0.0f)
+        {
+            skipCondition = position;
+        }
     }
 }
 
@@ -1281,34 +1316,28 @@ void PSVolumeRendering::internalDeleteCustomVolume(unsigned int volumeId)
     glDeleteTextures(1, &volumeId);
 }
 
-
 ///////////////////////////////////////////////////////////////////////////////
 //
-
 float PSVolumeRendering::getRealXSize() const
 {
     return m_spParams->RealXSize;
 }
-
 
 float PSVolumeRendering::getRealYSize() const
 {
     return m_spParams->RealYSize;
 }
 
-
 float PSVolumeRendering::getRealZSize() const
 {
     return m_spParams->RealZSize;
 }
 
-
 ///////////////////////////////////////////////////////////////////////////////
 //
-
 void PSVolumeRendering::redraw(bool bEraseBackground)
 {
-    if( m_pCanvas )
+    if (m_pCanvas)
     {
         m_pCanvas->Refresh(bEraseBackground);
     }
@@ -1316,7 +1345,6 @@ void PSVolumeRendering::redraw(bool bEraseBackground)
 
 ///////////////////////////////////////////////////////////////////////////////
 //
-
 void PSVolumeRendering::enable(bool bEnable)
 {
     m_Enabled = bEnable;
@@ -1336,17 +1364,14 @@ void PSVolumeRendering::enable(bool bEnable)
     }
 }
 
-
 ///////////////////////////////////////////////////////////////////////////////
-//
-
 // are we able to render?
 bool PSVolumeRendering::canStart()
 {
     tLock Lock(*this);
 
     // Set the current OpenGL rendering context
-    if( !m_pCanvas->getGraphicWindow()->makeCurrentImplementation() )
+    if (!m_pCanvas->getGraphicWindow()->makeCurrentImplementation())
     {
         return false;
     }
@@ -1359,14 +1384,11 @@ bool PSVolumeRendering::canStart()
     return bResult;
 }
 
-
 ///////////////////////////////////////////////////////////////////////////////
-//
-
 // take CDensityVolume and copy data and information
 void PSVolumeRendering::uploadData(vpl::img::CDensityVolume * pData)
 {
-    if( !pData )
+    if (!pData)
     {
         return;
     }
@@ -1389,25 +1411,23 @@ void PSVolumeRendering::uploadData(vpl::img::CDensityVolume * pData)
     setAndSignalFlag(DATA_INVALID | LUT_INVALID | OSR_INVALID);
 }
 
-
 ///////////////////////////////////////////////////////////////////////////////
-//
-
 //! - Updates specified surface
 void PSVolumeRendering::updateRenderTargets()
 {
     setFlag(OSR_INVALID);
 }
 
-
 ///////////////////////////////////////////////////////////////////////////////
 //
 void PSVolumeRendering::createLookupTables()
 {
     m_internalLookupTables.clear();
+    m_skipConditions.clear();
     for (int i = 0; i < LOOKUPS_COUNT; ++i)
     {
         m_internalLookupTables.push_back(new unsigned short[4 * LUT_1D_SIZE]);
+        m_skipConditions.push_back(0.0f);
     }
 
     CLookupTable &mipSoft = m_lookupTables["MIP_SOFT"];
@@ -1421,7 +1441,7 @@ void PSVolumeRendering::createLookupTables()
     CLookupTable &shadingBone2 = m_lookupTables["SHA_BONE2"];
     CLookupTable &surfaceSkin = m_lookupTables["SURFACE_SKIN"];
     CLookupTable &surfaceBone = m_lookupTables["SURFACE_BONE"];
-    
+
     mipSoft.setName("MIP soft");
     mipSoft.clear();
     mipSoft.addComponent();
@@ -1537,10 +1557,7 @@ void PSVolumeRendering::createLookupTables()
     updateLookupTables();
 }
 
-
 ///////////////////////////////////////////////////////////////////////////////
-//
-
 // deallocate all used resources
 void PSVolumeRendering::release()
 {
@@ -1557,7 +1574,7 @@ void PSVolumeRendering::release()
     m_Enabled = false;
     m_Error = DATA_NOT_SPECIFIED;
 
-    if( testFlag(INITIALIZED) )
+    if (testFlag(INITIALIZED))
     {
         // delete textures
         glDeleteTextures(1, &m_spGLData->VolumeTexture);
@@ -1565,9 +1582,8 @@ void PSVolumeRendering::release()
         glDeleteTextures(1, &m_spGLData->AuxVolumeTexture);
         glDeleteTextures(1, &m_spGLData->CustomAuxVolumeTexture);
 
-        glDeleteTextures(1, &m_spGLData->FBOTexture);
-        glDeleteTextures(1, &m_spGLData->FBOWorldCoords);
-		glDeleteTextures(1, &m_spGLData->BicKerTexture);
+        glDeleteTextures(1, &m_spGLData->RaysStartEnd);
+        glDeleteTextures(1, &m_spGLData->BicKerTexture);
         glDeleteTextures(1, &m_spGLData->RTTexture);
         glDeleteTextures(1, &m_spGLData->DEPTexture);
         glDeleteTextures(1, &m_spGLData->NoiseTexture);
@@ -1575,18 +1591,20 @@ void PSVolumeRendering::release()
         glDeleteTextures(1, &m_spGLData->GeometryDepthTexture);
 
         // delete framebuffers
-        glDeleteFramebuffersEXT(1, &m_spGLData->OffScreenFramebuffer);
+        glDeleteFramebuffersEXT(1, &m_spGLData->OffScreenFramebuffer0);
+        glDeleteFramebuffersEXT(1, &m_spGLData->OffScreenFramebuffer1);
         glDeleteFramebuffersEXT(1, &m_spGLData->ResizeFramebuffer);
 
         // delete shaders
         glDeleteProgram(m_spGLData->PshaderFBO);
-        for( int i = 0; i < SHADERS_COUNT - 1; ++i )
+        for (int i = 0; i < SHADERS_COUNT - 1; ++i)
         {
             glDeleteProgram(m_spGLData->PshaderRayCast[i]);
             glDeleteShader(m_spGLData->shaderRayCast[i]);
         }
         glDeleteProgram(m_spGLData->PshaderResize);
         glDeleteShader(m_spGLData->vertexShader);
+        glDeleteShader(m_spGLData->fsQuadVS);
 
         // VAO
         glDeleteVertexArraysX(conf::NumOfBatches, m_spGLData->VAOBox);
@@ -1595,32 +1613,29 @@ void PSVolumeRendering::release()
 #endif
 
         // VBO
-        glDeleteBuffersARB(2 * conf::NumOfBatches, m_spGLData->VBOBox);
-        glDeleteBuffersARB(2, m_spGLData->VBORect);
+        glDeleteBuffersARB(conf::NumOfBatches, m_spGLData->VBOBox);
+        glDeleteBuffersARB(1, &m_spGLData->VBORect);
     }
 
     // Clear all flags
     m_Flags = PSVR_NO_FLAGS;
 }
 
-
 ///////////////////////////////////////////////////////////////////////////////
-//
-
 // Faster gauss filter implementation
 float getFilteredVal(vpl::img::CDensityVolume * pVolume, int x, int y, int z)
 {
-    vpl::tSize zSums[3] = {};
+    vpl::tSize zSums[3] = { };
     vpl::tSize xOff = pVolume->getXOffset();
-    for(int dz = -1; dz <= 1; dz++)
+    for (int dz = -1; dz <= 1; dz++)
     {
-        vpl::tSize ySums[3] = {};
-        for(int dy = -1; dy <= 1; dy++)
+        vpl::tSize ySums[3] = { };
+        for (int dy = -1; dy <= 1; dy++)
         {
-            vpl::tSize idx = pVolume->getIdx(x, y+dy, z+dz);
-            ySums[dy+1] = pVolume->at(idx - xOff) + 3 * pVolume->at(idx) + pVolume->at(idx + xOff);
+            vpl::tSize idx = pVolume->getIdx(x, y + dy, z + dz);
+            ySums[dy + 1] = pVolume->at(idx - xOff) + 3 * pVolume->at(idx) + pVolume->at(idx + xOff);
         }
-        zSums[dz+1] = ySums[0] + 3 * ySums[1] + ySums[2];
+        zSums[dz + 1] = ySums[0] + 3 * ySums[1] + ySums[2];
     }
     //float val = pVolume->at(x,y,z);
     float sum = (zSums[0] + 3 * zSums[1] + zSums[2]) / 125.0;
@@ -1633,7 +1648,7 @@ bool PSVolumeRendering::internalUploadData()
     data::CObjectPtr<data::CDensityData> spVolumeData(APP_STORAGE.getEntry(VPL_SIGNAL(SigGetActiveDataSet).invoke2()));
     workingPtr = spVolumeData.get();
 
-    if( !workingPtr || workingPtr->getZSize() <= 0 )
+    if (!workingPtr || workingPtr->getZSize() <= 0)
     {
         return false;
     }
@@ -1654,8 +1669,8 @@ bool PSVolumeRendering::internalUploadData()
     float SubSampling = conf::DataSampling[m_spParams->currentQuality];
 
     // Sub-sampling...
-//    if( SubSampling < 1.0f )
-    if( SubSampling != 1.0f )
+    //if (SubSampling < 1.0f)
+    if (SubSampling != 1.0f)
     {
         m_spParams->XSize = vpl::math::round2Int(float(m_spParams->XSize) * SubSampling);
         m_spParams->YSize = vpl::math::round2Int(float(m_spParams->YSize) * SubSampling);
@@ -1718,7 +1733,7 @@ bool PSVolumeRendering::internalUploadData()
     m_spParams->AuxTexZSize = float(m_spParams->ZSize) / float(m_spParams->AuxZSize * 8);
 
     // Clear the volume
-    m_AuxVolumeData.fillEntire( vpl::img::tRGBPixel(0) );
+    m_AuxVolumeData.fillEntire(vpl::img::tRGBPixel(0));
 
     // Scaling factor
     static const vpl::img::tDensityPixel voxelMax = vpl::img::CPixelTraits<vpl::img::tDensityPixel>::getPixelMax();
@@ -1731,36 +1746,36 @@ bool PSVolumeRendering::internalUploadData()
     static const float skipScale = 1.0f;
 #endif // FULL_3D_TEXTURE
 
-//    osg::Timer timer;
-//    osg::Timer_t t1 = timer.tick();
+    //osg::Timer timer;
+    //osg::Timer_t t1 = timer.tick();
 
     // Check if the data are empty (i.e. reset of the storage, etc.)
     vpl::img::tDensityPixel MaxValue = vpl::img::getMax<vpl::img::tDensityPixel>(*workingPtr);
     bool bEmptyData = (MaxValue == voxelMin) ? true : false;
 
     // No need to interpolate and copy the data if they are empty
-    if( bEmptyData )
+    if (bEmptyData)
     {
         // Just clear the internal volume
-        m_VolumeData.fillEntire( tVolumeData::tVoxel(0) );
+        m_VolumeData.fillEntire(tVolumeData::tVoxel(0));
     }
     else
     {
         // Copy (and interpolate) data voxel by voxel
-//        if( SubSampling < 1.0f )
-        if( SubSampling != 1.0f )
+        //if (SubSampling < 1.0f)
+        if (SubSampling != 1.0f)
         {
             double XStep = double(workingPtr->getXSize() - 1) / (m_spParams->XSize - 1);
             double YStep = double(workingPtr->getYSize() - 1) / (m_spParams->YSize - 1);
             double ZStep = double(workingPtr->getZSize() - 1) / (m_spParams->ZSize - 1);
 #pragma omp parallel for schedule(static) default(shared)
-            for( vpl::tSize z = 0; z < m_spParams->ZSize; z++ )
+            for (vpl::tSize z = 0; z < m_spParams->ZSize; z++)
             {
                 vpl::img::CPoint3D Point(0.0, 0.0, z * ZStep);
-                for( vpl::tSize y = 0; y < m_spParams->YSize; y++, Point.y() += YStep )
+                for (vpl::tSize y = 0; y < m_spParams->YSize; y++, Point.y() += YStep)
                 {
                     Point.x() = 0.0;
-                    for( vpl::tSize x = 0; x < m_spParams->XSize; x++, Point.x() += XStep )
+                    for (vpl::tSize x = 0; x < m_spParams->XSize; x++, Point.x() += XStep)
                     {
                         tVolumeData::tVoxel normalizedPixel = tVolumeData::tVoxel(float(workingPtr->interpolate(Point) - voxelMin) * dataScale);
                         m_VolumeData(x, y, z) = normalizedPixel;
@@ -1783,11 +1798,11 @@ bool PSVolumeRendering::internalUploadData()
 #endif
 
 #pragma omp parallel for schedule(static) default(shared)
-            for( vpl::tSize z = 0; z < m_spParams->ZSize; z++ )
+            for (vpl::tSize z = 0; z < m_spParams->ZSize; z++)
             {
-                for( vpl::tSize y = 0; y < m_spParams->YSize; y++ )
+                for (vpl::tSize y = 0; y < m_spParams->YSize; y++)
                 {
-                    for( vpl::tSize x = 0; x < m_spParams->XSize; x++ )
+                    for (vpl::tSize x = 0; x < m_spParams->XSize; x++)
                     {
 #ifdef MDSTK_GAUSS
                         float Pixel = float(GaussFilter.getResponse(*workingPtr, x, y, z));
@@ -1819,13 +1834,13 @@ bool PSVolumeRendering::internalUploadData()
         vpl::img::tRGBPixel::tComponent pixelMax = vpl::img::CPixelTraits<vpl::img::tRGBPixel>::getPixelMax().r();
 
 #pragma omp parallel for schedule(static,8) default(shared)
-        for( vpl::tSize z = 0; z < m_spParams->ZSize; z++ )
+        for (vpl::tSize z = 0; z < m_spParams->ZSize; z++)
         {
             vpl::tSize sz = z / 8;
-            for( vpl::tSize y = 0; y < m_spParams->YSize; y++ )
+            for (vpl::tSize y = 0; y < m_spParams->YSize; y++)
             {
                 vpl::tSize sy = y / 8;
-                for( vpl::tSize x = 0; x < m_spParams->XSize; x++ )
+                for (vpl::tSize x = 0; x < m_spParams->XSize; x++)
                 {
                     vpl::tSize sx = x / 8;
                     vpl::img::tRGBPixel& RGBPixel = m_AuxVolumeData(sx, sy, sz);
@@ -1840,13 +1855,13 @@ bool PSVolumeRendering::internalUploadData()
 
         // Skipping volume - gradient magnitude
 #pragma omp parallel for schedule(static,8) default(shared)
-        for( vpl::tSize z = 1; z < (m_spParams->ZSize - 1); z += 2 )
+        for (vpl::tSize z = 1; z < (m_spParams->ZSize - 1); z += 2)
         {
             vpl::tSize sz = z / 8;
-            for( vpl::tSize y = 1; y < (m_spParams->YSize - 1); y += 2 )
+            for (vpl::tSize y = 1; y < (m_spParams->YSize - 1); y += 2)
             {
                 vpl::tSize sy = y / 8;
-                for( vpl::tSize x = 1; x < (m_spParams->XSize - 1); x += 2 )
+                for (vpl::tSize x = 1; x < (m_spParams->XSize - 1); x += 2)
                 {
                     vpl::tSize sx = x / 8;
                     vpl::img::tRGBPixel& RGBPixel = m_AuxVolumeData(sx, sy, sz);
@@ -1863,15 +1878,14 @@ bool PSVolumeRendering::internalUploadData()
         }
     }
 
-//    osg::Timer_t t2 = timer.tick();
-//    double diff1 = timer.delta_m(t1, t2);
-//    osg::Timer_t t3 = timer.tick();
-//    double diff2 = timer.delta_m(t2, t3);
+    //osg::Timer_t t2 = timer.tick();
+    //double diff1 = timer.delta_m(t1, t2);
+    //osg::Timer_t t3 = timer.tick();
+    //double diff2 = timer.delta_m(t2, t3);
 
     // O.K.
     return true;
 }
-
 
 ///////////////////////////////////////////////////////////////////////////////
 //
@@ -1952,10 +1966,9 @@ void PSVolumeRendering::storeVolumeToTexture(vpl::img::CVolume<vpl::img::tRGBPix
 
 ///////////////////////////////////////////////////////////////////////////////
 //
-
 bool PSVolumeRendering::internalCanStart()
 {
-    if( !m_pCanvas )
+    if (!m_pCanvas)
     {
         m_Error |= UNDEFINED_GL_CANVAS;
         VPL_LOG_INFO("Error: OpengGL canvas was not set!");
@@ -1968,14 +1981,14 @@ bool PSVolumeRendering::internalCanStart()
         vr::CGraficCardDesc Desc;
         //std::string ssName = Desc.getAdapterName();
         unsigned int uiMem = Desc.getAdapterRAM();
-        if( uiMem < 256 )
+        if (uiMem < 256)
         {
             m_Error |= UNSUPPORTED_GRAPHIC_CARD;
             VPL_LOG_INFO("Error: Not enough graphic memory!");
             return false;
         }
     }
-    catch( ... )
+    catch (...)
     {
         //m_Error |= UNSUPPORTED_GRAPHIC_CARD;
         //VPL_LOG_INFO("Error: Cannot inspect your graphic card!");
@@ -1983,16 +1996,16 @@ bool PSVolumeRendering::internalCanStart()
     }
 
     // First-time init of the GLEW library
-    if( m_GlewInit == 0 )
+    if (m_GlewInit == 0)
     {
         m_GlewInit = -1;
         glewExperimental = GL_TRUE;
-        if( glewInit() == GLEW_OK )
+        if (glewInit() == GLEW_OK)
         {
             m_GlewInit = 1;
         }
     }
-    if( m_GlewInit < 0 )
+    if (m_GlewInit < 0)
     {
         m_Error |= GLEW_INIT_FAILED;
         VPL_LOG_INFO("Error: Cannot initialize the GLEW library!");
@@ -2034,32 +2047,32 @@ bool PSVolumeRendering::internalCanStart()
     }
 
     // Check the OpenGL version
-    if( !glewIsSupported("GL_VERSION_2_1")
-        || !glewIsSupported("GL_ARB_shading_language_100")
-        || !glewIsSupported("GL_ARB_vertex_buffer_object")
-        || !glewIsSupported("GL_ARB_vertex_array_object")
-        || !glewIsSupported("GL_EXT_framebuffer_object")
-//        || !glewIsSupported("GL_EXT_gpu_shader4")
-        || !glTexImage3D || !glCreateShader || !glGetUniformLocation || !glFramebufferTexture2DEXT || !glGenBuffers 
-        )
+    if (!glewIsSupported("GL_VERSION_2_1") ||
+        !glewIsSupported("GL_ARB_shading_language_100") ||
+        !glewIsSupported("GL_ARB_vertex_buffer_object") ||
+        !glewIsSupported("GL_ARB_vertex_array_object") ||
+        !glewIsSupported("GL_EXT_framebuffer_object") ||
+        //!glewIsSupported("GL_EXT_gpu_shader4") ||
+        !glTexImage3D || !glCreateShader || !glGetUniformLocation ||
+        !glFramebufferTexture2DEXT || !glGenBuffers)
     {
         m_Error |= UNSUPPORTED_SHADER_MODEL;
         VPL_LOG_INFO("Error: Unsupported graphic hardware (OpenGL 2.1 required)!");
-		if (!glewIsSupported("GL_VERSION_2_1"))
-			VPL_LOG_INFO("GL_VERSION_2_1 not supported");
-		if (!glewIsSupported("GL_ARB_shading_language_100"))
-			VPL_LOG_INFO("GL_ARB_shading_language_100 not supported");
-		if (!glewIsSupported("GL_ARB_vertex_buffer_object"))
-			VPL_LOG_INFO("GL_ARB_vertex_buffer_object not supported");
-		if (!glewIsSupported("GL_ARB_vertex_array_object"))
-			VPL_LOG_INFO("GL_ARB_vertex_array_object not supported");
-		if (!glewIsSupported("GL_EXT_framebuffer_object"))
-			VPL_LOG_INFO("GL_EXT_framebuffer_object not supported");
-		if (!glTexImage3D || !glCreateShader || !glGetUniformLocation || !glFramebufferTexture2DEXT || !glGenBuffers)
-			VPL_LOG_INFO("Some gl functions missing");
+        if (!glewIsSupported("GL_VERSION_2_1"))
+            VPL_LOG_INFO("GL_VERSION_2_1 not supported");
+        if (!glewIsSupported("GL_ARB_shading_language_100"))
+            VPL_LOG_INFO("GL_ARB_shading_language_100 not supported");
+        if (!glewIsSupported("GL_ARB_vertex_buffer_object"))
+            VPL_LOG_INFO("GL_ARB_vertex_buffer_object not supported");
+        if (!glewIsSupported("GL_ARB_vertex_array_object"))
+            VPL_LOG_INFO("GL_ARB_vertex_array_object not supported");
+        if (!glewIsSupported("GL_EXT_framebuffer_object"))
+            VPL_LOG_INFO("GL_EXT_framebuffer_object not supported");
+        if (!glTexImage3D || !glCreateShader || !glGetUniformLocation || !glFramebufferTexture2DEXT || !glGenBuffers)
+            VPL_LOG_INFO("Some gl functions missing");
         return false;
     }
-    if( sizeof(tCoords) != (3 * sizeof(float)) )
+    if (sizeof(tCoords) != (3 * sizeof(float)))
     {
         m_Error |= UNSUPPORTED_SHADER_MODEL;
         VPL_LOG_INFO("Error: Unsupported memory alignment!");
@@ -2070,10 +2083,7 @@ bool PSVolumeRendering::internalCanStart()
     return true;
 }
 
-
 ///////////////////////////////////////////////////////////////////////////////
-//
-
 // first-time initialization of OpenGL state, textures, shaders, lookups, ...
 bool PSVolumeRendering::internalInitRendering()
 {
@@ -2094,7 +2104,7 @@ bool PSVolumeRendering::internalInitRendering()
     m_ErrorStrings.clear();
 
     // Already initialized?
-    if( testFlag(INITIALIZED) )
+    if (testFlag(INITIALIZED))
     {
         return true;
     }
@@ -2103,11 +2113,11 @@ bool PSVolumeRendering::internalInitRendering()
     int glerr = 0;
 
     // general OpenGL settings
-////    glClearColor(0.2f, 0.2f, 0.4f, 0.0f);
-//    glClearDepth(1.0f);
-//    glEnable(GL_DEPTH_TEST);
-////    glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST);
-//    glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_FASTEST);
+    //glClearColor(0.2f, 0.2f, 0.4f, 0.0f);
+    //glClearDepth(1.0f);
+    //glEnable(GL_DEPTH_TEST);
+    //glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST);
+    //glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_FASTEST);
 
     // generate textures
     glGenTextures(1, &m_spGLData->VolumeTexture);
@@ -2115,9 +2125,8 @@ bool PSVolumeRendering::internalInitRendering()
     glGenTextures(1, &m_spGLData->AuxVolumeTexture);
     glGenTextures(1, &m_spGLData->CustomAuxVolumeTexture);
 
-    glGenTextures(1, &m_spGLData->FBOTexture);
-    glGenTextures(1, &m_spGLData->FBOWorldCoords);
-	glGenTextures(1, &m_spGLData->BicKerTexture);
+    glGenTextures(1, &m_spGLData->RaysStartEnd);
+    glGenTextures(1, &m_spGLData->BicKerTexture);
     glGenTextures(1, &m_spGLData->RTTexture);
     glGenTextures(1, &m_spGLData->DEPTexture);
     glGenTextures(1, &m_spGLData->NoiseTexture);
@@ -2125,12 +2134,12 @@ bool PSVolumeRendering::internalInitRendering()
     glGenTextures(1, &m_spGLData->GeometryDepthTexture);
 
     // generate framebuffers
-    glGenFramebuffersEXT(1, &m_spGLData->OffScreenFramebuffer);
+    glGenFramebuffersEXT(1, &m_spGLData->OffScreenFramebuffer0);
+    glGenFramebuffersEXT(1, &m_spGLData->OffScreenFramebuffer1);
     glGenFramebuffersEXT(1, &m_spGLData->ResizeFramebuffer);
-    
+
     // Setup 3D texture
     ///////////////////////////////////////////////////////////////////////////
-
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_3D, m_spGLData->VolumeTexture);
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
@@ -2140,7 +2149,7 @@ bool PSVolumeRendering::internalInitRendering()
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
 
     // Create the texture
-//    glPixelStorei(GL_UNPACK_ALIGNMENT, 2);
+    //glPixelStorei(GL_UNPACK_ALIGNMENT, 2);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
     storeVolumeToTexture(m_VolumeData);
 #ifndef __APPLE__
@@ -2163,7 +2172,6 @@ bool PSVolumeRendering::internalInitRendering()
 
     // Setup skipping 3D texture
     ///////////////////////////////////////////////////////////////////////////
-
     glActiveTexture(GL_TEXTURE1);
     glBindTexture(GL_TEXTURE_3D, m_spGLData->AuxVolumeTexture);
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
@@ -2173,7 +2181,7 @@ bool PSVolumeRendering::internalInitRendering()
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
 
     // Create the texture
-//    glPixelStorei(GL_UNPACK_ALIGNMENT, 2);
+    //glPixelStorei(GL_UNPACK_ALIGNMENT, 2);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
     storeVolumeToTexture(m_AuxVolumeData);
 #ifndef __APPLE__
@@ -2196,33 +2204,31 @@ bool PSVolumeRendering::internalInitRendering()
 
     // LUT texture
     ///////////////////////////////////////////////////////////////////////////
-
     // setup 1D lookup texture in OpenGL and pre-load the first one
     glActiveTexture(GL_TEXTURE2);
     glBindTexture(GL_TEXTURE_1D, m_spGLData->LookUpTexture);
-//    glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-//    glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    //glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    //glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-//    glPixelStorei(GL_UNPACK_ALIGNMENT, 2);
+    //glPixelStorei(GL_UNPACK_ALIGNMENT, 2);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
     glTexImage1D(GL_TEXTURE_1D, 0, GL_RGBA16, LUT_1D_SIZE, 0, GL_RGBA, GL_UNSIGNED_SHORT, m_internalLookupTables[0]);
 
     // load shaders from string constants
     ///////////////////////////////////////////////////////////////////////////
-
 #ifdef LOAD_SHADERS
-    if( !loadShaderProgram("shaders2/fbo.frag", "shaders2/simple.vert", &m_spGLData->shaderFBO, &m_spGLData->vertexShader, &m_spGLData->PshaderFBO) )
+    if (!loadShaderProgram("shaders2/fbo.frag", "shaders2/simple.vert", &m_spGLData->shaderFBO, &m_spGLData->vertexShader, &m_spGLData->PshaderFBO))
     {
         m_Error |= INIT_FAILED;
         m_ErrorStrings.push_back("Error: Cannot initialize shader (off-screen rendering)!");
         VPL_LOG_INFO(m_ErrorStrings.back().c_str());
         retVal = false;
     }
-    for( int i = 0; i < SHADERS_COUNT - 1; ++i )
+    for (int i = 0; i < SHADERS_COUNT - 1; ++i)
     {
-        if( !loadShaderProgram(conf::shaderFilenames[i], "shaders2/simple.vert", &m_spGLData->shaderRayCast[i], &m_spGLData->vertexShader, &m_spGLData->PshaderRayCast[i]) )
+        if (!loadShaderProgram(conf::shaderFilenames[i], "shaders2/simple.vert", &m_spGLData->shaderRayCast[i], &m_spGLData->vertexShader, &m_spGLData->PshaderRayCast[i]))
         {
             m_Error |= INIT_FAILED;
             m_ErrorStrings.push_back("Error: Cannot initialize shader (volume rendering)!");
@@ -2230,7 +2236,7 @@ bool PSVolumeRendering::internalInitRendering()
             retVal = false;
         }
     }
-    if( !loadShaderProgram("shaders2/resize2.frag", &m_spGLData->shaderResize, &m_spGLData->PshaderResize) )
+    if (!loadShaderProgram("shaders2/resize2.frag", "shaders2/fsquad.vert", &m_spGLData->shaderResize, &m_spGLData->fsQuadVS, &m_spGLData->PshaderResize))
     {
         m_Error |= INIT_FAILED;
         m_ErrorStrings.push_back("Error: Cannot initialize shader (image composition)!");
@@ -2238,49 +2244,49 @@ bool PSVolumeRendering::internalInitRendering()
         retVal = false;
     }
 #else
-    if( !createShaderProgram(shader::OSRT, shader::Vert, &m_spGLData->shaderFBO, &m_spGLData->vertexShader, &m_spGLData->PshaderFBO) )
+    if (!createShaderProgram(shader::OSRT, shader::Vert, &m_spGLData->shaderFBO, &m_spGLData->vertexShader, &m_spGLData->PshaderFBO))
     {
         m_Error |= INIT_FAILED;
         m_ErrorStrings.push_back("Error: Cannot initialize shader (off-screen rendering)!");
         VPL_LOG_INFO(m_ErrorStrings.back().c_str());
         retVal = false;
     }
-    if( !createShaderProgram(shader::XRay, shader::Vert, &m_spGLData->shaderRayCast[0], &m_spGLData->vertexShader, &m_spGLData->PshaderRayCast[0]) )
+    if (!createShaderProgram(shader::XRay, shader::Vert, &m_spGLData->shaderRayCast[0], &m_spGLData->vertexShader, &m_spGLData->PshaderRayCast[0]))
     {
         m_Error |= INIT_FAILED;
         m_ErrorStrings.push_back("Error: Cannot initialize shader (x-ray)!");
         VPL_LOG_INFO(m_ErrorStrings.back().c_str());
         retVal = false;
     }
-    if( !createShaderProgram(shader::MAX_IP, shader::Vert, &m_spGLData->shaderRayCast[1], &m_spGLData->vertexShader, &m_spGLData->PshaderRayCast[1]) )
+    if (!createShaderProgram(shader::MAX_IP, shader::Vert, &m_spGLData->shaderRayCast[1], &m_spGLData->vertexShader, &m_spGLData->PshaderRayCast[1]))
     {
         m_Error |= INIT_FAILED;
         m_ErrorStrings.push_back("Error: Cannot initialize shader (MIP)!");
         VPL_LOG_INFO(m_ErrorStrings.back().c_str());
         retVal = false;
     }
-    if( !createShaderProgram(shader::Shade, shader::Vert, &m_spGLData->shaderRayCast[2], &m_spGLData->vertexShader, &m_spGLData->PshaderRayCast[2]) )
+    if (!createShaderProgram(shader::Shade, shader::Vert, &m_spGLData->shaderRayCast[2], &m_spGLData->vertexShader, &m_spGLData->PshaderRayCast[2]))
     {
         m_Error |= INIT_FAILED;
         m_ErrorStrings.push_back("Error: Cannot initialize shader (shading)!");
         VPL_LOG_INFO(m_ErrorStrings.back().c_str());
         retVal = false;
     }
-    if( !createShaderProgram(shader::Add, shader::Vert, &m_spGLData->shaderRayCast[3], &m_spGLData->vertexShader, &m_spGLData->PshaderRayCast[3]) )
+    if (!createShaderProgram(shader::Add, shader::Vert, &m_spGLData->shaderRayCast[3], &m_spGLData->vertexShader, &m_spGLData->PshaderRayCast[3]))
     {
         m_Error |= INIT_FAILED;
         m_ErrorStrings.push_back("Error: Cannot initialize shader (add)!");
         VPL_LOG_INFO(m_ErrorStrings.back().c_str());
         retVal = false;
     }
-    if( !createShaderProgram(shader::Surface, shader::Vert, &m_spGLData->shaderRayCast[4], &m_spGLData->vertexShader, &m_spGLData->PshaderRayCast[4]) )
+    if (!createShaderProgram(shader::Surface, shader::Vert, &m_spGLData->shaderRayCast[4], &m_spGLData->vertexShader, &m_spGLData->PshaderRayCast[4]))
     {
         m_Error |= INIT_FAILED;
         m_ErrorStrings.push_back("Error: Cannot initialize shader (surface)!");
         VPL_LOG_INFO(m_ErrorStrings.back().c_str());
         retVal = false;
     }
-    if( !createShaderProgram(shader::Resize, &m_spGLData->shaderResize, &m_spGLData->PshaderResize) )
+    if (!createShaderProgram(shader::Resize, shader::FSQuadVS, &m_spGLData->shaderResize, &m_spGLData->fsQuadVS, &m_spGLData->PshaderResize))
     {
         m_Error |= INIT_FAILED;
         m_ErrorStrings.push_back("Error: Cannot initialize shader (image composition)!");
@@ -2291,24 +2297,23 @@ bool PSVolumeRendering::internalInitRendering()
 
     // noise texture
     ///////////////////////////////////////////////////////////////////////////
-
     // Prepare a random noise texture
     vpl::math::CNormalPRNG Generator;
-    for( int i = 0; i < NOISE_SIZE * NOISE_SIZE; ++i )
+    for (int i = 0; i < NOISE_SIZE * NOISE_SIZE; ++i)
     {
         noise[i] = 128 + (unsigned char)Generator.random(0.0, conf::NoiseSigma);
     }
-    
+
     // setup the noise texture
     glActiveTexture(GL_TEXTURE3);
     glBindTexture(GL_TEXTURE_2D, m_spGLData->NoiseTexture);
-//    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-//    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    //glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    //glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-//    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    //glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE8, NOISE_SIZE, NOISE_SIZE, 0, GL_LUMINANCE, GL_UNSIGNED_BYTE, noise);
 
@@ -2317,29 +2322,17 @@ bool PSVolumeRendering::internalInitRendering()
 
     // setup addition textures used for off-screen rendering
     ///////////////////////////////////////////////////////////////////////////
-
-    // fbo - off screen texture render targer for back culling - texture coords
-    glActiveTexture(GL_TEXTURE4);
-    glBindTexture(GL_TEXTURE_2D, m_spGLData->FBOTexture);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB32F_ARB, renderingSize.x(), renderingSize.y(), 0, GL_RGB, GL_FLOAT, NULL);
-
-    // fbo - off screen texture render targer for back culling - world coords
-    glActiveTexture(GL_TEXTURE7);
-    glBindTexture(GL_TEXTURE_2D, m_spGLData->FBOWorldCoords);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB32F_ARB, renderingSize.x(), renderingSize.y(), 0, GL_RGB, GL_FLOAT, NULL);
+    // fbo - off screen texture render targer for back culling - texture coords, world coords of rays' starts and texture coords, world coords of rays' ends
+    glBindTexture(GL_TEXTURE_3D, m_spGLData->RaysStartEnd);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 2);
+    glTexImage3D(GL_TEXTURE_3D, 0, GL_RGB32F_ARB, renderingSize.x(), renderingSize.y(), 2, 0, GL_RGB, GL_FLOAT, NULL);
 
     // render target texture
-    glActiveTexture(GL_TEXTURE4);
     glBindTexture(GL_TEXTURE_2D, m_spGLData->RTTexture);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
@@ -2349,7 +2342,6 @@ bool PSVolumeRendering::internalInitRendering()
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB16F_ARB, renderingSize.x(), renderingSize.y(), 0, GL_RGB, GL_FLOAT, NULL);
 
     // depth target texture
-    glActiveTexture(GL_TEXTURE5);
     glBindTexture(GL_TEXTURE_2D, m_spGLData->DEPTexture);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -2369,16 +2361,15 @@ bool PSVolumeRendering::internalInitRendering()
 
     // create and upload 1D resize kernel texture (used for image interpolation)
     ///////////////////////////////////////////////////////////////////////////
-
     #define LUTSIZE 512
     static float klut[LUTSIZE];
-    for( int i = 0; i < LUTSIZE; i++ )
+    for (int i = 0; i < LUTSIZE; i++)
     {
         double X = double(i) / double(LUTSIZE) * 2.0;
         klut[i] = float((std::sin(X * vpl::math::PI) / (X * vpl::math::PI)) * (std::sin((X * 0.5f) * vpl::math::PI) / ((X * 0.5) * vpl::math::PI)));
     }
     klut[0] = 1.0f;
-    
+
     glActiveTexture(GL_TEXTURE6);
     glBindTexture(GL_TEXTURE_1D, m_spGLData->BicKerTexture);
     glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
@@ -2391,58 +2382,48 @@ bool PSVolumeRendering::internalInitRendering()
     glActiveTexture(GL_TEXTURE0);
 
     // BOX rendering
-    VPL_ASSERT( (m_Triangles.size() % conf::NumOfBatches) == 0 );
-    VPL_ASSERT( 3 * sizeof(GLfloat) == sizeof(tCoords) );
+    VPL_ASSERT((m_Triangles.size() % conf::NumOfBatches) == 0);
+    VPL_ASSERT(3 * sizeof(GLfloat) == sizeof(tCoords));
 
     // Generate the box VBOs
-    glGenBuffersARB( 2 * conf::NumOfBatches, m_spGLData->VBOBox );
+    glGenBuffersARB(conf::NumOfBatches, m_spGLData->VBOBox);
 
     // Init buffers
     int BatchSize = m_Triangles.size() / conf::NumOfBatches;
-    for( int b = 0; b < conf::NumOfBatches; ++b )
+    for (int b = 0; b < conf::NumOfBatches; ++b)
     {
         // Bind the vertex buffer
-        glBindBufferARB( GL_ARRAY_BUFFER_ARB, m_spGLData->VBOBox[2 * b] );
+        glBindBufferARB(GL_ARRAY_BUFFER_ARB, m_spGLData->VBOBox[b]);
         // Load the data
-        glBufferDataARB( GL_ARRAY_BUFFER_ARB, BatchSize * sizeof(tCoords), &(m_Triangles[b * BatchSize]), GL_STATIC_DRAW_ARB );
-
-        // Bind the texture coordinate buffer
-        glBindBufferARB( GL_ARRAY_BUFFER_ARB, m_spGLData->VBOBox[2 * b + 1] );
-        // Load the data
-        glBufferDataARB( GL_ARRAY_BUFFER_ARB, BatchSize * sizeof(tCoords), &(m_TexCoords[b * BatchSize]), GL_STATIC_DRAW_ARB );
+        glBufferDataARB(GL_ARRAY_BUFFER_ARB, BatchSize * sizeof(tCoords), &(m_Triangles[b * BatchSize]), GL_STATIC_DRAW_ARB);
     }
 
-    glBindBufferARB( GL_ARRAY_BUFFER_ARB, 0 );
-    glBindBufferARB( GL_ELEMENT_ARRAY_BUFFER_ARB, 0 );
+    glBindBufferARB(GL_ARRAY_BUFFER_ARB, 0);
+    glBindBufferARB(GL_ELEMENT_ARRAY_BUFFER_ARB, 0);
 
     GLint vertexArray;
     glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &vertexArray);
 
     // Generate box VAOs
-    glGenVertexArraysX( conf::NumOfBatches, m_spGLData->VAOBox );
+    glGenVertexArraysX(conf::NumOfBatches, m_spGLData->VAOBox);
 
     // Init VAOs
-    for( int b = 0; b < conf::NumOfBatches; ++b )
+    for (int b = 0; b < conf::NumOfBatches; ++b)
     {
         // Bind the VAO
-        glBindVertexArrayX( m_spGLData->VAOBox[b] );
+        glBindVertexArrayX(m_spGLData->VAOBox[b]);
 
         // Enable vertex arrays
-        glEnableClientState( GL_VERTEX_ARRAY );
-        glEnableClientState( GL_TEXTURE_COORD_ARRAY );
-        glDisableClientState( GL_NORMAL_ARRAY );
-        glDisableClientState( GL_COLOR_ARRAY );
+        glEnableClientState(GL_VERTEX_ARRAY);
+        glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+        glDisableClientState(GL_NORMAL_ARRAY);
+        glDisableClientState(GL_COLOR_ARRAY);
 
         // And set up vertex attributes
-        glBindBufferARB( GL_ARRAY_BUFFER_ARB, m_spGLData->VBOBox[2 * b] );
-        glVertexPointer( 3, GL_FLOAT, 0, 0 );
-//        glEnableVertexAttribArray(0);
-//        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
-
-        glBindBufferARB( GL_ARRAY_BUFFER_ARB, m_spGLData->VBOBox[2 * b + 1] );
-        glTexCoordPointer (3, GL_FLOAT, 0, 0);
-//        glEnableVertexAttribArray(1);
-//        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, 0);
+        glBindBufferARB(GL_ARRAY_BUFFER_ARB, m_spGLData->VBOBox[b]);
+        glVertexPointer(3, GL_FLOAT, 0, 0);
+        //glEnableVertexAttribArray(0);
+        //glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
     }
 
     // Bind with 0, so, switch back to normal pointer operation
@@ -2451,50 +2432,39 @@ bool PSVolumeRendering::internalInitRendering()
     // RECT rendering (two triangles)
 
     // Generate rect's VBOs
-    glGenBuffersARB( 2, m_spGLData->VBORect );
+    glGenBuffersARB(1, &m_spGLData->VBORect);
 
-        // Bind the vertex buffer
-        glBindBufferARB( GL_ARRAY_BUFFER_ARB, m_spGLData->VBORect[0] );
-        // Load the data
-        glBufferDataARB( GL_ARRAY_BUFFER_ARB, 18 * sizeof(float), conf::rectVertices, GL_STATIC_DRAW_ARB );
+    // Bind the vertex buffer
+    glBindBufferARB(GL_ARRAY_BUFFER_ARB, m_spGLData->VBORect);
+    // Load the data
+    glBufferDataARB(GL_ARRAY_BUFFER_ARB, 18 * sizeof(float), conf::rectVertices, GL_STATIC_DRAW_ARB);
 
-        // Bind the texture coordinate buffer
-        glBindBufferARB( GL_ARRAY_BUFFER_ARB, m_spGLData->VBORect[1] );
-        // Load the data
-        glBufferDataARB( GL_ARRAY_BUFFER_ARB, 18 * sizeof(float), conf::rectTexCoords, GL_STATIC_DRAW_ARB );
+    glBindBufferARB(GL_ARRAY_BUFFER_ARB, 0);
+    glBindBufferARB(GL_ELEMENT_ARRAY_BUFFER_ARB, 0);
 
-    glBindBufferARB( GL_ARRAY_BUFFER_ARB, 0 );
-    glBindBufferARB( GL_ELEMENT_ARRAY_BUFFER_ARB, 0 );
-    
 #ifdef USE_VAORECT
     // Generate rect's VAO
-    glGenVertexArraysX( 1, &m_spGLData->VAORect );
+    glGenVertexArraysX(1, &m_spGLData->VAORect);
 
-        // Bind the VAO
-        glBindVertexArrayX( m_spGLData->VAORect );
+    // Bind the VAO
+    glBindVertexArrayX(m_spGLData->VAORect);
 
-        // Enable vertex arrays
-        glEnableClientState( GL_VERTEX_ARRAY );
-        glEnableClientState( GL_TEXTURE_COORD_ARRAY );
-        glDisableClientState( GL_NORMAL_ARRAY );
-        glDisableClientState( GL_COLOR_ARRAY );
+    // Enable vertex arrays
+    glEnableClientState(GL_VERTEX_ARRAY);
+    glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+    glDisableClientState(GL_NORMAL_ARRAY);
+    glDisableClientState(GL_COLOR_ARRAY);
 
-        // And set up vertex attributes
-        glBindBufferARB( GL_ARRAY_BUFFER_ARB, m_spGLData->VBORect[0] );
-        glVertexPointer( 3, GL_FLOAT, 0, 0 );
-//        glEnableVertexAttribArray(0);
-//        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
-
-        glBindBufferARB( GL_ARRAY_BUFFER_ARB, m_spGLData->VBORect[1] );
-        glTexCoordPointer( 3, GL_FLOAT, 0, 0 );
-//        glEnableVertexAttribArray(1);
-//        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, 0);
-
+    // And set up vertex attributes
+    glBindBufferARB(GL_ARRAY_BUFFER_ARB, m_spGLData->VBORect);
+    glVertexPointer(3, GL_FLOAT, 0, 0);
+    //glEnableVertexAttribArray(0);
+    //glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
 #endif
 
     glBindVertexArrayX(vertexArray);
-    glBindBufferARB( GL_ARRAY_BUFFER_ARB, arrayBuffer );
-    glBindBufferARB( GL_ELEMENT_ARRAY_BUFFER_ARB, elementArrayBuffer );
+    glBindBufferARB(GL_ARRAY_BUFFER_ARB, arrayBuffer);
+    glBindBufferARB(GL_ELEMENT_ARRAY_BUFFER_ARB, elementArrayBuffer);
 
     // Restore state so that OSG can continue its work
     bVertexArray            ? glEnableClientState(GL_VERTEX_ARRAY)          : glDisableClientState(GL_VERTEX_ARRAY);
@@ -2517,13 +2487,16 @@ bool PSVolumeRendering::internalInitRendering()
     return retVal;
 }
 
-
 ///////////////////////////////////////////////////////////////////////////////
 //
 void PSVolumeRendering::reloadShader()
 {
-/*
 #ifdef LOAD_SHADERS
+    if (m_spParams->selectedShader == CUSTOM)
+    {
+        return;
+    }
+
     int curr = m_spParams->selectedShader;
     loadShaderProgram(
         conf::shaderFilenames[curr],
@@ -2532,12 +2505,10 @@ void PSVolumeRendering::reloadShader()
         &m_spGLData->vertexShader,
         &m_spGLData->PshaderRayCast[curr]);
 #endif
-*/
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 //
-
 bool PSVolumeRendering::internalUploadTexture()
 {
     glActiveTexture(GL_TEXTURE0);
@@ -2610,7 +2581,6 @@ bool PSVolumeRendering::internalUploadAuxTexture()
     return true;
 }
 
-
 ///////////////////////////////////////////////////////////////////////////////
 //
 bool PSVolumeRendering::internalUploadCustomData_bool()
@@ -2676,7 +2646,6 @@ bool PSVolumeRendering::internalUploadCustomData_bool()
 
     return true;
 }
-
 
 ///////////////////////////////////////////////////////////////////////////////
 //
@@ -2744,7 +2713,6 @@ bool PSVolumeRendering::internalUploadCustomData_tPixel8()
     return true;
 }
 
-
 ///////////////////////////////////////////////////////////////////////////////
 //
 bool PSVolumeRendering::internalUploadCustomData_tPixel16()
@@ -2810,7 +2778,6 @@ bool PSVolumeRendering::internalUploadCustomData_tPixel16()
 
     return true;
 }
-
 
 ///////////////////////////////////////////////////////////////////////////////
 //
@@ -2878,7 +2845,6 @@ bool PSVolumeRendering::internalUploadCustomData_tRGBPixel()
     return true;
 }
 
-
 ///////////////////////////////////////////////////////////////////////////////
 //
 bool PSVolumeRendering::internalUploadCustomTexture_bool()
@@ -2913,7 +2879,6 @@ bool PSVolumeRendering::internalUploadCustomTexture_bool()
 
     return true;
 }
-
 
 ///////////////////////////////////////////////////////////////////////////////
 //
@@ -2950,7 +2915,6 @@ bool PSVolumeRendering::internalUploadCustomTexture_tPixel8()
     return true;
 }
 
-
 ///////////////////////////////////////////////////////////////////////////////
 //
 bool PSVolumeRendering::internalUploadCustomTexture_tPixel16()
@@ -2985,7 +2949,6 @@ bool PSVolumeRendering::internalUploadCustomTexture_tPixel16()
 
     return true;
 }
-
 
 ///////////////////////////////////////////////////////////////////////////////
 //
@@ -3060,13 +3023,12 @@ bool PSVolumeRendering::internalUploadCustomAuxTexture()
 
 ///////////////////////////////////////////////////////////////////////////////
 //
-
 vpl::img::CPoint3D PSVolumeRendering::getRenderingSize(PSVolumeRenderingParams *pParams, int Flags) const
 {
     float desiredDimension = 0.0f;
     vpl::img::CPoint3D retValue;
 
-    if( Flags & MOUSE_MODE )
+    if (Flags & MOUSE_MODE)
     {
         desiredDimension = conf::MouseRenderingSize[pParams->currentQuality];
     }
@@ -3098,13 +3060,11 @@ vpl::img::CPoint3D PSVolumeRendering::getRenderingSize(PSVolumeRenderingParams *
     return retValue;
 }
 
-
 ///////////////////////////////////////////////////////////////////////////////
 //
-
 float PSVolumeRendering::getVolumeSamplingDistance(PSVolumeRenderingParams *pParams, int Flags) const
 {
-    if( Flags & MOUSE_MODE )
+    if (Flags & MOUSE_MODE)
     {
         return conf::MouseTextureSampling[pParams->currentQuality];
     }
@@ -3114,10 +3074,7 @@ float PSVolumeRendering::getVolumeSamplingDistance(PSVolumeRenderingParams *pPar
     }
 }
 
-
 ///////////////////////////////////////////////////////////////////////////////
-//
-
 // change size of all internal rendering textures
 bool PSVolumeRendering::internalSetRenderingSize(PSVolumeRenderingParams *pParams, int Flags)
 {
@@ -3126,52 +3083,42 @@ bool PSVolumeRendering::internalSetRenderingSize(PSVolumeRenderingParams *pParam
 
     glActiveTexture(GL_TEXTURE4);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
-    glBindTexture(GL_TEXTURE_2D, m_spGLData->FBOTexture);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB32F_ARB, renderingSize.x(), renderingSize.y(), 0, GL_RGB, GL_FLOAT, NULL);
+
+    glBindTexture(GL_TEXTURE_3D, m_spGLData->RaysStartEnd);
+    glTexImage3D(GL_TEXTURE_3D, 0, GL_RGB32F_ARB, renderingSize.x(), renderingSize.y(), 2, 0, GL_RGB, GL_FLOAT, NULL);
+
     glBindTexture(GL_TEXTURE_2D, m_spGLData->RTTexture);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB16F_ARB, renderingSize.x(), renderingSize.y(), 0, GL_RGB, GL_FLOAT, NULL);
 
-    glActiveTexture(GL_TEXTURE7);
-    glBindTexture(GL_TEXTURE_2D, m_spGLData->FBOWorldCoords);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB32F_ARB, renderingSize.x(), renderingSize.y(), 0, GL_RGB, GL_FLOAT, NULL);
-
-    glActiveTexture(GL_TEXTURE5);
     glBindTexture(GL_TEXTURE_2D, m_spGLData->DEPTexture);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB16F_ARB, renderingSize.x(), renderingSize.y(), 0, GL_RGB, GL_FLOAT, NULL);
 
     return true;
 }
 
-
 ///////////////////////////////////////////////////////////////////////////////
-//
-
 // upload new, user selected lookup texture to the GPU memory
 bool PSVolumeRendering::internalSetLUT(PSVolumeRenderingParams *pParams)
 {
     // upload new 1D texture
     glActiveTexture(GL_TEXTURE2);
     glBindTexture(GL_TEXTURE_1D, m_spGLData->LookUpTexture);
-//    glPixelStorei(GL_UNPACK_ALIGNMENT, 2);
+    //glPixelStorei(GL_UNPACK_ALIGNMENT, 2);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
     glTexImage1D(GL_TEXTURE_1D, 0, GL_RGBA16, LUT_1D_SIZE, 0, GL_RGBA, GL_UNSIGNED_SHORT, m_internalLookupTables[pParams->selectedLut]);
 
     return true;
 }
 
-
 ///////////////////////////////////////////////////////////////////////////////
 //
-
 void PSVolumeRendering::setFlag(int Flag)
 {
     m_Flags |= Flag;
 }
 
-
 ///////////////////////////////////////////////////////////////////////////////
 //
-
 void PSVolumeRendering::setAndSignalFlag(int Flag)
 {
     m_Mutex.lock();
@@ -3180,33 +3127,27 @@ void PSVolumeRendering::setAndSignalFlag(int Flag)
     m_Mutex.unlock();
 }
 
-
 ///////////////////////////////////////////////////////////////////////////////
 //
-
 void PSVolumeRendering::clearFlag(int Flag)
 {
     m_Flags &= (0xffff - Flag);
 }
 
-
 ///////////////////////////////////////////////////////////////////////////////
 //
-
 bool PSVolumeRendering::testFlag(int Flag)
 {
     return (m_Flags & Flag) != 0;
 }
 
-
 ///////////////////////////////////////////////////////////////////////////////
 //
-
 VPL_THREAD_ROUTINE(PSVolumeRendering::setupLoop)
 {
     // Console object
     PSVolumeRendering *pRenderer = static_cast<PSVolumeRendering *>(pThread->getData());
-    if( !pRenderer )
+    if (!pRenderer)
     {
         return -1;
     }
@@ -3219,10 +3160,10 @@ VPL_THREAD_ROUTINE(PSVolumeRendering::setupLoop)
     VPL_THREAD_MAIN_LOOP
     {
         pRenderer->m_Mutex.lock();
-        if( (pRenderer->m_Flags & InvalidMask) == 0 )
+        if ((pRenderer->m_Flags & InvalidMask) == 0)
         {
             // Wait for the "anything changed" event
-            if( !pRenderer->m_Condition.wait(pRenderer->m_Mutex, 250) )
+            if (!pRenderer->m_Condition.wait(pRenderer->m_Mutex, 250))
             {
                 pRenderer->m_Mutex.unlock();
                 continue;
@@ -3234,7 +3175,7 @@ VPL_THREAD_ROUTINE(PSVolumeRendering::setupLoop)
         pRenderer->clearFlag(DATA_INVALID);
         pRenderer->clearFlag(CUSTOM_DATA_INVALID);
 
-//        PSVolumeRenderingParams params = *pRenderer->m_spParams;
+        //PSVolumeRenderingParams params = *pRenderer->m_spParams;
 
         // Release the mutex
         pRenderer->m_Mutex.unlock();
@@ -3242,9 +3183,9 @@ VPL_THREAD_ROUTINE(PSVolumeRendering::setupLoop)
         int newFlags = PSVR_NO_FLAGS;
 
         // Prepare the data if required.
-        if( Flags & DATA_INVALID )
+        if (Flags & DATA_INVALID)
         {
-            if( pRenderer->internalUploadData() )
+            if (pRenderer->internalUploadData())
             {
                 newFlags |= TEXTURE_INVALID;
                 newFlags |= AUX_TEXTURE_INVALID;
@@ -3252,7 +3193,7 @@ VPL_THREAD_ROUTINE(PSVolumeRendering::setupLoop)
         }
 
         // Prepare the data if required.
-        if( Flags & CUSTOM_DATA_INVALID )
+        if (Flags & CUSTOM_DATA_INVALID)
         {
             bool uploadData = false;
             switch (pRenderer->m_currentType)
@@ -3284,7 +3225,7 @@ VPL_THREAD_ROUTINE(PSVolumeRendering::setupLoop)
         pRenderer->setFlag(newFlags);
 
         // on change request redraw
-        if (( Flags & DATA_INVALID ) || (Flags & CUSTOM_DATA_INVALID))
+        if ((Flags & DATA_INVALID) || (Flags & CUSTOM_DATA_INVALID))
         {
             pRenderer->redraw();
         }
@@ -3296,16 +3237,13 @@ VPL_THREAD_ROUTINE(PSVolumeRendering::setupLoop)
     return 0;
 }
 
-
 ///////////////////////////////////////////////////////////////////////////////
 // Latest version
 // - num. of quads specified by the parameter
 // - VAO (Vertex Array Object)
-
 void PSVolumeRendering::prepareBox(int NumOfQuads)
 {
     m_Triangles.clear();
-    m_TexCoords.clear();
 
     // Quad size - real and texture coordinates
     float rs = 2.0f / NumOfQuads;
@@ -3313,169 +3251,141 @@ void PSVolumeRendering::prepareBox(int NumOfQuads)
 
     // First side
     float b = -1.0f, v = 0.0f;
-    for( int j = 0; j < NumOfQuads; ++j, b += rs, v += ts )
+    for (int j = 0; j < NumOfQuads; ++j, b += rs, v += ts)
     {
         float a = -1.0f, u = 0.0f;
-        for( int i = 0; i < NumOfQuads; ++i, a += rs, u += ts )
+        for (int i = 0; i < NumOfQuads; ++i, a += rs, u += ts)
         {
-            m_TexCoords.push_back( tCoords(u,      v + ts, 0.0f) );
-            m_TexCoords.push_back( tCoords(u + ts, v + ts, 0.0f) );
-            m_TexCoords.push_back( tCoords(u + ts, v,      0.0f) );
+            m_Triangles.push_back(tCoords(a,      b + rs, -1.0f));
+            m_Triangles.push_back(tCoords(a + rs, b + rs, -1.0f));
+            m_Triangles.push_back(tCoords(a + rs, b,      -1.0f));
 
-            m_TexCoords.push_back( tCoords(u + ts, v,      0.0f) );
-            m_TexCoords.push_back( tCoords(u,      v,      0.0f) );
-            m_TexCoords.push_back( tCoords(u,      v + ts, 0.0f) );
-            
-            m_Triangles.push_back( tCoords(a,      b + rs, -1.0f) );
-            m_Triangles.push_back( tCoords(a + rs, b + rs, -1.0f) );
-            m_Triangles.push_back( tCoords(a + rs, b,      -1.0f) );
+            m_Triangles.push_back(tCoords(a + rs, b,      -1.0f));
+            m_Triangles.push_back(tCoords(a,      b,      -1.0f));
+            m_Triangles.push_back(tCoords(a,      b + rs, -1.0f));
 
-            m_Triangles.push_back( tCoords(a + rs, b,      -1.0f) );
-            m_Triangles.push_back( tCoords(a,      b,      -1.0f) );           
-            m_Triangles.push_back( tCoords(a,      b + rs, -1.0f) );
+            m_Triangles.push_back(tCoords(a,      b + rs, 1.0f));
+            m_Triangles.push_back(tCoords(a,      b,      1.0f));
+            m_Triangles.push_back(tCoords(a + rs, b,      1.0f));
 
-            m_TexCoords.push_back( tCoords(u,      v + ts, 1.0f) );
-            m_TexCoords.push_back( tCoords(u,      v,      1.0f) );
-            m_TexCoords.push_back( tCoords(u + ts, v,      1.0f) );
-
-            m_TexCoords.push_back( tCoords(u + ts, v,      1.0f) );
-            m_TexCoords.push_back( tCoords(u + ts, v + ts, 1.0f) );
-            m_TexCoords.push_back( tCoords(u,      v + ts, 1.0f) );
-            
-            m_Triangles.push_back( tCoords(a,      b + rs, 1.0f) );
-            m_Triangles.push_back( tCoords(a,      b,      1.0f) );
-            m_Triangles.push_back( tCoords(a + rs, b,      1.0f) );
-
-            m_Triangles.push_back( tCoords(a + rs, b,      1.0f) );
-            m_Triangles.push_back( tCoords(a + rs, b + rs, 1.0f) );
-            m_Triangles.push_back( tCoords(a,      b + rs, 1.0f) );
+            m_Triangles.push_back(tCoords(a + rs, b,      1.0f));
+            m_Triangles.push_back(tCoords(a + rs, b + rs, 1.0f));
+            m_Triangles.push_back(tCoords(a,      b + rs, 1.0f));
         }
     }
 
     b = -1.0f, v = 0.0f;
-    for( int j = 0; j < NumOfQuads; ++j, b += rs, v += ts )
+    for (int j = 0; j < NumOfQuads; ++j, b += rs, v += ts)
     {
         float a = -1.0f, u = 0.0f;
-        for( int i = 0; i < NumOfQuads; ++i, a += rs, u += ts )
+        for (int i = 0; i < NumOfQuads; ++i, a += rs, u += ts)
         {
-            m_TexCoords.push_back( tCoords(u,      0.0f, v) );
-            m_TexCoords.push_back( tCoords(u + ts, 0.0f, v) );
-            m_TexCoords.push_back( tCoords(u + ts, 0.0f, v + ts) );
+            m_Triangles.push_back(tCoords(a,      -1.0f, b));
+            m_Triangles.push_back(tCoords(a + rs, -1.0f, b));
+            m_Triangles.push_back(tCoords(a + rs, -1.0f, b + rs));
 
-            m_TexCoords.push_back( tCoords(u + ts, 0.0f, v + ts) );
-            m_TexCoords.push_back( tCoords(u,      0.0f, v + ts) );
-            m_TexCoords.push_back( tCoords(u,      0.0f, v) );
-            
-            m_Triangles.push_back( tCoords(a,      -1.0f, b) );
-            m_Triangles.push_back( tCoords(a + rs, -1.0f, b) );
-            m_Triangles.push_back( tCoords(a + rs, -1.0f, b + rs) );
+            m_Triangles.push_back(tCoords(a + rs, -1.0f, b + rs));
+            m_Triangles.push_back(tCoords(a,      -1.0f, b + rs));
+            m_Triangles.push_back(tCoords(a,      -1.0f, b));
 
-            m_Triangles.push_back( tCoords(a + rs, -1.0f, b + rs) );
-            m_Triangles.push_back( tCoords(a,      -1.0f, b + rs) );
-            m_Triangles.push_back( tCoords(a,      -1.0f, b) );
+            m_Triangles.push_back(tCoords(a,      1.0f,  b));
+            m_Triangles.push_back(tCoords(a,      1.0f,  b + rs));
+            m_Triangles.push_back(tCoords(a + rs, 1.0f,  b + rs));
 
-            m_TexCoords.push_back( tCoords(u,      1.0f, v) );
-            m_TexCoords.push_back( tCoords(u,      1.0f, v + ts) );
-            m_TexCoords.push_back( tCoords(u + ts, 1.0f, v + ts) );
-
-            m_TexCoords.push_back( tCoords(u + ts, 1.0f, v + ts) );
-            m_TexCoords.push_back( tCoords(u + ts, 1.0f, v) );
-            m_TexCoords.push_back( tCoords(u,      1.0f, v) );
-            
-            m_Triangles.push_back( tCoords(a,      1.0f, b) );
-            m_Triangles.push_back( tCoords(a,      1.0f, b + rs) );
-            m_Triangles.push_back( tCoords(a + rs, 1.0f, b + rs) );
-
-            m_Triangles.push_back( tCoords(a + rs, 1.0f, b + rs) );
-            m_Triangles.push_back( tCoords(a + rs, 1.0f, b) );           
-            m_Triangles.push_back( tCoords(a,      1.0f, b) );
+            m_Triangles.push_back(tCoords(a + rs, 1.0f,  b + rs));
+            m_Triangles.push_back(tCoords(a + rs, 1.0f,  b));
+            m_Triangles.push_back(tCoords(a,      1.0f,  b));
         }
     }
 
     b = -1.0f, v = 0.0f;
-    for( int j = 0; j < NumOfQuads; ++j, b += rs, v += ts )
+    for (int j = 0; j < NumOfQuads; ++j, b += rs, v += ts)
     {
         float a = -1.0f, u = 0.0f;
-        for( int i = 0; i < NumOfQuads; ++i, a += rs, u += ts )
+        for (int i = 0; i < NumOfQuads; ++i, a += rs, u += ts)
         {
-            m_TexCoords.push_back( tCoords(0.0f, u + ts, v + ts) );
-            m_TexCoords.push_back( tCoords(0.0f, u + ts, v) );
-            m_TexCoords.push_back( tCoords(0.0f, u,      v) );
+            m_Triangles.push_back(tCoords(-1.0f, a + rs, b + rs));
+            m_Triangles.push_back(tCoords(-1.0f, a + rs, b));
+            m_Triangles.push_back(tCoords(-1.0f, a,      b));
 
-            m_TexCoords.push_back( tCoords(0.0f, u,      v) );
-            m_TexCoords.push_back( tCoords(0.0f, u,      v + ts) );
-            m_TexCoords.push_back( tCoords(0.0f, u + ts, v + ts) );
-            
-            m_Triangles.push_back( tCoords(-1.0f, a + rs, b + rs) );
-            m_Triangles.push_back( tCoords(-1.0f, a + rs, b) );
-            m_Triangles.push_back( tCoords(-1.0f, a,      b) );
+            m_Triangles.push_back(tCoords(-1.0f, a,      b));
+            m_Triangles.push_back(tCoords(-1.0f, a,      b + rs));
+            m_Triangles.push_back(tCoords(-1.0f, a + rs, b + rs));
 
-            m_Triangles.push_back( tCoords(-1.0f, a,      b) );
-            m_Triangles.push_back( tCoords(-1.0f, a,      b + rs) );           
-            m_Triangles.push_back( tCoords(-1.0f, a + rs, b + rs) );
+            m_Triangles.push_back(tCoords(1.0f,  a + rs, b + rs));
+            m_Triangles.push_back(tCoords(1.0f,  a,      b + rs));
+            m_Triangles.push_back(tCoords(1.0f,  a,      b));
 
-            m_TexCoords.push_back( tCoords(1.0f, u + ts, v + ts) );
-            m_TexCoords.push_back( tCoords(1.0f, u,      v + ts) );
-            m_TexCoords.push_back( tCoords(1.0f, u,      v) );
-
-            m_TexCoords.push_back( tCoords(1.0f, u,      v) );
-            m_TexCoords.push_back( tCoords(1.0f, u + ts, v) );
-            m_TexCoords.push_back( tCoords(1.0f, u + ts, v + ts) );
-            
-            m_Triangles.push_back( tCoords(1.0f, a + rs, b + rs) );
-            m_Triangles.push_back( tCoords(1.0f, a,      b + rs) );
-            m_Triangles.push_back( tCoords(1.0f, a,      b) );
-
-            m_Triangles.push_back( tCoords(1.0f, a,      b) );
-            m_Triangles.push_back( tCoords(1.0f, a + rs, b) );
-            m_Triangles.push_back( tCoords(1.0f, a + rs, b + rs) );
+            m_Triangles.push_back(tCoords(1.0f,  a,      b));
+            m_Triangles.push_back(tCoords(1.0f,  a + rs, b));
+            m_Triangles.push_back(tCoords(1.0f,  a + rs, b + rs));
         }
     }
 }
-
 
 ///////////////////////////////////////////////////////////////////////////////
 // Latest version
 // - a complex geometry (more than 6 basic quads)
 // - VAO (Vertex Array Object)
-
-void PSVolumeRendering::renderBox(PSVolumeRenderingParams *pParams, const tArray& Triangles, const tArray& TexCoords)
+void PSVolumeRendering::renderBox(PSVolumeRenderingParams *pParams, const tArray& Triangles)
 {
     // height of the box (object)
     float Y = (float)pParams->YSize / (float)pParams->XSize * pParams->aspectRatio_YtoX;
-    
+
     // depth of the box
     float Z = (float)pParams->ZSize / (float)pParams->XSize * pParams->aspectRatio_ZtoX;
-    
+
     // Scaling of the box
-    glMatrixMode( GL_MODELVIEW );
+    glMatrixMode(GL_MODELVIEW);
     glPushMatrix();
-    glScalef( 1.0f, Y, Z );
+    glScalef(1.0f, Y, Z);
+
+    // grab current matrices and calculate inverse matrices for further processing
+    osg::Matrix projectionMatrix;
+    GLdouble glProjectionMatrix[16];
+    glMatrixMode(GL_PROJECTION);
+    glGetDoublev(GL_PROJECTION_MATRIX, glProjectionMatrix);
+    projectionMatrix.set(glProjectionMatrix);
+    projectionMatrix = osg::Matrix::inverse(projectionMatrix);
+
+    osg::Matrix modelViewMatrix;
+    GLdouble glModelViewMatrix[16];
+    glMatrixMode(GL_MODELVIEW);
+    glGetDoublev(GL_MODELVIEW_MATRIX, glModelViewMatrix);
+    modelViewMatrix.set(glModelViewMatrix);
+    modelViewMatrix = osg::Matrix::inverse(modelViewMatrix);
+
+    // store inverted matrices
+    for (int i = 0; i < 16; i++)
+    {
+        pParams->invModelViewMatrix[i] = modelViewMatrix.ptr()[i];
+        pParams->invProjectionMatrix[i] = projectionMatrix.ptr()[i];
+    }
 
     // Useless color definition - not visible under normal circumstances
-    glColor3f( 0.0f, 0.0f, 0.0f );
+    glColor3f(0.0f, 0.0f, 0.0f);
 
     // Save current state
-    bool bVertexArray = glIsEnabled(GL_VERTEX_ARRAY);
-    bool bTexCoordArray = glIsEnabled(GL_TEXTURE_COORD_ARRAY);
-    bool bNormalArray = glIsEnabled(GL_NORMAL_ARRAY);
-    bool bColorArray = glIsEnabled(GL_COLOR_ARRAY);
-    bool bIndexArray = glIsEnabled(GL_INDEX_ARRAY);
+    bool bVertexArray =         glIsEnabled(GL_VERTEX_ARRAY);
+    bool bTexCoordArray =       glIsEnabled(GL_TEXTURE_COORD_ARRAY);
+    bool bNormalArray =         glIsEnabled(GL_NORMAL_ARRAY);
+    bool bColorArray =          glIsEnabled(GL_COLOR_ARRAY);
+    bool bIndexArray =          glIsEnabled(GL_INDEX_ARRAY);
     bool bSecondaryColorArray = glIsEnabled(GL_SECONDARY_COLOR_ARRAY);
-    bool bEdgeFlagArray = glIsEnabled(GL_EDGE_FLAG_ARRAY);
-    bool bFogCoordArray = glIsEnabled(GL_FOG_COORD_ARRAY);
+    bool bEdgeFlagArray =       glIsEnabled(GL_EDGE_FLAG_ARRAY);
+    bool bFogCoordArray =       glIsEnabled(GL_FOG_COORD_ARRAY);
     GLint vertexArray;
     glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &vertexArray);
 
-    // Draw all VBOs    
+    // Draw all VBOs
     int BatchSize = Triangles.size() / conf::NumOfBatches;
-    for( int b = 0; b < conf::NumOfBatches; ++b )
+    for (int b = 0; b < conf::NumOfBatches; ++b)
     {
         // Bind the corresponding VAO
-        glBindVertexArrayX( m_spGLData->VAOBox[b] );
-        
+        glBindVertexArrayX(m_spGLData->VAOBox[b]);
+
         // Draw the box
-        glDrawArrays( GL_TRIANGLES, 0, GLsizei(BatchSize) );
+        glDrawArrays(GL_TRIANGLES, 0, GLsizei(BatchSize));
     }
 
     // Unbind the vertex array
@@ -3499,7 +3409,6 @@ void PSVolumeRendering::renderBox(PSVolumeRenderingParams *pParams, const tArray
 // Main volume rendering function called for every frame displayed
 // Initilizes OpenGL when first called, than updates shaders and lookups
 // and finally renders volume in a few steps.
-
 void PSVolumeRendering::renderVolume()
 {
     // Local copy of rendering parameters
@@ -3511,7 +3420,7 @@ void PSVolumeRendering::renderVolume()
         tLock Lock(*this);
 
         // Is rendering enabled?
-        if( !m_Enabled )
+        if (!m_Enabled)
         {
             return;
         }
@@ -3526,7 +3435,7 @@ void PSVolumeRendering::renderVolume()
         init();
 
         // Is rendering correctly initialized?
-        if( !testFlag(INITIALIZED) )
+        if (!testFlag(INITIALIZED))
         {
             return;
         }
@@ -3591,26 +3500,26 @@ void PSVolumeRendering::renderVolume()
     // END: Locked part of the rendering
 
     // Resolution changed?
-    if( Flags & OSR_INVALID )
+    if (Flags & OSR_INVALID)
     {
         internalSetRenderingSize(&Params, Flags);
     }
 
     // LUT changed?
-    if( Flags & LUT_INVALID )
+    if (Flags & LUT_INVALID)
     {
         internalSetLUT(&Params);
     }
 
     // general OpenGL settings
-//    glClearColor(0.2f, 0.2f, 0.4f, 0.0f);
+    //glClearColor(0.2f, 0.2f, 0.4f, 0.0f);
     glClearDepth(1.0f);
     glEnable(GL_DEPTH_TEST);
-//    glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST);
+    //glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST);
     glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_FASTEST);
 
     // reset to most likely original state
-//    glActiveTexture(GL_TEXTURE0);
+    //glActiveTexture(GL_TEXTURE0);
 
     // The current rendering size
     vpl::img::CPoint3D renderingSize = getRenderingSize(&Params, Flags);
@@ -3622,21 +3531,21 @@ void PSVolumeRendering::renderVolume()
     // save current render target
     GLint framebuffer;
     glGetIntegerv(GL_FRAMEBUFFER_BINDING, &framebuffer);
-    
+
     // save current viewport size
     GLint viewport[4];
     glGetIntegerv(GL_VIEWPORT, viewport);
-    
+
     // Setup depth texture
     glActiveTexture(GL_TEXTURE5);
     glBindTexture(GL_TEXTURE_2D, m_spGLData->GeometryDepthTexture);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, viewport[2], viewport[3], 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
     glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, viewport[2], viewport[3]);
-    
+
     // and change it to small off-screen texture
     glViewport(0, 0, renderingSize.x(), renderingSize.y());
-    
+
     // modify OSG transformation matrix
     glScalef(Params.RealXSize * 0.5f, Params.RealXSize * 0.5f, Params.RealXSize * 0.5f);
 
@@ -3646,33 +3555,41 @@ void PSVolumeRendering::renderVolume()
     // if fast redraw is not set, render volume
     if ((Flags & FAST_REDRAW) == 0)
     {
-        // ************************************************
-        // RENDER BACK SIDE POLYGONS OF THE BOX
-        glCullFace(GL_FRONT); // culling - render only back sides
-        glDepthFunc(GL_GREATER); // only whats in the back
-        glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, m_spGLData->OffScreenFramebuffer); // render to texture
-        glFramebufferTexture2DEXT(GL_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0_EXT, GL_TEXTURE_2D, m_spGLData->FBOTexture, 0);
-        glFramebufferTexture2DEXT(GL_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT1_EXT, GL_TEXTURE_2D, m_spGLData->FBOWorldCoords, 0);
-        GLenum buffers1[] = {GL_COLOR_ATTACHMENT0_EXT, GL_COLOR_ATTACHMENT1_EXT}; 
-        glDrawBuffers(2, buffers1); 
-        glUseProgram(m_spGLData->PshaderFBO); // use special small shader
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        GLenum drawBuffers0[] = { GL_COLOR_ATTACHMENT0_EXT };
+        GLenum drawBuffers1[] = { GL_COLOR_ATTACHMENT0_EXT, GL_COLOR_ATTACHMENT1_EXT };
 
-        // render back sides
-        renderBox(&Params, m_Triangles, m_TexCoords);
-    
-        // ************************************************
-        // RESET OPENGL AND PREPARE RENDER TO SQUARE OFF SCREEN TEXTURE
+        // render front side polygons of the box
+        glCullFace(GL_BACK); // cull back-facing polygons
+        glDepthFunc(GL_LESS); // keep front-most fragments
+        glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, m_spGLData->OffScreenFramebuffer0);
+        glFramebufferTexture3DEXT(GL_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0_EXT, GL_TEXTURE_3D, m_spGLData->RaysStartEnd, 0, 0);
+        glDrawBuffers(1, drawBuffers0);
+        glUseProgram(m_spGLData->PshaderFBO); // use special small shader
+        glClearDepth(1.0);
+        glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        renderBox(&Params, m_Triangles);
+
+        // render back side polygons of the box
+        glCullFace(GL_FRONT); // cull front-facing polygons
+        glDepthFunc(GL_GREATER); // keep back-most fragments
+        glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, m_spGLData->OffScreenFramebuffer1);
+        glFramebufferTexture3DEXT(GL_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0_EXT, GL_TEXTURE_3D, m_spGLData->RaysStartEnd, 0, 1);
+        glDrawBuffers(1, drawBuffers0);
+        glUseProgram(m_spGLData->PshaderFBO); // use special small shader
+        glClearDepth(0.0);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        renderBox(&Params, m_Triangles);
+
+        // render back side polygons of the box - this time using VR shaders and related stuff
         glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, m_spGLData->ResizeFramebuffer); // render to texture
         glFramebufferTexture2DEXT(GL_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0_EXT, GL_TEXTURE_2D, m_spGLData->RTTexture, 0);
         glFramebufferTexture2DEXT(GL_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT1_EXT, GL_TEXTURE_2D, m_spGLData->DEPTexture, 0);
-        GLenum buffers2[] = {GL_COLOR_ATTACHMENT0_EXT, GL_COLOR_ATTACHMENT1_EXT}; 
-        glDrawBuffers(2, buffers2); 
+        glDrawBuffers(2, drawBuffers1);
         glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        glDepthFunc(GL_LESS); // roll back
-        glCullFace(GL_BACK);
-        // DO VOLUME RENDERING
+
+        // use volume rendering shader
         unsigned int selectedShader = 0;
         if (Params.selectedShader == CUSTOM)
         {
@@ -3683,11 +3600,8 @@ void PSVolumeRendering::renderVolume()
             selectedShader = m_spGLData->PshaderRayCast[Params.selectedShader];
         }
         glUseProgram(selectedShader);
-    
-        // ***********************************************
-        // SET SHADER PARAMETERS HERE
-        // ***********************************************
-        // TEXTURES
+
+        // bind textures
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_3D, m_spGLData->VolumeTexture);
         setParameter(selectedShader, "t3D", 0);
@@ -3705,16 +3619,17 @@ void PSVolumeRendering::renderVolume()
         setParameter(selectedShader, "Noise", 3);
 
         glActiveTexture(GL_TEXTURE4);
-        glBindTexture(GL_TEXTURE_2D, m_spGLData->FBOTexture);
-        setParameter(selectedShader, "Osr", 4);
+        glBindTexture(GL_TEXTURE_3D, m_spGLData->RaysStartEnd);
+        setParameter(selectedShader, "tRaysStartEnd", 4);
 
         glActiveTexture(GL_TEXTURE5);
         glBindTexture(GL_TEXTURE_2D, m_spGLData->GeometryDepthTexture);
         setParameter(selectedShader, "Depth", 5);
 
-        glActiveTexture(GL_TEXTURE6);
-        glBindTexture(GL_TEXTURE_2D, m_spGLData->FBOWorldCoords);
-        setParameter(selectedShader, "OsrWC", 6);
+        // nothing in Texture Unit #6
+        //glActiveTexture(GL_TEXTURE6);
+        //glBindTexture(GL_TEXTURE_3D, 0);
+        //setParameter(selectedShader, "", 6);
 
         if (Params.selectedShader == CUSTOM)
         {
@@ -3723,47 +3638,53 @@ void PSVolumeRendering::renderVolume()
             setParameter(selectedShader, "tCustom3D", 7);
         }
 
-        // VALUES
+        // set shader values
         float volumeSamplingDistance = getVolumeSamplingDistance(&Params, Flags);
         osg::Vec3 par_sVector = (Params.selectedShader == CUSTOM ? osg::Vec3(1.25f / float(Params.CustomXSize), 1.25f / float(Params.CustomYSize), 1.25f / float(Params.CustomZSize)) : osg::Vec3(1.25f / float(Params.XSize), 1.25f / float(Params.YSize), 1.25f / float(Params.ZSize)));
         osg::Vec3 par_skipTexSize = (Params.selectedShader == CUSTOM ? osg::Vec3(Params.CustomAuxTexXSize, Params.CustomAuxTexYSize, Params.CustomAuxTexZSize) : osg::Vec3(Params.AuxTexXSize, Params.AuxTexYSize, Params.AuxTexZSize));
         osg::Vec3 par_tResolution = (Params.selectedShader == CUSTOM ? osg::Vec3(volumeSamplingDistance / float(Params.CustomXSize), volumeSamplingDistance / float(Params.CustomYSize), volumeSamplingDistance / float(Params.CustomZSize)) : osg::Vec3(volumeSamplingDistance / float(Params.XSize), volumeSamplingDistance / float(Params.YSize), volumeSamplingDistance / float(Params.ZSize)));
         osg::Vec3 par_tSkipResolution = (Params.selectedShader == CUSTOM ? osg::Vec3(8.0f / float(Params.CustomXSize), 8.0f / float(Params.CustomYSize), 8.0f / float(Params.CustomZSize)) : osg::Vec3(8.0f / float(Params.XSize), 8.0f / float(Params.YSize), 8.0f / float(Params.ZSize)));
+        osg::Matrix invProjectionMatrix = osg::Matrix(Params.invProjectionMatrix);
+        osg::Matrix invModelViewMatrix = osg::Matrix(Params.invModelViewMatrix);
 
-        setParameter(selectedShader, "textureSampling", volumeSamplingDistance);
-        setParameter(selectedShader, "inputAdjustment", osg::Vec2(Params.dataPreMultiplication, -Params.dataOffset));
-        setParameter(selectedShader, "imageAdjustment", osg::Vec2(Params.imageBrightness, Params.imageContrast));
-        setParameter(selectedShader, "sVector",         par_sVector);
-        setParameter(selectedShader, "skipTexSize",     par_skipTexSize);
-        setParameter(selectedShader, "tResolution",     par_tResolution);
-        setParameter(selectedShader, "tSkipResolution", par_tSkipResolution);
-        setParameter(selectedShader, "StopCondition",   0.01f);
-        setParameter(selectedShader, "wSize",           osg::Vec2(1.0f / float(renderingSize.x()), 1.0f / float(renderingSize.y())));
-        setParameter(selectedShader, "pl",              osg::Vec4(Params.planeA, Params.planeB, Params.planeC, Params.planeD + Params.planeDeltaNear * Sqrt3Div2));
-        setParameter(selectedShader, "plNear",          osg::Vec4(Params.planeA, Params.planeB, Params.planeC, Params.planeD + Params.planeDeltaNear * Sqrt3Div2));
-        setParameter(selectedShader, "plFar",           osg::Vec4(Params.planeA, Params.planeB, Params.planeC, Params.planeD + Params.planeDeltaFar * Sqrt3Div2));
+        setParameter(selectedShader, "textureSampling",     volumeSamplingDistance);
+        setParameter(selectedShader, "inputAdjustment",     osg::Vec2(Params.dataPreMultiplication, -Params.dataOffset));
+        setParameter(selectedShader, "imageAdjustment",     osg::Vec2(Params.imageBrightness, Params.imageContrast));
+        setParameter(selectedShader, "sVector",             par_sVector);
+        setParameter(selectedShader, "skipTexSize",         par_skipTexSize);
+        setParameter(selectedShader, "tResolution",         par_tResolution);
+        setParameter(selectedShader, "tSkipResolution",     par_tSkipResolution);
+        setParameter(selectedShader, "StopCondition",       0.01f);
+        setParameter(selectedShader, "wSize",               osg::Vec2(1.0f / float(renderingSize.x()), 1.0f / float(renderingSize.y())));
+        setParameter(selectedShader, "pl",                  osg::Vec4(Params.planeA, Params.planeB, Params.planeC, Params.planeD + Params.planeDeltaNear * Sqrt3Div2));
+        setParameter(selectedShader, "plNear",              osg::Vec4(Params.planeA, Params.planeB, Params.planeC, Params.planeD + Params.planeDeltaNear * Sqrt3Div2));
+        setParameter(selectedShader, "plFar",               osg::Vec4(Params.planeA, Params.planeB, Params.planeC, Params.planeD + Params.planeDeltaFar * Sqrt3Div2));
+        setParameter(selectedShader, "invProjectionMatrix", invProjectionMatrix);
+        setParameter(selectedShader, "invModelViewMatrix",  invModelViewMatrix);
+        setParameter(selectedShader, "skipCondition",       m_skipConditions[Params.selectedLut]);
 
         if (Params.selectedShader == SURFACE)
         {
             setParameter(selectedShader, "surfacePar",  osg::Vec2(Params.surfaceNormalMult, Params.surfaceNormalExp));
         }
 
-        // let plugin fill shader
+        // let plugin fill custom shader parameters
         if (Params.selectedShader == CUSTOM)
         {
             shaderUpdateCallback();
         }
 
-        // *************************************************
-        // FINISH BOX RENDERING
+        // actual rendering
+        renderBox(&Params, m_Triangles);
 
-        renderBox(&Params, m_Triangles, m_TexCoords);
+        // restore culling and depth func
+        glCullFace(GL_BACK);
+        glDepthFunc(GL_LESS);
+        glClearDepth(1.0);
     }
 
-    // *************************************************
-    // now RESIZE rendered txture to fit window
+    // now RESIZE rendered texture to fit window
     // AND RENDER BICUBIC RESIZED IMAGE TO WHOLE WINDOW - SCREEN
-
     glUseProgram(m_spGLData->PshaderResize);
     glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, framebuffer);
     glViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
@@ -3785,19 +3706,12 @@ void PSVolumeRendering::renderVolume()
     // end of parameters
 
     glColor3f(0, 1, 1); // no use
-    glMatrixMode(GL_PROJECTION);
-    glPushMatrix();
-    glLoadIdentity();
-    glOrtho(-1, 1, -1, 1, 0, 100);
-    glMatrixMode(GL_MODELVIEW);
-
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
+    glDepthFunc(GL_ALWAYS);
     glDisable(GL_CULL_FACE);
-
-    glPushMatrix(); // no transformation for this quad
-    glLoadIdentity();
+    //GLint binding;
+    //glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &binding);
 
     // Save current state
     bool bVertexArray = glIsEnabled(GL_VERTEX_ARRAY);
@@ -3814,27 +3728,25 @@ void PSVolumeRendering::renderVolume()
     glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &vertexArray);
 
     // Bind the corresponding VAO
-    glBindVertexArrayX( m_spGLData->VAORect );
+    glBindVertexArrayX(m_spGLData->VAORect);
 
     // Draw the rect
-    glDrawArrays( GL_TRIANGLES, 0, GLsizei(6) );
+    glDrawArrays(GL_TRIANGLES, 0, GLsizei(6));
 
     // Unboud a previously bound Vertex Array Object (just to be sure)
     glBindVertexArrayX(vertexArray);
 #else
-    glEnableClientState( GL_VERTEX_ARRAY );
-    glEnableClientState( GL_TEXTURE_COORD_ARRAY );
-    glDisableClientState( GL_NORMAL_ARRAY );
-    glDisableClientState( GL_COLOR_ARRAY );
+    glEnableClientState(GL_VERTEX_ARRAY);
+    glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+    glDisableClientState(GL_NORMAL_ARRAY);
+    glDisableClientState(GL_COLOR_ARRAY);
 
     // And set up vertex attributes
-    glBindBufferARB( GL_ARRAY_BUFFER_ARB, m_spGLData->VBORect[0] );
-    glVertexPointer( 3, GL_FLOAT, 0, 0 );
+    glBindBufferARB(GL_ARRAY_BUFFER_ARB, m_spGLData->VBORect);
+    glVertexPointer(3, GL_FLOAT, 0, 0);
 
-    glBindBufferARB( GL_ARRAY_BUFFER_ARB, m_spGLData->VBORect[1] );
-    glTexCoordPointer( 3, GL_FLOAT, 0, 0 );
-    glDrawArrays( GL_TRIANGLES, 0, GLsizei(6) );
-    glBindBufferARB( GL_ARRAY_BUFFER_ARB, 0);
+    glDrawArrays(GL_TRIANGLES, 0, GLsizei(6));
+    glBindBufferARB(GL_ARRAY_BUFFER_ARB, 0);
 #endif
     
     // Restore state so that OSG can continue its work
@@ -3847,21 +3759,12 @@ void PSVolumeRendering::renderVolume()
     bEdgeFlagArray          ? glEnableClientState(GL_EDGE_FLAG_ARRAY)       : glDisableClientState(GL_EDGE_FLAG_ARRAY);
     bFogCoordArray          ? glEnableClientState(GL_FOG_COORD_ARRAY)       : glDisableClientState(GL_FOG_COORD_ARRAY);
 
+    // restore state
     glPopMatrix();
-    glDisable(GL_BLEND);
-
-    // Restore projection matrix
-    glMatrixMode(GL_PROJECTION);
-    glPopMatrix();
-
-    // Restore modelview matrix
-    glMatrixMode(GL_MODELVIEW);
-    glPopMatrix();
-
-    // OpenGL state restoration
     glUseProgram(0);
     glActiveTexture(GL_TEXTURE0);
-
+    glDepthFunc(GL_LESS);
+    glDisable(GL_BLEND);
     glDisable(GL_CULL_FACE);
     //glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
 
@@ -3877,13 +3780,11 @@ void PSVolumeRendering::renderVolume()
     // SwapBuffers();
     //
     // Never call glFlush before calling SwapBuffers. The SwapBuffer command takes care of flushing and command processing.
-//    glFlush();
+    //glFlush();
 }
-
 
 ///////////////////////////////////////////////////////////////////////////////
 //
-
 bool PSVolumeRendering::init()
 {
     tLock Lock(*this);
@@ -3923,14 +3824,12 @@ bool PSVolumeRendering::init()
     return true;
 }
 
-
 ///////////////////////////////////////////////////////////////////////////////
 // Resets initialization failure counter
 void PSVolumeRendering::resetFailureCounter()
 {
     m_FailureCounter = 0;
 }
-
 
 ///////////////////////////////////////////////////////////////////////////////
 // Returns if init has failed too many times in a row
@@ -3939,7 +3838,6 @@ bool PSVolumeRendering::constantFailure()
     return (m_FailureCounter > PSVR_FAIL_LIMIT);
 }
 
-
 ///////////////////////////////////////////////////////////////////////////////
 // Returns all error strings
 std::vector<std::string> PSVolumeRendering::getErrorStrings()
@@ -3947,10 +3845,7 @@ std::vector<std::string> PSVolumeRendering::getErrorStrings()
     return m_ErrorStrings;
 }
 
-
 ///////////////////////////////////////////////////////////////////////////////
-//
-
 // are we able to render?
 void PSVolumeRendering::setMouseMode(bool bEnable)
 {
@@ -3967,7 +3862,7 @@ void PSVolumeRendering::setMouseMode(bool bEnable)
         return;
     }*/
 
-    if( bEnable )
+    if (bEnable)
     {
         setAndSignalFlag(MOUSE_MODE | OSR_INVALID);
     }
@@ -3977,7 +3872,6 @@ void PSVolumeRendering::setMouseMode(bool bEnable)
         setAndSignalFlag(OSR_INVALID);
     }
 }
-
 
 ////////////////////////////////////////////////////////////////////////////////
 //
@@ -3995,13 +3889,11 @@ void PSVolumeRendering::setMousePressed(bool bPressed)
     }
 }
 
-
 //////////////////////////////////////////////////////////////////////////////
 //
-
 void PSVolumeRendering::setShader(int shader)
 {
-    if( shader < 0 || shader >= SHADERS_COUNT )
+    if (shader < 0 || shader >= SHADERS_COUNT)
     {
         return;
     }
@@ -4013,13 +3905,11 @@ void PSVolumeRendering::setShader(int shader)
     VPL_SIGNAL(SigVRModeChange).invoke(shader);
 }
 
-
 ///////////////////////////////////////////////////////////////////////////////
 //
-
 void PSVolumeRendering::setLut(int lut)
 {
-    if( lut < 0 || lut >= LOOKUPS_COUNT )
+    if (lut < 0 || lut >= LOOKUPS_COUNT)
     {
         return;
     }
@@ -4028,26 +3918,24 @@ void PSVolumeRendering::setLut(int lut)
 
     m_spParams->selectedLut = lut;
 
-//    setAndSignalFlag(LUT_INVALID);
+    //setAndSignalFlag(LUT_INVALID);
     setFlag(LUT_INVALID);
 
     VPL_SIGNAL(SigVRLutChange).invoke(lut);
 }
 
-
 ///////////////////////////////////////////////////////////////////////////////
 //
-
 void PSVolumeRendering::setQuality(int quality)
 {
-    if( quality < 0 || quality >= QUALITY_LEVELS )
+    if (quality < 0 || quality >= QUALITY_LEVELS)
     {
         return;
     }
 
     tLock Lock(*this);
 
-    if( m_spParams->currentQuality == quality )
+    if (m_spParams->currentQuality == quality)
     {
         return;
     }
@@ -4062,10 +3950,8 @@ void PSVolumeRendering::setQuality(int quality)
     VPL_SIGNAL(SigVRQualityChange).invoke(quality);
 }
 
-
 ///////////////////////////////////////////////////////////////////////////////
 //
-
 void PSVolumeRendering::setDataRemap(float expand, float offset)
 {
     tLock Lock(*this);
@@ -4073,7 +3959,7 @@ void PSVolumeRendering::setDataRemap(float expand, float offset)
     m_spParams->dataPreMultiplication = expand;
     m_spParams->dataOffset = offset;
 
-//    VPL_LOG_INFO("PSVolumeRendering::setDataRemap(): mult = " << m_spParams->dataPreMultiplication << ", offset = " << m_spParams->dataOffset);
+    //VPL_LOG_INFO("PSVolumeRendering::setDataRemap(): mult = " << m_spParams->dataPreMultiplication << ", offset = " << m_spParams->dataOffset);
     VPL_SIGNAL(SigVRDataRemapChange).invoke(expand, offset);
 }
 
@@ -4087,7 +3973,6 @@ void PSVolumeRendering::getDataRemap(float& expand, float& offset)
 
 ///////////////////////////////////////////////////////////////////////////////
 //
-
 void PSVolumeRendering::setPicture(float brightness, float contrast)
 {
     tLock Lock(*this);
@@ -4096,10 +3981,8 @@ void PSVolumeRendering::setPicture(float brightness, float contrast)
     m_spParams->imageContrast = contrast;
 }
 
-
 ///////////////////////////////////////////////////////////////////////////////
 //
-
 void PSVolumeRendering::setSurfaceDetection(float mult, float exp)
 {
     tLock Lock(*this);
@@ -4108,13 +3991,11 @@ void PSVolumeRendering::setSurfaceDetection(float mult, float exp)
     m_spParams->surfaceNormalExp = exp;
 }
 
-
 ///////////////////////////////////////////////////////////////////////////////
 //
-
 void PSVolumeRendering::setRenderingSize(int size)
 {
-    if( size < 0 )
+    if (size < 0)
     {
         return;
     }
@@ -4124,10 +4005,8 @@ void PSVolumeRendering::setRenderingSize(int size)
     m_spParams->renderingSize = size;
 }
 
-
 ///////////////////////////////////////////////////////////////////////////////
 //
-
 void PSVolumeRendering::setCuttingPlane(float a, float b, float c, float d)
 {
     tLock Lock(*this);
@@ -4138,10 +4017,8 @@ void PSVolumeRendering::setCuttingPlane(float a, float b, float c, float d)
     m_spParams->planeD = d;
 }
 
-
 ///////////////////////////////////////////////////////////////////////////////
 //
-
 void PSVolumeRendering::setCuttingPlaneDisplacement(float deltaNear, float deltaFar)
 {
     tLock Lock(*this);
@@ -4154,7 +4031,6 @@ void PSVolumeRendering::setCuttingPlaneDisplacement(float deltaNear, float delta
 
 ///////////////////////////////////////////////////////////////////////////////
 //
-
 void PSVolumeRendering::setNearCuttingPlaneDisplacement(float delta)
 {
     vpl::math::limit<float>(delta, -1.0f, 1.0f);
@@ -4163,7 +4039,6 @@ void PSVolumeRendering::setNearCuttingPlaneDisplacement(float delta)
 
 ///////////////////////////////////////////////////////////////////////////////
 //
-
 void PSVolumeRendering::setFarCuttingPlaneDisplacement(float delta)
 {
     vpl::math::limit<float>(delta, -1.0f, 1.0f);
@@ -4172,7 +4047,6 @@ void PSVolumeRendering::setFarCuttingPlaneDisplacement(float delta)
 
 ///////////////////////////////////////////////////////////////////////////////
 //
-
 void PSVolumeRendering::getCuttingPlane(float &a, float &b, float &c, float &d)
 {
     a = m_spParams->planeA;
@@ -4183,7 +4057,6 @@ void PSVolumeRendering::getCuttingPlane(float &a, float &b, float &c, float &d)
 
 ///////////////////////////////////////////////////////////////////////////////
 //
-
 float PSVolumeRendering::getNearCuttingPlaneDisplacement()
 {
     return m_spParams->planeDeltaNear;
@@ -4191,7 +4064,6 @@ float PSVolumeRendering::getNearCuttingPlaneDisplacement()
 
 ///////////////////////////////////////////////////////////////////////////////
 //
-
 float PSVolumeRendering::getFarCuttingPlaneDisplacement()
 {
     return m_spParams->planeDeltaFar;
@@ -4199,10 +4071,9 @@ float PSVolumeRendering::getFarCuttingPlaneDisplacement()
 
 ///////////////////////////////////////////////////////////////////////////////
 //
-
 void PSVolumeRendering::setSamplingDistance(float distance)
 {
-    if( distance < 0.0f )
+    if (distance < 0.0f)
     {
         return;
     }
@@ -4214,7 +4085,6 @@ void PSVolumeRendering::setSamplingDistance(float distance)
 
 ///////////////////////////////////////////////////////////////////////////////
 // get methods
-
 int  PSVolumeRendering::getLut() const
 {
     return m_spParams->selectedLut;
@@ -4229,7 +4099,6 @@ int  PSVolumeRendering::getQuality() const
 {
     return m_spParams->currentQuality;
 }
-
 
 } // namesapce PSVR
 

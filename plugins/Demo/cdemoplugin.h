@@ -1,5 +1,6 @@
 ///////////////////////////////////////////////////////////////////////////////
-// $Id: cdemoplugin.h 1530 2012-03-02 07:54:39Z tryhuk $
+// 
+// Copyright 2008-2015 3Dim Laboratory s.r.o.
 //
 
 #ifndef CDEMOPLUGIN_H

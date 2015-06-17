@@ -28,7 +28,7 @@
    </property>
    <widget class="QMenu" name="menuArchive">
     <property name="title">
-     <string>File</string>
+     <string>&amp;File</string>
     </property>
     <widget class="QMenu" name="menuRecent">
      <property name="title">
@@ -54,7 +54,7 @@
    </widget>
    <widget class="QMenu" name="menuEdit">
     <property name="title">
-     <string>Edit</string>
+     <string>&amp;Edit</string>
     </property>
     <widget class="QMenu" name="menuSwitch_Mouse_Mode">
      <property name="title">
@@ -72,7 +72,7 @@
    </widget>
    <widget class="QMenu" name="menuView">
     <property name="title">
-     <string>View</string>
+     <string>&amp;View</string>
     </property>
     <widget class="QMenu" name="menuViews">
      <property name="title">
@@ -100,9 +100,13 @@
      </property>
      <addaction name="actionDensity_Window"/>
      <addaction name="actionOrtho_Slices_Panel"/>
-     <addaction name="actionSegmentation_Panel"/>
      <addaction name="actionVolume_Rendering_Panel"/>
+     <addaction name="actionSegmentation_Panel"/>
      <addaction name="actionModels_List_Panel"/>
+     <addaction name="separator"/>
+     <addaction name="actionPrevious_Panel"/>
+     <addaction name="actionNext_Panel"/>
+     <addaction name="actionClose_Active_Panel"/>
     </widget>
     <widget class="QMenu" name="menu3D_Scene">
      <property name="title">
@@ -136,14 +140,14 @@
    </widget>
    <widget class="QMenu" name="menuModel">
     <property name="title">
-     <string>Model</string>
+     <string>&amp;Model</string>
     </property>
     <addaction name="actionCreate_Surface_Model"/>
     <addaction name="actionShow_Surface_Model"/>
    </widget>
    <widget class="QMenu" name="menuHelp">
     <property name="title">
-     <string>Help</string>
+     <string>&amp;Help</string>
     </property>
     <addaction name="actionShow_Help"/>
     <addaction name="separator"/>
@@ -152,7 +156,7 @@
    </widget>
    <widget class="QMenu" name="menuFiltering">
     <property name="title">
-     <string>Filtering</string>
+     <string>Fil&amp;tering</string>
     </property>
     <widget class="QMenu" name="menuViewFilter">
      <property name="title">
@@ -168,7 +172,7 @@
    </widget>
    <widget class="QMenu" name="menuMeasurements">
     <property name="title">
-     <string>Measurements</string>
+     <string>Me&amp;asurements</string>
     </property>
     <addaction name="actionMeasure_Density_Value"/>
     <addaction name="actionMeasure_Distance"/>
@@ -541,6 +545,9 @@
    <property name="statusTip">
     <string>Shows/Hides the density window adjusting panel.</string>
    </property>
+   <property name="shortcut">
+    <string>Ctrl+1</string>
+   </property>
   </action>
   <action name="actionOrtho_Slices_Panel">
    <property name="checkable">
@@ -558,6 +565,9 @@
    </property>
    <property name="statusTip">
     <string>Shows/Hides the ortho slices panel.</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+2</string>
    </property>
   </action>
   <action name="actionTrackball_Mode">
@@ -714,6 +724,9 @@
    <property name="statusTip">
     <string>Shows/Hides the tissue segmentation panel.</string>
    </property>
+   <property name="shortcut">
+    <string>Ctrl+4</string>
+   </property>
   </action>
   <action name="actionWorkspaceTabs">
    <property name="checkable">
@@ -788,6 +801,9 @@
    <property name="statusTip">
     <string>Shows/Hides the volume rendering configuration panel.</string>
    </property>
+   <property name="shortcut">
+    <string>Ctrl+3</string>
+   </property>
   </action>
   <action name="actionPreferences">
    <property name="icon">
@@ -858,7 +874,7 @@
   </action>
   <action name="actionGaussian_Filter">
    <property name="text">
-    <string>Gaussian Filter</string>
+    <string>Gaussian Filter...</string>
    </property>
    <property name="toolTip">
     <string>Applies 3D Gaussian filter on the volumetric data.</string>
@@ -869,7 +885,7 @@
   </action>
   <action name="actionMedian_Filter">
    <property name="text">
-    <string>Median Filter</string>
+    <string>Median Filter...</string>
    </property>
    <property name="toolTip">
     <string>Applies median filter on the volumetric data.</string>
@@ -880,7 +896,7 @@
   </action>
   <action name="action3D_Anisotropic_Filter">
    <property name="text">
-    <string>3D Anisotropic Filter</string>
+    <string>3D Anisotropic Filter...</string>
    </property>
    <property name="toolTip">
     <string>Applies 3D anisotropic filter on the volumetric data.</string>
@@ -1124,6 +1140,9 @@
    <property name="statusTip">
     <string>Shows/Hides the models list.</string>
    </property>
+   <property name="shortcut">
+    <string>Ctrl+5</string>
+   </property>
   </action>
   <action name="actionViewEqualize">
    <property name="checkable">
@@ -1150,6 +1169,35 @@
    </property>
    <property name="statusTip">
     <string>Saves original DICOM Series to a given directory.</string>
+   </property>
+  </action>
+  <action name="actionClose_Active_Panel">
+   <property name="text">
+    <string>Close Active Panel</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+F4</string>
+   </property>
+  </action>
+  <action name="actionPrevious_Panel">
+   <property name="text">
+    <string>Previous Panel</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+Shift+Tab</string>
+   </property>
+  </action>
+  <action name="actionNext_Panel">
+   <property name="text">
+    <string>Next Panel</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+Tab</string>
+   </property>
+  </action>
+  <action name="actionVolume_Filter">
+   <property name="text">
+    <string>Volume Filter...</string>
    </property>
   </action>
  </widget>

@@ -111,11 +111,11 @@ void data::CSerieInfo::getDicomFileList( tDicomFileList& Files )
 }
 
 //==============================================================================================
-bool data::CSerieInfo::loadDicomFile( int FileNum, vpl::img::CDicomSlice& Slice, bool bLoadImageData )
+bool data::CSerieInfo::loadDicomFile(int FileNum, vpl::img::CDicomSlice& Slice, sExtendedTags& tags, bool bLoadImageData)
 {
     if( FileNum >= 0 && FileNum < int(m_DicomList.size()) )
     {
-		return loadDicomDCTk( m_DCMTkList[FileNum].directory, m_DCMTkList[FileNum].filename, Slice, bLoadImageData );
+		return loadDicomDCTk( m_DCMTkList[FileNum].directory, m_DCMTkList[FileNum].filename, Slice, tags, bLoadImageData );
     }
     else
     {
@@ -124,11 +124,11 @@ bool data::CSerieInfo::loadDicomFile( int FileNum, vpl::img::CDicomSlice& Slice,
 }
 
 //==============================================================================================
-int data::CSerieInfo::loadDicomFile( int FileNum, tDicomSlices& Slices, bool bLoadImageData, bool bCompatibilityMode )
+int data::CSerieInfo::loadDicomFile(int FileNum, tDicomSlices& Slices, sExtendedTags& tags, bool bLoadImageData, bool bCompatibilityMode)
 {
     if( FileNum >= 0 && FileNum < int(m_DicomList.size()) )
     {
-		return loadDicomDCTk( m_DCMTkList[FileNum].directory, m_DCMTkList[FileNum].filename, Slices, bLoadImageData, bCompatibilityMode );
+        return loadDicomDCTk( m_DCMTkList[FileNum].directory, m_DCMTkList[FileNum].filename, Slices, tags, bLoadImageData, bCompatibilityMode );
     }
     else
     {

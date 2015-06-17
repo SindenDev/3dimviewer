@@ -32,10 +32,12 @@ namespace data
 ///////////////////////////////////////////////////////////////////////////////
 //
 
-CModelManager::CModelManager() : CStorageInterface(APP_STORAGE)
+CModelManager::CModelManager()
+    : CStorageInterface(APP_STORAGE)
+    , m_selectedModel(-1)
 {
     // Initialize the dummy model
-    m_DummyModel.setMesh(new CMesh);
+    m_DummyModel.setMesh(new geometry::CMesh);
     m_transparencyNeeded = false;
 
     // Register all callback functions
@@ -44,6 +46,7 @@ CModelManager::CModelManager() : CStorageInterface(APP_STORAGE)
     VPL_SIGNAL(SigSetModelVisibility).connect(this, &CModelManager::setModelVisibility);
     VPL_SIGNAL(SigGetModelColor).connect(this, &CModelManager::getModelColor2);
     VPL_SIGNAL(SigGetModelVisibility).connect(this, &CModelManager::isModelShown);
+    VPL_SIGNAL(SigSelectModel).connect(this, &CModelManager::selectModel);
 
     // Initialize the manager
     CModelManager::init();
@@ -53,22 +56,25 @@ CModelManager::CModelManager() : CStorageInterface(APP_STORAGE)
     setModelColor(Storage::SoftTissuesModel::Id, 1.0f, 0.0f, 0.0f, 1.0f);
     setModelColor(Storage::ImprintModel::Id, 1.0f, 0.0f, 0.0f, 1.0f);
     setModelColor(Storage::TemplateModel::Id, 0.0f, 0.0f, 1.0f, 1.0f);
-    for(int id = 0; id < MAX_IMPORTED_MODELS; ++id)
+    for (int id = 0; id < MAX_IMPORTED_MODELS; ++id)
+    {
         setModelColor(Storage::ImportedModel::Id + id, 1.0f, 1.0f, 0.0f, 1.0f);
+    }
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 //
 
 CModelManager::~CModelManager()
-{
-}
+{ }
 
 ///////////////////////////////////////////////////////////////////////////////
 //
 
 void CModelManager::init()
 {
+    m_selectedModel = -1;
+
     using namespace Storage;
 
     CEntryDeps ModelDeps;
@@ -79,43 +85,47 @@ void CModelManager::init()
     STORABLE_FACTORY.registerObject(SoftTissuesModel::Id, SoftTissuesModel::Type::create, ModelDeps);
     STORABLE_FACTORY.registerObject(ImprintModel::Id, ImprintModel::Type::create, ModelDeps);
     STORABLE_FACTORY.registerObject(TemplateModel::Id, TemplateModel::Type::create, ModelDeps);
-    for(int id = 0; id < MAX_IMPORTED_MODELS; ++id)
+    for (int id = 0; id < MAX_IMPORTED_MODELS; ++id)
+    {
         STORABLE_FACTORY.registerObject(ImportedModel::Id + id, ImportedModel::Type::create, ModelDeps);
+    }
 
-	// cuts through imported models
-	for (int i = 0; i < MAX_IMPORTED_MODELS; ++i)
-	{
-		STORABLE_FACTORY.registerObject(ImportedModelCutSliceXY::Id + i, ImportedModelCutSliceXY::Type::create, CEntryDeps().insert(SliceXY::Id).insert(ImportedModel::Id + i));
-		STORABLE_FACTORY.registerObject(ImportedModelCutSliceXZ::Id + i, ImportedModelCutSliceXZ::Type::create, CEntryDeps().insert(SliceXZ::Id).insert(ImportedModel::Id + i));
-		STORABLE_FACTORY.registerObject(ImportedModelCutSliceYZ::Id + i, ImportedModelCutSliceYZ::Type::create, CEntryDeps().insert(SliceYZ::Id).insert(ImportedModel::Id + i));
-	}
+    // cuts through imported models
+    for (int i = 0; i < MAX_IMPORTED_MODELS; ++i)
+    {
+        STORABLE_FACTORY.registerObject(ImportedModelCutSliceXY::Id + i, ImportedModelCutSliceXY::Type::create, CEntryDeps().insert(SliceXY::Id).insert(ImportedModel::Id + i));
+        STORABLE_FACTORY.registerObject(ImportedModelCutSliceXZ::Id + i, ImportedModelCutSliceXZ::Type::create, CEntryDeps().insert(SliceXZ::Id).insert(ImportedModel::Id + i));
+        STORABLE_FACTORY.registerObject(ImportedModelCutSliceYZ::Id + i, ImportedModelCutSliceYZ::Type::create, CEntryDeps().insert(SliceYZ::Id).insert(ImportedModel::Id + i));
+    }
 
     // Enforce object creation
     APP_STORAGE.getEntry(BonesModel::Id);
 
-	for (int i = 0; i < MAX_IMPORTED_MODELS; ++i)
-	{
-		CObjectPtr<CModelCutSliceXY> spModelCutXY( APP_STORAGE.getEntry(ImportedModelCutSliceXY::Id + i) );
-		spModelCutXY->setModelId(ImportedModel::Id + i);
-		CObjectPtr<CModelCutSliceXZ> spModelCutXZ( APP_STORAGE.getEntry(ImportedModelCutSliceXZ::Id + i) );
-		spModelCutXZ->setModelId(ImportedModel::Id + i);
-		CObjectPtr<CModelCutSliceYZ> spModelCutYZ( APP_STORAGE.getEntry(ImportedModelCutSliceYZ::Id + i) );
-		spModelCutYZ->setModelId(ImportedModel::Id + i);
-	}
+    for (int i = 0; i < MAX_IMPORTED_MODELS; ++i)
+    {
+        CObjectPtr<CModelCutSliceXY> spModelCutXY(APP_STORAGE.getEntry(ImportedModelCutSliceXY::Id + i));
+        spModelCutXY->setModelId(ImportedModel::Id + i);
+        CObjectPtr<CModelCutSliceXZ> spModelCutXZ(APP_STORAGE.getEntry(ImportedModelCutSliceXZ::Id + i));
+        spModelCutXZ->setModelId(ImportedModel::Id + i);
+        CObjectPtr<CModelCutSliceYZ> spModelCutYZ(APP_STORAGE.getEntry(ImportedModelCutSliceYZ::Id + i));
+        spModelCutYZ->setModelId(ImportedModel::Id + i);
+    }
 
     // Initialize storage ids for mesh undo providers
     initMeshUndoProvider(Storage::BonesModel::Id);
     initMeshUndoProvider(Storage::SoftTissuesModel::Id);
     initMeshUndoProvider(Storage::ImprintModel::Id);
     initMeshUndoProvider(Storage::TemplateModel::Id);
-    for(int id = 0; id < MAX_IMPORTED_MODELS; ++id)
+    for (int id = 0; id < MAX_IMPORTED_MODELS; ++id)
+    {
         initMeshUndoProvider(Storage::ImportedModel::Id + id);
+    }
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 //
 
-void CModelManager::setModel(int id, CMesh * pMesh)
+void CModelManager::setModel(int id, geometry::CMesh * pMesh)
 {
     if( id < Storage::BonesModel::Id || id >= Storage::BonesModel::Id + MAX_MODELS || !pMesh )
     {
@@ -130,6 +140,39 @@ void CModelManager::setModel(int id, CMesh * pMesh)
     APP_STORAGE.invalidate(spModel.getEntryPtr());
 }
 
+
+// Selects implant
+void CModelManager::selectModel(int id)
+{
+    if (id < Storage::BonesModel::Id || id >= Storage::BonesModel::Id + MAX_MODELS)
+    {
+        id = -1;
+    }
+
+    if (m_selectedModel != id)
+    {
+        // deselect current
+        if (m_selectedModel != -1)
+        {
+            data::CObjectPtr<data::CModel> spPrevModel(APP_STORAGE.getEntry(m_selectedModel));
+            spPrevModel->deselect();
+            APP_STORAGE.invalidate(spPrevModel.getEntryPtr(), CModel::NOTHING_CHANGED & ~CModel::SELECTION_NOT_CHANGED);
+        }
+
+        m_selectedModel = id;
+
+        // just deselecting => do not do anything
+        if (m_selectedModel == -1)
+        {
+            return;
+        }
+
+        // select new
+        data::CObjectPtr<data::CModel> spCurrModel(APP_STORAGE.getEntry(m_selectedModel));
+        spCurrModel->select();
+        APP_STORAGE.invalidate(spCurrModel.getEntryPtr(), CModel::NOTHING_CHANGED & ~CModel::SELECTION_NOT_CHANGED);
+    }
+}
 ///////////////////////////////////////////////////////////////////////////////
 //
 

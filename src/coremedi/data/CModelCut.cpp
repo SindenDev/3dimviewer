@@ -95,12 +95,15 @@ void CModelCutSliceXY::update(const CChangedEntries &changedEntries)
 
     m_color = spModel->getColor();
 
-    data::CMesh *mesh = spModel->getMesh();
+    geometry::CMesh *mesh = spModel->getMesh();
     float planePosition = spSlice->getPosition() * dZ;
 
     if (changedEntries.hasChanged(m_modelId))
     {
-        mesh->updateOctree();
+		data::CChangedEntries::tFilter filter;
+		filter.insert(m_modelId);
+		if (!changedEntries.checkExactFlagsAll(data::CModel::MESH_NOT_CHANGED,data::CModel::MESH_NOT_CHANGED,filter))
+			mesh->updateOctree(APP_STORAGE.getEntry(m_modelId).get()->getLatestVersion());
     }
 
     clear();
@@ -108,12 +111,12 @@ void CModelCutSliceXY::update(const CChangedEntries &changedEntries)
     m_transformMatrix = matrix;
     if (matrix.isIdentity())
     {
-        data::CMesh::cutByZPlane(mesh, m_vertices, m_indices, planePosition);
+        geometry::CMesh::cutByZPlane(mesh, m_vertices, m_indices, planePosition);
     }
     else
     {
         osg::Plane plane( osg::Vec3(0.0, 0.0, 1.0), -planePosition );
-        data::CMesh::cutByPlane(mesh, m_vertices, m_indices, plane, matrix);
+        geometry::CMesh::cutByPlane(mesh, m_vertices, m_indices, plane, matrix);
     }
 }
 
@@ -136,12 +139,15 @@ void CModelCutSliceXZ::update(const CChangedEntries &changedEntries)
 
     m_color = spModel->getColor();
 
-    data::CMesh *mesh = spModel->getMesh();
+    geometry::CMesh *mesh = spModel->getMesh();
     float planePosition = spSlice->getPosition() * dY;
 
     if (changedEntries.hasChanged(m_modelId))
     {
-        mesh->updateOctree();
+		data::CChangedEntries::tFilter filter;
+		filter.insert(m_modelId);
+		if (!changedEntries.checkExactFlagsAll(data::CModel::MESH_NOT_CHANGED,data::CModel::MESH_NOT_CHANGED,filter))
+			mesh->updateOctree(APP_STORAGE.getEntry(m_modelId).get()->getLatestVersion());
     }
 
     clear();
@@ -149,12 +155,12 @@ void CModelCutSliceXZ::update(const CChangedEntries &changedEntries)
     m_transformMatrix = matrix;
     if (matrix.isIdentity())
     {
-        data::CMesh::cutByYPlane(mesh, m_vertices, m_indices, planePosition);
+        geometry::CMesh::cutByYPlane(mesh, m_vertices, m_indices, planePosition);
     }
     else
     {
         osg::Plane plane( osg::Vec3(0.0, 1.0, 0.0), -planePosition );
-        data::CMesh::cutByPlane(mesh, m_vertices, m_indices, plane, matrix);
+        geometry::CMesh::cutByPlane(mesh, m_vertices, m_indices, plane, matrix);
     }
 }
 
@@ -177,12 +183,15 @@ void CModelCutSliceYZ::update(const CChangedEntries &changedEntries)
 
     m_color = spModel->getColor();
 
-    data::CMesh *mesh = spModel->getMesh();
+    geometry::CMesh *mesh = spModel->getMesh();
     float planePosition = spSlice->getPosition() * dX;
 
     if (changedEntries.hasChanged(m_modelId))
     {
-        mesh->updateOctree();
+		data::CChangedEntries::tFilter filter;
+		filter.insert(m_modelId);
+		if (!changedEntries.checkExactFlagsAll(data::CModel::MESH_NOT_CHANGED,data::CModel::MESH_NOT_CHANGED,filter))
+			mesh->updateOctree(APP_STORAGE.getEntry(m_modelId).get()->getLatestVersion());
     }
 
     clear();
@@ -190,12 +199,12 @@ void CModelCutSliceYZ::update(const CChangedEntries &changedEntries)
     m_transformMatrix = matrix;
     if (matrix.isIdentity())
     {
-        data::CMesh::cutByXPlane(mesh, m_vertices, m_indices, planePosition);
+        geometry::CMesh::cutByXPlane(mesh, m_vertices, m_indices, planePosition);
     }
     else
     {
         osg::Plane plane( osg::Vec3(1.0, 0.0, 0.0), -planePosition );
-        data::CMesh::cutByPlane(mesh, m_vertices, m_indices, plane, matrix);
+        geometry::CMesh::cutByPlane(mesh, m_vertices, m_indices, plane, matrix);
     }
 }
 

@@ -225,7 +225,7 @@ CDataInfoDialog::CDataInfoDialog(QWidget *parent) :
 		data::CObjectPtr<data::CModel> spModel( APP_STORAGE.getEntry(data::Storage::ImportedModel::Id+id, data::Storage::NO_UPDATE) );
 		if(spModel->hasData())
 		{
-			data::CMesh *pMesh = spModel->getMesh();
+			geometry::CMesh *pMesh = spModel->getMesh();
 			//const std::string &std_name(spModel->getLabel());
 			//QString qs_name(QString::fromStdString(std_name));
 			AddRow(tr("Model %1").arg(id+1),"",QColor(0,128,255));

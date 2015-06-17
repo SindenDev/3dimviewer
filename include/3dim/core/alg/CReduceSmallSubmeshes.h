@@ -23,7 +23,7 @@
 #ifndef CReduceSmallSubmeshes_H
 #define CReduceSmallSubmeshes_H
 
-#include <data/CMesh.h>
+#include <geometry/base/CMesh.h>
 
 // STL
 #include <deque>
@@ -39,10 +39,10 @@ class CSmallSubmeshReducer
 {
 public:
     //! Method performs removal of all submeshes which have less than specified number of triangles.
-    bool reduce(data::CMesh &mesh, int triangle_threshold);
+    bool reduce(geometry::CMesh &mesh, int triangle_threshold);
 
     //! Method keeps only the largest submesh, all others are removed.
-    bool reduceNonMax(data::CMesh &mesh);
+    bool reduceNonMax(geometry::CMesh &mesh);
 };
 
 

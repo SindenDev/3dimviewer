@@ -23,10 +23,10 @@
 #ifndef CDecimator_H
 #define CDecimator_H
 
-////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////
 // Includes
 
-#include <data/CMesh.h>
+#include <geometry/base/CMesh.h>
 #include <OpenMesh/Tools/Decimater/ModBaseT.hh>
 #include <OpenMesh/Tools/Decimater/DecimaterT.hh>
 
@@ -59,7 +59,7 @@ public:
     ~CDecimator() {}
 
     //! Reduce input tri mesh using Volume error metrics polygonal surface simplification.
-    bool Reduce(data::CMesh &mesh, int final_vert_number, int final_tri_number);
+    bool Reduce(geometry::CMesh &mesh, int final_vert_number, int final_tri_number);
 
     bool makeProgress(int step);
 };
@@ -100,7 +100,7 @@ public:
 		m_decimator = decimater;
 	}
 
-    virtual float collapse_priority(const OpenMesh::Decimater::CollapseInfoT<data::CMesh>& collapseInfo) override
+    virtual float collapse_priority(const OpenMesh::Decimater::CollapseInfoT<geometry::CMesh>& collapseInfo) override
     {
         if (m_cancel)
         {
@@ -112,7 +112,7 @@ public:
         }
     }
 
-    virtual void postprocess_collapse(const OpenMesh::Decimater::CollapseInfoT<data::CMesh> &collapseInfo) override
+    virtual void postprocess_collapse(const OpenMesh::Decimater::CollapseInfoT<geometry::CMesh> &collapseInfo) override
     {
         if (!m_cancel && NULL!=m_decimator && !m_decimator->makeProgress(2))
         {

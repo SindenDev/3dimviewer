@@ -275,42 +275,46 @@
 <context>
     <name>CPluginManager</name>
     <message>
-        <location filename="../../../src/qtplugin/CPluginManager.cpp" line="368"/>
         <source>Plugins</source>
-        <translation>Pluginy</translation>
+        <translation type="obsolete">Pluginy</translation>
     </message>
     <message>
-        <location filename="../../../src/qtplugin/CPluginManager.cpp" line="453"/>
+        <location filename="../../../src/qtplugin/CPluginManager.cpp" line="376"/>
+        <source>&amp;Plugins</source>
+        <translation>&amp;Pluginy</translation>
+    </message>
+    <message>
+        <location filename="../../../src/qtplugin/CPluginManager.cpp" line="463"/>
         <source>Show Help</source>
         <translation>Zobrazit nápovědu</translation>
     </message>
     <message>
-        <location filename="../../../src/qtplugin/CPluginManager.cpp" line="473"/>
+        <location filename="../../../src/qtplugin/CPluginManager.cpp" line="492"/>
         <source>Show/Hide Plugin Toolbar</source>
         <translation>Zobrazit/Skrýt lištu pluginu</translation>
     </message>
     <message>
-        <location filename="../../../src/qtplugin/CPluginManager.cpp" line="481"/>
+        <location filename="../../../src/qtplugin/CPluginManager.cpp" line="501"/>
         <source>Show/Hide Plugin Panel</source>
         <translation>Zobrazit/Skrýt panel pluginu</translation>
     </message>
     <message>
-        <location filename="../../../src/qtplugin/CPluginManager.cpp" line="489"/>
+        <location filename="../../../src/qtplugin/CPluginManager.cpp" line="513"/>
         <source>Plugin Registration...</source>
         <translation>Registrace pluginu...</translation>
     </message>
     <message>
-        <location filename="../../../src/qtplugin/CPluginManager.cpp" line="637"/>
+        <location filename="../../../src/qtplugin/CPluginManager.cpp" line="662"/>
         <source>A PDF viewer is required to view help!</source>
         <translation>K zobrazení nápovědy je potřeba PDF prohlížeč!</translation>
     </message>
     <message>
-        <location filename="../../../src/qtplugin/CPluginManager.cpp" line="640"/>
+        <location filename="../../../src/qtplugin/CPluginManager.cpp" line="665"/>
         <source>Help file is missing!</source>
         <translation>Soubor s nápovědou nebyl nalezen!</translation>
     </message>
     <message>
-        <location filename="../../../src/qtplugin/CPluginManager.cpp" line="646"/>
+        <location filename="../../../src/qtplugin/CPluginManager.cpp" line="671"/>
         <source>Couldn&apos;t open online help! Please verify your internet connection.</source>
         <translation>Nepodařilo se získat online nápovědu, zkontrolujte prosím své internetové připojení.</translation>
     </message>
@@ -401,14 +405,50 @@
         <translation>Modely svázány s regiony</translation>
     </message>
     <message>
+        <location filename="../ui/cpreferencesdialog.ui" line="196"/>
+        <source>Action</source>
+        <translation>Akce</translation>
+    </message>
+    <message>
+        <location filename="../ui/cpreferencesdialog.ui" line="201"/>
+        <location filename="../ui/cpreferencesdialog.ui" line="209"/>
+        <source>Shortcut</source>
+        <translation>Klávesová zkratka</translation>
+    </message>
+    <message>
+        <location filename="../ui/cpreferencesdialog.ui" line="218"/>
+        <source>Type to set shortcut</source>
+        <translation>Zadejte klávesovou zkratku</translation>
+    </message>
+    <message>
         <location filename="../ui/cpreferencesdialog.ui" line="225"/>
-        <location filename="../ui/cpreferencesdialog.ui" line="254"/>
+        <source>Set</source>
+        <translation>Nastavit</translation>
+    </message>
+    <message>
+        <location filename="../ui/cpreferencesdialog.ui" line="232"/>
+        <source>Clear</source>
+        <translation>Smazat</translation>
+    </message>
+    <message>
+        <location filename="../ui/cpreferencesdialog.ui" line="279"/>
+        <location filename="../ui/cpreferencesdialog.ui" line="308"/>
         <source>General</source>
         <translation>Základní</translation>
     </message>
     <message>
-        <location filename="../src/cpreferencesdialog.cpp" line="43"/>
+        <location filename="../ui/cpreferencesdialog.ui" line="313"/>
+        <source>Shortcuts</source>
+        <translation>Klávesové zkratky</translation>
+    </message>
+    <message>
+        <location filename="../src/cpreferencesdialog.cpp" line="44"/>
         <source>English</source>
+        <translation></translation>
+    </message>
+    <message>
+        <location filename="../src/cpreferencesdialog.cpp" line="259"/>
+        <source>Alt+%1</source>
         <translation></translation>
     </message>
 </context>
@@ -463,7 +503,7 @@
         <translation>Obrazová data</translation>
     </message>
     <message>
-        <location filename="../src/cseriesselectiondialog.cpp" line="220"/>
+        <location filename="../src/cseriesselectiondialog.cpp" line="223"/>
         <source>%1 x %2 x %3 voxels
 %4 x %5 x %6 mm
 %7 - %8</source>
@@ -472,7 +512,7 @@
 %7 - %8</translation>
     </message>
     <message>
-        <location filename="../src/cseriesselectiondialog.cpp" line="332"/>
+        <location filename="../src/cseriesselectiondialog.cpp" line="335"/>
         <source>Please select a series.</source>
         <translation>Zvolte prosím sérii.</translation>
     </message>
@@ -584,59 +624,59 @@
 <context>
     <name>CVolumeRenderingWidget</name>
     <message>
-        <location filename="../src/volumerenderingwidget.cpp" line="154"/>
+        <location filename="../src/volumerenderingwidget.cpp" line="164"/>
         <source>Soft tissues</source>
         <translation>Měkké tkáně</translation>
     </message>
     <message>
-        <location filename="../src/volumerenderingwidget.cpp" line="155"/>
+        <location filename="../src/volumerenderingwidget.cpp" line="165"/>
         <source>Bone tissues</source>
         <translation>Kostní tkáň</translation>
     </message>
     <message>
-        <location filename="../src/volumerenderingwidget.cpp" line="176"/>
+        <location filename="../src/volumerenderingwidget.cpp" line="187"/>
         <source>Transparent</source>
         <translation>Průhledný</translation>
     </message>
     <message>
-        <location filename="../src/volumerenderingwidget.cpp" line="177"/>
+        <location filename="../src/volumerenderingwidget.cpp" line="188"/>
         <source>Air pockets</source>
         <translation>Vzduchové kapsy</translation>
     </message>
     <message>
-        <location filename="../src/volumerenderingwidget.cpp" line="178"/>
+        <location filename="../src/volumerenderingwidget.cpp" line="189"/>
         <source>Bones (skull)</source>
         <translation>Kosti (lebka)</translation>
     </message>
     <message>
-        <location filename="../src/volumerenderingwidget.cpp" line="179"/>
+        <location filename="../src/volumerenderingwidget.cpp" line="190"/>
         <source>Bones (spine)</source>
         <translation>Kosti (páteř)</translation>
     </message>
     <message>
-        <location filename="../src/volumerenderingwidget.cpp" line="180"/>
+        <location filename="../src/volumerenderingwidget.cpp" line="191"/>
         <source>Bones (pelvis)</source>
         <translation>Kosti (pánev)</translation>
     </message>
     <message>
-        <location filename="../src/volumerenderingwidget.cpp" line="200"/>
-        <location filename="../src/volumerenderingwidget.cpp" line="222"/>
+        <location filename="../src/volumerenderingwidget.cpp" line="212"/>
+        <location filename="../src/volumerenderingwidget.cpp" line="234"/>
         <source>Enhance soft</source>
         <translation>Zvýraznit měkké tkáně</translation>
     </message>
     <message>
-        <location filename="../src/volumerenderingwidget.cpp" line="201"/>
-        <location filename="../src/volumerenderingwidget.cpp" line="223"/>
+        <location filename="../src/volumerenderingwidget.cpp" line="213"/>
+        <location filename="../src/volumerenderingwidget.cpp" line="235"/>
         <source>Enhance hard</source>
         <translation>Zvýraznit kosti</translation>
     </message>
     <message>
-        <location filename="../src/volumerenderingwidget.cpp" line="243"/>
+        <location filename="../src/volumerenderingwidget.cpp" line="256"/>
         <source>Bone surface</source>
         <translation>Povrch kosti</translation>
     </message>
     <message>
-        <location filename="../src/volumerenderingwidget.cpp" line="244"/>
+        <location filename="../src/volumerenderingwidget.cpp" line="257"/>
         <source>Skin surface</source>
         <translation>Měkké tkáně</translation>
     </message>
@@ -717,9 +757,8 @@
 <context>
     <name>MainWindow</name>
     <message>
-        <location filename="../ui/mainwindow.ui" line="57"/>
         <source>Edit</source>
-        <translation>Úpravy</translation>
+        <translation type="obsolete">Úpravy</translation>
     </message>
     <message>
         <location filename="../ui/mainwindow.ui" line="61"/>
@@ -727,7 +766,6 @@
         <translation>Přepnout mód myši</translation>
     </message>
     <message>
-        <location filename="../ui/mainwindow.ui" line="75"/>
         <location filename="../ui/mainwindow.ui" line="159"/>
         <source>View</source>
         <translation>Zobrazit</translation>
@@ -739,7 +777,7 @@
     </message>
     <message>
         <location filename="../ui/mainwindow.ui" line="89"/>
-        <location filename="../src/mainwindow.cpp" line="4154"/>
+        <location filename="../src/mainwindow.cpp" line="4205"/>
         <source>Toolbars</source>
         <translation>Nástrojové lišty</translation>
     </message>
@@ -754,9 +792,8 @@
         <translation>3D scéna</translation>
     </message>
     <message>
-        <location filename="../ui/mainwindow.ui" line="139"/>
         <source>Model</source>
-        <translation>Model</translation>
+        <translation type="obsolete">Model</translation>
     </message>
     <message>
         <location filename="../ui/mainwindow.ui" line="188"/>
@@ -798,9 +835,8 @@
         <translation></translation>
     </message>
     <message>
-        <location filename="../ui/mainwindow.ui" line="31"/>
         <source>File</source>
-        <translation>Soubor</translation>
+        <translation type="obsolete">Soubor</translation>
     </message>
     <message>
         <location filename="../ui/mainwindow.ui" line="14"/>
@@ -813,24 +849,21 @@
         <translation>Uspořádání</translation>
     </message>
     <message>
-        <location filename="../ui/mainwindow.ui" line="146"/>
-        <location filename="../src/mainwindow.cpp" line="916"/>
+        <location filename="../src/mainwindow.cpp" line="938"/>
         <source>Help</source>
         <translation>Nápověda</translation>
     </message>
     <message>
-        <location filename="../ui/mainwindow.ui" line="155"/>
         <source>Filtering</source>
-        <translation>Filtrování</translation>
+        <translation type="obsolete">Filtrování</translation>
     </message>
     <message>
         <source>Tools</source>
         <translation type="obsolete">Nástroje</translation>
     </message>
     <message>
-        <location filename="../ui/mainwindow.ui" line="171"/>
         <source>Measurements</source>
-        <translation>Měření</translation>
+        <translation type="obsolete">Měření</translation>
     </message>
     <message>
         <location filename="../ui/mainwindow.ui" line="259"/>
@@ -1388,9 +1421,44 @@
         <translation>Lišta panelů</translation>
     </message>
     <message>
+        <location filename="../ui/mainwindow.ui" line="31"/>
+        <source>&amp;File</source>
+        <translation>&amp;Soubor</translation>
+    </message>
+    <message>
         <location filename="../ui/mainwindow.ui" line="35"/>
         <source>Recent</source>
         <translation>Naposledy otevřené</translation>
+    </message>
+    <message>
+        <location filename="../ui/mainwindow.ui" line="57"/>
+        <source>&amp;Edit</source>
+        <translation>Úp&amp;ravy</translation>
+    </message>
+    <message>
+        <location filename="../ui/mainwindow.ui" line="75"/>
+        <source>&amp;View</source>
+        <translation>&amp;Zobrazit</translation>
+    </message>
+    <message>
+        <location filename="../ui/mainwindow.ui" line="139"/>
+        <source>&amp;Model</source>
+        <translation>M&amp;odel</translation>
+    </message>
+    <message>
+        <location filename="../ui/mainwindow.ui" line="146"/>
+        <source>&amp;Help</source>
+        <translation>&amp;Nápověda</translation>
+    </message>
+    <message>
+        <location filename="../ui/mainwindow.ui" line="155"/>
+        <source>Fil&amp;tering</source>
+        <translation>&amp;Filtrování</translation>
+    </message>
+    <message>
+        <location filename="../ui/mainwindow.ui" line="171"/>
+        <source>Me&amp;asurements</source>
+        <translation>&amp;Měření</translation>
     </message>
     <message>
         <location filename="../ui/mainwindow.ui" line="298"/>
@@ -1468,7 +1536,7 @@
     </message>
     <message>
         <location filename="../ui/mainwindow.ui" line="1081"/>
-        <location filename="../src/mainwindow.cpp" line="897"/>
+        <location filename="../src/mainwindow.cpp" line="917"/>
         <source>Volume Rendering</source>
         <translation>Volume Rendering</translation>
     </message>
@@ -1478,170 +1546,175 @@
         <translation>Zpracovat model</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="427"/>
+        <location filename="../src/mainwindow.cpp" line="429"/>
         <source>Visualization</source>
         <translation>Vizualizace</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="428"/>
+        <location filename="../src/mainwindow.cpp" line="430"/>
         <source>Smooth</source>
         <translation>Hladké stínování</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="429"/>
+        <location filename="../src/mainwindow.cpp" line="432"/>
         <source>Flat</source>
         <translation>Ploché stínování</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="430"/>
+        <location filename="../src/mainwindow.cpp" line="434"/>
         <source>Wire</source>
         <translation>Drátový model</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="633"/>
+        <location filename="../src/mainwindow.cpp" line="643"/>
+        <source>Change panel visibility</source>
+        <translation>Viditelnost panelů</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow.cpp" line="650"/>
         <source>Fullscreen</source>
         <translation>Celá obrazovka</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="872"/>
+        <location filename="../src/mainwindow.cpp" line="889"/>
         <source>Density Window</source>
         <translation>Densitní okénko</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="880"/>
+        <location filename="../src/mainwindow.cpp" line="898"/>
         <source>Ortho Slices</source>
         <translation>Kolmé řezy</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="888"/>
+        <location filename="../src/mainwindow.cpp" line="907"/>
         <source>Tissue Segmentation</source>
         <translation>Segmentace tkání</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="907"/>
+        <location filename="../src/mainwindow.cpp" line="928"/>
         <source>Models list</source>
         <translation>Seznam modelů</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1163"/>
+        <location filename="../src/mainwindow.cpp" line="1188"/>
         <source>You have an unsaved segmentation data! All unsaved changes will be lost. Are your sure?</source>
         <translation>Segmentační data byla změněna, ale ne uložena. Při ukončení programu budou neuložené změny ztraceny. Opravdu chcete pokračovat?</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1163"/>
+        <location filename="../src/mainwindow.cpp" line="1188"/>
         <source>All unsaved changes will be lost. Are your sure?</source>
         <translation>Všechny neuložené změny budou při ukončení programu ztraceny. Opravdu chcete pokračovat?</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1260"/>
-        <location filename="../src/mainwindow.cpp" line="1281"/>
+        <location filename="../src/mainwindow.cpp" line="1285"/>
+        <location filename="../src/mainwindow.cpp" line="1306"/>
         <source>Load DICOM Data</source>
         <translation>Prosím, zadejte adresář obsahující vstupní DICOM data...</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1281"/>
+        <location filename="../src/mainwindow.cpp" line="1306"/>
         <source>ZIP archive (*.zip)</source>
         <translation>ZIP archiv (*.zip)</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1337"/>
+        <location filename="../src/mainwindow.cpp" line="1363"/>
         <source>Scanning the directory for DICOM datasets, please wait...</source>
         <translation>Vyhledávání DICOM datových sad, prosím čekejte...</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1354"/>
+        <location filename="../src/mainwindow.cpp" line="1380"/>
         <source>No valid DICOM datasets have been found in a given directory!</source>
         <translation>V zadaném adresáři nebyla nalaezena žádná DICOM data!</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1377"/>
+        <location filename="../src/mainwindow.cpp" line="1403"/>
         <source>Loading input DICOM dataset, please wait...</source>
         <translation>Načítání DICOM datové sady, prosím čekejte...</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1385"/>
+        <location filename="../src/mainwindow.cpp" line="1412"/>
         <source>Failed to load the DICOM dataset!</source>
         <translation>Nepodařilo se načíst model!</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1441"/>
+        <location filename="../src/mainwindow.cpp" line="1468"/>
         <source>You have an unsaved data! All unsaved changes will be lost. Do you want to continue?</source>
         <translation>Všechny neuložené změny budou při ukončení programu ztraceny. Opravdu chcete pokračovat?</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1520"/>
+        <location filename="../src/mainwindow.cpp" line="1547"/>
         <source>Please, choose an input volume data to open...</source>
         <translation>Prosím, vyberte vstupní data...</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1520"/>
-        <location filename="../src/mainwindow.cpp" line="1663"/>
+        <location filename="../src/mainwindow.cpp" line="1547"/>
+        <location filename="../src/mainwindow.cpp" line="1690"/>
         <source>Volume Data (*.vlm)</source>
         <translation>Objemová data (*.vlm)</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1560"/>
+        <location filename="../src/mainwindow.cpp" line="1587"/>
         <source>Loading input volumetric data, please wait...</source>
         <translation>Načítám objemová data, prosím čekejte...</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1648"/>
+        <location filename="../src/mainwindow.cpp" line="1675"/>
         <source>Failed to read input volumetric data!</source>
         <translation>Nepodařilo se načíst vstupní objemová data!</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1663"/>
+        <location filename="../src/mainwindow.cpp" line="1690"/>
         <source>Choose an output file...</source>
         <translation>Zadejte výstupní soubor...</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1672"/>
+        <location filename="../src/mainwindow.cpp" line="1699"/>
         <source>Saving volumetric data, please wait...</source>
         <translation>Ukládám objemová data, prosím čekejte...</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1717"/>
+        <location filename="../src/mainwindow.cpp" line="1744"/>
         <source>Failed to save volumetric data!</source>
         <translation>Nepodařilo se uložit objemová data!</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1737"/>
-        <location filename="../src/mainwindow.cpp" line="1879"/>
+        <location filename="../src/mainwindow.cpp" line="1764"/>
+        <location filename="../src/mainwindow.cpp" line="1906"/>
         <source>Please, choose a directory where to save current DICOM dataset...</source>
         <translation>Zvolte cílový adresář pro uložení DICOM dat....</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1779"/>
+        <location filename="../src/mainwindow.cpp" line="1806"/>
         <source>Failed to copy file %1. Retry?</source>
         <translation>Při kopírování souboru %1 došlo k chybě. Opakovat?</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1824"/>
+        <location filename="../src/mainwindow.cpp" line="1851"/>
         <source>Save DICOM</source>
         <translation>Uložení DICOM</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1829"/>
+        <location filename="../src/mainwindow.cpp" line="1856"/>
         <source>Save all data</source>
         <translation>Uložit aktuální data</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1832"/>
+        <location filename="../src/mainwindow.cpp" line="1859"/>
         <source>Save all segmented areas</source>
         <translation>Uložit všechny osegmentované oblasti</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1834"/>
+        <location filename="../src/mainwindow.cpp" line="1861"/>
         <source>Save active region only</source>
         <translation>Uložit pouze aktivní region</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1841"/>
+        <location filename="../src/mainwindow.cpp" line="1868"/>
         <source>Compress</source>
         <translation>Komprimovat</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1866"/>
+        <location filename="../src/mainwindow.cpp" line="1893"/>
         <source>Segmented areas can&apos;t be exported with the current product license.</source>
         <translation>Aktuální licence neumožňuje export segmentovaných oblastí. </translation>
     </message>
@@ -1650,39 +1723,39 @@
         <translation type="obsolete">Uložit pouze osegmentované oblasti</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1892"/>
+        <location filename="../src/mainwindow.cpp" line="1919"/>
         <source>Specified directory already contains DICOM files! Do you really want to continue?</source>
         <translation>Zvolený adresář obsahuje DICOM soubory! Opravdu chcete pokračovat?</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="1901"/>
+        <location filename="../src/mainwindow.cpp" line="1928"/>
         <source>Saving DICOM data, please wait...</source>
         <translation>Ukládájí se DICOM data, čekejte prosím...</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2143"/>
+        <location filename="../src/mainwindow.cpp" line="2170"/>
         <source>Choose an input binary STL model to load...</source>
         <translation>Vyberte vstupní STL model pro načtení...</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2143"/>
+        <location filename="../src/mainwindow.cpp" line="2170"/>
         <source>Stereo litography model (*.stl);;Polygon file format (*.ply)</source>
         <translation></translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="4346"/>
-        <location filename="../src/mainwindow.cpp" line="4347"/>
-        <location filename="../src/mainwindow.cpp" line="4348"/>
+        <location filename="../src/mainwindow.cpp" line="4415"/>
+        <location filename="../src/mainwindow.cpp" line="4416"/>
+        <location filename="../src/mainwindow.cpp" line="4417"/>
         <source>Process using %1</source>
         <translation>Zpracovat pomocí %1</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="4352"/>
+        <location filename="../src/mainwindow.cpp" line="4421"/>
         <source>There are none known tools available!</source>
         <translation>Nejsou k dispozici žádné nástroje pro zpracování.</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="4531"/>
+        <location filename="../src/mainwindow.cpp" line="4600"/>
         <source>The maximum number of loadable models reached!</source>
         <translation>Byl dosažen maximální počet podporovaných modelů!</translation>
     </message>
@@ -1691,39 +1764,39 @@
         <translation type="obsolete">STL data (*.stl)</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2430"/>
+        <location filename="../src/mainwindow.cpp" line="2457"/>
         <source>Failed to load binary STL model!</source>
         <translation>Nepodařilo se načíst vstupní STL model!</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2493"/>
-        <location filename="../src/mainwindow.cpp" line="4304"/>
+        <location filename="../src/mainwindow.cpp" line="2520"/>
+        <location filename="../src/mainwindow.cpp" line="4373"/>
         <source>No model selected!</source>
         <translation>Není zvolen žádný model!</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2505"/>
-        <location filename="../src/mainwindow.cpp" line="4313"/>
+        <location filename="../src/mainwindow.cpp" line="2532"/>
+        <location filename="../src/mainwindow.cpp" line="4382"/>
         <source>No STL data!</source>
         <translation>Nejsou k dispozici žádná STL data!</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2525"/>
+        <location filename="../src/mainwindow.cpp" line="2552"/>
         <source>Data can&apos;t be exported with the current product license.</source>
         <translation>S aktuální licencí není možné exportovat zvolená data.</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2537"/>
+        <location filename="../src/mainwindow.cpp" line="2564"/>
         <source>Please, specify an output file...</source>
         <translation>Zadejte výstupní soubor...</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2537"/>
+        <location filename="../src/mainwindow.cpp" line="2564"/>
         <source>Stereo litography model (*.stl);;Binary Polygon file format (*.ply);;ASCII Polygon file format (*.ply)</source>
         <translation></translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2556"/>
+        <location filename="../src/mainwindow.cpp" line="2583"/>
         <source>ASCII Polygon file format (*.ply)</source>
         <translation></translation>
     </message>
@@ -1732,37 +1805,37 @@
         <translation type="obsolete">Načtená data jsou oříznutá. Pokud neexportujete STL model pro využití s VLM daty, je vhodné exportovat model s informacemi o ořezu dat.</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2604"/>
+        <location filename="../src/mainwindow.cpp" line="2631"/>
         <source>Failed to save binary STL model!</source>
         <translation>Nepodařilo se uložit binární STL model!</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2878"/>
+        <location filename="../src/mainwindow.cpp" line="2905"/>
         <source>VR Error!</source>
         <translation>Chyba inicializace Volume Renderingu!</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2977"/>
+        <location filename="../src/mainwindow.cpp" line="3004"/>
         <source>3D</source>
         <translation></translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2985"/>
+        <location filename="../src/mainwindow.cpp" line="3012"/>
         <source>Axial / XY</source>
         <translation>Axiální / XY</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="2993"/>
+        <location filename="../src/mainwindow.cpp" line="3020"/>
         <source>Coronal / XZ</source>
         <translation>Koronární / XZ</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="3001"/>
+        <location filename="../src/mainwindow.cpp" line="3028"/>
         <source>Sagittal / YZ</source>
         <translation>Sagitální / YZ</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="3154"/>
+        <location filename="../src/mainwindow.cpp" line="3181"/>
         <source>Creating surface model, please wait...</source>
         <translation>Vytvářím povrchový model, prosím čekejte...</translation>
     </message>
@@ -1771,59 +1844,60 @@
         <translation type="obsolete">Redukuji rovné plochy, prosím čekejte...</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="3193"/>
+        <location filename="../src/mainwindow.cpp" line="3220"/>
         <source>Reducing small areas, please wait...</source>
         <translation>Redukuji příliš malé oblaste, prosím čekejte...</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="3198"/>
+        <location filename="../src/mainwindow.cpp" line="3225"/>
         <source>Smoothing model, please wait...</source>
         <translation>Vyhlazuji model, prosím čekejte...</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="3211"/>
+        <location filename="../src/mainwindow.cpp" line="3238"/>
         <source>Decimating model, please wait...</source>
         <translation>Probíhá decimace modelu, prosím čekejte...</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="3268"/>
+        <location filename="../src/mainwindow.cpp" line="3318"/>
         <source>You must restart the application to apply the changes.</source>
         <translation>Nyní je nutné restartovat aplikaci.</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="3775"/>
+        <location filename="../src/mainwindow.cpp" line="3826"/>
         <source>ONLY for internal testing and not for distribution!</source>
         <translation>Pouze pro interní testování, nešířit!</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="3777"/>
+        <location filename="../src/mainwindow.cpp" line="3828"/>
         <source>ONLY for testing!</source>
         <translation>Pouze pro testování!</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="3913"/>
-        <location filename="../src/mainwindow.cpp" line="3984"/>
+        <location filename="../src/mainwindow.cpp" line="3964"/>
+        <location filename="../src/mainwindow.cpp" line="4035"/>
         <source>Please specify an output file...</source>
         <translation>Zadejte prosím výstupní soubor...</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="3913"/>
-        <location filename="../src/mainwindow.cpp" line="3984"/>
+        <location filename="../src/mainwindow.cpp" line="3964"/>
+        <location filename="../src/mainwindow.cpp" line="4035"/>
         <source>JPEG Image (*.jpg);;PNG Image (*.png);;BMP Image (*.bmp)</source>
         <translation>Obrázek JPEG (*.jpg);;Obrázek PNG (*.png);;Obrázek BMP (*.bmp)</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="3998"/>
+        <location filename="../src/mainwindow.cpp" line="4049"/>
         <source>Density Level: %1</source>
         <translation>Hustota: %1</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="4144"/>
+        <location filename="../src/mainwindow.cpp" line="642"/>
+        <location filename="../src/mainwindow.cpp" line="4195"/>
         <source>Panels</source>
         <translation>Panely</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="4162"/>
+        <location filename="../src/mainwindow.cpp" line="4213"/>
         <source>Mouse Mode</source>
         <translation>Mód myši</translation>
     </message>
@@ -1844,24 +1918,24 @@ Datum série: 	%9</translation>
         <translation type="obsolete">Informace o aktuální datové sadě...</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="3292"/>
+        <location filename="../src/mainwindow.cpp" line="3342"/>
         <source>About </source>
         <translation>O aplikaci </translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="3294"/>
+        <location filename="../src/mainwindow.cpp" line="3344"/>
         <source>Lightweight 3D DICOM viewer.
 
 </source>
         <translation></translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="3296"/>
+        <location filename="../src/mainwindow.cpp" line="3346"/>
         <source>http://www.3dim-laboratory.cz/</source>
         <translation></translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="3298"/>
+        <location filename="../src/mainwindow.cpp" line="3348"/>
         <source>Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
@@ -1876,16 +1950,16 @@ limitations under the License.</source>
         <translation></translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="3362"/>
-        <location filename="../src/mainwindow.cpp" line="3404"/>
-        <location filename="../src/mainwindow.cpp" line="3445"/>
+        <location filename="../src/mainwindow.cpp" line="3413"/>
+        <location filename="../src/mainwindow.cpp" line="3455"/>
+        <location filename="../src/mainwindow.cpp" line="3496"/>
         <source>Filtering volumetric data, please wait...</source>
         <translation>Probíhá filtrování objemových dat, prosím čekejte...</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="3390"/>
-        <location filename="../src/mainwindow.cpp" line="3428"/>
-        <location filename="../src/mainwindow.cpp" line="3469"/>
+        <location filename="../src/mainwindow.cpp" line="3441"/>
+        <location filename="../src/mainwindow.cpp" line="3479"/>
+        <location filename="../src/mainwindow.cpp" line="3520"/>
         <source>Filtering aborted!</source>
         <translation>Filtrování selhalo!</translation>
     </message>
@@ -2051,7 +2125,7 @@ limitations under the License.</source>
         <translation type="obsolete">Copyright %1 2008-2014 3Dim Laboratory s.r.o.</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="3295"/>
+        <location filename="../src/mainwindow.cpp" line="3345"/>
         <source>Copyright %1 2008-%2 by 3Dim Laboratory s.r.o.</source>
         <translation>Copyright %1 2008-%2 3Dim Laboratory s.r.o.</translation>
     </message>

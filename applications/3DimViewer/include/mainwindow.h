@@ -107,6 +107,9 @@ public:
     //! Returns pointer to model manager
     data::CModelManager* getModelManager() { return &m_ModelManager; }
 
+    //! Find plugin by name
+    QObject*                findPluginByID(QString sPluginName);
+
 #ifdef WIN32 // Windows need nonunicode paths to be in ACP
     static std::string     wcs2ACP(const std::wstring &filename);
 #endif
@@ -277,9 +280,6 @@ private:
 
 // Plugins
     CPluginManager			*m_pPlugins;
-
-    //! Find plugin by name
-    QObject*                findPluginByID(QString sPluginName);
 
 // Translations
     //! Translations base directory
@@ -507,8 +507,6 @@ private slots:
 
     //! Show/hide surface model in 3D scene
     void            showSurfaceModel(bool bShow);
-    //! Create surface model
-    void            createSurfaceModel();
     //! Process surface model using extern application
     void            processSurfaceModelExtern();
     //! Change model visualization mode
@@ -551,6 +549,8 @@ private slots:
     void            filterMedian();
     //! Perform 3D anisotropic filtering of volumetric data
     void            filterAnisotropic();
+	//! Helper volume mixing method
+	void			mixVolumes(vpl::img::CDensityVolume* main, vpl::img::CDensityVolume* temp, int mixing) const; // 0-100
 
 // undo and redo
     //! Undo last undoable action
@@ -567,6 +567,7 @@ private slots:
 // screenshots
     QImage*         canvasScreenShotToQImage(OSGCanvas* pCanvas, int nRenderingSize, bool bIncludeWidgets);
     void            saveScreenshot(OSGCanvas* pCanvas);
+	void			copyScreenshotToClipboard(OSGCanvas* pCanvas);
     void            saveSlice(OSGCanvas* pCanvas, int mode);
 
 // tab icons
@@ -583,13 +584,34 @@ private slots:
     QMenu *         createPopupMenu ();
     void            onPanelContextMenu(const QPoint & pos);
     void            onDockWidgetToggleView(bool);
-
-	void			fullscreen(bool);
+	void			showPanelsMenu();
+	void			fullscreen(bool);	
 
 // texture filters
 	void			setTextureFilterEqualize(bool);
 	void			setTextureFilterSharpen(bool);
 	void			aboutToShowViewFilterMenu();
+
+// keyboard shortcuts
+	void			loadShortcuts();
+	void			saveShortcuts();
+	void			loadShortcutsForMenu(QMenu* menu, QSettings& settings);
+	void			saveShortcutsForMenu(QMenu* menu, QSettings& settings);
+
+	//! Detect dock widget visibility by examining its children visibility
+	bool			isDockWidgetVisible(QDockWidget* pDW);
+	//! find active panel;
+	QDockWidget *	getActivePanel();
+	//! Close active panel
+	void			closeActivePanel();
+	//! activate previous panel
+	void			prevPanel();
+	//! activate next panel
+	void			nextPanel();
+
+public slots:
+	//! Create surface model
+    void            createSurfaceModel();
 };
 
 

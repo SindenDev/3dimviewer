@@ -46,24 +46,22 @@ namespace PSVR
 
 ///////////////////////////////////////////////////////////////////////////////
 // forward declarations
-
 class PSVolumeRendering;
 
 
 ///////////////////////////////////////////////////////////////////////////////
 //! OSG drawable implementing volume rendering.
-
 class osgPSVolumeRendering : public osg::Drawable
 {
 public:
     //! Default constructor.
-	osgPSVolumeRendering();
+    osgPSVolumeRendering();
 
-	//! Copy constructor using CopyOp to manage deep vs shallow copy.
+    //! Copy constructor using CopyOp to manage deep vs shallow copy.
     osgPSVolumeRendering(const osgPSVolumeRendering& volume, const osg::CopyOp& copyop = osg::CopyOp::SHALLOW_COPY);
 
     //! Destructor.
-	virtual ~osgPSVolumeRendering();
+    virtual ~osgPSVolumeRendering();
 
     META_Object(3DimAdvLib, osgPSVolumeRendering);
 
@@ -83,20 +81,19 @@ public:
 
     //! Computes the bounding box.
 #if OSG_VERSION_GREATER_OR_EQUAL(3,1,10)
-	virtual osg::BoundingBox computeBoundingBox() const;
+    virtual osg::BoundingBox computeBoundingBox() const;
 #else
     virtual osg::BoundingBox computeBound() const;
 #endif
 
 protected:
     //! Pointer to the volume rendering.
-	PSVolumeRendering * m_pRenderer;
+    PSVolumeRendering * m_pRenderer;
 };
 
 
 ///////////////////////////////////////////////////////////////////////////////
 //! OSG geode implementing volume rendering
-
 class osgPSVolumeRenderingGeode : public osg::Geode, public scene::CObjectObserverOSG<data::CActiveDataSet>
 {
 public:
@@ -109,7 +106,6 @@ public:
 
     //! Method called on OSG update callback.
     virtual void updateFromStorage();
-
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -117,20 +113,14 @@ public:
 //
 //\brief Plane update callback. 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-
 class CPSVPlaneUpdateCallback : public osg::Drawable::UpdateCallback
 {
 public:
    //! Update operator
-   virtual void update(osg::NodeVisitor* nv, osg::Drawable * node );
-
+   virtual void update(osg::NodeVisitor* nv, osg::Drawable * node);
 }; // class CPSVPlaneUpdateCallback 
 
 } // namespace PSVR
 
 #endif // USE_PSVR
 #endif // PSVRosg_H
-
-///////////////////////////////////////////////////////////////////////////////
-///////////////////////////////////////////////////////////////////////////////
-

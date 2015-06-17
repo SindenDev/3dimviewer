@@ -280,7 +280,7 @@ void scene::CSceneOrientationWidget::createScene(void)
 
     // Assistant model
 #ifdef USE_BODY
-    vpl::base::CScopedPtr< data::CMesh > pMesh(new data::CMesh);
+    vpl::base::CScopedPtr< geometry::CMesh > pMesh(new geometry::CMesh);
     OpenMesh::IO::Options ropt;
     ropt += OpenMesh::IO::Options::Binary;
     if( OpenMesh::IO::read_mesh(*pMesh, "models/assistant_body.stl", ropt) )

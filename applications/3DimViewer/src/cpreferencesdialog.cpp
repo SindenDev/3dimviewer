@@ -29,12 +29,13 @@
 #include <QStyleFactory>
 #include <C3DimApplication.h>
 
-CPreferencesDialog::CPreferencesDialog(const QDir &localeDir, QWidget *parent, Qt::WindowFlags f) :
+CPreferencesDialog::CPreferencesDialog(const QDir &localeDir, QMenuBar* pMenuBar, QWidget *parent, Qt::WindowFlags f) :
     QDialog(parent, f),
     ui(new Ui::CPreferencesDialog)
 {
     m_bColorsChanged = false;
     m_bChangesNeedRestart = false;
+	m_bChangedShortcuts = false;
     ui->setupUi(this);
     // get current language
     QSettings settings;
@@ -83,12 +84,53 @@ CPreferencesDialog::CPreferencesDialog(const QDir &localeDir, QWidget *parent, Q
     connect(resetButton, SIGNAL(clicked()), this, SLOT(resetDefaultsPressed()));
     connect(ui->pushButtonShowLog,SIGNAL(clicked()),qobject_cast<C3DimApplication*>(qApp),SLOT(showLog()));
     //
-    ui->listPages->setCurrentRow(0);
+	connect(ui->listPages,SIGNAL(currentRowChanged(int)),this,SLOT(pageChange(int)));
+
+	// shortcuts
+	ui->treeWidget->header()->setStretchLastSection(false);
+	ui->treeWidget->header()->setResizeMode(0, QHeaderView::Stretch);
+	ui->treeWidget->header()->setResizeMode(1, QHeaderView::ResizeToContents);
+	ui->treeWidget->header()->setMinimumSectionSize(50);
+	if (NULL!=pMenuBar)
+	{
+		QList<QMenu*> lst = pMenuBar->findChildren<QMenu*>();
+		foreach(QMenu* m, lst)
+		{
+			if (m->parent()==pMenuBar)
+				addTreeMenu(m,NULL);
+		}
+	}
+	connect(ui->treeWidget,SIGNAL(itemSelectionChanged()),this,SLOT(treeItemSelectionChanged()));
+	ui->lineEditShortCut->installEventFilter(this);
+	ui->lineEditShortCut->setEnabled(false);
+	ui->pushButtonSetShortcut->setEnabled(false);
+	ui->pushButtonClearShortcut->setEnabled(false);
+    
+    settings.beginGroup("PreferencesDialog");
+    resize(settings.value("size").toSize());
+    settings.endGroup();
+
+	int page = settings.value("PreferencesPage",0).toInt();
+    ui->listPages->setCurrentRow(page);	
 }
 
 CPreferencesDialog::~CPreferencesDialog()
 {
+	QSettings settings;
+	settings.setValue("PreferencesPage",ui->listPages->currentRow());
+    if ( Qt::WindowMaximized!=QWidget::windowState ())
+    {
+        settings.beginGroup("PreferencesDialog");
+        settings.setValue("size",size());
+        settings.endGroup();
+    }
     delete ui;
+}
+
+void CPreferencesDialog::pageChange(int index)
+{    
+    ui->labelPageName->setText(ui->listPages->item(index)->text());
+    ui->stackedWidget->setCurrentIndex(index);
 }
 
 void CPreferencesDialog::on_CPreferencesDialog_accepted()
@@ -158,6 +200,30 @@ void CPreferencesDialog::on_buttonBGColor_clicked()
     }
 }
 
+
+void CPreferencesDialog::removeCustomShortcuts( QTreeWidgetItem *item )
+{
+	if (NULL!=item)
+	{
+		QAction* pAct=(QAction*)item->data(1,Qt::UserRole).value<void*>();
+		if (NULL!=pAct)
+		{
+			if (0==pAct->property("Shortcut").toString().compare("Custom",Qt::CaseInsensitive))
+			{
+				QKeySequence ks;					
+				pAct->setShortcut(ks);
+				pAct->setProperty("Shortcut","");
+				item->setText(1,"");
+			}
+		}
+	}
+
+    for( int i = 0; i < item->childCount(); ++i )
+	{
+        removeCustomShortcuts( item->child(i) );		
+	}
+}
+
 void CPreferencesDialog::resetDefaultsPressed( )
 {
     // set threading to single threaded
@@ -173,4 +239,193 @@ void CPreferencesDialog::resetDefaultsPressed( )
     int savePathMode = DEFAULT_SAVE_PATH_MODE;
     ui->radioButtonPathLastUsed->setChecked(savePathMode==0);
     ui->radioButtonPathProject->setChecked(savePathMode==1);
+	// reset keyboard shortcuts
+	QSettings settings;
+	settings.beginGroup("Shortcuts");
+	settings.remove("");
+	m_bChangedShortcuts = false;
+	// reset tree widgets and actions
+	removeCustomShortcuts( ui->treeWidget->invisibleRootItem() );
+}
+
+QTreeWidgetItem* CPreferencesDialog::addTreeRoot(QString name, QString description) 
+{ 
+	QTreeWidgetItem *treeItem = new QTreeWidgetItem(ui->treeWidget); 
+	int idxAnd = name.indexOf("&");
+	if (idxAnd>=0 && idxAnd<name.length()-1)
+	{
+		name.remove("&");
+		if (description.isEmpty())
+			description = tr("Alt+%1").arg(QString(name.at(idxAnd).toUpper()));
+	}
+	treeItem->setText(0, name); 
+	treeItem->setText(1, description); 
+	return treeItem;
+} 
+
+QTreeWidgetItem * CPreferencesDialog::addTreeChild(QTreeWidgetItem *parent, QString name, QString description, QAction* pAction) 
+{ 	
+	QTreeWidgetItem *treeItem = new QTreeWidgetItem(); 
+	if (NULL==pAction) // menu
+		name.remove("&");
+	treeItem->setText(0, name); 
+	treeItem->setText(1, description); 
+	treeItem->setData(1, Qt::UserRole, QVariant::fromValue((void*)pAction));
+	if (NULL!=pAction)
+	{
+		if (pAction->icon().isNull())
+		{
+			QPixmap pm(24,24);
+			pm.fill(Qt::transparent);
+			treeItem->setIcon(0,QIcon(pm));
+		}
+		else
+			treeItem->setIcon(0,pAction->icon());
+	}
+	parent->addChild(treeItem); 
+	return treeItem;
+} 
+
+QTreeWidgetItem* CPreferencesDialog::addTreeMenu(QMenu* m, QTreeWidgetItem *parent) 
+{
+	if (NULL==m)
+		return NULL;
+	if (0==m->objectName().compare("menuRecent",Qt::CaseInsensitive)) // ignore "Recent" menu
+	{
+	}
+	else
+	{
+		QTreeWidgetItem* pMenuItem = NULL==parent?addTreeRoot(m->title(),"") : addTreeChild(parent,m->title(),"",NULL);
+		foreach(QAction* a, m->actions())
+		{
+			if (!a->isSeparator() && a->isVisible())
+			{
+				if (NULL!=a->menu())
+					addTreeMenu(a->menu(), pMenuItem);
+				else
+					addTreeChild(pMenuItem,a->text(),a->shortcut().toString(QKeySequence::NativeText),a);
+			}
+			
+		}
+		pMenuItem->setExpanded(true);
+		return pMenuItem;
+	}
+	return NULL;
+}
+
+void CPreferencesDialog::treeItemSelectionChanged()
+{
+	ui->lineEditShortCut->setText("");
+	ui->lineEditShortCut->setStyleSheet("");
+	QList<QTreeWidgetItem *> selItems = ui->treeWidget->selectedItems();
+	ui->lineEditShortCut->setEnabled(!selItems.empty() && 0==selItems[0]->childCount());
+	ui->pushButtonSetShortcut->setEnabled(!selItems.empty() && 0==selItems[0]->childCount());
+	ui->pushButtonClearShortcut->setEnabled(!selItems.empty() && 0==selItems[0]->childCount());
+	if (!selItems.empty())
+	{
+		foreach(QTreeWidgetItem *it, selItems)
+		{
+			if (0==it->childCount())
+				ui->lineEditShortCut->setText(it->text(1));
+		}
+	}		
+}
+
+void CPreferencesDialog::on_pushButtonSetShortcut_clicked()
+{
+	QList<QTreeWidgetItem *> selItems = ui->treeWidget->selectedItems();
+	if (!selItems.empty())
+	{
+		foreach(QTreeWidgetItem *it, selItems)
+		{
+			if (0==it->childCount())
+			{				
+				QAction* pAct=(QAction*)it->data(1,Qt::UserRole).value<void*>();
+				if (NULL!=pAct)
+				{
+					m_bChangedShortcuts = true;
+
+					QKeySequence ks(ui->lineEditShortCut->text());					
+					pAct->setShortcut(ks);
+					pAct->setProperty("Shortcut","Custom");
+					ui->lineEditShortCut->setText(ks.toString(QKeySequence::NativeText));
+					it->setText(1,ks.toString(QKeySequence::NativeText));
+				}
+			}				
+		}
+	}	
+}
+
+void CPreferencesDialog::on_pushButtonClearShortcut_clicked()
+{
+	QList<QTreeWidgetItem *> selItems = ui->treeWidget->selectedItems();
+	if (!selItems.empty())
+	{
+		foreach(QTreeWidgetItem *it, selItems)
+		{
+			if (0==it->childCount())
+			{				
+				QAction* pAct=(QAction*)it->data(1,Qt::UserRole).value<void*>();
+				if (NULL!=pAct)
+				{
+					m_bChangedShortcuts = true;
+
+					QKeySequence ks;					
+					pAct->setShortcut(ks);
+					pAct->setProperty("Shortcut","Custom");
+					ui->lineEditShortCut->setText(ks.toString(QKeySequence::NativeText));
+					it->setText(1,ks.toString(QKeySequence::NativeText));
+				}
+			}				
+		}
+	}	
+}
+
+bool CPreferencesDialog::shortcutUsed(const QString& shortcut)
+{
+	QList<QTreeWidgetItem*> lst = ui->treeWidget->findItems(shortcut,Qt::MatchExactly|Qt::MatchRecursive,1);
+	return !lst.empty();
+}
+
+bool CPreferencesDialog::eventFilter(QObject* obj, QEvent *event)
+{
+    if (obj == ui->lineEditShortCut)
+    {
+        if (event->type() == QEvent::KeyPress)
+        {
+            QKeyEvent* keyEvent = static_cast<QKeyEvent*>(event);
+			int keyInt = keyEvent->key(); 
+			Qt::Key key = static_cast<Qt::Key>(keyInt); 
+			if(key == Qt::Key_unknown)
+				return false;
+			Qt::KeyboardModifiers mod = keyEvent->modifiers();
+			if(key == Qt::Key_Control || 
+				key == Qt::Key_Shift || 
+				key == Qt::Key_Alt || 
+				key == Qt::Key_Meta ||
+				(mod.testFlag(Qt::NoModifier) && key == Qt::Key_Escape) ||
+				(mod.testFlag(Qt::NoModifier) && key == Qt::Key_Backspace) ||
+				(mod.testFlag(Qt::NoModifier) && key == Qt::Key_Return)
+				)
+			{
+				keyInt=0;
+			}
+			if (mod.testFlag(Qt::ShiftModifier))
+				keyInt += Qt::SHIFT; 
+			if (mod.testFlag(Qt::ControlModifier))
+				keyInt += Qt::CTRL; 
+			if (mod.testFlag(Qt::AltModifier))
+				keyInt += Qt::ALT; 
+			if (mod.testFlag(Qt::MetaModifier))
+				keyInt += Qt::META; 
+			ui->lineEditShortCut->setText(QKeySequence(keyInt).toString(QKeySequence::NativeText));
+			if (shortcutUsed(ui->lineEditShortCut->text()))
+				ui->lineEditShortCut->setStyleSheet("color: #ff0000");
+			else
+				ui->lineEditShortCut->setStyleSheet("");
+			return true;
+        }
+        return false;
+    }
+    return QDialog::eventFilter(obj, event);
 }

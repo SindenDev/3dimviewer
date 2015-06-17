@@ -1,5 +1,6 @@
 ///////////////////////////////////////////////////////////////////////////////
-// $Id$
+// 
+// Copyright 2008-2015 3Dim Laboratory s.r.o.
 //
 
 #include <QtGui>
@@ -18,6 +19,7 @@ GaugePlugin::GaugePlugin() : QObject(), PluginInterface()
     m_pMenu = NULL;
     m_pToolBar = NULL;
     m_pPanel = NULL;
+	setProperty("Icon",":/icons/measure_density.png");
 }
 
 void  GaugePlugin::createActions()
@@ -25,6 +27,7 @@ void  GaugePlugin::createActions()
     if (!m_actionMeasureDensity)
     {
         m_actionMeasureDensity = new QAction(QIcon(":/icons/measure_density.png"),tr("Measure Density Value [Hu]"),NULL);
+		m_actionMeasureDensity ->setObjectName("measure_density");
         m_actionMeasureDensity->setCheckable(true);
         m_actionMeasureDensity->setStatusTip(tr("To measure local density specify a point using the mouse cursor and click the left button."));
         connect(m_actionMeasureDensity, SIGNAL(triggered(bool)), this, SLOT(measureDensity(bool)) );
@@ -32,6 +35,7 @@ void  GaugePlugin::createActions()
     if (!m_actionMeasureDistance)
     {
         m_actionMeasureDistance = new QAction(QIcon(":/icons/measure_distance.png"),tr("Measure Distance [mm]"),NULL);
+		m_actionMeasureDistance ->setObjectName("measure_distance");
         m_actionMeasureDistance->setCheckable(true);
         m_actionMeasureDistance->setStatusTip(tr("Measure distance by clicking the left mouse button and dragging."));
         connect(m_actionMeasureDistance, SIGNAL(triggered(bool)), this, SLOT(measureDistance(bool)) );
@@ -39,6 +43,7 @@ void  GaugePlugin::createActions()
     if (!m_actionClearMeasurements)
     {
         m_actionClearMeasurements = new QAction(QIcon(":/icons/delete.png"),tr("Clear Measurements"),NULL);
+		m_actionClearMeasurements ->setObjectName("clear_measurements");
         m_actionClearMeasurements->setStatusTip(tr("Clear all results of measurements visible in all scenes."));
         connect(m_actionClearMeasurements, SIGNAL(triggered()), this, SLOT(clearMeasurements()) );
     }
@@ -123,8 +128,12 @@ QAction* GaugePlugin::getAction(const QString &actionName)
 void GaugePlugin::sigModeChanged( scene::CAppMode::tMode mode )
 {
     Q_ASSERT(m_actionMeasureDensity && m_actionMeasureDistance);
+	m_actionMeasureDensity->blockSignals(true);
+	m_actionMeasureDistance->blockSignals(true);
     m_actionMeasureDensity->setChecked(scene::CAppMode::COMMAND_DENSITY_MEASURE==mode);
     m_actionMeasureDistance->setChecked(scene::CAppMode::COMMAND_DISTANCE_MEASURE==mode);
+	m_actionMeasureDensity->blockSignals(false);
+	m_actionMeasureDistance->blockSignals(false);
 }
 
 void GaugePlugin::measureDensity(bool on)

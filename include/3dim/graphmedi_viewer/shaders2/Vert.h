@@ -27,14 +27,13 @@ namespace shader
 {
 
 const char Vert[] =
-"varying vec3 worldCoords; \n"
+"varying vec4 fragWorldPosition; \n"
 " \n"
 "void main() \n"
 "{ \n"
 "    // Transforming The Vertex \n"
 "    gl_Position = ftransform(); \n"
-"    gl_TexCoord[0] = gl_MultiTexCoord0; \n"
-"    worldCoords = gl_Vertex.xyz; \n"
+"    fragWorldPosition = vec4(gl_Vertex.xyz, 1.0); \n"
 "} \n";
 
 } // namespace shader

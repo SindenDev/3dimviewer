@@ -36,7 +36,7 @@ class OrthoManipulator : public CameraManipulator
 {
 public:
    //! Up/down signal type
-   typedef vpl::mod::CSignal< void, bool > tSigUpDown;
+   typedef vpl::mod::CSignal< void, int > tSigUpDown;
 
    //! Scroll signal type
    typedef vpl::mod::CSignal< bool, const osgGA::GUIEventAdapter::ScrollingMotion > tSigScroll;

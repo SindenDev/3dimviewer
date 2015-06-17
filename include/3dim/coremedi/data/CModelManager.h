@@ -108,7 +108,16 @@ public:
 
     //! Sets model geometry.
     //! - Method can be called directly, or using appropriate signal.
-    void setModel(int id, CMesh * pMesh);
+    void setModel(int id, geometry::CMesh * pMesh);
+
+    //! Selects model
+    void selectModel(int id);
+
+    //! Returns ID of selected model
+    int getSelectedModel() const
+    {
+        return m_selectedModel;
+    }
 
     //! Returns true if a specified model is shown.
     //! - Method can be called directly, or using appropriate signal.
@@ -151,6 +160,9 @@ protected:
 
     //! flag if transparency is needed
     bool m_transparencyNeeded;
+
+    //! Selected implant
+    int m_selectedModel;
 
 private:
     //! Private copy constructor.

@@ -30,14 +30,14 @@
  *
  * \return	.
 **/
-size_t CRegionCounter::count( data::CMesh &mesh )
+size_t CRegionCounter::count( geometry::CMesh &mesh )
 {
 	// Zero sized mesh
 	if(mesh.n_faces() == 0)
 		return 0;
 
 	// queue of triangles to visit
-	std::deque<data::CMesh::FaceHandle> fill_queue;
+	std::deque<geometry::CMesh::FaceHandle> fill_queue;
 
 	// last used submesh index
 	size_t last_region(0);
@@ -47,11 +47,11 @@ size_t CRegionCounter::count( data::CMesh &mesh )
 	flags.assign(mesh.n_faces(), -1);
 
 	// For all faces
-	data::CMesh::FaceIter itFace(mesh.faces_begin()), itEnd(mesh.faces_end());
+	geometry::CMesh::FaceIter itFace(mesh.faces_begin()), itEnd(mesh.faces_end());
 	while (itFace != itEnd)
 	{
 		// Get face handle
-		data::CMesh::FaceHandle fhandle(itFace.handle());
+		geometry::CMesh::FaceHandle fhandle(itFace.handle());
 		++itFace;
 
 		// Already set face, advance
@@ -64,7 +64,7 @@ size_t CRegionCounter::count( data::CMesh &mesh )
 		// "Fill" region
 		while (!fill_queue.empty())
 		{
-			data::CMesh::FaceHandle curr = fill_queue.front();
+			geometry::CMesh::FaceHandle curr = fill_queue.front();
 			fill_queue.pop_front();
 
 			// Test if already filled
@@ -75,9 +75,9 @@ size_t CRegionCounter::count( data::CMesh &mesh )
 			flags[curr.idx()] = last_region;
 
 			// get all neighbors and store to queue
-			for (data::CMesh::FaceFaceIter ffit = mesh.ff_begin(curr); ffit != mesh.ff_end(curr); ++ffit)
+			for (geometry::CMesh::FaceFaceIter ffit = mesh.ff_begin(curr); ffit != mesh.ff_end(curr); ++ffit)
 			{
-				data::CMesh::FaceHandle neighbour = ffit.handle();
+				geometry::CMesh::FaceHandle neighbour = ffit.handle();
 				fill_queue.push_back(neighbour);
 			}
 		}

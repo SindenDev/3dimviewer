@@ -35,7 +35,7 @@
 #include <osg/Shape>
 #include <osg/Vec4>
 
-#include <data/CMesh.h>
+#include <geometry/base/CMesh.h>
 
 
 namespace osg
@@ -68,7 +68,7 @@ public:
     CTriMesh();
 
     //! Initialization of the OSG geode based on a given surface mesh.
-    void createMesh( data::CMesh *mesh, bool createNormals = true, bool smooth = true );
+    void createMesh( geometry::CMesh *mesh, bool createNormals = true, bool smooth = true );
 
     //! Changes surface color.
     void setColor( float r, float g, float b, float a = 1.0f );
@@ -80,7 +80,7 @@ public:
     osg::Material *getMaterial();
 
 	//! Update only part of model
-	void updatePartOfMesh(data::CMesh *mesh, const tIdPosVec &ip, bool createNormals = true, bool smooth = true);
+	void updatePartOfMesh(geometry::CMesh *mesh, const tIdPosVec &ip, bool createNormals = true, bool smooth = true);
 
 	//! Set use display lists
 	void setUseDisplayList(bool bUse) { pGeometry->setUseDisplayList(bUse);}
@@ -110,10 +110,10 @@ protected:
 };
 
 // Creates OSG geometry from loaded OpenMesh data structure
-osg::Geometry *convertOpenMesh2OSGGeometry(data::CMesh *mesh, bool vertexNormals);
+osg::Geometry *convertOpenMesh2OSGGeometry(geometry::CMesh *mesh, bool vertexNormals);
 
 // Creates OSG geometry from loaded OpenMesh data structure
-osg::Geometry *convertOpenMesh2OSGGeometry(data::CMesh *mesh, const osg::Vec4& color );
+osg::Geometry *convertOpenMesh2OSGGeometry(geometry::CMesh *mesh, const osg::Vec4& color );
 
 } // namespace osg
 

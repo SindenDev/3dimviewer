@@ -32,7 +32,7 @@
 #include "data/CColorVector.h"
 #include "data/CObjectHolder.h"
 
-#include "data/CMesh.h"
+#include "geometry/base/CMesh.h"
 #include <data/CSnapshot.h>
 
 #include <data/CStorageInterface.h>
@@ -40,242 +40,281 @@
 namespace data
 {
 
-class CMeshSnapshot : public data::CSnapshot
-{
-protected:
-    int *propertyVertexFlags;
-    data::CMesh::Point *vertices;
-    int vertexCount;
-    int *indices;
-    int indexCount;
-
-public:
-    CMeshSnapshot(CUndoProvider *provider = NULL);
-    ~CMeshSnapshot();
-    virtual long getDataSize();
-
-    friend class CModel;
-};
-
-///////////////////////////////////////////////////////////////////////////////
-//! Polygonal surface model...
-
-class CModel 
-	: public vpl::base::CObject
-	, public vpl::mod::CSerializable
-    , public CUndoProvider
-{
-public:
-	//! Default class name.
-	VPL_ENTITY_NAME("Model");
-
-    //! Default compression method.
-//    VPL_ENTITY_COMPRESSION(vpl::mod::CC_RAW);
-    VPL_ENTITY_COMPRESSION(vpl::mod::CC_GZIP);
-
-    //! Smart pointer type.
-    //! - Declares type tSmartPtr.
-    VPL_SHAREDPTR(CModel);
-
-    //! Undefined model identifier.
-    enum { UNDEFINED = -1 };
-
-    //! Helper flags you can pass to the invalidate() method.
-    enum { MESH_NOT_CHANGED = 1 << 3 };
-
-public:
-	//! Default constructor.
-    CModel()
-        : m_bVisibility(false), m_Color(1.0f, 1.0f, 1.0f, 1.0f)
-    { }
-
-	//! Destructor.
-    ~CModel()
-    { }
-
-    //! Returns the model geometry.
-    CMesh *getMesh()
+    class CMeshSnapshot : public data::CSnapshot
     {
-        return m_spModel.get();
-    }
+    protected:
+        int *propertyVertexFlags;
+        geometry::CMesh::Point *vertices;
+        int vertexCount;
+        int *indices;
+        int indexCount;
 
-    //! Returns the model geometry and clears Destroy flag in smart pointer
-    CMesh *releaseMesh()
+    public:
+        CMeshSnapshot(CUndoProvider *provider = NULL);
+        ~CMeshSnapshot();
+        virtual long getDataSize();
+
+        friend class CModel;
+    };
+
+    ///////////////////////////////////////////////////////////////////////////////
+    //! Polygonal surface model...
+
+    class CModel
+        : public vpl::base::CObject
+        , public vpl::mod::CSerializable
+        , public CUndoProvider
     {
-        return m_spModel.release();
-    }
+    public:
+        //! Default class name.
+        VPL_ENTITY_NAME("Model");
 
-    // Undo provider interface
-    virtual CSnapshot *getSnapshot(CSnapshot *snapshot);
-    virtual void restore(CSnapshot *snapshot);
-    void createAndStoreSnapshot();
+        //! Default compression method.
+        //VPL_ENTITY_COMPRESSION(vpl::mod::CC_RAW);
+        VPL_ENTITY_COMPRESSION(vpl::mod::CC_GZIP);
 
-    //! Sets the model geometry.
-    //! - Deletes a given object automatically.
-    void setMesh(CMesh *model)
-    {
-        m_spModel = model;
-    }
+        //! Smart pointer type.
+        //! - Declares type tSmartPtr.
+        VPL_SHAREDPTR(CModel);
 
-    //! Returns true if the model is visible.
-    bool isShown() const { return m_bVisibility; }
+        //! Undefined model identifier.
+        enum { UNDEFINED = -1 };
 
-    //! Turns on visibility of the model.
-    void show() { m_bVisibility = true; }
+        //! Helper flags you can pass to the invalidate() method.
+        enum
+        {
+            MESH_NOT_CHANGED = 1 << 3,
+            POSITION_NOT_CHANGED = 1 << 4,
+            SELECTION_NOT_CHANGED = 1 << 5,
 
-    //! Turns off visibility of the model.
-    void hide() { m_bVisibility = false; }
+            NOTHING_CHANGED = MESH_NOT_CHANGED | POSITION_NOT_CHANGED | SELECTION_NOT_CHANGED,
+        };
 
-	//! Turns on/off visibility of the model. 
-    void setVisibility(bool visible) { m_bVisibility = visible; }
+    public:
+        //! Default constructor.
+        CModel()
+            : m_bVisibility(false)
+            , m_Color(1.0f, 1.0f, 1.0f, 1.0f)
+            , m_bSelected(false)
+        { }
 
-    //! Returns the model color.
-    void getColor(float& r, float& g, float& b, float& a) const
-    {
-        m_Color.getColor(r, g, b, a);
-    }
+        //! Destructor.
+        ~CModel()
+        { }
 
-    //! Returns the model color.
-    const CColor4f& getColor() const { return m_Color; }
+        //! Returns the model geometry.
+        geometry::CMesh *getMesh()
+        {
+            return m_spModel.get();
+        }
 
-    //! Sets the model color.
-	void setColor(float r, float g, float b, float a = 1.0f )
-    {
-        m_Color.setColor(r, g, b, a);
-    }
+        //! Returns the model geometry and clears Destroy flag in smart pointer
+        geometry::CMesh *releaseMesh()
+        {
+            return m_spModel.release();
+        }
 
-    //! Sets the model color.
-    void setColor(const CColor4f& Color) { m_Color.setColor(Color); }
+        // Undo provider interface
+        virtual CSnapshot *getSnapshot(CSnapshot *snapshot);
+        virtual void restore(CSnapshot *snapshot);
+        void createAndStoreSnapshot();
 
-    //! Returns voluntary transformation matrix
-    const osg::Matrix& getTransformationMatrix() { return m_transformationMatrix; }
+        //! Sets the model geometry.
+        //! - Deletes a given object automatically.
+        void setMesh(geometry::CMesh *model)
+        {
+            m_spModel = model;
+        }
 
-    //! Sets transformation matrix for the model
-    void setTransformationMatrix(const osg::Matrix& matrix) { m_transformationMatrix=matrix; }
+        //! Returns true if the model is visible.
+        bool isShown() const { return m_bVisibility; }
 
-    //! Get model name
-    const std::string& getLabel() const {  return m_label;  }
+        //! Turns on visibility of the model.
+        void show() { m_bVisibility = true; }
 
-    //! Set model name
-    void setLabel(const std::string &label) {  m_label = label;  }
+        //! Turns off visibility of the model.
+        void hide() { m_bVisibility = false; }
 
-	//! Get model property
-    std::string getProperty(const std::string &prop) const 
-	{  
-		auto it = m_properties.find(prop);
-		if (it!=m_properties.end())
-			return it->second;
-		return "";  
-	}
+        //! Turns on/off visibility of the model. 
+        void setVisibility(bool visible) { m_bVisibility = visible; }
 
-    //! Set model property
-    void setProperty(const std::string &prop, const std::string &value) {  m_properties[prop] = value;  }
+        //! (De)selects model
+        void select(bool value = true)
+        {
+            m_bSelected = value;
+        }
 
-	//! Clear all properties
-    void clearAllProperties() {  m_properties.clear();  }
+        void deselect()
+        {
+            select(false);
+        }
 
-    //! Clear the model.
-    void clear() { m_spModel = new CMesh; }
+        //! Returns true if model is selected
+        bool isSelected() const
+        {
+            return m_bSelected;
+        }
 
-    //! Regenerates the object state according to any changes in the data storage.
-    void update(const CChangedEntries& Changes);
+        //! Returns the model color.
+        void getColor(float& r, float& g, float& b, float& a) const
+        {
+            m_Color.getColor(r, g, b, a);
+        }
 
-    //! Initializes the object to its default state.
-    void init();
+        //! Returns the model color.
+        const CColor4f& getColor() const { return m_Color; }
 
-    //! Does object contain relevant data?
-    bool hasData() { return (m_spModel.get() && m_spModel->n_vertices() > 0); }
+        //! Sets the model color.
+        void setColor(float r, float g, float b, float a = 1.0f)
+        {
+            m_Color.setColor(r, g, b, a);
+        }
 
-    //! Returns true if changes of a given parent entry may affect this object.
-    bool checkDependency(CStorageEntry * VPL_UNUSED(pParent)) { return true; }
+        //! Sets the model color.
+        void setColor(const CColor4f& Color) { m_Color.setColor(Color); }
 
-	//! Compute areas oriented up and down
-	void getUpDownSurfaceAreas(float &up_area, float &down_area);
+        //! Returns voluntary transformation matrix
+        const osg::Matrix& getTransformationMatrix() { return m_transformationMatrix; }
 
-	//! Copy model
-    CModel &operator=(const CModel &model);
+        //! Sets transformation matrix for the model
+        void setTransformationMatrix(const osg::Matrix& matrix) { m_transformationMatrix = matrix; }
 
-    //! Serialize
-    template < class tpSerializer >
-    void serialize( vpl::mod::CChannelSerializer<tpSerializer> & Writer )
-    {
-        Writer.beginWrite( * this );
+        //! Get model name
+        const std::string& getLabel() const { return m_label; }
 
-        WRITEINT32( 2 ); // version
+        //! Set model name
+        void setLabel(const std::string &label) { m_label = label; }
 
-        Writer.write( (vpl::sys::tInt32)m_bVisibility );
-        m_Color.serialize( Writer );
-        Writer.write( m_label );
-        CSerializableData< osg::Matrix >::serialize( &m_transformationMatrix, Writer );
-		Writer.write( (vpl::sys::tInt32)m_properties.size() );
-		for(auto it = m_properties.begin(); it!=m_properties.end(); it++)
-		{
-			Writer.write( it->first );
-			Writer.write( it->second );
-		}
+        //! Get model property
+        std::string getProperty(const std::string &prop) const
+        {
+            auto it = m_properties.find(prop);
+            if (it != m_properties.end())
+            {
+                return it->second;
+            }
+            return "";
+        }
 
-        Writer.endWrite( * this );
+        //! Set model property
+        void setProperty(const std::string &prop, const std::string &value) { m_properties[prop] = value; }
 
-        m_spModel->serialize( Writer );
-    }
+        //! Clear all properties
+        void clearAllProperties() { m_properties.clear(); }
 
-    //! Deserialize
-    template < class tpSerializer >
-    void deserialize( vpl::mod::CChannelSerializer<tpSerializer> & Reader )
-    {
-        Reader.beginRead( * this );
+        //! Clear the model.
+        void clear() { m_spModel = new geometry::CMesh; }
 
-        int version = 0;
-        READINT32( version );
+        //! Regenerates the object state according to any changes in the data storage.
+        void update(const CChangedEntries& Changes);
 
-        vpl::sys::tInt32 bVis = 0;
-        Reader.read( bVis ); m_bVisibility = bVis!=0;
-        m_Color.deserialize( Reader );
-        Reader.read( m_label );
-        CSerializableData< osg::Matrix >::deserialize( &m_transformationMatrix, Reader );
-		if (version>1)
-		{
-			vpl::sys::tInt32 nProps = 0;
-			Reader.read( nProps );
-			for( int i = 0; i < nProps; i++ )
-			{
-				std::string key, value;
-				Reader.read( key );
-				Reader.read( value );
-				m_properties[key]=value;
-			}
-		}
+        //! Initializes the object to its default state.
+        void init();
 
-        Reader.endRead( * this );
+        //! Does object contain relevant data?
+        bool hasData() { return (m_spModel.get() && m_spModel->n_vertices() > 0); }
 
-        m_spModel->deserialize( Reader );
-    }
+        //! Returns true if changes of a given parent entry may affect this object.
+        bool checkDependency(CStorageEntry * VPL_UNUSED(pParent)) { return true; }
 
-protected:
-    //! Model storage.
-    vpl::base::CScopedPtr<CMesh> m_spModel;
+        //! Compute areas oriented up and down
+        void getUpDownSurfaceAreas(float &up_area, float &down_area);
 
-    //! Model visibility.
-    bool m_bVisibility;
+        //! Copy model
+        CModel &operator=(const CModel &model);
 
-    //! Model color (RGBA components).
-    CColor4f m_Color;
+        //! Serialize
+        template<class tpSerializer>
+        void serialize(vpl::mod::CChannelSerializer<tpSerializer> & Writer)
+        {
+            Writer.beginWrite(*this);
 
-    //! Model transformation matrix
-    osg::Matrix m_transformationMatrix;
+            WRITEINT32(3); // version
 
-    //! Model name
-    std::string m_label;
+            Writer.write((vpl::sys::tInt32)m_bVisibility);
+            Writer.write((vpl::sys::tInt32)m_bSelected);
+            m_Color.serialize(Writer);
+            Writer.write(m_label);
+            CSerializableData< osg::Matrix >::serialize(&m_transformationMatrix, Writer);
+            Writer.write((vpl::sys::tInt32)m_properties.size());
+            for (auto it = m_properties.begin(); it != m_properties.end(); it++)
+            {
+                Writer.write(it->first);
+                Writer.write(it->second);
+            }
 
-	//! Named model properties
-	std::map<std::string, std::string> m_properties;
-};
+            Writer.endWrite(*this);
+
+            m_spModel->serialize(Writer);
+        }
+
+        //! Deserialize
+        template<class tpSerializer>
+        void deserialize(vpl::mod::CChannelSerializer<tpSerializer> & Reader)
+        {
+            Reader.beginRead(*this);
+
+            int version = 0;
+            READINT32(version);
+
+            vpl::sys::tInt32 bVis = 0;
+            Reader.read(bVis); m_bVisibility = bVis != 0;
+
+            if (version > 2)
+            {
+                vpl::sys::tInt32 bSel = 0;
+                Reader.read(bSel); m_bSelected = bVis != 0;
+            }
+
+            m_Color.deserialize(Reader);
+            Reader.read(m_label);
+            CSerializableData< osg::Matrix >::deserialize(&m_transformationMatrix, Reader);
+            if (version>1)
+            {
+                vpl::sys::tInt32 nProps = 0;
+                Reader.read(nProps);
+                for (int i = 0; i < nProps; i++)
+                {
+                    std::string key, value;
+                    Reader.read(key);
+                    Reader.read(value);
+                    m_properties[key] = value;
+                }
+            }
+
+            Reader.endRead(*this);
+
+            m_spModel->deserialize(Reader);
+        }
+
+    protected:
+        //! Model storage.
+        vpl::base::CScopedPtr<geometry::CMesh> m_spModel;
+
+        //! Model visibility.
+        bool m_bVisibility;
+
+        //! Model visibility.
+        bool m_bSelected;
+
+        //! Model color (RGBA components).
+        CColor4f m_Color;
+
+        //! Model transformation matrix
+        osg::Matrix m_transformationMatrix;
+
+        //! Model name
+        std::string m_label;
+
+        //! Named model properties
+        std::map<std::string, std::string> m_properties;
+    };
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
-//! Serialization wrapper. 
+    ////////////////////////////////////////////////////////////////////////////////////////////////////
+    //! Serialization wrapper. 
 
-DECLARE_SERIALIZATION_WRAPPER( CModel )
+    DECLARE_SERIALIZATION_WRAPPER(CModel)
 
 } // namespace data
 

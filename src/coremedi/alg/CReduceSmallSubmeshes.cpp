@@ -22,10 +22,10 @@
 
 #include <alg/CReduceSmallSubmeshes.h>
 
-bool CSmallSubmeshReducer::reduce(data::CMesh &mesh, int triangle_threshold)
+bool CSmallSubmeshReducer::reduce(geometry::CMesh &mesh, int triangle_threshold)
 {
     // queue of triangles to visit
-    std::deque<data::CMesh::FaceHandle> toVisit;
+    std::deque<geometry::CMesh::FaceHandle> toVisit;
 
     // submesh index map with number of submeshes
     std::map<int, int> counts;
@@ -37,16 +37,16 @@ bool CSmallSubmeshReducer::reduce(data::CMesh &mesh, int triangle_threshold)
     OpenMesh::FPropHandleT<int> fProp_submeshIndex;
     mesh.add_property<int>(fProp_submeshIndex, "submeshIndex");
 
-    for (data::CMesh::FaceIter fit = mesh.faces_begin(); fit != mesh.faces_end(); ++fit)
+    for (geometry::CMesh::FaceIter fit = mesh.faces_begin(); fit != mesh.faces_end(); ++fit)
     {
         mesh.property<int>(fProp_submeshIndex, fit) = -1;
     }
 
     // get first triangle of the mesh
-    data::CMesh::FaceIter faceIt = mesh.faces_begin();
+    geometry::CMesh::FaceIter faceIt = mesh.faces_begin();
     while (faceIt != mesh.faces_end())
     {
-        data::CMesh::FaceHandle face = faceIt.handle();
+        geometry::CMesh::FaceHandle face = faceIt.handle();
 
         // start new submesh index
         counts[lastused] = 0;
@@ -58,13 +58,13 @@ bool CSmallSubmeshReducer::reduce(data::CMesh &mesh, int triangle_threshold)
         // go through all triangles to visit ( that lie on the same submesh )
         while (toVisit.size() > 0)
         {
-            data::CMesh::FaceHandle curr = toVisit.front();
+            geometry::CMesh::FaceHandle curr = toVisit.front();
             toVisit.pop_front();
 
             // get all neighbourhoods and place them in the queue
-            for (data::CMesh::FaceFaceIter ffit = mesh.ff_begin(curr); ffit != mesh.ff_end(curr); ++ffit)
+            for (geometry::CMesh::FaceFaceIter ffit = mesh.ff_begin(curr); ffit != mesh.ff_end(curr); ++ffit)
             {
-                data::CMesh::FaceHandle neighbour = ffit.handle();
+                geometry::CMesh::FaceHandle neighbour = ffit.handle();
                 if (mesh.property<int>(fProp_submeshIndex, neighbour) == -1)
                 {
                     mesh.property<int>(fProp_submeshIndex, neighbour) = lastused;
@@ -94,7 +94,7 @@ bool CSmallSubmeshReducer::reduce(data::CMesh &mesh, int triangle_threshold)
     }
 
     // erase marked tris
-    for (data::CMesh::FaceIter fit = mesh.faces_begin(); fit != mesh.faces_end(); ++fit)
+    for (geometry::CMesh::FaceIter fit = mesh.faces_begin(); fit != mesh.faces_end(); ++fit)
     {
         if (toErase.find(mesh.property<int>(fProp_submeshIndex, fit.handle())) != toErase.end())
         {
@@ -112,10 +112,10 @@ bool CSmallSubmeshReducer::reduce(data::CMesh &mesh, int triangle_threshold)
 ///////////////////////////////////////////////////////////////////////////////
 //
 
-bool CSmallSubmeshReducer::reduceNonMax(data::CMesh &mesh)
+bool CSmallSubmeshReducer::reduceNonMax(geometry::CMesh &mesh)
 {
     // queue of triangles to visit
-    std::deque<data::CMesh::FaceHandle> toVisit;
+    std::deque<geometry::CMesh::FaceHandle> toVisit;
 
     // submesh index map with number of submeshes
     std::map<int, int> counts;
@@ -129,16 +129,16 @@ bool CSmallSubmeshReducer::reduceNonMax(data::CMesh &mesh)
     OpenMesh::FPropHandleT<int> fProp_submeshIndex;
     mesh.add_property<int>(fProp_submeshIndex, "submeshIndex");
 
-    for (data::CMesh::FaceIter fit = mesh.faces_begin(); fit != mesh.faces_end(); ++fit)
+    for (geometry::CMesh::FaceIter fit = mesh.faces_begin(); fit != mesh.faces_end(); ++fit)
     {
         mesh.property<int>(fProp_submeshIndex, fit) = -1;
     }
 
     // get first triangle of the mesh
-    data::CMesh::FaceIter faceIt = mesh.faces_begin();
+    geometry::CMesh::FaceIter faceIt = mesh.faces_begin();
     while (faceIt != mesh.faces_end())
     {
-        data::CMesh::FaceHandle face = faceIt.handle();
+        geometry::CMesh::FaceHandle face = faceIt.handle();
 
         // start new submesh index
         counts[lastused] = 0;
@@ -150,13 +150,13 @@ bool CSmallSubmeshReducer::reduceNonMax(data::CMesh &mesh)
         // go through all triangles to visit ( that lie on the same submesh )
         while (toVisit.size() > 0)
         {
-            data::CMesh::FaceHandle curr = toVisit.front();
+            geometry::CMesh::FaceHandle curr = toVisit.front();
             toVisit.pop_front();
 
             // get all neighbourhoods and place them in the queue
-            for (data::CMesh::FaceFaceIter ffit = mesh.ff_begin(curr); ffit != mesh.ff_end(curr); ++ffit)
+            for (geometry::CMesh::FaceFaceIter ffit = mesh.ff_begin(curr); ffit != mesh.ff_end(curr); ++ffit)
             {
-                data::CMesh::FaceHandle neighbour = ffit.handle();
+                geometry::CMesh::FaceHandle neighbour = ffit.handle();
                 if (mesh.property<int>(fProp_submeshIndex, neighbour) == -1)
                 {
                     mesh.property<int>(fProp_submeshIndex, neighbour) = lastused;
@@ -181,7 +181,7 @@ bool CSmallSubmeshReducer::reduceNonMax(data::CMesh &mesh)
     }
 
     // erase tris of nonmax groups
-    for (data::CMesh::FaceIter fit = mesh.faces_begin(); fit != mesh.faces_end(); ++fit)
+    for (geometry::CMesh::FaceIter fit = mesh.faces_begin(); fit != mesh.faces_end(); ++fit)
     {
         if (mesh.property<int>(fProp_submeshIndex, fit.handle()) != maxGroupIndex)
         {

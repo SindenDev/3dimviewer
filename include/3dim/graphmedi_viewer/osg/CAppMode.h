@@ -35,6 +35,8 @@ namespace osgManipulator
     class Dragger;
 }
 
+class OSGCanvas;
+
 namespace scene
 {
 
@@ -152,6 +154,10 @@ public:
     //!   return true if the signal
     typedef vpl::mod::CSignal<void, osgManipulator::Dragger*, int> tSigDraggerHit;
 
+    //! Signal invoked when mouse cursor enters/leaves window
+    //! First parameter is pointer to canvas, second is enter/leave identifier.
+    typedef vpl::mod::CSignal< void, OSGCanvas*, bool > tSigWindowEnter;
+
 public:
     //! Returns the current mode.
     tMode get() const { return m_Mode; }
@@ -258,6 +264,12 @@ public:
     tSigDraggerHit& getDraggerHitSignal()
     {
         return m_sigDraggerHit;
+    }
+
+    //! Returns reference to the "window enter/leave" signal.
+    tSigWindowEnter& getWindowEnterLeaveSignal()
+    {
+        return m_sigWindowEnter;
     }
 
     //! Is drawing handler connected?
@@ -410,6 +422,9 @@ protected:
 
     //! Dragger hit signal.
     tSigDraggerHit m_sigDraggerHit;
+
+	//! Window enter/leave signal
+    tSigWindowEnter m_sigWindowEnter;
 
 protected:
     //! Stores the current mouse mode.

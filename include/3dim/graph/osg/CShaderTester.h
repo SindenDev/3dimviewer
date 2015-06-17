@@ -32,105 +32,27 @@
 #include <osg/Geometry>
 #include <osg/CForceCullCallback.h>
 
+#define SHADERLOG
+
 namespace osg
 {
-
-class CShaderTester : public osg::Geometry
-{
-protected:
-    bool m_initialized;
-    bool m_compiled;
-    GLenum m_shaderType;
-    std::string m_vertSource;
-    std::string m_geomSource;
-    std::string m_fragSource;
-    std::string m_programName;
-
-public:
-    CShaderTester(std::string programName, std::string vertSource, std::string geomSource, std::string fragSource)
-        : osg::Geometry()
-        , m_initialized(false)
-        , m_compiled(false)
-        , m_vertSource(vertSource)
-        , m_geomSource(geomSource)
-        , m_fragSource(fragSource)
-        , m_programName(programName)
+    class CShaderTester : public osg::Geometry
     {
-        setCullCallback(new osg::CForceCullCallback(true));
-    }
+    protected:
+        bool m_initialized;
+        bool m_compiled;
+        GLenum m_shaderType;
+        std::string m_vertSource;
+        std::string m_geomSource;
+        std::string m_fragSource;
+        std::string m_programName;
 
-    ~CShaderTester()
-    { }
-
-    GLuint createAndCompileShader(GLenum shaderType, const char *shaderSource) const
-    {
-        GLuint shader = glCreateShader(shaderType);
-        glShaderSource(shader, 1, &shaderSource, NULL);
-        glCompileShader(shader);
-
-        GLint result = GL_FALSE;
-        glGetShaderiv(shader, GL_COMPILE_STATUS, &result);
-        if (result != GL_TRUE)
-        {
-            GLchar buffer[2048 + 1];
-            GLsizei length;
-            GLsizei size = 2048;
-            glGetShaderInfoLog(shader, size, &length, buffer);
-            bool damn = true;
-        }
-
-        return shader;
-    }
-
-    virtual void drawImplementation(osg::RenderInfo &renderInfo) const
-    {
-        if ((!m_initialized) /* && (glewInit() == GLEW_OK)*/) // can't call glewInit here!
-        {
-            *const_cast<bool *>(&m_initialized) = true;
-        }
-
-        if (!m_initialized || m_compiled)
-        {
-            return;
-        }
-
-        GLuint vertShader = 0;
-        GLuint geomShader = 0;
-        GLuint fragShader = 0;
-        GLuint program = glCreateProgram();
-
-        VPL_LOG_INFO("Testing shader program: " << m_programName << " ...");
-        if (m_vertSource.length() > 0) { vertShader = createAndCompileShader(GL_VERTEX_SHADER, m_vertSource.c_str()); }
-        if (m_geomSource.length() > 0) { geomShader = createAndCompileShader(GL_GEOMETRY_SHADER_EXT, m_geomSource.c_str()); }
-        if (m_fragSource.length() > 0) { fragShader = createAndCompileShader(GL_FRAGMENT_SHADER, m_fragSource.c_str()); }
-
-        if (vertShader > 0) { glAttachShader(program, vertShader); }
-        if (geomShader > 0) { glAttachShader(program, geomShader); }
-        if (fragShader > 0) { glAttachShader(program, fragShader); }
-
-        glLinkProgram(program);
-        GLint result = GL_FALSE;
-        glGetProgramiv(program, GL_LINK_STATUS, &result);
-        if (result != GL_TRUE)
-        {
-            GLchar buffer[2048 + 1];
-            GLsizei length;
-            GLsizei size = 2048;
-            glGetProgramInfoLog(program, size, &length, buffer);
-            bool damn = true;
-        }
-
-        glDeleteProgram(program);
-        glDeleteShader(vertShader);
-        glDeleteShader(geomShader);
-        glDeleteShader(fragShader);
-
-        *const_cast<bool *>(&m_compiled) = true;
-
-        VPL_LOG_INFO("    ...OK");
-    }
-};
-
+    public:
+        CShaderTester(std::string programName, std::string vertSource, std::string geomSource, std::string fragSource);
+        ~CShaderTester();
+        GLuint createAndCompileShader(GLenum shaderType, const char *shaderSource) const;
+        virtual void drawImplementation(osg::RenderInfo &renderInfo) const;
+    };
 }
 
 #endif // CShaderTester_H_included

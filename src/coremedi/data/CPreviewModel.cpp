@@ -127,7 +127,7 @@ void data::CPreviewModel::update(const data::CChangedEntries& Changes)
     }
 
     // Create a new mesh
-    vpl::base::CScopedPtr<data::CMesh> pMesh(new data::CMesh);
+    vpl::base::CScopedPtr<geometry::CMesh> pMesh(new geometry::CMesh);
 
     // Marching Cubes algorithm creates polygonal surface from the segmented data
     CMarchingCubes mc;
@@ -158,7 +158,7 @@ void data::CPreviewModel::update(const data::CChangedEntries& Changes)
     // Center of the mesh
     double offset = 0.5;
     double dX = offset, dY = offset, dZ = offset;
-    for (data::CMesh::VertexIter vit = pMesh->vertices_sbegin(); vit != pMesh->vertices_end(); ++vit)
+    for (geometry::CMesh::VertexIter vit = pMesh->vertices_sbegin(); vit != pMesh->vertices_end(); ++vit)
 	{
         dX += pMesh->point(vit)[0];
         dY += pMesh->point(vit)[1];
@@ -170,7 +170,7 @@ void data::CPreviewModel::update(const data::CChangedEntries& Changes)
     dZ *= dInvCount;
 
     // Center the mesh
-	for (data::CMesh::VertexIter vit = pMesh->vertices_sbegin(); vit != pMesh->vertices_end(); ++vit)
+	for (geometry::CMesh::VertexIter vit = pMesh->vertices_sbegin(); vit != pMesh->vertices_end(); ++vit)
 	{
         pMesh->point(vit)[0] += offset - dX;
         pMesh->point(vit)[1] += offset - dY;

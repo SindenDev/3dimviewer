@@ -26,6 +26,8 @@
 #include <VPL/Base/SharedPtr.h>
 #include <VPL/ImageIO/DicomSlice.h>
 
+#include <data/CDicomLoader.h>
+
 // STL
 #include <string>
 #include <vector>
@@ -35,13 +37,6 @@
 
 namespace data
 {
-
-///////////////////////////////////////////////////////////////////////////////
-// Global definitions.
-
-//! Vector of dicom slices.
-typedef std::vector<vpl::img::CDicomSlicePtr> tDicomSlices;
-
 
 ///////////////////////////////////////////////////////////////////////////////
 //! Struct encapsulates DICOM filename
@@ -113,11 +108,11 @@ public:
     void getDicomFileList( tDicomFileList& Files );
 
     //! Loads a single frame (i.e. slice) from a specified dicom file. 
-    bool loadDicomFile( int FileNum, vpl::img::CDicomSlice& Slice, bool bLoadImageData = true );
+    bool loadDicomFile(int FileNum, vpl::img::CDicomSlice& Slice, sExtendedTags& tags, bool bLoadImageData = true);
 
     //! Loads all frames/slices from a specified dicom file.
     //! - Returns the number of succesfully read slices.
-    int loadDicomFile( int FileNum, tDicomSlices& Slices, bool bLoadImageData = true, bool bCompatibilityMode = false );
+    int loadDicomFile(int FileNum, tDicomSlices& Slices, sExtendedTags& tags, bool bLoadImageData = true, bool bCompatibilityMode = false);
 
 protected:
     //! Set of all dicom files belonging to this serie.

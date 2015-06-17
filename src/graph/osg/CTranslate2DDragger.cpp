@@ -35,6 +35,7 @@ using namespace osgManipulator;
 // Constructor - default settings
 CTranslate2DDragger::CTranslate2DDragger()
 	: m_bNoGeometryTransform( true )
+    , m_bTranslating(false)
 {
 	m_initialPlane.set(osg::Vec3(0.0, 0.0, 1.0), osg::Vec3(0.0, 0.0, 0.0));
 	_projector = new PlaneProjector(m_initialPlane);
@@ -46,6 +47,7 @@ CTranslate2DDragger::CTranslate2DDragger()
 CTranslate2DDragger::CTranslate2DDragger(const osg::Plane& plane)
 : m_initialPlane(plane)
 , m_bNoGeometryTransform( true )
+, m_bTranslating(false)
 {
 	_projector = new PlaneProjector(m_initialPlane);
 	_polygonOffset = new osg::PolygonOffset(-1.0f,-1.0f);
@@ -64,11 +66,17 @@ bool CTranslate2DDragger::handle(const PointerInfo& pointer, const osgGA::GUIEve
 	// Check if the dragger node is in the nodepath.
 	if (!pointer.contains(this)) return false;
 
+    if((ea.getButtonMask() &  osgGA::GUIEventAdapter::LEFT_MOUSE_BUTTON) == 0)
+        return false;
+
 	switch (ea.getEventType())
 	{
 		// Pick start.
 	case (osgGA::GUIEventAdapter::PUSH):
 		{
+//             if(m_bTranslating && ((ea.getButtonMask() & osgGA::GUIEventAdapter::LEFT_MOUSE_BUTTON) == 0))
+//                 return false;
+
             m_bTranslating = true;
 
 			// Get the LocalToWorld matrix for this node and set it for the projector.
