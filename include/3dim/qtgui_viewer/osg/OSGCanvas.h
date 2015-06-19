@@ -102,8 +102,12 @@ protected:
     osg::ref_ptr<GraphicsWindow>                       m_graphic_window;
     //! Restore mode on mouse button release?
     bool                m_bRestoreModeOnMouseRelease;    
+	//! true when shortcut event came but no key press
+	bool				m_bShortcut;
     //! Last rendering time in msecs
     int                 m_lastRenderingTime;
+    //! Custom cursor
+    QCursor*			m_customCursor;
 private:
     void                init(QWidget *parent, const osg::Vec4& bgColor);
 
@@ -121,8 +125,17 @@ public:
     //! Sets mouse cursor according to a given application mode.
     void                setCursorX ( int appmode );
 
+    //! Set custom cursor for drawing mode
+    void setCustomCursor(QCursor *cursor) { m_customCursor = cursor; }
+
+    //! Get custom cursor for drawing mode
+    QCursor *getCustomCursor() {return m_customCursor; }
+
     //! Set scene data.
     void                setScene(osg::Node * scene) ;
+
+	//! Get scene data.
+    osg::Node *			getScene() ;
 
     //! Returns pointer to viewer
     osgViewer::Viewer * getView() { return m_view.get(); }
@@ -174,6 +187,7 @@ public:
     virtual void        mouseReleaseEvent ( QMouseEvent * event );        
     virtual void        enterEvent ( QEvent * event ) ;
     virtual void        leaveEvent ( QEvent * event ) ;
+	virtual bool		event(QEvent *event);
 };
 
 

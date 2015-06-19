@@ -1,27 +1,9 @@
 ///////////////////////////////////////////////////////////////////////////////
-// $Id$
-//
-// This file comes from 3DimViewer software and was modified for 
-// 
-// BlueSkyPlan version 3.x
-// Diagnostic and implant planning software for dentistry.
-//
-// The original 3DimViewer license can be found below.
-//
-// Changes are Copyright 2012 Blue Sky Bio, LLC
-// All rights reserved 
-//
-// Changelog:
-//    [2012/mm/dd] - ...
-//
-///////////////////////////////////////////////////////////////////////////////
-
-///////////////////////////////////////////////////////////////////////////////
 //
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2015 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.

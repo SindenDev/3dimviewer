@@ -36,7 +36,6 @@ namespace data
 {
 
 class CDentalExamination;
-class CBlueDentExamination;
 
 ///////////////////////////////////////////////////////////////////////////////
 //! Parameters of special widgets shown in corners of 3D and ortho scenes.
@@ -110,7 +109,6 @@ protected:
     osg::Vec4 m_orthoSlicesColors[3];
 
     friend class CDentalExamination;
-    friend class CBlueDentExamination;
 };
 
 namespace Storage

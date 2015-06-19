@@ -45,5 +45,7 @@
         <file>resources/dropper.png</file>
         <file>resources/models.png</file>
         <file>resources/fullscreen.png</file>
+        <file>resources/regions.png</file>
+        <file>resources/autoseg.png</file>
     </qresource>
 </RCC>

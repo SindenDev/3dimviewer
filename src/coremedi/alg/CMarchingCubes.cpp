@@ -1484,7 +1484,7 @@ CMarchingCubes::~CMarchingCubes()
 { }
 
 bool CMarchingCubes::generateMesh(
-    data::CMesh &mesh,
+    geometry::CMesh &mesh,
     IMarchingCubesFunctor *volumeFunctor,
     bool reduceFlatAreas,
     int numOfIterations,
@@ -1578,8 +1578,8 @@ bool CMarchingCubes::generateMesh(
 
     // merge submeshes
     mesh.clear();
-    std::map<int, std::set<std::pair<data::CMesh::VertexHandle, int> > > vertexMap;
-    std::vector<data::CMesh::VertexHandle> seamVertices;
+    std::map<int, std::set<std::pair<geometry::CMesh::VertexHandle, int> > > vertexMap;
+    std::vector<geometry::CMesh::VertexHandle> seamVertices;
     for (int i = 0; i < workerCount; ++i)
     {
         mergeMeshes(workers[i].getMesh(), workers[i].getOpenEdgeVertices(), mesh, vertexMap, seamVertices);
@@ -1617,25 +1617,25 @@ bool CMarchingCubes::generateMesh(
 
 #if(0)
     int boundaryEdgesCount = 0;
-    std::vector<std::pair<data::CMesh::Point, data::CMesh::VertexHandle> > boundaryVertices;
-    for (data::CMesh::EdgeIter eit = mesh.edges_begin(); eit != mesh.edges_end(); ++eit)
+    std::vector<std::pair<geometry::CMesh::Point, geometry::CMesh::VertexHandle> > boundaryVertices;
+    for (geometry::CMesh::EdgeIter eit = mesh.edges_begin(); eit != mesh.edges_end(); ++eit)
     {
         if (mesh.is_boundary(eit.handle()))
         {
-            data::CMesh::HalfedgeHandle hedge = mesh.halfedge_handle(eit.handle(), 0);
+            geometry::CMesh::HalfedgeHandle hedge = mesh.halfedge_handle(eit.handle(), 0);
             if (!hedge.is_valid())
             {
                 hedge = mesh.halfedge_handle(eit.handle(), 1);
             }
-            data::CMesh::VertexHandle vh[2];
-            data::CMesh::Point p[2];
+            geometry::CMesh::VertexHandle vh[2];
+            geometry::CMesh::Point p[2];
 
             vh[0] = mesh.from_vertex_handle(hedge);
             vh[1] = mesh.to_vertex_handle(hedge);
             p[0] = mesh.point(vh[0]);
             p[1] = mesh.point(vh[1]);
-            boundaryVertices.push_back(std::pair<data::CMesh::Point, data::CMesh::VertexHandle>(p[0], vh[0]));
-            boundaryVertices.push_back(std::pair<data::CMesh::Point, data::CMesh::VertexHandle>(p[1], vh[1]));
+            boundaryVertices.push_back(std::pair<geometry::CMesh::Point, geometry::CMesh::VertexHandle>(p[0], vh[0]));
+            boundaryVertices.push_back(std::pair<geometry::CMesh::Point, geometry::CMesh::VertexHandle>(p[1], vh[1]));
 
             boundaryEdgesCount++;
         }
@@ -1645,25 +1645,25 @@ bool CMarchingCubes::generateMesh(
     return true;
 }
 
-void CMarchingCubes::mergeMeshes(data::CMesh &sourceMesh, std::set<std::pair<data::CMesh::VertexHandle, int> > &openEdgeVertices, data::CMesh &targetMesh, std::map<int, std::set<std::pair<data::CMesh::VertexHandle, int> > > &vertexMap, std::vector<data::CMesh::VertexHandle> &seamVertices)
+void CMarchingCubes::mergeMeshes(geometry::CMesh &sourceMesh, std::set<std::pair<geometry::CMesh::VertexHandle, int> > &openEdgeVertices, geometry::CMesh &targetMesh, std::map<int, std::set<std::pair<geometry::CMesh::VertexHandle, int> > > &vertexMap, std::vector<geometry::CMesh::VertexHandle> &seamVertices)
 {
     if (sourceMesh.n_vertices() == 0)
     {
         return;
     }
 
-    OpenMesh::VPropHandleT<data::CMesh::VertexHandle> vProp_targetHandle;
+    OpenMesh::VPropHandleT<geometry::CMesh::VertexHandle> vProp_targetHandle;
     sourceMesh.add_property(vProp_targetHandle, "vProp_targetHandle");
 
     // handle edge vertices first and try to find them in target mesh
-    for (std::set<std::pair<data::CMesh::VertexHandle, int> >::iterator oevit = openEdgeVertices.begin(); oevit != openEdgeVertices.end(); ++oevit)
+    for (std::set<std::pair<geometry::CMesh::VertexHandle, int> >::iterator oevit = openEdgeVertices.begin(); oevit != openEdgeVertices.end(); ++oevit)
     {
-        data::CMesh::Point sourcePoint = sourceMesh.point(oevit->first);
+        geometry::CMesh::Point sourcePoint = sourceMesh.point(oevit->first);
         int hashValue = int(sourcePoint[2]) / 10 * 1000000 + int(sourcePoint[1]) / 10 * 1000 + int(sourcePoint[0]) / 10 * 1;
-        std::set<std::pair<data::CMesh::VertexHandle, int> > &hashVertexMap = vertexMap[hashValue];
+        std::set<std::pair<geometry::CMesh::VertexHandle, int> > &hashVertexMap = vertexMap[hashValue];
 
-        std::set<std::pair<data::CMesh::VertexHandle, int> >::iterator foundVertex = hashVertexMap.end();
-        for (std::set<std::pair<data::CMesh::VertexHandle, int> >::iterator hvit = hashVertexMap.begin(); hvit != hashVertexMap.end(); ++hvit)
+        std::set<std::pair<geometry::CMesh::VertexHandle, int> >::iterator foundVertex = hashVertexMap.end();
+        for (std::set<std::pair<geometry::CMesh::VertexHandle, int> >::iterator hvit = hashVertexMap.begin(); hvit != hashVertexMap.end(); ++hvit)
         {
             if ((sourcePoint - targetMesh.point(hvit->first)).length() < 0.001)
             {
@@ -1674,35 +1674,35 @@ void CMarchingCubes::mergeMeshes(data::CMesh &sourceMesh, std::set<std::pair<dat
 
         if (foundVertex == hashVertexMap.end())
         {
-            data::CMesh::VertexHandle newVertex = targetMesh.add_vertex(sourcePoint);
+            geometry::CMesh::VertexHandle newVertex = targetMesh.add_vertex(sourcePoint);
             sourceMesh.property(vProp_targetHandle, oevit->first) = newVertex;
-            hashVertexMap.insert(std::pair<data::CMesh::VertexHandle, int>(newVertex, oevit->second - 1));
+            hashVertexMap.insert(std::pair<geometry::CMesh::VertexHandle, int>(newVertex, oevit->second - 1));
             seamVertices.push_back(newVertex);
         }
         else
         {
             sourceMesh.property(vProp_targetHandle, oevit->first) = foundVertex->first;
 
-            data::CMesh::VertexHandle vertexHandle = foundVertex->first;
+            geometry::CMesh::VertexHandle vertexHandle = foundVertex->first;
             int usages = foundVertex->second - 1;
 
             hashVertexMap.erase(foundVertex);
             if (usages != 0)
             {
-                hashVertexMap.insert(std::pair<data::CMesh::VertexHandle, int>(vertexHandle, usages));
+                hashVertexMap.insert(std::pair<geometry::CMesh::VertexHandle, int>(vertexHandle, usages));
             }
         }
     }
 
     // handle all other vertices
-    for (data::CMesh::VertexIter vit = sourceMesh.vertices_begin(); vit != sourceMesh.vertices_end(); ++vit)
+    for (geometry::CMesh::VertexIter vit = sourceMesh.vertices_begin(); vit != sourceMesh.vertices_end(); ++vit)
     {
         if (sourceMesh.property(vProp_targetHandle, vit.handle()).is_valid())
         {
             continue;
         }
 
-        data::CMesh::VertexHandle newVertex = targetMesh.add_vertex(sourceMesh.point(vit.handle()));
+        geometry::CMesh::VertexHandle newVertex = targetMesh.add_vertex(sourceMesh.point(vit.handle()));
         sourceMesh.property(vProp_targetHandle, vit.handle()) = newVertex;
     }
 
@@ -1718,18 +1718,18 @@ void CMarchingCubes::mergeMeshes(data::CMesh &sourceMesh, std::set<std::pair<dat
     }
 
     // copy faces using handle map
-    for (data::CMesh::FaceIter fit = sourceMesh.faces_begin(); fit != sourceMesh.faces_end(); ++fit)
+    for (geometry::CMesh::FaceIter fit = sourceMesh.faces_begin(); fit != sourceMesh.faces_end(); ++fit)
     {
-        data::CMesh::FaceHandle faceHandle = fit.handle();
-        std::vector<data::CMesh::VertexHandle> vertexHandles;
-        for (data::CMesh::FaceVertexIter fvit = sourceMesh.fv_begin(faceHandle); fvit != sourceMesh.fv_end(faceHandle); ++fvit)
+        geometry::CMesh::FaceHandle faceHandle = fit.handle();
+        std::vector<geometry::CMesh::VertexHandle> vertexHandles;
+        for (geometry::CMesh::FaceVertexIter fvit = sourceMesh.fv_begin(faceHandle); fvit != sourceMesh.fv_end(faceHandle); ++fvit)
         {
             vertexHandles.push_back(sourceMesh.property(vProp_targetHandle, fvit.handle()));
         }
 
         assert(vertexHandles.size() == 3);
 
-        data::CMesh::FaceHandle newFace = targetMesh.add_face(vertexHandles[0], vertexHandles[1], vertexHandles[2]);
+        geometry::CMesh::FaceHandle newFace = targetMesh.add_face(vertexHandles[0], vertexHandles[1], vertexHandles[2]);
 
         if (flagIsPresent)
         {
@@ -1761,12 +1761,12 @@ CMarchingCubesWorker::~CMarchingCubesWorker()
     deallocWorktMem();
 }
 
-data::CMesh &CMarchingCubesWorker::getMesh()
+geometry::CMesh &CMarchingCubesWorker::getMesh()
 {
     return m_mesh;
 }
 
-std::set<std::pair<data::CMesh::VertexHandle, int> > &CMarchingCubesWorker::getOpenEdgeVertices()
+std::set<std::pair<geometry::CMesh::VertexHandle, int> > &CMarchingCubesWorker::getOpenEdgeVertices()
 {
     return m_openEdgeVertices;
 }
@@ -1877,7 +1877,7 @@ bool CMarchingCubesWorker::generateMesh(IMarchingCubesFunctor *volumeFunctor, bo
 
     unsigned char cube_code; // code of actual cube
     unsigned char *state_matrix_ptr, *cube_code_matrix_ptr; // help pointers on state and code matrix
-    data::CMesh::VertexHandle *node_matrix_ptr; // help pointer on node matrix
+    geometry::CMesh::VertexHandle *node_matrix_ptr; // help pointer on node matrix
 
     // save pointer on actual tri mesh
     m_mesh.clear();
@@ -2022,21 +2022,21 @@ void CMarchingCubesWorker::updateOpenEdgeVertices()
     limit.z() = m_voxelSize.z() * 0.5 * 0.1;
 
     m_openEdgeVertices.clear();
-    for (data::CMesh::EdgeIter eit = m_mesh.edges_begin(); eit != m_mesh.edges_end(); ++eit)
+    for (geometry::CMesh::EdgeIter eit = m_mesh.edges_begin(); eit != m_mesh.edges_end(); ++eit)
     {
         if (m_mesh.is_boundary(eit.handle()))
         {
-            data::CMesh::HalfedgeHandle halfedge = m_mesh.halfedge_handle(eit.handle(), 0);
+            geometry::CMesh::HalfedgeHandle halfedge = m_mesh.halfedge_handle(eit.handle(), 0);
             if (!halfedge.is_valid())
             {
                 halfedge = m_mesh.halfedge_handle(eit.handle(), 1);
             }
 
-            data::CMesh::VertexHandle vh[2];
+            geometry::CMesh::VertexHandle vh[2];
             vh[0] = m_mesh.from_vertex_handle(halfedge);
             vh[1] = m_mesh.to_vertex_handle(halfedge);
 
-            data::CMesh::Point p[2];
+            geometry::CMesh::Point p[2];
             for (int i = 0; i < 2; ++i)
             {
                 p[i] = m_mesh.point(vh[i]);
@@ -2068,7 +2068,7 @@ void CMarchingCubesWorker::updateOpenEdgeVertices()
                 }
 
                 usages = ipow(2, usages);
-                m_openEdgeVertices.insert(std::pair<data::CMesh::VertexHandle, int>(vh[i], usages));
+                m_openEdgeVertices.insert(std::pair<geometry::CMesh::VertexHandle, int>(vh[i], usages));
             }
         }
     }
@@ -2087,11 +2087,11 @@ void CMarchingCubesWorker::allocWorktMem(int size_x, int size_y)
     int workMatrixSize = m_work_matrices_size_x * m_work_matrices_size_y;
     m_state_matrix_up = new unsigned char[workMatrixSize];
     m_state_matrix_down = new unsigned char[workMatrixSize];
-    m_node_matrix_up_h = new data::CMesh::VertexHandle[workMatrixSize];
-    m_node_matrix_up_v = new data::CMesh::VertexHandle[workMatrixSize];
-    m_node_matrix_down_h = new data::CMesh::VertexHandle[workMatrixSize];
-    m_node_matrix_down_v = new data::CMesh::VertexHandle[workMatrixSize];
-    m_node_matrix_middle = new data::CMesh::VertexHandle[workMatrixSize];
+    m_node_matrix_up_h = new geometry::CMesh::VertexHandle[workMatrixSize];
+    m_node_matrix_up_v = new geometry::CMesh::VertexHandle[workMatrixSize];
+    m_node_matrix_down_h = new geometry::CMesh::VertexHandle[workMatrixSize];
+    m_node_matrix_down_v = new geometry::CMesh::VertexHandle[workMatrixSize];
+    m_node_matrix_middle = new geometry::CMesh::VertexHandle[workMatrixSize];
     m_cube_code_matrix = new unsigned char[workMatrixSize];
     m_down_cube_code_matrix = new unsigned char[workMatrixSize];
 
@@ -2132,8 +2132,8 @@ void CMarchingCubesWorker::makeTri(int x, int y, unsigned char cube_code)
     OpenMesh::FPropHandleT<short> fProp_flag;
     bool markFaces = m_mesh.get_property_handle(fProp_flag, "fProp_flag");
 
-    data::CMesh::Point edge_center;
-    data::CMesh::VertexHandle tri_vertex[3];
+    geometry::CMesh::Point edge_center;
+    geometry::CMesh::VertexHandle tri_vertex[3];
 
     // cycle of tri
     for (int i = 0; i < 4; i++)
@@ -2153,8 +2153,8 @@ void CMarchingCubesWorker::makeTri(int x, int y, unsigned char cube_code)
             {
                 // edge center calculation
                 int edgeIndex = node_state[cube_code][3 * i + h];
-                data::CMesh::Point &edgeVertexA = m_cube_vertices[edge_indexes[edgeIndex][0]];
-                data::CMesh::Point &edgeVertexB = m_cube_vertices[edge_indexes[edgeIndex][1]];
+                geometry::CMesh::Point &edgeVertexA = m_cube_vertices[edge_indexes[edgeIndex][0]];
+                geometry::CMesh::Point &edgeVertexB = m_cube_vertices[edge_indexes[edgeIndex][1]];
                 edge_center = (edgeVertexA + edgeVertexB) / 2.0;
 
                 // create edge center vertex
@@ -2166,7 +2166,7 @@ void CMarchingCubesWorker::makeTri(int x, int y, unsigned char cube_code)
         }
 
         // create new tri
-        data::CMesh::FaceHandle face = m_mesh.add_face(tri_vertex[0], tri_vertex[1], tri_vertex[2]);
+        geometry::CMesh::FaceHandle face = m_mesh.add_face(tri_vertex[0], tri_vertex[1], tri_vertex[2]);
         if (markFaces)
         {
             m_mesh.property(fProp_flag, face) = tri_direction_group[cube_code][i];
@@ -2183,8 +2183,8 @@ void CMarchingCubesWorker::holeFilling(int x, int y, unsigned char cube_code, bo
     //unsigned char front_code = GetCubeCodeFront(x, y); // code of front cube
     unsigned char left_code = getCubeCodeLeft(x, y); // code of left cube
 
-    data::CMesh::FaceHandle face;
-    data::CMesh::Point normal;
+    geometry::CMesh::FaceHandle face;
+    geometry::CMesh::Point normal;
 
     if (fill_down)
     {
@@ -2200,7 +2200,7 @@ void CMarchingCubesWorker::holeFilling(int x, int y, unsigned char cube_code, bo
             // test unity of down cube hole code with down cube code => hole existence
             else if (down_hole_code[cube_code][i] == getCubeCodeDown(x, y))
             {
-                data::CMesh::VertexHandle hole_vertex[4]; // array of pointers of hole vertices
+                geometry::CMesh::VertexHandle hole_vertex[4]; // array of pointers of hole vertices
 
                 // take hole vertices pointers
                 hole_vertex[0] = getCubeEdgeNode(0, x, y);
@@ -2261,7 +2261,7 @@ void CMarchingCubesWorker::holeFilling(int x, int y, unsigned char cube_code, bo
             // test unity of front cube hole code with front cube code => hole existence
             else if (front_hole_code[cube_code][i] == getCubeCodeFront(x, y))
             {
-                data::CMesh::VertexHandle hole_vertex[4]; // array of pointers of hole vertices
+                geometry::CMesh::VertexHandle hole_vertex[4]; // array of pointers of hole vertices
 
                 // take hole vertices pointers
                 hole_vertex[0] = getCubeEdgeNode(0, x, y);
@@ -2322,7 +2322,7 @@ void CMarchingCubesWorker::holeFilling(int x, int y, unsigned char cube_code, bo
             // test unity of left cube hole code with left cube code => hole existence
             else if (left_hole_code[cube_code][i] == left_code)
             {
-                data::CMesh::VertexHandle hole_vertex[4]; // array of pointers of hole vertices
+                geometry::CMesh::VertexHandle hole_vertex[4]; // array of pointers of hole vertices
 
                 // take hole vertices pointers
                 hole_vertex[0] = getCubeEdgeNode(3, x, y);
@@ -2372,9 +2372,9 @@ void CMarchingCubesWorker::holeFilling(int x, int y, unsigned char cube_code, bo
     }
 }
 
-data::CMesh::VertexHandle CMarchingCubesWorker::getCubeEdgeNode(int edge_index, int x, int y)
+geometry::CMesh::VertexHandle CMarchingCubesWorker::getCubeEdgeNode(int edge_index, int x, int y)
 {
-    data::CMesh::VertexHandle vh;
+    geometry::CMesh::VertexHandle vh;
     vh.invalidate();
     
     switch (edge_index)
@@ -2431,7 +2431,7 @@ data::CMesh::VertexHandle CMarchingCubesWorker::getCubeEdgeNode(int edge_index, 
     return vh;
 }
 
-void CMarchingCubesWorker::setCubeEdgeNode(int edge_index, int x, int y, data::CMesh::VertexHandle new_vertex)
+void CMarchingCubesWorker::setCubeEdgeNode(int edge_index, int x, int y, geometry::CMesh::VertexHandle new_vertex)
 {
     switch (edge_index)
     {
@@ -2485,7 +2485,7 @@ void CMarchingCubesWorker::setCubeEdgeNode(int edge_index, int x, int y, data::C
     }
 }
 
-void CMarchingCubesWorker::markupVertices(data::CMesh &mesh, std::vector<data::CMesh::VertexHandle> &vertices)
+void CMarchingCubesWorker::markupVertices(geometry::CMesh &mesh, std::vector<geometry::CMesh::VertexHandle> &vertices)
 {
     OpenMesh::FPropHandleT<short> fProp_flag;
     mesh.get_property_handle(fProp_flag, "fProp_flag");
@@ -2501,14 +2501,14 @@ void CMarchingCubesWorker::markupVertices(data::CMesh &mesh, std::vector<data::C
     // calculate vertex flags
     if (vertices.size() == 0)
     {
-        for (data::CMesh::VertexIter vit = mesh.vertices_begin(); vit != mesh.vertices_end(); ++vit)
+        for (geometry::CMesh::VertexIter vit = mesh.vertices_begin(); vit != mesh.vertices_end(); ++vit)
         {
             resolveVertexFlag(mesh, vit.handle(), vProp_flag, fProp_flag);
         }
     }
     else
     {
-        for (std::vector<data::CMesh::VertexHandle>::iterator vit = vertices.begin(); vit != vertices.end(); ++vit)
+        for (std::vector<geometry::CMesh::VertexHandle>::iterator vit = vertices.begin(); vit != vertices.end(); ++vit)
         {
             resolveVertexFlag(mesh, *vit, vProp_flag, fProp_flag);
         }
@@ -2517,25 +2517,25 @@ void CMarchingCubesWorker::markupVertices(data::CMesh &mesh, std::vector<data::C
     // adjust flags to resolve near vertices
     if (vertices.size() == 0)
     {
-        for (data::CMesh::VertexIter vit = mesh.vertices_begin(); vit != mesh.vertices_end(); ++vit)
+        for (geometry::CMesh::VertexIter vit = mesh.vertices_begin(); vit != mesh.vertices_end(); ++vit)
         {
             resolveNearVertexFlag(mesh, vit.handle(), vProp_flag);
         }
     }
     else
     {
-        for (std::vector<data::CMesh::VertexHandle>::iterator vit = vertices.begin(); vit != vertices.end(); ++vit)
+        for (std::vector<geometry::CMesh::VertexHandle>::iterator vit = vertices.begin(); vit != vertices.end(); ++vit)
         {
             resolveNearVertexFlag(mesh, *vit, vProp_flag);
         }
     }
 }
 
-void CMarchingCubesWorker::resolveVertexFlag(data::CMesh &mesh, data::CMesh::VertexHandle vertex, OpenMesh::VPropHandleT<int> &vProp_flag, OpenMesh::FPropHandleT<short> &fProp_flag)
+void CMarchingCubesWorker::resolveVertexFlag(geometry::CMesh &mesh, geometry::CMesh::VertexHandle vertex, OpenMesh::VPropHandleT<int> &vProp_flag, OpenMesh::FPropHandleT<short> &fProp_flag)
 {
     std::vector<short> directionGroups;
     int facesAroundVertex = 0;
-    for (data::CMesh::VertexFaceIter vfit = mesh.vf_begin(vertex); vfit != mesh.vf_end(vertex); ++vfit)
+    for (geometry::CMesh::VertexFaceIter vfit = mesh.vf_begin(vertex); vfit != mesh.vf_end(vertex); ++vfit)
     {
         facesAroundVertex++;
 
@@ -2592,16 +2592,16 @@ void CMarchingCubesWorker::resolveVertexFlag(data::CMesh &mesh, data::CMesh::Ver
     mesh.property(vProp_flag, vertex) = vertexType;
 }
 
-void CMarchingCubesWorker::resolveNearVertexFlag(data::CMesh &mesh, data::CMesh::VertexHandle vertex, OpenMesh::VPropHandleT<int> &vProp_flag)
+void CMarchingCubesWorker::resolveNearVertexFlag(geometry::CMesh &mesh, geometry::CMesh::VertexHandle vertex, OpenMesh::VPropHandleT<int> &vProp_flag)
 {
     if (mesh.property(vProp_flag, vertex) != VT_FLAT)
     {
         return;
     }
 
-    for (data::CMesh::VertexVertexIter vvit = mesh.vv_begin(vertex); vvit != mesh.vv_end(vertex); ++vvit)
+    for (geometry::CMesh::VertexVertexIter vvit = mesh.vv_begin(vertex); vvit != mesh.vv_end(vertex); ++vvit)
     {
-        data::CMesh::VertexHandle vvertex = vvit.handle();
+        geometry::CMesh::VertexHandle vvertex = vvit.handle();
         int vvflag = mesh.property(vProp_flag, vvertex);
 
         if ((vvflag == VT_EDGE) || (vvflag == VT_CORNER))
@@ -2614,7 +2614,7 @@ void CMarchingCubesWorker::resolveNearVertexFlag(data::CMesh &mesh, data::CMesh:
 
 void CMarchingCubesWorker::lockOpenEdges()
 {
-    for (std::set<std::pair<data::CMesh::VertexHandle, int> >::iterator it = m_openEdgeVertices.begin(); it != m_openEdgeVertices.end(); ++it)
+    for (std::set<std::pair<geometry::CMesh::VertexHandle, int> >::iterator it = m_openEdgeVertices.begin(); it != m_openEdgeVertices.end(); ++it)
     {
         m_mesh.status(it->first).set_locked(true);
     }
@@ -2622,7 +2622,7 @@ void CMarchingCubesWorker::lockOpenEdges()
 
 void CMarchingCubesWorker::unlockOpenEdges()
 {
-    for (std::set<std::pair<data::CMesh::VertexHandle, int> >::iterator it = m_openEdgeVertices.begin(); it != m_openEdgeVertices.end(); ++it)
+    for (std::set<std::pair<geometry::CMesh::VertexHandle, int> >::iterator it = m_openEdgeVertices.begin(); it != m_openEdgeVertices.end(); ++it)
     {
         m_mesh.status(it->first).set_locked(true);
     }
@@ -2631,17 +2631,17 @@ void CMarchingCubesWorker::unlockOpenEdges()
 void CMarchingCubesWorker::reduceFlatAreas(int numOfIterations, bool eliminateNearVertices, float maxEdgeLength)
 {
     lockOpenEdges();
-    std::vector<data::CMesh::VertexHandle> vertices;
+    std::vector<geometry::CMesh::VertexHandle> vertices;
     reduceFlatAreas(m_mesh, vertices, numOfIterations, eliminateNearVertices, maxEdgeLength);
     updateOpenEdgeVertices();
     unlockOpenEdges();
     m_mesh.garbage_collection();
 }
 
-void CMarchingCubesWorker::reduceFlatAreas(data::CMesh &mesh, std::vector<data::CMesh::VertexHandle> &vertices, int numOfIterations, bool eliminateNearVertices, float maxEdgeLength)
+void CMarchingCubesWorker::reduceFlatAreas(geometry::CMesh &mesh, std::vector<geometry::CMesh::VertexHandle> &vertices, int numOfIterations, bool eliminateNearVertices, float maxEdgeLength)
 {
     numOfIterations = numOfIterations < 1 ? 1 : numOfIterations;
-    data::CMesh::VertexHandle eliminated_vertex; // handle of eliminated vertex
+    geometry::CMesh::VertexHandle eliminated_vertex; // handle of eliminated vertex
 
     // markup vertices of input mesh, divide them on geometry groups
     markupVertices(mesh, vertices);
@@ -2654,11 +2654,11 @@ void CMarchingCubesWorker::reduceFlatAreas(data::CMesh &mesh, std::vector<data::
     // mesh vertices cycle
     for (int l = 0; l < numOfIterations; ++l)
     {
-        std::vector<data::CMesh::VertexHandle> randomVertices;
+        std::vector<geometry::CMesh::VertexHandle> randomVertices;
 
         if (vertices.size() == 0)
         {
-            for (data::CMesh::VertexIter vit = mesh.vertices_begin(); vit != mesh.vertices_end(); ++vit)
+            for (geometry::CMesh::VertexIter vit = mesh.vertices_begin(); vit != mesh.vertices_end(); ++vit)
             {
                 if (!mesh.status(vit.handle()).deleted() && !mesh.status(vit.handle()).locked())
                 {
@@ -2668,7 +2668,7 @@ void CMarchingCubesWorker::reduceFlatAreas(data::CMesh &mesh, std::vector<data::
         }
         else
         {
-            for (std::vector<data::CMesh::VertexHandle>::iterator vit = vertices.begin(); vit != vertices.end(); ++vit)
+            for (std::vector<geometry::CMesh::VertexHandle>::iterator vit = vertices.begin(); vit != vertices.end(); ++vit)
             {
                 if (!mesh.status(*vit).deleted() && !mesh.status(*vit).locked())
                 {
@@ -2679,7 +2679,7 @@ void CMarchingCubesWorker::reduceFlatAreas(data::CMesh &mesh, std::vector<data::
 
         std::random_shuffle(randomVertices.begin(), randomVertices.end());
 
-        for (std::vector<data::CMesh::VertexHandle>::iterator vit = randomVertices.begin(); vit != randomVertices.end(); ++vit)
+        for (std::vector<geometry::CMesh::VertexHandle>::iterator vit = randomVertices.begin(); vit != randomVertices.end(); ++vit)
         {
             // save handle of eliminated vertex
             eliminated_vertex = *vit;
@@ -2703,7 +2703,7 @@ void CMarchingCubesWorker::reduceFlatAreas(data::CMesh &mesh, std::vector<data::
             }
         }
 
-        for (std::vector<data::CMesh::VertexHandle>::iterator vit = randomVertices.begin(); vit != randomVertices.end(); ++vit)
+        for (std::vector<geometry::CMesh::VertexHandle>::iterator vit = randomVertices.begin(); vit != randomVertices.end(); ++vit)
         {
             // save handle of eliminated vertex
             eliminated_vertex = *vit;
@@ -2734,7 +2734,7 @@ void CMarchingCubesWorker::reduceFlatAreas(data::CMesh &mesh, std::vector<data::
     mesh.garbage_collection();
 }
 
-bool CMarchingCubesWorker::eliminateNearVertex(data::CMesh &mesh, data::CMesh::VertexHandle eliminate_vertex, float maxEdgeLength)
+bool CMarchingCubesWorker::eliminateNearVertex(geometry::CMesh &mesh, geometry::CMesh::VertexHandle eliminate_vertex, float maxEdgeLength)
 {
     OpenMesh::VPropHandleT<int> vProp_flag;
     if (!mesh.get_property_handle(vProp_flag, "vProp_flag"))
@@ -2743,20 +2743,20 @@ bool CMarchingCubesWorker::eliminateNearVertex(data::CMesh &mesh, data::CMesh::V
     }
 
     // gather info of all possible collapses
-    std::map<data::CMesh::HalfedgeHandle, double> collapsableEdges;
+    std::map<geometry::CMesh::HalfedgeHandle, double> collapsableEdges;
 
     // gather info about neighbour vertices
-    std::vector<data::CMesh::Point> vertices;
-    for (data::CMesh::VertexVertexIter vvit = mesh.vv_begin(eliminate_vertex); vvit != mesh.vv_end(eliminate_vertex); ++vvit)
+    std::vector<geometry::CMesh::Point> vertices;
+    for (geometry::CMesh::VertexVertexIter vvit = mesh.vv_begin(eliminate_vertex); vvit != mesh.vv_end(eliminate_vertex); ++vvit)
     {
         vertices.push_back(mesh.point(vvit.handle()));
     }
 
     // try every edge
-    for (data::CMesh::VertexOHalfedgeIter vohit = mesh.voh_begin(eliminate_vertex); vohit != mesh.voh_end(eliminate_vertex); ++vohit)
+    for (geometry::CMesh::VertexOHalfedgeIter vohit = mesh.voh_begin(eliminate_vertex); vohit != mesh.voh_end(eliminate_vertex); ++vohit)
     {
-        data::CMesh::HalfedgeHandle halfedge = vohit.handle();
-        data::CMesh::VertexHandle targetVertex = mesh.to_vertex_handle(halfedge);
+        geometry::CMesh::HalfedgeHandle halfedge = vohit.handle();
+        geometry::CMesh::VertexHandle targetVertex = mesh.to_vertex_handle(halfedge);
         double quality = -1.0;
 
         // save flag
@@ -2770,16 +2770,16 @@ bool CMarchingCubesWorker::eliminateNearVertex(data::CMesh &mesh, data::CMesh::V
 
         // check adjacent faces
         bool normalChange = false;
-        for (data::CMesh::VertexFaceIter vfit = mesh.vf_begin(eliminate_vertex); vfit != mesh.vf_end(eliminate_vertex); ++vfit)
+        for (geometry::CMesh::VertexFaceIter vfit = mesh.vf_begin(eliminate_vertex); vfit != mesh.vf_end(eliminate_vertex); ++vfit)
         {
-            data::CMesh::FaceHandle face = vfit.handle();
+            geometry::CMesh::FaceHandle face = vfit.handle();
             bool hasTarget = false;
-            std::vector<data::CMesh::VertexHandle> fvertices;
+            std::vector<geometry::CMesh::VertexHandle> fvertices;
 
             // construct virtual face
-            for (data::CMesh::FaceVertexIter fvit = mesh.fv_begin(face); fvit != mesh.fv_end(face); ++fvit)
+            for (geometry::CMesh::FaceVertexIter fvit = mesh.fv_begin(face); fvit != mesh.fv_end(face); ++fvit)
             {
-                data::CMesh::VertexHandle vertex = fvit.handle();
+                geometry::CMesh::VertexHandle vertex = fvit.handle();
 
                 if (vertex == targetVertex)
                 {
@@ -2803,8 +2803,8 @@ bool CMarchingCubesWorker::eliminateNearVertex(data::CMesh &mesh, data::CMesh::V
             }
 
             // check for change of normal after possible collapse
-            data::CMesh::Normal fnormal = mesh.normal(face);
-            data::CMesh::Normal vfnormal = mesh.calc_face_normal(mesh.point(fvertices[0]), mesh.point(fvertices[1]), mesh.point(fvertices[2]));
+            geometry::CMesh::Normal fnormal = mesh.normal(face);
+            geometry::CMesh::Normal vfnormal = mesh.calc_face_normal(mesh.point(fvertices[0]), mesh.point(fvertices[1]), mesh.point(fvertices[2]));
 
             if ((fnormal | vfnormal) < allowedDot)
             {
@@ -2836,11 +2836,11 @@ bool CMarchingCubesWorker::eliminateNearVertex(data::CMesh &mesh, data::CMesh::V
 
         if (maxEdgeLength > 0.0)
         {
-            data::CMesh::Point targetPoint = mesh.point(mesh.to_vertex_handle(halfedge));
+            geometry::CMesh::Point targetPoint = mesh.point(mesh.to_vertex_handle(halfedge));
             bool lengthOk = true;
-            for (std::vector<data::CMesh::Point>::iterator vit = vertices.begin(); vit != vertices.end(); ++vit)
+            for (std::vector<geometry::CMesh::Point>::iterator vit = vertices.begin(); vit != vertices.end(); ++vit)
             {
-                data::CMesh::Point vec = targetPoint - *vit;
+                geometry::CMesh::Point vec = targetPoint - *vit;
                 if (vec.length() > maxEdgeLength)
                 {
                     lengthOk = false;
@@ -2860,8 +2860,8 @@ bool CMarchingCubesWorker::eliminateNearVertex(data::CMesh &mesh, data::CMesh::V
     }
 
     // select the best collapse if it is possible
-    data::CMesh::HalfedgeHandle halfedge;
-    for (std::map<data::CMesh::HalfedgeHandle, double>::iterator hit = collapsableEdges.begin(); hit != collapsableEdges.end(); ++hit)
+    geometry::CMesh::HalfedgeHandle halfedge;
+    for (std::map<geometry::CMesh::HalfedgeHandle, double>::iterator hit = collapsableEdges.begin(); hit != collapsableEdges.end(); ++hit)
     {
         if ((!halfedge.is_valid()) || (hit->second > collapsableEdges[halfedge]))
         {
@@ -2872,18 +2872,18 @@ bool CMarchingCubesWorker::eliminateNearVertex(data::CMesh &mesh, data::CMesh::V
     // perform collapse
     if (halfedge.is_valid())
     {
-        data::CMesh::VertexHandle targetVertex = mesh.to_vertex_handle(halfedge);
-        data::CMesh::Point p1 = mesh.point(eliminate_vertex);
-        data::CMesh::Point p2 = mesh.point(targetVertex);
-        data::CMesh::Point v1 = p2 - p1;
+        geometry::CMesh::VertexHandle targetVertex = mesh.to_vertex_handle(halfedge);
+        geometry::CMesh::Point p1 = mesh.point(eliminate_vertex);
+        geometry::CMesh::Point p2 = mesh.point(targetVertex);
+        geometry::CMesh::Point v1 = p2 - p1;
         v1.normalize();
 
         // check if collapsed vertex lies on line formed by selected edge and some "opposite" edge
         bool ok = false;
-        for (data::CMesh::VertexVertexIter vvit = mesh.vv_begin(eliminate_vertex); vvit != mesh.vv_end(eliminate_vertex); ++vvit)
+        for (geometry::CMesh::VertexVertexIter vvit = mesh.vv_begin(eliminate_vertex); vvit != mesh.vv_end(eliminate_vertex); ++vvit)
         {
-            data::CMesh::Point p0 = mesh.point(vvit.handle());
-            data::CMesh::Point v0 = p1 - p0;
+            geometry::CMesh::Point p0 = mesh.point(vvit.handle());
+            geometry::CMesh::Point v0 = p1 - p0;
             v0.normalize();
 
             if (mesh.property<int>(vProp_flag, vvit.handle()) != VT_NEAR)
@@ -2917,7 +2917,7 @@ bool CMarchingCubesWorker::eliminateNearVertex(data::CMesh &mesh, data::CMesh::V
     return false;
 }
 
-bool CMarchingCubesWorker::eliminateFlatVertex(data::CMesh &mesh, data::CMesh::VertexHandle eliminate_vertex, float maxEdgeLength)
+bool CMarchingCubesWorker::eliminateFlatVertex(geometry::CMesh &mesh, geometry::CMesh::VertexHandle eliminate_vertex, float maxEdgeLength)
 {
     // get "vProp_flag" property
     OpenMesh::VPropHandleT<int> vProp_flag;
@@ -2927,20 +2927,20 @@ bool CMarchingCubesWorker::eliminateFlatVertex(data::CMesh &mesh, data::CMesh::V
     }
 
     // gather info of all possible collapses
-    std::map<data::CMesh::HalfedgeHandle, double> collapsableEdges;
+    std::map<geometry::CMesh::HalfedgeHandle, double> collapsableEdges;
 
     // gather info about neighbour vertices
-    std::vector<data::CMesh::Point> vertices;
-    for (data::CMesh::VertexVertexIter vvit = mesh.vv_begin(eliminate_vertex); vvit != mesh.vv_end(eliminate_vertex); ++vvit)
+    std::vector<geometry::CMesh::Point> vertices;
+    for (geometry::CMesh::VertexVertexIter vvit = mesh.vv_begin(eliminate_vertex); vvit != mesh.vv_end(eliminate_vertex); ++vvit)
     {
         vertices.push_back(mesh.point(vvit.handle()));
     }
 
     // try every edge
-    for (data::CMesh::VertexOHalfedgeIter vohit = mesh.voh_begin(eliminate_vertex); vohit != mesh.voh_end(eliminate_vertex); ++vohit)
+    for (geometry::CMesh::VertexOHalfedgeIter vohit = mesh.voh_begin(eliminate_vertex); vohit != mesh.voh_end(eliminate_vertex); ++vohit)
     {
-        data::CMesh::HalfedgeHandle halfedge = vohit.handle();
-        data::CMesh::VertexHandle targetVertex = mesh.to_vertex_handle(halfedge);
+        geometry::CMesh::HalfedgeHandle halfedge = vohit.handle();
+        geometry::CMesh::VertexHandle targetVertex = mesh.to_vertex_handle(halfedge);
         if (mesh.property<int>(vProp_flag, targetVertex) == VT_NONE)
         {
             continue;
@@ -2949,16 +2949,16 @@ bool CMarchingCubesWorker::eliminateFlatVertex(data::CMesh &mesh, data::CMesh::V
 
         // check adjacent faces
         bool normalChange = false;
-        for (data::CMesh::VertexFaceIter vfit = mesh.vf_begin(eliminate_vertex); vfit != mesh.vf_end(eliminate_vertex); ++vfit)
+        for (geometry::CMesh::VertexFaceIter vfit = mesh.vf_begin(eliminate_vertex); vfit != mesh.vf_end(eliminate_vertex); ++vfit)
         {
-            data::CMesh::FaceHandle face = vfit.handle();
+            geometry::CMesh::FaceHandle face = vfit.handle();
             bool hasTarget = false;
-            std::vector<data::CMesh::VertexHandle> fvertices;
+            std::vector<geometry::CMesh::VertexHandle> fvertices;
 
             // construct virtual face
-            for (data::CMesh::FaceVertexIter fvit = mesh.fv_begin(face); fvit != mesh.fv_end(face); ++fvit)
+            for (geometry::CMesh::FaceVertexIter fvit = mesh.fv_begin(face); fvit != mesh.fv_end(face); ++fvit)
             {
-                data::CMesh::VertexHandle vertex = fvit.handle();
+                geometry::CMesh::VertexHandle vertex = fvit.handle();
 
                 if (vertex == targetVertex)
                 {
@@ -2982,8 +2982,8 @@ bool CMarchingCubesWorker::eliminateFlatVertex(data::CMesh &mesh, data::CMesh::V
             }
 
             // check for flip of normal after possible collapse
-            data::CMesh::Normal fnormal = mesh.normal(face);
-            data::CMesh::Normal vfnormal = mesh.calc_face_normal(mesh.point(fvertices[0]), mesh.point(fvertices[1]), mesh.point(fvertices[2]));
+            geometry::CMesh::Normal fnormal = mesh.normal(face);
+            geometry::CMesh::Normal vfnormal = mesh.calc_face_normal(mesh.point(fvertices[0]), mesh.point(fvertices[1]), mesh.point(fvertices[2]));
 
             if ((fnormal | vfnormal) < allowedDot)
             {
@@ -3015,11 +3015,11 @@ bool CMarchingCubesWorker::eliminateFlatVertex(data::CMesh &mesh, data::CMesh::V
 
         if (maxEdgeLength > 0.0)
         {
-            data::CMesh::Point targetPoint = mesh.point(mesh.to_vertex_handle(halfedge));
+            geometry::CMesh::Point targetPoint = mesh.point(mesh.to_vertex_handle(halfedge));
             bool lengthOk = true;
-            for (std::vector<data::CMesh::Point>::iterator vit = vertices.begin(); vit != vertices.end(); ++vit)
+            for (std::vector<geometry::CMesh::Point>::iterator vit = vertices.begin(); vit != vertices.end(); ++vit)
             {
-                data::CMesh::Point vec = targetPoint - *vit;
+                geometry::CMesh::Point vec = targetPoint - *vit;
                 if (vec.length() > maxEdgeLength)
                 {
                     lengthOk = false;
@@ -3039,8 +3039,8 @@ bool CMarchingCubesWorker::eliminateFlatVertex(data::CMesh &mesh, data::CMesh::V
     }
 
     // select the best collapse if it is possible
-    data::CMesh::HalfedgeHandle halfedge;
-    for (std::map<data::CMesh::HalfedgeHandle, double>::iterator hit = collapsableEdges.begin(); hit != collapsableEdges.end(); ++hit)
+    geometry::CMesh::HalfedgeHandle halfedge;
+    for (std::map<geometry::CMesh::HalfedgeHandle, double>::iterator hit = collapsableEdges.begin(); hit != collapsableEdges.end(); ++hit)
     {
         if ((!halfedge.is_valid()) || (hit->second > collapsableEdges[halfedge]))
         {
@@ -3051,7 +3051,7 @@ bool CMarchingCubesWorker::eliminateFlatVertex(data::CMesh &mesh, data::CMesh::V
     // perform collapse
     if (halfedge.is_valid())
     {
-        data::CMesh::VertexHandle targetVertex = mesh.to_vertex_handle(halfedge);
+        geometry::CMesh::VertexHandle targetVertex = mesh.to_vertex_handle(halfedge);
 
         // save flag
         int flag = mesh.property<int>(vProp_flag, targetVertex);
@@ -3067,7 +3067,7 @@ bool CMarchingCubesWorker::eliminateFlatVertex(data::CMesh &mesh, data::CMesh::V
     return false;
 }
 
-bool CMarchingCubesWorker::eliminateEdgeVertex(data::CMesh &mesh, data::CMesh::VertexHandle eliminate_vertex, float maxEdgeLength)
+bool CMarchingCubesWorker::eliminateEdgeVertex(geometry::CMesh &mesh, geometry::CMesh::VertexHandle eliminate_vertex, float maxEdgeLength)
 {
     OpenMesh::VPropHandleT<int> vProp_flag;
     if (!mesh.get_property_handle(vProp_flag, "vProp_flag"))
@@ -3076,20 +3076,20 @@ bool CMarchingCubesWorker::eliminateEdgeVertex(data::CMesh &mesh, data::CMesh::V
     }
 
     // gather info of all possible collapses
-    std::map<data::CMesh::HalfedgeHandle, double> collapsableEdges;
+    std::map<geometry::CMesh::HalfedgeHandle, double> collapsableEdges;
 
     // gather info about neighbour vertices
-    std::vector<data::CMesh::Point> vertices;
-    for (data::CMesh::VertexVertexIter vvit = mesh.vv_begin(eliminate_vertex); vvit != mesh.vv_end(eliminate_vertex); ++vvit)
+    std::vector<geometry::CMesh::Point> vertices;
+    for (geometry::CMesh::VertexVertexIter vvit = mesh.vv_begin(eliminate_vertex); vvit != mesh.vv_end(eliminate_vertex); ++vvit)
     {
         vertices.push_back(mesh.point(vvit.handle()));
     }
 
     // try every edge
-    for (data::CMesh::VertexOHalfedgeIter vohit = mesh.voh_begin(eliminate_vertex); vohit != mesh.voh_end(eliminate_vertex); ++vohit)
+    for (geometry::CMesh::VertexOHalfedgeIter vohit = mesh.voh_begin(eliminate_vertex); vohit != mesh.voh_end(eliminate_vertex); ++vohit)
     {
-        data::CMesh::HalfedgeHandle halfedge = vohit.handle();
-        data::CMesh::VertexHandle targetVertex = mesh.to_vertex_handle(halfedge);
+        geometry::CMesh::HalfedgeHandle halfedge = vohit.handle();
+        geometry::CMesh::VertexHandle targetVertex = mesh.to_vertex_handle(halfedge);
         double quality = -1.0;
 
         // save flag
@@ -3103,16 +3103,16 @@ bool CMarchingCubesWorker::eliminateEdgeVertex(data::CMesh &mesh, data::CMesh::V
 
         // check adjacent faces
         bool normalChange = false;
-        for (data::CMesh::VertexFaceIter vfit = mesh.vf_begin(eliminate_vertex); vfit != mesh.vf_end(eliminate_vertex); ++vfit)
+        for (geometry::CMesh::VertexFaceIter vfit = mesh.vf_begin(eliminate_vertex); vfit != mesh.vf_end(eliminate_vertex); ++vfit)
         {
-            data::CMesh::FaceHandle face = vfit.handle();
+            geometry::CMesh::FaceHandle face = vfit.handle();
             bool hasTarget = false;
-            std::vector<data::CMesh::VertexHandle> fvertices;
+            std::vector<geometry::CMesh::VertexHandle> fvertices;
 
             // construct virtual face
-            for (data::CMesh::FaceVertexIter fvit = mesh.fv_begin(face); fvit != mesh.fv_end(face); ++fvit)
+            for (geometry::CMesh::FaceVertexIter fvit = mesh.fv_begin(face); fvit != mesh.fv_end(face); ++fvit)
             {
-                data::CMesh::VertexHandle vertex = fvit.handle();
+                geometry::CMesh::VertexHandle vertex = fvit.handle();
 
                 if (vertex == targetVertex)
                 {
@@ -3136,8 +3136,8 @@ bool CMarchingCubesWorker::eliminateEdgeVertex(data::CMesh &mesh, data::CMesh::V
             }
 
             // check for change of normal after possible collapse
-            data::CMesh::Normal fnormal = mesh.normal(face);
-            data::CMesh::Normal vfnormal = mesh.calc_face_normal(mesh.point(fvertices[0]), mesh.point(fvertices[1]), mesh.point(fvertices[2]));
+            geometry::CMesh::Normal fnormal = mesh.normal(face);
+            geometry::CMesh::Normal vfnormal = mesh.calc_face_normal(mesh.point(fvertices[0]), mesh.point(fvertices[1]), mesh.point(fvertices[2]));
 
             if ((fnormal | vfnormal) < allowedDot)
             {
@@ -3169,11 +3169,11 @@ bool CMarchingCubesWorker::eliminateEdgeVertex(data::CMesh &mesh, data::CMesh::V
 
         if (maxEdgeLength > 0.0)
         {
-            data::CMesh::Point targetPoint = mesh.point(mesh.to_vertex_handle(halfedge));
+            geometry::CMesh::Point targetPoint = mesh.point(mesh.to_vertex_handle(halfedge));
             bool lengthOk = true;
-            for (std::vector<data::CMesh::Point>::iterator vit = vertices.begin(); vit != vertices.end(); ++vit)
+            for (std::vector<geometry::CMesh::Point>::iterator vit = vertices.begin(); vit != vertices.end(); ++vit)
             {
-                data::CMesh::Point vec = targetPoint - *vit;
+                geometry::CMesh::Point vec = targetPoint - *vit;
                 if (vec.length() > maxEdgeLength)
                 {
                     lengthOk = false;
@@ -3193,8 +3193,8 @@ bool CMarchingCubesWorker::eliminateEdgeVertex(data::CMesh &mesh, data::CMesh::V
     }
 
     // select the best collapse if it is possible
-    data::CMesh::HalfedgeHandle halfedge;
-    for (std::map<data::CMesh::HalfedgeHandle, double>::iterator hit = collapsableEdges.begin(); hit != collapsableEdges.end(); ++hit)
+    geometry::CMesh::HalfedgeHandle halfedge;
+    for (std::map<geometry::CMesh::HalfedgeHandle, double>::iterator hit = collapsableEdges.begin(); hit != collapsableEdges.end(); ++hit)
     {
         if ((!halfedge.is_valid()) || (hit->second > collapsableEdges[halfedge]))
         {
@@ -3205,7 +3205,7 @@ bool CMarchingCubesWorker::eliminateEdgeVertex(data::CMesh &mesh, data::CMesh::V
     // perform collapse
     if (halfedge.is_valid())
     {
-        data::CMesh::VertexHandle targetVertex = mesh.to_vertex_handle(halfedge);
+        geometry::CMesh::VertexHandle targetVertex = mesh.to_vertex_handle(halfedge);
 
         // save flag
         int flag = mesh.property<int>(vProp_flag, targetVertex);
@@ -3221,14 +3221,14 @@ bool CMarchingCubesWorker::eliminateEdgeVertex(data::CMesh &mesh, data::CMesh::V
     return false;
 }
 
-void CMarchingCubesWorker::swapTriEdges(data::CMesh &mesh)
+void CMarchingCubesWorker::swapTriEdges(geometry::CMesh &mesh)
 {
     // precomputations for quality enhancement
     makeAllTrisQuality(mesh);
 
     OpenMesh::FPropHandleT<double> fProp_quality;
-    OpenMesh::FPropHandleT<data::CMesh::EdgeHandle> fProp_maxEdge;
-    OpenMesh::FPropHandleT<data::CMesh::FaceHandle> fProp_neighbour;
+    OpenMesh::FPropHandleT<geometry::CMesh::EdgeHandle> fProp_maxEdge;
+    OpenMesh::FPropHandleT<geometry::CMesh::FaceHandle> fProp_neighbour;
     OpenMesh::FPropHandleT<int> fProp_loop;
 
     mesh.get_property_handle(fProp_quality, "quality");
@@ -3245,7 +3245,7 @@ void CMarchingCubesWorker::swapTriEdges(data::CMesh &mesh)
         swap_number = 0;
 
         // mesh tris cycle
-        for (data::CMesh::FaceIter fit = mesh.faces_begin(); fit != mesh.faces_end(); ++fit)
+        for (geometry::CMesh::FaceIter fit = mesh.faces_begin(); fit != mesh.faces_end(); ++fit)
         {
             // swap actual tri to improve his quality (shape)
             if (swapTriImproveQuality(mesh, fit.handle(), loop, fProp_quality, fProp_maxEdge, fProp_neighbour, fProp_loop))
@@ -3266,12 +3266,12 @@ void CMarchingCubesWorker::swapTriEdges(data::CMesh &mesh)
 }
 
 bool CMarchingCubesWorker::swapTriImproveQuality(
-    data::CMesh &mesh,
-    data::CMesh::FaceHandle curr_tri,
+    geometry::CMesh &mesh,
+    geometry::CMesh::FaceHandle curr_tri,
     int loop,
     OpenMesh::FPropHandleT<double> fProp_quality,
-    OpenMesh::FPropHandleT<data::CMesh::EdgeHandle> fProp_maxEdge,
-    OpenMesh::FPropHandleT<data::CMesh::FaceHandle> fProp_neighbour,
+    OpenMesh::FPropHandleT<geometry::CMesh::EdgeHandle> fProp_maxEdge,
+    OpenMesh::FPropHandleT<geometry::CMesh::FaceHandle> fProp_neighbour,
     OpenMesh::FPropHandleT<int> fProp_loop)
 {
     // do not attempt if there was no change last time
@@ -3281,23 +3281,23 @@ bool CMarchingCubesWorker::swapTriImproveQuality(
     }
 
     // take max edge of tri
-    data::CMesh::EdgeHandle max_edge = mesh.property<data::CMesh::EdgeHandle>(fProp_maxEdge, curr_tri);
-    data::CMesh::HalfedgeHandle max_halfedge = mesh.halfedge_handle(max_edge, 0);
+    geometry::CMesh::EdgeHandle max_edge = mesh.property<geometry::CMesh::EdgeHandle>(fProp_maxEdge, curr_tri);
+    geometry::CMesh::HalfedgeHandle max_halfedge = mesh.halfedge_handle(max_edge, 0);
 
     // take neighbour tri by max edge
-    data::CMesh::FaceHandle neighbour_tri = mesh.property<data::CMesh::FaceHandle>(fProp_neighbour, curr_tri);
+    geometry::CMesh::FaceHandle neighbour_tri = mesh.property<geometry::CMesh::FaceHandle>(fProp_neighbour, curr_tri);
     if (!neighbour_tri.is_valid())
     {
         return false;
     }
 
     // take vertices of edge
-    data::CMesh::VertexHandle edge_v0 = mesh.from_vertex_handle(max_halfedge);
-    data::CMesh::VertexHandle edge_v1 = mesh.to_vertex_handle(max_halfedge);
+    geometry::CMesh::VertexHandle edge_v0 = mesh.from_vertex_handle(max_halfedge);
+    geometry::CMesh::VertexHandle edge_v1 = mesh.to_vertex_handle(max_halfedge);
 
     // take rest vertices of both tris
-    data::CMesh::VertexHandle curr_tri_vertex = mesh.rest_vertex(curr_tri, edge_v0, edge_v1);
-    data::CMesh::VertexHandle neighbour_tri_vertex = mesh.rest_vertex(neighbour_tri, edge_v0, edge_v1);
+    geometry::CMesh::VertexHandle curr_tri_vertex = mesh.rest_vertex(curr_tri, edge_v0, edge_v1);
+    geometry::CMesh::VertexHandle neighbour_tri_vertex = mesh.rest_vertex(neighbour_tri, edge_v0, edge_v1);
 
     // take minimal actual quality
     double actual_quality_0 = mesh.property<double>(fProp_quality, curr_tri);
@@ -3305,15 +3305,15 @@ bool CMarchingCubesWorker::swapTriImproveQuality(
     double actual_quality = vpl::math::getMin<double>(actual_quality_0, actual_quality_1);
 
     // get points in space
-    data::CMesh::Point p0, p1, p2, p3;
+    geometry::CMesh::Point p0, p1, p2, p3;
     p0 = mesh.point(curr_tri_vertex);
     p1 = mesh.point(neighbour_tri_vertex);
     p2 = mesh.point(edge_v1);
     p3 = mesh.point(edge_v0);
 
     // get normals of both tris to swap
-    data::CMesh::Normal curr_normal = mesh.calc_face_normal(p0, p2, p3);
-    data::CMesh::Normal neighbour_normal = mesh.calc_face_normal(p1, p3, p2);
+    geometry::CMesh::Normal curr_normal = mesh.calc_face_normal(p0, p2, p3);
+    geometry::CMesh::Normal neighbour_normal = mesh.calc_face_normal(p1, p3, p2);
 
     // test, if tris to swap are in plane
     if ((curr_normal | neighbour_normal) < allowedDot)
@@ -3322,7 +3322,7 @@ bool CMarchingCubesWorker::swapTriImproveQuality(
     }
 
     // make first variant working normal, quality and test results of swap
-    data::CMesh::Normal work_normal = mesh.calc_face_normal(p0, p2, p1);
+    geometry::CMesh::Normal work_normal = mesh.calc_face_normal(p0, p2, p1);
     double work_quality_0 = mesh.quality(p0, p2, p1);
 
     // test swap tri overturn because of swap
@@ -3370,29 +3370,29 @@ bool CMarchingCubesWorker::swapTriImproveQuality(
     }
 
     // register adjacent faces for recalculation of neighbuors and traversal in next pass
-    std::vector<data::CMesh::FaceHandle> needRecalculationFaces;
-    for (data::CMesh::FaceFaceIter ffit = mesh.ff_begin(curr_tri); ffit != mesh.ff_end(curr_tri); ++ffit)
+    std::vector<geometry::CMesh::FaceHandle> needRecalculationFaces;
+    for (geometry::CMesh::FaceFaceIter ffit = mesh.ff_begin(curr_tri); ffit != mesh.ff_end(curr_tri); ++ffit)
     {
-        data::CMesh::FaceHandle faceHandle = ffit.handle();
+        geometry::CMesh::FaceHandle faceHandle = ffit.handle();
         if (!faceHandle.is_valid())
         {
             continue;
         }
 
-        if (mesh.property<data::CMesh::FaceHandle>(fProp_neighbour, faceHandle) == curr_tri)
+        if (mesh.property<geometry::CMesh::FaceHandle>(fProp_neighbour, faceHandle) == curr_tri)
         {
             needRecalculationFaces.push_back(faceHandle);
         }
     }
-    for (data::CMesh::FaceFaceIter ffit = mesh.ff_begin(neighbour_tri); ffit != mesh.ff_end(neighbour_tri); ++ffit)
+    for (geometry::CMesh::FaceFaceIter ffit = mesh.ff_begin(neighbour_tri); ffit != mesh.ff_end(neighbour_tri); ++ffit)
     {
-        data::CMesh::FaceHandle faceHandle = ffit.handle();
+        geometry::CMesh::FaceHandle faceHandle = ffit.handle();
         if (!faceHandle.is_valid())
         {
             continue;
         }
 
-        if (mesh.property<data::CMesh::FaceHandle>(fProp_neighbour, ffit.handle()) == neighbour_tri)
+        if (mesh.property<geometry::CMesh::FaceHandle>(fProp_neighbour, ffit.handle()) == neighbour_tri)
         {
             needRecalculationFaces.push_back(ffit.handle());
         }
@@ -3406,18 +3406,18 @@ bool CMarchingCubesWorker::swapTriImproveQuality(
     mesh.update_normal(neighbour_tri);
     mesh.property<double>(fProp_quality, curr_tri) = work_quality_0;
     mesh.property<double>(fProp_quality, neighbour_tri) = work_quality_1;
-    mesh.property<data::CMesh::EdgeHandle>(fProp_maxEdge, curr_tri) = mesh.max_edge(curr_tri);
-    mesh.property<data::CMesh::EdgeHandle>(fProp_maxEdge, neighbour_tri) = mesh.max_edge(neighbour_tri);
-    mesh.property<data::CMesh::FaceHandle>(fProp_neighbour, curr_tri) = mesh.neighbour(curr_tri, mesh.property<data::CMesh::EdgeHandle>(fProp_maxEdge, curr_tri));
-    mesh.property<data::CMesh::FaceHandle>(fProp_neighbour, neighbour_tri) = mesh.neighbour(neighbour_tri, mesh.property<data::CMesh::EdgeHandle>(fProp_maxEdge, neighbour_tri));
+    mesh.property<geometry::CMesh::EdgeHandle>(fProp_maxEdge, curr_tri) = mesh.max_edge(curr_tri);
+    mesh.property<geometry::CMesh::EdgeHandle>(fProp_maxEdge, neighbour_tri) = mesh.max_edge(neighbour_tri);
+    mesh.property<geometry::CMesh::FaceHandle>(fProp_neighbour, curr_tri) = mesh.neighbour(curr_tri, mesh.property<geometry::CMesh::EdgeHandle>(fProp_maxEdge, curr_tri));
+    mesh.property<geometry::CMesh::FaceHandle>(fProp_neighbour, neighbour_tri) = mesh.neighbour(neighbour_tri, mesh.property<geometry::CMesh::EdgeHandle>(fProp_maxEdge, neighbour_tri));
     mesh.property<int>(fProp_loop, curr_tri) = loop + 1;
     mesh.property<int>(fProp_loop, neighbour_tri) = loop + 1;
 
     // recalculate properties for adjacent faces
     for (int i = 0; i < (int)needRecalculationFaces.size(); ++i)
     {
-        data::CMesh::FaceHandle currFace = needRecalculationFaces[i];
-        mesh.property<data::CMesh::FaceHandle>(fProp_neighbour, currFace) = mesh.neighbour(currFace, mesh.property<data::CMesh::EdgeHandle>(fProp_maxEdge, currFace));
+        geometry::CMesh::FaceHandle currFace = needRecalculationFaces[i];
+        mesh.property<geometry::CMesh::FaceHandle>(fProp_neighbour, currFace) = mesh.neighbour(currFace, mesh.property<geometry::CMesh::EdgeHandle>(fProp_maxEdge, currFace));
         mesh.property<int>(fProp_loop, currFace) = loop + 1;
     }
 
@@ -3425,12 +3425,12 @@ bool CMarchingCubesWorker::swapTriImproveQuality(
     return true;
 }
 
-void CMarchingCubesWorker::makeAllTrisQuality(data::CMesh &mesh)
+void CMarchingCubesWorker::makeAllTrisQuality(geometry::CMesh &mesh)
 {
     // add "quality" property
     OpenMesh::FPropHandleT<double> fProp_quality;
-    OpenMesh::FPropHandleT<data::CMesh::EdgeHandle> fProp_maxEdge;
-    OpenMesh::FPropHandleT<data::CMesh::FaceHandle> fProp_neighbour;
+    OpenMesh::FPropHandleT<geometry::CMesh::EdgeHandle> fProp_maxEdge;
+    OpenMesh::FPropHandleT<geometry::CMesh::FaceHandle> fProp_neighbour;
     OpenMesh::FPropHandleT<int> fProp_loop;
     mesh.add_property(fProp_quality, "quality");
     mesh.add_property(fProp_maxEdge, "maxEdge");
@@ -3438,7 +3438,7 @@ void CMarchingCubesWorker::makeAllTrisQuality(data::CMesh &mesh)
     mesh.add_property(fProp_loop, "loop");
     
     // cycle of input mesh tris
-    for (data::CMesh::FaceIter fit = mesh.faces_sbegin(); fit != mesh.faces_end(); ++fit)
+    for (geometry::CMesh::FaceIter fit = mesh.faces_sbegin(); fit != mesh.faces_end(); ++fit)
     {
         mesh.property(fProp_quality, fit) = mesh.quality(fit);
         mesh.property(fProp_maxEdge, fit) = mesh.max_edge(fit);

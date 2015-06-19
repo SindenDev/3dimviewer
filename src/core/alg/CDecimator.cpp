@@ -35,15 +35,15 @@
 ////////////////////////////////////////////////////////////
 //
 
-bool CDecimator::Reduce(data::CMesh &mesh, int final_vert_number, int final_tri_number)
+bool CDecimator::Reduce(geometry::CMesh &mesh, int final_vert_number, int final_tri_number)
 {
 #if (OM_VERSION<0x020300)
-    OpenMesh::Decimater::DecimaterT<data::CMesh> decimater(mesh);
-    OpenMesh::Decimater::ModQuadricT<OpenMesh::Decimater::DecimaterT<data::CMesh> >::Handle modHandle0;
-    OpenMesh::Decimater::ModAspectRatioT<OpenMesh::Decimater::DecimaterT<data::CMesh> >::Handle modHandle1;
-    OpenMesh::Decimater::ModNormalDeviationT<OpenMesh::Decimater::DecimaterT<data::CMesh> >::Handle modHandle2;
-    OpenMesh::Decimater::ModNormalFlippingT<OpenMesh::Decimater::DecimaterT<data::CMesh> >::Handle modHandle3;
-    CDecimatorProgressModule<OpenMesh::Decimater::DecimaterT<data::CMesh> >::Handle progressModuleHandle;
+    OpenMesh::Decimater::DecimaterT<geometry::CMesh> decimater(mesh);
+    OpenMesh::Decimater::ModQuadricT<OpenMesh::Decimater::DecimaterT<geometry::CMesh> >::Handle modHandle0;
+    OpenMesh::Decimater::ModAspectRatioT<OpenMesh::Decimater::DecimaterT<geometry::CMesh> >::Handle modHandle1;
+    OpenMesh::Decimater::ModNormalDeviationT<OpenMesh::Decimater::DecimaterT<geometry::CMesh> >::Handle modHandle2;
+    OpenMesh::Decimater::ModNormalFlippingT<OpenMesh::Decimater::DecimaterT<geometry::CMesh> >::Handle modHandle3;
+    CDecimatorProgressModule<OpenMesh::Decimater::DecimaterT<geometry::CMesh> >::Handle progressModuleHandle;
 
     decimater.add(modHandle0);
     decimater.add(modHandle1);
@@ -53,7 +53,7 @@ bool CDecimator::Reduce(data::CMesh &mesh, int final_vert_number, int final_tri_
 
     decimater.initialize();
 
-	CDecimatorProgressModule<OpenMesh::Decimater::DecimaterT<data::CMesh> > & meh = decimater.module(progressModuleHandle);
+	CDecimatorProgressModule<OpenMesh::Decimater::DecimaterT<geometry::CMesh> > & meh = decimater.module(progressModuleHandle);
 	meh.setDecimator(this);
 
     int start_tri_number = mesh.n_faces();
@@ -71,13 +71,13 @@ bool CDecimator::Reduce(data::CMesh &mesh, int final_vert_number, int final_tri_
 
     this->endProgress();
 #else
-    OpenMesh::Decimater::DecimaterT<data::CMesh> decimater(mesh);
-    OpenMesh::Decimater::ModQuadricT<data::CMesh>::Handle modHandle0;
-    OpenMesh::Decimater::ModAspectRatioT<data::CMesh>::Handle modHandle1;
-    //OpenMesh::Decimater::ModNormalDeviationT<data::CMesh >::Handle modHandle2;
-    OpenMesh::Decimater::ModNormalFlippingT<data::CMesh>::Handle modHandle3;
-    //OpenMesh::Decimater::ModIndependentSetsT<data::CMesh>::Handle modHandle4;
-    CDecimatorProgressModule<data::CMesh>::Handle progressModuleHandle;
+    OpenMesh::Decimater::DecimaterT<geometry::CMesh> decimater(mesh);
+    OpenMesh::Decimater::ModQuadricT<geometry::CMesh>::Handle modHandle0;
+    OpenMesh::Decimater::ModAspectRatioT<geometry::CMesh>::Handle modHandle1;
+    //OpenMesh::Decimater::ModNormalDeviationT<geometry::CMesh >::Handle modHandle2;
+    OpenMesh::Decimater::ModNormalFlippingT<geometry::CMesh>::Handle modHandle3;
+    //OpenMesh::Decimater::ModIndependentSetsT<geometry::CMesh>::Handle modHandle4;
+    CDecimatorProgressModule<geometry::CMesh>::Handle progressModuleHandle;
 
     decimater.add(modHandle0);
     decimater.add(modHandle1);
@@ -88,7 +88,7 @@ bool CDecimator::Reduce(data::CMesh &mesh, int final_vert_number, int final_tri_
 	
     decimater.initialize();
 
-	CDecimatorProgressModule<data::CMesh> & meh = decimater.module(progressModuleHandle);
+	CDecimatorProgressModule<geometry::CMesh> & meh = decimater.module(progressModuleHandle);
 	meh.setDecimator(this);
 
     int start_tri_number = mesh.n_faces();

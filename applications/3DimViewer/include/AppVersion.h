@@ -25,7 +25,7 @@
 
 #define VER_MAJOR               2
 #define VER_MINOR               2
-#define VER_BUILD               4
+#define VER_BUILD               7
 
 #define STR_HELPER(x) #x
 #define STR(x) STR_HELPER(x)

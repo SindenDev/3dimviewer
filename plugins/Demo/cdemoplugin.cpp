@@ -1,5 +1,6 @@
 ///////////////////////////////////////////////////////////////////////////////
-// $Id: cdemoplugin.cpp 1530 2012-03-02 07:54:39Z tryhuk $
+// 
+// Copyright 2008-2015 3Dim Laboratory s.r.o.
 //
 
 #include <QtGui>
@@ -32,12 +33,14 @@ void  CDemoPlugin::createActions()
     if (!m_actionPickValue)
     {
         m_actionPickValue = new QAction(QIcon(":/icons/icons/1.png"),tr("Pick Value"),NULL);
+		m_actionPickValue->setObjectName("actionPickValue");
         m_actionPickValue->setStatusTip(tr("Click the button and then select any point the volume data."));
         QObject::connect(m_actionPickValue, SIGNAL(triggered()), this, SLOT(onActionPickValue()) );
     }
     if (!m_actionStroke)
     {
         m_actionStroke = new QAction(QIcon(":/icons/icons/2.png"),tr("Stroke Drawing Mode"),NULL);
+		m_actionStroke->setObjectName("actionStroke");
         m_actionStroke->setStatusTip(tr("Click the button, then press Shift and start drawing using mouse."));
         m_actionStroke->setCheckable(true);
         QObject::connect(m_actionStroke, SIGNAL(triggered(bool)), this, SLOT(onActionStroke(bool)) );
@@ -45,6 +48,7 @@ void  CDemoPlugin::createActions()
     if (!m_actionPolygon)
     {
         m_actionPolygon = new QAction(QIcon(":/icons/icons/3.png"),tr("Polygon Drawing Mode"),NULL);
+		m_actionPolygon->setObjectName("actionPolygon");
         m_actionPolygon->setStatusTip(tr("Click the button, then press Shift and start drawing using mouse."));
         m_actionPolygon->setCheckable(true);
         QObject::connect(m_actionPolygon, SIGNAL(triggered(bool)), this, SLOT(onActionPolygon(bool)) );
@@ -52,6 +56,7 @@ void  CDemoPlugin::createActions()
     if (!m_actionShowRegions)
     {
         m_actionShowRegions = new QAction(QIcon(":/icons/icons/4.png"),tr("Show Regions"),NULL);
+		m_actionShowRegions->setObjectName("actionShowRegions");
         m_actionShowRegions->setStatusTip(tr("Show Regions"));
         m_actionShowRegions->setCheckable(true);
         QObject::connect(m_actionShowRegions, SIGNAL(triggered(bool)), this, SLOT(onActionShowRegions(bool)) );

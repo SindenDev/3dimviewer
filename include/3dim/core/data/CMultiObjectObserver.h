@@ -66,10 +66,8 @@ public:
 public:
     //! Default constructor.
     CMultiObjectObserver()
-        : m_Version1(1)
-        , m_NewVersion1(2)
-        , m_Version2(1)
-        , m_NewVersion2(2)
+		: m_curID1(0)
+		, m_curID2(0)
     {}
 
     //! Virtual destructor.
@@ -88,8 +86,9 @@ public:
             if( pEntry->checkType<tObjectHolder1>() )
             {
                 tObject1 *pObject1 = pEntry->getDataPtr<tObjectHolder1>()->getObjectPtr();
-                m_NewVersion1 = pEntry->getLatestVersion();
-                pEntry->getChanges(m_Version1, m_Changes1);
+				m_curID1 = pEntry->getId();
+                m_NewVersion1[m_curID1] = pEntry->getLatestVersion();
+                pEntry->getChanges(m_Version1[m_curID1], m_Changes1);
                 
                 vpl::sys::tScopedLock Lock(pEntry->getDataLock());
                 objectChanged(pObject1);
@@ -97,8 +96,9 @@ public:
             else if( pEntry->checkType<tObjectHolder2>() )
             {
                 tObject2 *pObject2 = pEntry->getDataPtr<tObjectHolder2>()->getObjectPtr();
-                m_NewVersion2 = pEntry->getLatestVersion();
-                pEntry->getChanges(m_Version2, m_Changes2);
+				m_curID2 = pEntry->getId();
+                m_NewVersion2[m_curID2] = pEntry->getLatestVersion();
+                pEntry->getChanges(m_Version2[m_curID2], m_Changes2);
                 
                 vpl::sys::tScopedLock Lock(pEntry->getDataLock());
                 objectChanged(pObject2);
@@ -119,22 +119,58 @@ public:
     //! Returns a non-zero value if one of the observed objects have changed
     //! since the last call of this method.
     //! - Returned value represents changed objects (see predefined flags).
-    int hasChanged()
+    int hasChangedAll()
     {
         int Aux = 0;
-        if( m_NewVersion1 != m_Version1 )
-        {
-            Aux |= MultiObjectObserver::FIRST;
-            m_Version1 = m_NewVersion1;
-        }
-        if( m_NewVersion2 != m_Version2 )
-        {
-            Aux |= MultiObjectObserver::SECOND;
-            m_Version2 = m_NewVersion2;
-        }
+		if (0 == m_Version1.size())
+		{
+			Aux |= MultiObjectObserver::FIRST;
+			m_Version1[m_curID1] = m_NewVersion1[m_curID1];
+		}
+		for(auto it = m_Version1.begin(), ite = m_Version1.end(); it!=ite; ++it)
+		{			
+			int id = it->first;
+			if( m_Version1.find(id) == m_Version1.end() || m_NewVersion1[id] != m_Version1[id] )
+			{
+				Aux |= MultiObjectObserver::FIRST;
+				m_Version1[id] = m_NewVersion1[id];
+			}
+		}
+		if (0 == m_Version2.size())
+		{
+			Aux |= MultiObjectObserver::SECOND;
+			m_Version2[m_curID2] = m_NewVersion2[m_curID2];
+		}
+		for(auto it = m_Version2.begin(), ite = m_Version2.end(); it!=ite; ++it)
+		{
+			int id = it->first;
+			if( m_Version2.find(id) == m_Version2.end() || m_NewVersion2[id] != m_Version2[id] )
+			{
+				Aux |= MultiObjectObserver::SECOND;
+				m_Version2[id] = m_NewVersion2[id];
+			}
+		}
         return Aux;
     }
 
+    //! Returns a non-zero value if one of the observed objects have changed
+    //! since the last call of this method.
+    //! - Returned value represents changed objects (see predefined flags).
+    int hasChanged()
+    {
+        int Aux = 0;
+		if( m_Version1.find(m_curID1) == m_Version1.end() || m_NewVersion1[m_curID1] != m_Version1[m_curID1] )
+		{
+			Aux |= MultiObjectObserver::FIRST;
+			m_Version1[m_curID1] = m_NewVersion1[m_curID1];
+		}
+		if( m_Version2.find(m_curID2) == m_Version2.end() || m_NewVersion2[m_curID2] != m_Version2[m_curID2] )
+		{
+			Aux |= MultiObjectObserver::SECOND;
+			m_Version2[m_curID2] = m_NewVersion2[m_curID2];
+		}
+        return Aux;
+    }    
 
     //! Returns changes since the previous version.
     //! - Only the first or the second object can be specified!
@@ -163,16 +199,21 @@ public:
 
 protected:
     //! Previous and latest version of the object.
-    unsigned m_Version1, m_NewVersion1;
+    std::map<int,unsigned> m_Version1;
+	std::map<int,unsigned> m_NewVersion1;
 
     //! Changes since the previous version.
     CChangedEntries m_Changes1;
 
     //! Previous and latest version of the second object.
-    unsigned m_Version2, m_NewVersion2;
+    std::map<int,unsigned> m_Version2;
+	std::map<int,unsigned> m_NewVersion2;
 
     //! Changes since the previous version.
     CChangedEntries m_Changes2;
+
+	//! Current IDs
+	int m_curID1, m_curID2;
 };
 
 

@@ -46,6 +46,8 @@ macro( INCLUDE_BASIC_HEADERS )
     ${CMAKE_SOURCE_DIR}/include/3dim/core${TRIDIM_LIBRARY_EXT}/
     ${CMAKE_SOURCE_DIR}/include/3dim/graph/
     ${CMAKE_SOURCE_DIR}/include/3dim/graph${TRIDIM_LIBRARY_EXT}/
+    ${CMAKE_SOURCE_DIR}/include/3dim/geometry/
+    ${CMAKE_SOURCE_DIR}/include/3dim/geometry${TRIDIM_LIBRARY_EXT}/
     )
 endmacro( INCLUDE_BASIC_HEADERS )
 
@@ -103,6 +105,7 @@ endif( BUILDING_QT_APP )
 # 3Dim libraries
 set( TRIDIM_CORE_LIB 3DimCore )
 set( TRIDIM_COREMEDI_LIB 3DimCoreMedi )
+set( TRIDIM_GEOMETRY_LIB 3DimGeometry )
 set( TRIDIM_GRAPH_LIB 3DimGraph )
 set( TRIDIM_GRAPHMEDI_LIB 3DimGraphMedi )
 set( TRIDIM_GUIQT_LIB 3DimGuiQt )

@@ -198,6 +198,9 @@ public:
 	//! Start sending invalidation signals, invalidate
 	void unlockInvalidation();
 
+	//! Is invalidation locked
+	bool invalidationLocked() const { return !m_bCanInvalidate; }
+
 protected:
 	//! Invalidated entries map
 	typedef std::map< int, CChangedEntries > tInvalidatedEntriesMap;

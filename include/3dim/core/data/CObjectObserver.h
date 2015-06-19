@@ -49,7 +49,7 @@ public:
 
 public:
     //! Default constructor.
-    CObjectObserver() : m_Version(1), m_NewVersion(2) {}
+    CObjectObserver() : m_curID(0) {}
 
     //! Virtual destructor.
 	virtual ~CObjectObserver() {}
@@ -65,8 +65,9 @@ public:
 
         try {
             tObject *pObject = pEntry->getDataPtr<tObjectHolder>()->getObjectPtr();
-            m_NewVersion = pEntry->getLatestVersion();
-            pEntry->getChanges(m_Version, m_Changes);
+			m_curID = pEntry->getId();
+            m_NewVersion[m_curID] = pEntry->getLatestVersion();
+            pEntry->getChanges(m_Version[m_curID], m_Changes);
             
             vpl::sys::tScopedLock Lock(pEntry->getDataLock());
             objectChanged(pObject);
@@ -82,16 +83,37 @@ public:
 
     //! Returns true if the observed object has changed since the last call
     //! of this method.
+    bool hasChangedAll()
+    {
+		if (0 == m_NewVersion.size()) // no data -> use default implementation for one
+			return hasChanged();
+		bool bChanged = false;
+		for(auto it = m_Version.begin(), ite = m_Version.end(); it!=ite; ++it)
+		{			
+			int id = it->first;
+			if( m_NewVersion[id] != m_Version[id] || m_Version.find(id) == m_Version.end() )
+			{
+				m_Version[id] = m_NewVersion[id];
+				bChanged = true;
+			}
+		}
+        return bChanged;
+    }
+
+	//! Returns true if the observed object has changed since the last call
+    //! of this method.
     bool hasChanged()
     {
-        if( m_NewVersion != m_Version )
+		if( m_Version.find(m_curID) == m_Version.end() || m_NewVersion[m_curID] != m_Version[m_curID])
         {
-            m_Version = m_NewVersion;
+            m_Version[m_curID] = m_NewVersion[m_curID];
             return true;
         }
         return false;
     }
 
+	//! Returns current entry ID
+	int getCurrentID() const { return m_curID; } 
 
     //! Returns changes made since the previous version.
     void getChanges(CChangedEntries& Changes)
@@ -111,7 +133,11 @@ public:
 
 protected:
     //! Previous and latest version of the object.
-    unsigned m_Version, m_NewVersion;
+	std::map<int, unsigned> m_Version;
+	std::map<int, unsigned> m_NewVersion;
+
+	//! Currently handled ID
+	int m_curID;
 
     //! Changes since the previous version.
     CChangedEntries m_Changes;

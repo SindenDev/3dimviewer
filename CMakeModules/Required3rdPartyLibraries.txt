@@ -203,7 +203,7 @@ macro( ADD_LIB_QT4 )
     if (QT_BASIC)
       FIND_PACKAGE(Qt4 REQUIRED QtCore QtGui QtOpenGL QtNetwork)
     else (QT_BASIC)
-      FIND_PACKAGE(Qt4 REQUIRED QtCore QtGui QtOpenGL QtWebKit QtNetwork)
+      FIND_PACKAGE(Qt4 REQUIRED QtCore QtGui QtOpenGL QtWebKit QtNetwork QtSql QtScript)
     endif (QT_BASIC)
     IF( QT_FOUND )
       INCLUDE(${QT_USE_FILE})
@@ -237,6 +237,7 @@ macro( ADD_LIB_QT5 )
         WebKitWidgets
         OpenGL
         LinguistTools
+        Script
       )
     foreach(_component ${_components})
       find_package(Qt5${_component})

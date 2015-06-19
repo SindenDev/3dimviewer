@@ -156,11 +156,14 @@ bool OrthoManipulator::handle(const GUIEventAdapter& ea,GUIActionAdapter& us)
 		}
 
       // Move up
-      if ( ea.getKey() == UIK_UP )
+	  if ( ea.getKey() == UIK_UP || ea.getKey() == GUIEventAdapter::KEY_Page_Up )
       {
          clearStack();
          _thrown = false;
-         m_sigUpDown.invoke( true );
+		 if (ea.getKey() == GUIEventAdapter::KEY_Page_Up)
+			m_sigUpDown.invoke( 5 );
+		 else
+			m_sigUpDown.invoke( 1 );
 
 //         us.requestRedraw();
 //			us.requestContinuousUpdate(false);
@@ -168,11 +171,14 @@ bool OrthoManipulator::handle(const GUIEventAdapter& ea,GUIActionAdapter& us)
       }
 
       // Move down
-      if ( ea.getKey() == UIK_DOWN )
+      if ( ea.getKey() == UIK_DOWN || ea.getKey() == GUIEventAdapter::KEY_Page_Down )
       {
          clearStack();
          _thrown = false;
-         m_sigUpDown.invoke( false );
+		 if (ea.getKey() == GUIEventAdapter::KEY_Page_Down)
+			m_sigUpDown.invoke( -5 );
+		 else
+			m_sigUpDown.invoke( -1 );
 //         us.requestRedraw();
 //			us.requestContinuousUpdate(false);
          return true;

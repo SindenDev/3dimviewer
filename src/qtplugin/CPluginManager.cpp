@@ -60,6 +60,7 @@ CPluginManager::CPluginManager()
 {
     m_pMain = NULL;
     m_pluginsMenu = NULL;
+	m_pluginsToolbar = NULL;
     m_pDockTo = NULL;
 	initSignalTable();
 }
@@ -122,7 +123,7 @@ void CPluginManager::disconnectPlugins()
 	{
 		{
 			data::CObjectPtr<data::CModel> spModel( APP_STORAGE.getEntry(data::Storage::BonesModel::Id) );
-            data::CMesh* pMesh=spModel->getMesh();
+            geometry::CMesh* pMesh=spModel->getMesh();
             spModel->setMesh(NULL);
 			spModel->clearAllProperties();
             APP_STORAGE.invalidate( spModel.getEntryPtr() );
@@ -130,7 +131,7 @@ void CPluginManager::disconnectPlugins()
         for(int i = 0; i < MAX_IMPORTED_MODELS; ++i)
         {
             data::CObjectPtr<data::CModel> spModel( APP_STORAGE.getEntry(data::Storage::ImportedModel::Id + i) );
-            data::CMesh* pMesh=spModel->getMesh();
+            geometry::CMesh* pMesh=spModel->getMesh();
             spModel->setMesh(NULL);
 			spModel->clearAllProperties();
             APP_STORAGE.invalidate( spModel.getEntryPtr() );
@@ -155,6 +156,12 @@ void CPluginManager::disconnectPlugins()
     if (NULL!=m_pluginsMenu)
         foreach(QMenu* pMenu, m_menuWidgets)
             m_pluginsMenu->removeAction(pMenu->menuAction());
+	if (NULL!=m_pluginsToolbar)
+	{
+		m_pMain->removeToolBar(m_pluginsToolbar);
+		delete m_pluginsToolbar;
+		m_pluginsToolbar = NULL;
+	}
     // call disconnectPlugin for every loaded plugin
     foreach (QPluginLoader* pluginLoader, m_plugins)
     {
@@ -234,6 +241,7 @@ void CPluginManager::initSignalTable()
 	if (m_vplSignals.size()>0) return;
 	m_vplSignals[VPL_SIGNAL(SigGetModelColor).getId()]=&(VPL_SIGNAL(SigGetModelColor));
 	m_vplSignals[VPL_SIGNAL(SigSetModelColor).getId()]=&(VPL_SIGNAL(SigSetModelColor));
+	m_vplSignals[VPL_SIGNAL(SigUndoSnapshot).getId()]=&(VPL_SIGNAL(SigUndoSnapshot));
 }
 
 void CPluginManager::initPlugin(QObject* plugin, const QString& fileName)
@@ -291,7 +299,14 @@ void CPluginManager::initPlugin(QObject* plugin, const QString& fileName)
             pDW->setAllowedAreas(Qt::AllDockWidgetAreas);
             pDW->setFeatures(QDockWidget::DockWidgetClosable|QDockWidget::DockWidgetMovable);
             pDW->setObjectName(pPanel->objectName());
+			QString icon  = plugin->property("Icon").toString();
+			if (icon.isEmpty())
+				pDW->setProperty("Icon",":/icons/page.png");
+			else
+				pDW->setProperty("Icon",icon);
             pDW->hide();
+			connect(pDW, SIGNAL(visibilityChanged(bool)), m_pMain, SLOT(dockWidgetVisiblityChanged(bool)));
+			connect(pDW,SIGNAL(dockLocationChanged(Qt::DockWidgetArea)),m_pMain,SLOT(dockLocationChanged(Qt::DockWidgetArea))); 
             // tabify or add to a dock area
             if (m_pDockTo)
                 m_pMain->tabifyDockWidget(m_pDockTo,pDW);
@@ -365,7 +380,16 @@ void CPluginManager::populateMenus(QObject *plugin)
     if (!plugin) return;
     // Create plugins menu in the apps main window
     if (!m_pluginsMenu)
-        m_pluginsMenu=m_pMain->menuBar()->addMenu(tr("Plugins"));
+	{
+        m_pluginsMenu=m_pMain->menuBar()->addMenu(tr("&Plugins"));
+		m_pluginsMenu->setObjectName("menuPlugins");
+	}
+	if (!m_pluginsToolbar)
+	{
+		m_pluginsToolbar = m_pMain->addToolBar(tr("Plugins Toolbar"));
+		m_pluginsToolbar->setObjectName("toolbarPlugins");
+		connect(m_pluginsToolbar,SIGNAL(actionTriggered(QAction*)),this,SLOT(pluginMenuAction(QAction*)));
+	}
     if (NULL!=m_pluginsMenu)
     {
         // Basic plugin interface
@@ -451,17 +475,26 @@ void CPluginManager::populateMenus(QObject *plugin)
                 if (!pdfHelp.isEmpty())
                 {
                     pShowDoc = new QAction(tr("Show Help"),this);
+					pShowDoc->setObjectName("show_plugin_help");
                     pShowDoc->setProperty("OfflinePDF",pdfHelp);
                 }
             }
             // create plugin menu
             QMenu* pPluginMenu=iPlugin->getOrCreateMenu();
+			if (NULL!=pPluginMenu)
+			{
+				if (pPluginMenu->objectName().isEmpty())
+					pPluginMenu->setObjectName(iPlugin->pluginID());
+			}
             // check presence of toolbar or panel to add entries to show/hide them
             QToolBar* pToolBar=iPlugin->getOrCreateToolBar();
             QWidget* pPanel=iPlugin->getOrCreatePanel();
             // if there's no plugin menu but there is a toolbar or panel, create our own menu
             if (NULL==pPluginMenu && (pToolBar || pPanel || iPluginLic || pShowDoc))
+			{
                 pPluginMenu = new QMenu(iPlugin->pluginName());
+				pPluginMenu->setObjectName(iPlugin->pluginID());
+			}
             if (NULL!=pPluginMenu)
             {
                 if (pToolBar || pPanel || iPluginLic || pShowDoc)
@@ -471,6 +504,7 @@ void CPluginManager::populateMenus(QObject *plugin)
                     {
                         // create new action
                         QAction* pActShowToolbar=new QAction(tr("Show/Hide Plugin Toolbar"),NULL);
+						pActShowToolbar->setObjectName("show_hide_plugin_toolbar");
                         // set pointer to object as custom data - used by pluginMenuAction
                         pActShowToolbar->setData(QVariant::fromValue((void*)pToolBar));
                         // add action
@@ -479,7 +513,11 @@ void CPluginManager::populateMenus(QObject *plugin)
                     if (pPanel)
                     {
                         QAction* pActShowPanel=new QAction(tr("Show/Hide Plugin Panel"),NULL);
+						pActShowPanel->setObjectName("show_hide_plugin_panel");
                         pActShowPanel->setData(QVariant::fromValue((void*)pPanel));
+						QString icon  = plugin->property("Icon").toString();
+						if (!icon.isEmpty())
+							pActShowPanel->setIcon(QIcon(icon));
                         pPluginMenu->addAction(pActShowPanel);
                     }
                     if (iPluginLic)
@@ -487,6 +525,7 @@ void CPluginManager::populateMenus(QObject *plugin)
                         if (pToolBar || pPanel)
                             pPluginMenu->addSeparator();
                         QAction* pActRegistration=new QAction(tr("Plugin Registration..."),NULL);
+						pActRegistration->setObjectName("plugin_registration");
                         pActRegistration->setData(QVariant::fromValue((void*)plugin));
                         pPluginMenu->addAction(pActRegistration);
                     }
@@ -508,6 +547,18 @@ void CPluginManager::populateMenus(QObject *plugin)
             {
                 m_menuWidgets.push_back(pPluginMenu);
             }
+			if (NULL!=m_pluginsToolbar && NULL!=pPanel)
+			{
+                QAction* pActShowPanel=new QAction(iPlugin->pluginName(),NULL);
+				pActShowPanel->setObjectName("show_plugin_panel");
+                pActShowPanel->setData(QVariant::fromValue((void*)pPanel));
+				QString icon  = plugin->property("Icon").toString();
+				if (!icon.isEmpty())
+					pActShowPanel->setIcon(QIcon(icon));
+				else
+					pActShowPanel->setIcon(QIcon(":/icons/3dim.ico"));
+                m_pluginsToolbar->addAction(pActShowPanel);				
+			}
         }
     }
 }
@@ -594,26 +645,27 @@ void CPluginManager::pluginMenuAction(QAction* action)
             QWidget* pPanel=qobject_cast<QWidget*>(pObj);
             if (pPanel)
             {
-                QDockWidget* pParentDock = qobject_cast<QDockWidget*>(pPanel->parentWidget());
-                if (pParentDock)
-                {
-                    if (pParentDock->isVisible())
-                    {
-                        pParentDock->hide();
-                    }
-                    else
-                    {
-                        pParentDock->show();
-                        pParentDock->raise();
-                    }
-                }
-                else
-                {
-                    if (pPanel->isVisible())
-                        pPanel->hide();
-                    else
-                        pPanel->show();
-                }
+				bool bForceShow = (0==action->objectName().compare("show_plugin_panel",Qt::CaseInsensitive));
+				QDockWidget* pParentDock = qobject_cast<QDockWidget*>(pPanel->parentWidget());
+				if (pParentDock)
+				{
+					if (pParentDock->isVisible() && !bForceShow)
+					{
+						pParentDock->hide();
+					}
+					else
+					{
+						pParentDock->show();
+						pParentDock->raise();
+					}
+				}
+				else
+				{
+					if (pPanel->isVisible() && !bForceShow)
+						pPanel->hide();
+					else
+						pPanel->show();
+				}
             }
             else
             {

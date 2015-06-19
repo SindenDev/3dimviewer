@@ -20,21 +20,18 @@
 //
 ///////////////////////////////////////////////////////////////////////////////
 
-
 #include <render/CSceneVolumeRendering.h>
-
 #include <render/PSVRosg.h>
 #include <render/PSVRrenderer.h>
 
 ///////////////////////////////////////////////////////////////////////////////
 //
-
-scene::CSceneVolumeRendering::CSceneVolumeRendering( OSGCanvas *pCanvas )
-    : scene::CSceneBase( pCanvas )
+scene::CSceneVolumeRendering::CSceneVolumeRendering(OSGCanvas *pCanvas)
+    : scene::CSceneBase(pCanvas)
 {
     // VR drawable and geode
     m_vrDrawable = new PSVR::osgPSVolumeRendering;
-//    m_vrDrawable->getOrCreateStateSet()->setRenderBinDetails(LAYER_VOLUME_RENDERING, "RenderBin");
+    //m_vrDrawable->getOrCreateStateSet()->setRenderBinDetails(LAYER_VOLUME_RENDERING, "RenderBin");
     PSVR::osgPSVolumeRenderingGeode *pGeode = new PSVR::osgPSVolumeRenderingGeode;
     pGeode->setCanvas(pCanvas);
     m_vrGeode = pGeode;
@@ -44,59 +41,55 @@ scene::CSceneVolumeRendering::CSceneVolumeRendering( OSGCanvas *pCanvas )
     m_renderedGroup = new osg::MatrixTransform;
 
     m_renderedSS = new osg::StateSet;
-    m_renderedSS->setRenderBinDetails( LAYER_VOLUME_RENDERING, "RenderBin");
-//    m_renderedSS->setRenderBinMode(osg::StateSet::INHERIT_RENDERBIN_DETAILS);
-//    m_renderedSS->setRenderBinMode(osg::StateSet::USE_RENDERBIN_DETAILS);
+    m_renderedSS->setRenderBinDetails(LAYER_VOLUME_RENDERING, "RenderBin");
+    //m_renderedSS->setRenderBinMode(osg::StateSet::INHERIT_RENDERBIN_DETAILS);
+    //m_renderedSS->setRenderBinMode(osg::StateSet::USE_RENDERBIN_DETAILS);
+    
+    //m_renderedSS->setMode(GL_DEPTH_TEST, osg::StateAttribute::OFF);
+    //->setRenderingHint(osg::StateSet::TRANSPARENT_BIN);
+    //->setMode(GL_BLEND, osg::StateAttribute::ON);
 
-//    m_renderedSS->setMode(GL_DEPTH_TEST, osg::StateAttribute::OFF);
-//    ->setRenderingHint( osg::StateSet::TRANSPARENT_BIN );
-//    ->setMode(GL_BLEND,osg::StateAttribute::ON);
-
-    m_renderedGroup->setStateSet( m_renderedSS.get() );
+    m_renderedGroup->setStateSet(m_renderedSS.get());
 
     // Add renderer gizmo to the scene
-    m_renderedGroup->addChild( m_vrGeode.get() );
+    m_renderedGroup->addChild(m_vrGeode.get());
 
     // Set anchored groups render order
-//    p_AnchorGroup->getOrCreateStateSet()->setRenderBinDetails( LAYER_SCENE, "RenderBin");
-//    p_AnchorAndCenterGroup->getOrCreateStateSet()->setRenderBinDetails( LAYER_SCENE, "RenderBin");
+    //p_AnchorGroup->getOrCreateStateSet()->setRenderBinDetails(LAYER_SCENE, "RenderBin");
+    //p_AnchorAndCenterGroup->getOrCreateStateSet()->setRenderBinDetails(LAYER_SCENE, "RenderBin");
 
     m_orthoTransformMatrix = osg::Matrix::identity();
 
-/*
-    // Preview 
+    /*// Preview 
     osg::Geode * gcube = new osg::Geode;
     osg::Box* unitCube = new osg::Box( osg::Vec3(0,0,0), 1.0f);
     osg::ShapeDrawable* unitCubeDrawable = new osg::ShapeDrawable(unitCube);
 
-    gcube->addDrawable( unitCubeDrawable );
-    this->addChild( gcube );*/
+    gcube->addDrawable(unitCubeDrawable);
+    this->addChild(gcube);*/
 
     // Add rendered group to the scene
-    this->addChild( m_renderedGroup.get() );
+    this->addChild(m_renderedGroup.get());
 
-/*
-    // Clipping node
+    /*// Clipping node
     m_clipNode = new osg::ClipNode;
 
     // Clipping plane
-    m_clipPlane = new osg::ClipPlane(0, 1, 0, 0, 0 );
+    m_clipPlane = new osg::ClipPlane(0, 1, 0, 0, 0);
 
     // Add clipping plane
-    m_clipNode->addClipPlane( m_clipPlane.get() );
+    m_clipNode->addClipPlane(m_clipPlane.get());
 
     this->addChild( m_clipNode.get() );
-    m_clipNode->addChild( m_renderedGroup.get() );*/
+    m_clipNode->addChild(m_renderedGroup.get());*/
 }
-
 
 ///////////////////////////////////////////////////////////////////////////////
 //
-
 void scene::CSceneVolumeRendering::setRenderer(PSVR::PSVolumeRendering *pRenderer)
 {
     PSVR::osgPSVolumeRendering *pDrawable = dynamic_cast<PSVR::osgPSVolumeRendering *>(m_vrDrawable.get());
-    if( !pDrawable )
+    if (!pDrawable)
     {
         return;
     }
@@ -104,10 +97,8 @@ void scene::CSceneVolumeRendering::setRenderer(PSVR::PSVolumeRendering *pRendere
     pDrawable->setRenderer(pRenderer);
 }
 
-
 ///////////////////////////////////////////////////////////////////////////////
 //
-
 void scene::CSceneVolumeRendering::updateFromStorage()
 {
     // Get the active dataset
@@ -128,20 +119,18 @@ void scene::CSceneVolumeRendering::updateFromStorage()
 
     // Data loaded - recenter scene
     // TODO: tady je asi problem (volume rendering jeste neni nastaveny, aby vratil rozumny box)
-    if( m_pCanvas )
+    if (m_pCanvas)
     {
         m_pCanvas->centerAndScale();
     }
 }
 
-
 ///////////////////////////////////////////////////////////////////////////////
 //
-
 void scene::CSceneVolumeRendering::enableRenderer(bool enable)
 {
     PSVR::osgPSVolumeRendering *pDrawable = dynamic_cast<PSVR::osgPSVolumeRendering *>(m_vrDrawable.get());
-    if( !pDrawable || !pDrawable->getRenderer() )
+    if (!pDrawable || !pDrawable->getRenderer())
     {
         return;
     }
@@ -151,7 +140,6 @@ void scene::CSceneVolumeRendering::enableRenderer(bool enable)
 
 ///////////////////////////////////////////////////////////////////////////////
 //
-
 osg::Geode *scene::CSceneVolumeRendering::getVRGeode()
 {
     return m_vrGeode.get();

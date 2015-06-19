@@ -55,9 +55,14 @@ public:
         {
 			if (NULL!=m_pModifierFn)
 				m_pModifierFn(iCount,iMax);
-            setMaximum (iMax);
-            setValue(iCount);
-            QApplication::processEvents();
+			if (!isHidden())
+			{
+				setMaximum (iMax);
+				setValue(iCount);		
+				bool bCanceled = this->wasCanceled(); // save to local variable because processEvents can lead to destruction of this object
+				QApplication::processEvents();
+				return !bCanceled;
+			}
             return !(this->wasCanceled());
         }
         return true;

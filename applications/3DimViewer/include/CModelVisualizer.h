@@ -27,7 +27,7 @@
 #include <osg/COnOffNode.h>
 #include <osg/CTriMesh.h>
 #include <osg/LightModel>
-#include <data/CMesh.h>
+#include <geometry/base/CMesh.h>
 #include <osg/CObjectObserverOSG.h>
 #include <data/CModel.h>
 

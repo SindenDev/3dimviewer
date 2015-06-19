@@ -31,7 +31,6 @@
 
 ///////////////////////////////////////////////////////////////////////////////
 // includes
-
 #include <VPL/Base/Lock.h>
 #include <VPL/System/Thread.h>
 #include <VPL/System/Condition.h>
@@ -48,37 +47,31 @@
 #include <vector>
 
 //! Enables dynamic loading of shaders and lookup tables at runtime.
-//#ifndef LOAD_SHADERS
-//#   define LOAD_SHADERS
-//#endif
+#ifndef LOAD_SHADERS
+//#define LOAD_SHADERS
+#endif
 
 //! Enables 16bit 3D texture.
 //#ifndef FULL_3D_TEXTURE
-#   define FULL_3D_TEXTURE
+#define FULL_3D_TEXTURE
 //#endif
 
 #define PSVR_FAIL_LIMIT 10
 
-
 ///////////////////////////////////////////////////////////////////////////////
 // forward declarations
-
 class OSGCanvas;
-
 
 namespace PSVR
 {
 
 ///////////////////////////////////////////////////////////////////////////////
 // forward declarations
-
 class osgPSVolumeRendering;
 class osgPSVolumeRenderingGeode;
 
-
 ///////////////////////////////////////////////////////////////////////////////
 //! Volume rendering routines suitable for OSG
-
 class PSVolumeRendering : public vpl::base::CLockableObject<PSVolumeRendering>, public CVolumeRenderer
 {
 public:
@@ -170,11 +163,13 @@ public:
     virtual void setParameter(unsigned int shaderId, std::string name, osg::Vec2 value);
     virtual void setParameter(unsigned int shaderId, std::string name, osg::Vec3 value);
     virtual void setParameter(unsigned int shaderId, std::string name, osg::Vec4 value);
+    virtual void setParameter(unsigned int shaderId, std::string name, osg::Matrix value);
     virtual void setParameter(unsigned int shaderId, std::string name, int *value, int count);
     virtual void setParameter(unsigned int shaderId, std::string name, float *value, int count);
     virtual void setParameter(unsigned int shaderId, std::string name, osg::Vec2 *value, int count);
     virtual void setParameter(unsigned int shaderId, std::string name, osg::Vec3 *value, int count);
     virtual void setParameter(unsigned int shaderId, std::string name, osg::Vec4 *value, int count);
+    virtual void setParameter(unsigned int shaderId, std::string name, osg::Matrix *value, int count);
 
     // custom volume
     virtual void getDataFromCustomVolume(unsigned int volumeId, vpl::img::CVolume<bool> &volume);
@@ -204,6 +199,7 @@ private:
     std::map<unsigned int, std::vector<unsigned int> > m_programShaders;
     unsigned int m_customShaderId;
     std::vector<unsigned short *> m_internalLookupTables;
+    std::vector<float> m_skipConditions;
 
 public:
     //! Returns pointer to the used canvas.
@@ -266,7 +262,7 @@ private:
     void createLookupTables();
 
     //! Updates internal lookup table (converts from point representation to pixel representation)
-    void updateLookupTable(CLookupTable &lookupTable, unsigned short *internalLookupTable);
+    void updateLookupTable(CLookupTable &lookupTable, unsigned short *internalLookupTable, float &skipCondition);
 
 public:
     // Methods for VR control
@@ -512,11 +508,6 @@ protected:
         NOISE_SIZE = 1024
     };
 
-#ifdef LOAD_SHADERS
-    //! Loaded 1D color lookup tables.
-    unsigned short lookup1D[NUM_OF_LUTS_1D][LUT_1D_SIZE * 4];
-#endif // LOAD_SHADERS
-
     //! Random noise table.
     unsigned char noise[NOISE_SIZE * NOISE_SIZE];
 
@@ -533,27 +524,20 @@ protected:
     //! Auxilliary vector of vertices (i.e. triangles).
     tArray m_Triangles;
 
-    //! Auxilliary vector of texture coordinates.
-    tArray m_TexCoords;
-
 protected:
     //! Prepares the box that bounds volume data.
     void prepareBox(int NumOfQuads);
 
     //! Rendering of the box that bounds the volume data...
-    void renderBox(PSVolumeRenderingParams *pParams, const tArray& Triangles, const tArray& TexCoords);
+    void renderBox(PSVolumeRenderingParams *pParams, const tArray& Triangles);
 
     // Friend classes
     friend class osgPSVolumeRendering;
     friend class osgPSVolumeRenderingGeode;
 };
 
-
 } // namespace PSVR
 
 #endif // USE_PSVR
+
 #endif // PSVRrenderer_H
-
-///////////////////////////////////////////////////////////////////////////////
-///////////////////////////////////////////////////////////////////////////////
-

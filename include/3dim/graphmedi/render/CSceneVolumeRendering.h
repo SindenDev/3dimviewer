@@ -28,20 +28,16 @@
 // Clipping support
 //#include <osg/ClipNode>
 
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // forward declarations
-
 namespace PSVR { class PSVolumeRendering; }
-
 
 namespace scene
 {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //! Scene volume rendering - base class
-
-class CSceneVolumeRendering : public CSceneBase
+    class CSceneVolumeRendering : public CSceneBase
 {
 public:
     //! Constructor
@@ -73,12 +69,11 @@ protected:
     osg::ref_ptr<osg::StateSet> m_renderedSS;
 
     //! Clipping node
-//    osg::ref_ptr<osg::ClipNode> m_clipNode;
+    //osg::ref_ptr<osg::ClipNode> m_clipNode;
 
     //! Clipping plane
-//    osg::ref_ptr<osg::ClipPlane> m_clipPlane;
+    //osg::ref_ptr<osg::ClipPlane> m_clipPlane;
 };
-
 
 } // namespace scene
 

@@ -286,12 +286,44 @@ protected:
     {
         QString text;
 		QString dir = QDir::currentPath();
+		QList<QString> paths;
+		{
+			QFileInfo fi(dir + QString("/3DimViewer.log"));
+			QFileInfo fi2(QDir::homePath() + QString("/3DimViewer.log"));
+			if (fi.exists() && fi2.exists())
+			{
+				QDateTime dt = fi.lastModified();
+				QDateTime dt2 = fi2.lastModified();
+				//qDebug() << dt.toString();
+				//qDebug() << dt2.toString();
+				if (dt2>dt)
+				{
+					paths.push_back(fi2.filePath());
+					paths.push_back(fi.filePath());
+				}
+				else
+				{
+					paths.push_back(fi.filePath());
+					paths.push_back(fi2.filePath());
+				}
+			}
+			else
+			{
+				if (fi.exists())
+					paths.push_back(fi.filePath());
+				if (fi2.exists())
+					paths.push_back(fi2.filePath());
+			}
+
+		}
+		if (paths.isEmpty())
+			return text;
 		// Is the current workdir writable? 
-		QFile file(dir + QString("/3DimViewer.log"));
-		if( !file.open(QIODevice::ReadOnly | QIODevice::Text) )
+		QFile file(paths[0]);
+		if( !file.open(QIODevice::ReadOnly | QIODevice::Text) && paths.size()>1)
 		{
 			// Let's use user's home directory
-			file.setFileName(QDir::homePath()  + QString("/3DimViewer.log"));
+			file.setFileName(paths[1]);
 			file.open(QIODevice::ReadOnly | QIODevice::Text);
 		}
 		if (file.isOpen())
@@ -313,7 +345,7 @@ public slots:
 	{
         QDialog dlg(NULL,Qt::WindowTitleHint | Qt::WindowSystemMenuHint | Qt::WindowCloseButtonHint);
         dlg.setWindowTitle(QApplication::applicationName());
-        dlg.setMinimumSize(500,300);
+        dlg.setMinimumSize(720,480);
 		dlg.setSizeGripEnabled(true);
         QVBoxLayout* pLayout = new QVBoxLayout();
         dlg.setLayout(pLayout);

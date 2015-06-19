@@ -19,6 +19,11 @@
 // limitations under the License.
 //
 ///////////////////////////////////////////////////////////////////////////////
+#ifdef __APPLE__
+#   include <glew.h>
+#else
+#   include <GL/glew.h>
+#endif
 
 #include "segmentationwidget.h"
 #include "ui_segmentationwidget.h"
@@ -27,8 +32,10 @@
 #include <QSettings>
 #include <app/Signals.h>
 #include <data/CDensityData.h>
+#include <data/CRegionData.h>
 #include <osg/CAppMode.h>
-
+#include <mainwindow.h>
+#include <data/CUndoManager.h>
 
 CSegmentationWidget::CSegmentationWidget(QWidget *parent) :
     QWidget(parent),
@@ -57,6 +64,9 @@ CSegmentationWidget::CSegmentationWidget(QWidget *parent) :
     ui->lowThresholdSlider->setValue(settings.value("LowThreshold",ui->lowThresholdSlider->value()).toInt());
     ui->highThresholdSlider->setValue(settings.value("HighThreshold",ui->highThresholdSlider->value()).toInt());
     ui->checkBoxApplyThresholds->setChecked(settings.value("ApplyThresholds",ui->checkBoxApplyThresholds->isChecked()).toBool());
+
+	ui->pushButtonSetToActiveRegion->setVisible(false);
+	QTimer::singleShot(0,this,SLOT(firstEvent()));	
 }
 
 CSegmentationWidget::~CSegmentationWidget()
@@ -67,6 +77,11 @@ CSegmentationWidget::~CSegmentationWidget()
     settings.setValue("HighThreshold",ui->highThresholdSlider->value());
     settings.setValue("ApplyThresholds",ui->checkBoxApplyThresholds->isChecked());
     delete ui;
+}
+
+void CSegmentationWidget::firstEvent()
+{
+	ui->pushButtonSetToActiveRegion->setVisible(MainWindow::getInstance()->findPluginByID("RegionControl"));
 }
 
 int CSegmentationWidget::getLo()
@@ -185,3 +200,46 @@ void CSegmentationWidget::setHigherThreshold(float x, float y, float z, int Even
         SetColoring();
 }
 
+void CSegmentationWidget::on_pushButtonCreateSurfaceModel_clicked()
+{
+	MainWindow::getInstance()->createSurfaceModel();
+}
+
+void CSegmentationWidget::on_pushButtonSetToActiveRegion_clicked()
+{
+	const int low = ui->lowThresholdSlider->value();
+	const int high = ui->highThresholdSlider->value();
+	data::CObjectPtr< data::CRegionColoring > ptrColoring( APP_STORAGE.getEntry( data::Storage::RegionColoring::Id ) );
+    int region( ptrColoring->getActiveRegion() );
+
+	data::CObjectPtr<data::CDensityData> spData( APP_STORAGE.getEntry(data::Storage::PatientData::Id) );    
+	data::CObjectPtr< data::CRegionData  > pRegion( APP_STORAGE.getEntry( data::Storage::RegionData::Id ) );
+
+    data::CObjectPtr< data::CUndoManager > undoManager( APP_STORAGE.getEntry( data::Storage::UndoManager::Id ) );
+    undoManager->insert( pRegion->getVolumeSnapshot() );
+
+    pRegion->enableColoring();
+	int xSize = pRegion->getXSize();
+	int ySize = pRegion->getYSize();
+	int zSize = pRegion->getZSize();
+#pragma omp parallel for
+	for(int z=0; z<zSize; z++)
+	{
+		for(int y=0; y<ySize; y++)
+		{
+			for(int x=0; x<xSize; x++)
+			{
+				vpl::img::tDensityPixel val = spData->at(x,y,z);
+				if (pRegion->at(x,y,z) == 0 || pRegion->at(x,y,z) == region)
+				{
+					if (val>=low && val<=high)
+						pRegion->at(x,y,z) = region;
+					else
+						if (pRegion->at(x,y,z) == region)
+							pRegion->at(x,y,z) = 0;
+				}
+			}
+		}
+	}
+	APP_STORAGE.invalidate( pRegion.getEntryPtr() );
+}

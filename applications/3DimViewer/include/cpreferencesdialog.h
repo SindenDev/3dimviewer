@@ -25,6 +25,8 @@
 
 #include <QDialog>
 #include <QDir>
+#include <QMenuBar>
+#include <QTreeWidgetItem>
 
 #define DEFAULT_BACKGROUND_COLOR        qRgb(51,51,102) 
 #define DEFAULT_LOGGING                 true
@@ -43,7 +45,7 @@ class CPreferencesDialog : public QDialog
     
 public:
     //! Constructor
-    explicit CPreferencesDialog(const QDir &localeDir, QWidget *parent = 0, Qt::WindowFlags f = 0);
+    explicit CPreferencesDialog(const QDir &localeDir, QMenuBar* pMenuBar, QWidget *parent = 0, Qt::WindowFlags f = 0);
 
     //! Destructor
     ~CPreferencesDialog();
@@ -53,17 +55,32 @@ public:
 
     //! Returns true when background color changed
     bool colorsChanged() const { return m_bColorsChanged; }
+
+	//! Returns true when some keyboard shortcut has changed
+	bool shortcutsChanged() const { return m_bChangedShortcuts; }	
     
 private slots:
     void on_CPreferencesDialog_accepted();
     void on_buttonBGColor_clicked();
     void resetDefaultsPressed( );  
+	void pageChange(int index);
+	void treeItemSelectionChanged();
+	void on_pushButtonSetShortcut_clicked();
+	void on_pushButtonClearShortcut_clicked();
+	bool eventFilter(QObject* obj, QEvent *event);
 private:
     Ui::CPreferencesDialog *ui;
     bool                    m_bColorsChanged,
-                            m_bChangesNeedRestart;
+                            m_bChangesNeedRestart,
+							m_bChangedShortcuts;
     QColor                  m_bgColor;
     void    setButtonColor(QColor& targetColor, const QColor& sourceColor, QPushButton *targetButton);
+
+	QTreeWidgetItem* addTreeRoot(QString name, QString description);
+	QTreeWidgetItem * addTreeChild(QTreeWidgetItem *parent, QString name, QString description, QAction* pAction);
+	QTreeWidgetItem* addTreeMenu(QMenu* pMenu, QTreeWidgetItem *parent);
+	bool shortcutUsed(const QString& shortcut);
+	void removeCustomShortcuts( QTreeWidgetItem *item );
 };
 
 #endif // CPREFERENCESDIALOG_H

@@ -168,18 +168,30 @@ protected:
     QToolButton* m_closeButton;
     QToolButton* m_screenshotButton;
     QSlider*     m_slider;
+	//! Signal connections
     vpl::mod::tSignalConnection m_vrDataRemapChangeConnection;
+    vpl::mod::tSignalConnection m_ConnectionData;
+    vpl::mod::tSignalConnection m_ConnectionXY, m_ConnectionXZ, m_ConnectionYZ;
 public:
     // please note that the following values are actually flags!
 #define DWT_BUTTONS_NONE        0
 #define DWT_BUTTONS_CLOSE       1
 #define DWT_BUTTONS_MAXIMIZE    2
 #define DWT_SLIDER_VR           4
+#define DWT_SLIDER_XY           8
+#define DWT_SLIDER_XZ           16
+#define DWT_SLIDER_YZ           32
     CCustomDockWidgetTitle(int flags = DWT_BUTTONS_MAXIMIZE, QWidget* parent = 0);
     virtual ~CCustomDockWidgetTitle();
     QSize sizeHint() const { return minimumSizeHint(); }
     QSize minimumSizeHint() const;
     void    vrDataRemapChange(float expand, float offset);
+    //! Called on volume data change.
+    void onNewDensityData(data::CStorageEntry *pEntry);
+    //! Called on slice change.
+    void onNewSliceXY(data::CStorageEntry *pEntry);
+    void onNewSliceXZ(data::CStorageEntry *pEntry);
+    void onNewSliceYZ(data::CStorageEntry *pEntry);
 protected:
     void paintEvent(QPaintEvent *event);
     void mousePressEvent(QMouseEvent *event);
@@ -189,8 +201,12 @@ protected slots:
     void btnMaximizeClicked();
     void btnScreenshotClicked();
     void vrValueChanged(int);
+	void xySliderChange(int value);
+	void xzSliderChange(int value);
+	void yzSliderChange(int value);
 signals:
     void saveScreenshot(OSGCanvas* pCanvas);
+	void copyScreenshotToClipboard(OSGCanvas* pCanvas);
     void saveSlice(OSGCanvas* pCanvas, int mode);
 };
 

@@ -37,6 +37,7 @@
 #include "shaders2/Suma.h"
 #include "shaders2/Surface.h"
 #include "shaders2/Vert.h"
+#include "shaders2/FSQuadVS.h"
 
 #endif // ShaderData_H
 

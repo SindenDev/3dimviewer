@@ -1,3 +1,9 @@
+///////////////////////////////////////////////////////////////////////////////
+// 
+// Copyright 2008-2015 3Dim Laboratory s.r.o.
+// All rights reserved
+//
+
 #include <osg/osgcompat.h>
 
 #if OSG_VERSION_GREATER_OR_EQUAL(3,1,10)

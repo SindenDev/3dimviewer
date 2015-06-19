@@ -50,6 +50,14 @@ CAnyModelVisualizer<T>::CAnyModelVisualizer(int ModelId)
     // Set the update callback
     APP_STORAGE.connect( m_ModelId, this );
     this->setupObserver( this );
+
+    m_materialRegular = new osg::CPseudoMaterial;
+    m_materialRegular->uniform("Shininess")->set(0.0f);
+    m_materialRegular->uniform("Specularity")->set(0.0f);
+
+    m_materialSelected = new osg::CPseudoMaterial;
+    m_materialRegular->uniform("Shininess")->set(0.0f);
+    m_materialRegular->uniform("Specularity")->set(0.0f);
 }
 
 
@@ -59,24 +67,28 @@ CAnyModelVisualizer<T>::CAnyModelVisualizer(int ModelId)
 template <class T>
 void CAnyModelVisualizer<T>::updateFromStorage()
 {
-	if(m_bManualUpdate)
-		return;
-
-    data::CObjectPtr< tModel > spModel( APP_STORAGE.getEntry(m_ModelId) );
-
-    // Update the triangular mesh
-    data::CChangedEntries Changes( this );
-    if( !Changes.checkFlagAll(data::CModel::MESH_NOT_CHANGED) )
+    if (m_bManualUpdate)
     {
-//        m_pMesh->createMesh( spModel->getMesh() );
-        m_pMesh->createMesh( spModel->getMesh(), true, true );
-
-        // Setup OSG state set
-        ModelVisualizer::setupModelStateSet( m_pMesh.get() );
+        return;
     }
 
-	if(m_bUseKDTree)
-		buildKDTree();
+    data::CObjectPtr<tModel> spModel(APP_STORAGE.getEntry(m_ModelId));
+
+    // Update the triangular mesh
+    data::CChangedEntries Changes(this);
+    if (!Changes.checkFlagAll(data::CModel::MESH_NOT_CHANGED))
+    {
+        //m_pMesh->createMesh( spModel->getMesh() );
+        m_pMesh->createMesh(spModel->getMesh(), true, true);
+
+        // Setup OSG state set
+        ModelVisualizer::setupModelStateSet(m_pMesh.get());
+    }
+
+    if (m_bUseKDTree)
+    {
+        buildKDTree();
+    }
 
     // Update model matrix
     m_pTransform->setMatrix(spModel->getTransformationMatrix());
@@ -86,10 +98,12 @@ void CAnyModelVisualizer<T>::updateFromStorage()
     spModel->getColor(r, g, b, a);
 
     // Set model color
-    m_pMesh->setColor( r, g, b, a );
+    m_pMesh->setColor(r, g, b, a);
 
     // Set visibility
-    setOnOffState( spModel->isShown() );    
+    setOnOffState(spModel->isShown());
+
+    (spModel->isSelected() ? m_materialSelected : m_materialRegular)->apply(m_pTransform);
 }
 
 template <class T>

@@ -34,18 +34,34 @@
 #include <string>
 #include <set>
 
-#include "CSeries.h"
-
+namespace data
+{
+    class CSeries;
+}
 
 namespace data
 {
 
 ///////////////////////////////////////////////////////////////////////////////
-// Global definitions
+// Global definitions.
+
+//! Vector of dicom slices.
+typedef std::vector<vpl::img::CDicomSlicePtr> tDicomSlices;
 
 //! Exception thrown when DICOM image loader failes.
 VPL_DECLARE_EXCEPTION(CDicomLoadingFailure, "Failed to load DICOM image.")
 
+//! Loads a RTG from a given dicom file.
+struct sExtendedTags
+{
+    double fDistanceSourceToDetector;
+    double fDistanceSourceToPatient;
+    double fEstimatedRadiographicMagnificationFactor;
+    double fGridFocalDistance;
+    int iPatientAge;
+    double fPatientHeight;
+    double fPatientWeight;
+};
 
 ///////////////////////////////////////////////////////////////////////////////
 //! Dicom dataset loader.
@@ -106,37 +122,27 @@ protected:
 // Dicom dataset loader.
 
 //! Loads a single frame (i.e. slice) from a given dicom file.
-bool loadDicomDCTk( const vpl::sys::tString &dir,
-					const std::string &filename,
-                    vpl::img::CDicomSlice &slice,
-                    bool bLoadImageData = true
-                    );
+bool loadDicomDCTk(const vpl::sys::tString &dir,
+                   const std::string &filename,
+                   vpl::img::CDicomSlice &slice,
+                   sExtendedTags& tags,
+                   bool bLoadImageData = true);
 
 //! Loads all frames/slices from a given dicom file.
 //! - Returns the number of successfully read images.
-int loadDicomDCTk( const vpl::sys::tString &dir,
-				   const std::string &filename,
-                   tDicomSlices &slices,
-                   bool bLoadImageData = true,
-                   bool bIgnoreBitsStoredTag = false
-                   );
-
-//! Loads a RTG from a given dicom file.
-struct sExtendedTags
-{
-	double fDistanceSourceToDetector;
-	double fDistanceSourceToPatient;
-	double fEstimatedRadiographicMagnificationFactor;
-	double fGridFocalDistance;
-};
+int loadDicomDCTk(const vpl::sys::tString &dir,
+                  const std::string &filename,
+                  tDicomSlices &slices,
+                  sExtendedTags& tags,
+                  bool bLoadImageData = true,
+                  bool bIgnoreBitsStoredTag = false);
 
 bool loadDicomDCTk2D(const vpl::sys::tString &dir,
-                    const std::string &filename,
-                    vpl::img::CDicomSlice &slice,
-					sExtendedTags& tags,
-                    bool bLoadImageData,
-					int nDesiredBits
-                    );
+                     const std::string &filename,
+                     vpl::img::CDicomSlice &slice,
+                     sExtendedTags& tags,
+                     bool bLoadImageData,
+                     int nDesiredBits);
 
 //! Retrieves data from dicom file tags
 bool getDicomFileInfo( const vpl::sys::tString &dir, const std::string &filename, int& nFrames);

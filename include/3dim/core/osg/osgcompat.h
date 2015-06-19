@@ -1,5 +1,9 @@
 ///////////////////////////////////////////////////////////////////////////////
 // OpenSceneGraph compatibility header
+// 
+// Copyright 2008-2015 3Dim Laboratory s.r.o.
+// All rights reserved
+//
 
 #ifndef OSGCOMPAT_H_INCLUDED
 #define OSGCOMPAT_H_INCLUDED

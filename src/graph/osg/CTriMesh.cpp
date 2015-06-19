@@ -77,7 +77,7 @@ osg::CTriMesh::CTriMesh()
 ///////////////////////////////////////////////////////////////////////////////
 //
 
-void osg::CTriMesh::createMesh(data::CMesh *mesh, bool createNormals, bool smooth)
+void osg::CTriMesh::createMesh(geometry::CMesh *mesh, bool createNormals, bool smooth)
 {
     if (!mesh)
     {
@@ -151,7 +151,7 @@ void osg::CTriMesh::createMesh(data::CMesh *mesh, bool createNormals, bool smoot
 	if(!mesh->get_property_handle(vProp_bufferIndex, BUFFER_INDEX_PROPERTY))
 		mesh->add_property(vProp_bufferIndex, BUFFER_INDEX_PROPERTY);
 
-    for (data::CMesh::VertexIter vit = mesh->vertices_begin(); vit != mesh->vertices_end(); ++vit)
+    for (geometry::CMesh::VertexIter vit = mesh->vertices_begin(); vit != mesh->vertices_end(); ++vit)
     {
         mesh->property(vProp_bufferIndex, vit) = index;
         (*pVertices)[index] = osg::Vec3( mesh->point(vit)[0], mesh->point(vit)[1], mesh->point(vit)[2] );
@@ -171,10 +171,10 @@ void osg::CTriMesh::createMesh(data::CMesh *mesh, bool createNormals, bool smoot
 #if OSG_VERSION_GREATER_OR_EQUAL(3,1,10)
     triindex = 0;
     index = 0;	
-    for (data::CMesh::FaceIter fit = mesh->faces_begin(); fit != mesh->faces_end(); ++fit)
+    for (geometry::CMesh::FaceIter fit = mesh->faces_begin(); fit != mesh->faces_end(); ++fit)
     {
 		osg::Vec3 fn = osg::Vec3(mesh->normal(fit)[0], mesh->normal(fit)[1], mesh->normal(fit)[2]);
-        for (data::CMesh::FaceVertexIter fvit = mesh->fv_begin(fit); fvit != mesh->fv_end(fit); ++fvit)
+        for (geometry::CMesh::FaceVertexIter fvit = mesh->fv_begin(fit); fvit != mesh->fv_end(fit); ++fvit)
         {            
 			(*pVerticesFlat)[index] = osg::Vec3( mesh->point(fvit)[0], mesh->point(fvit)[1], mesh->point(fvit)[2] );
 			(*pFaceNormals)[index] = fn;
@@ -187,9 +187,9 @@ void osg::CTriMesh::createMesh(data::CMesh *mesh, bool createNormals, bool smoot
 #else
     triindex = 0;
     index = 0;
-    for (data::CMesh::FaceIter fit = mesh->faces_begin(); fit != mesh->faces_end(); ++fit)
+    for (geometry::CMesh::FaceIter fit = mesh->faces_begin(); fit != mesh->faces_end(); ++fit)
     {
-        for (data::CMesh::FaceVertexIter fvit = mesh->fv_begin(fit); fvit != mesh->fv_end(fit); ++fvit)
+        for (geometry::CMesh::FaceVertexIter fvit = mesh->fv_begin(fit); fvit != mesh->fv_end(fit); ++fvit)
         {            
 			(*pPrimitives)[index++] = mesh->property(vProp_bufferIndex, fvit);
         }        
@@ -286,7 +286,7 @@ void osg::CTriMesh::useNormals(ENormalsUsage normalsUsage)
 }
 
 
-void osg::CTriMesh::updatePartOfMesh(data::CMesh *mesh, const tIdPosVec &ip, bool createNormals /*= true*/, bool smooth /*= true*/ )
+void osg::CTriMesh::updatePartOfMesh(geometry::CMesh *mesh, const tIdPosVec &ip, bool createNormals /*= true*/, bool smooth /*= true*/ )
 {
 	// If no vertices, do nothing...
 	if(ip.size() == 0)
@@ -340,10 +340,10 @@ void osg::CTriMesh::updatePartOfMesh(data::CMesh *mesh, const tIdPosVec &ip, boo
 		assert(pFaceNormals->size()==mesh->n_faces()*3);
 		int triindex = 0;
 		int index = 0;	
-		for (data::CMesh::FaceIter fit = mesh->faces_begin(); fit != mesh->faces_end(); ++fit)
+		for (geometry::CMesh::FaceIter fit = mesh->faces_begin(); fit != mesh->faces_end(); ++fit)
 		{
 			osg::Vec3 fn = osg::Vec3(mesh->normal(fit)[0], mesh->normal(fit)[1], mesh->normal(fit)[2]);
-			for (data::CMesh::FaceVertexIter fvit = mesh->fv_begin(fit); fvit != mesh->fv_end(fit); ++fvit)
+			for (geometry::CMesh::FaceVertexIter fvit = mesh->fv_begin(fit); fvit != mesh->fv_end(fit); ++fvit)
 			{            
 				(*pVerticesFlat)[index] = osg::Vec3( mesh->point(fvit)[0], mesh->point(fvit)[1], mesh->point(fvit)[2] );
 				(*pFaceNormals)[index] = fn;
@@ -386,7 +386,7 @@ void osg::CTriMesh::buildKDTree()
 //////////////////////////////////////////////////////////////////////////////////////////////
 // Creates OSG geometry from loaded OpenMesh data structure
 
-osg::Geometry *osg::convertOpenMesh2OSGGeometry(data::CMesh *mesh, bool vertexNormals)
+osg::Geometry *osg::convertOpenMesh2OSGGeometry(geometry::CMesh *mesh, bool vertexNormals)
 {
     osg::Geometry *geometry = new osg::Geometry();
     
@@ -429,7 +429,7 @@ osg::Geometry *osg::convertOpenMesh2OSGGeometry(data::CMesh *mesh, bool vertexNo
     OpenMesh::VPropHandleT<int> vProp_flag;
     mesh->add_property(vProp_bufferIndex, "bufferIndex");
 
-    for (data::CMesh::VertexIter vit = mesh->vertices_begin(); vit != mesh->vertices_end(); ++vit)
+    for (geometry::CMesh::VertexIter vit = mesh->vertices_begin(); vit != mesh->vertices_end(); ++vit)
     {
         mesh->property(vProp_bufferIndex, vit) = index;
         (*pVertices)[index] = osg::Vec3(mesh->point(vit)[0], mesh->point(vit)[1], mesh->point(vit)[2]);
@@ -442,9 +442,9 @@ osg::Geometry *osg::convertOpenMesh2OSGGeometry(data::CMesh *mesh, bool vertexNo
 	{
 #endif
 		index = 0;
-		for (data::CMesh::FaceIter fit = mesh->faces_begin(); fit != mesh->faces_end(); ++fit)
+		for (geometry::CMesh::FaceIter fit = mesh->faces_begin(); fit != mesh->faces_end(); ++fit)
 		{
-			for (data::CMesh::FaceVertexIter fvit = mesh->fv_begin(fit); fvit != mesh->fv_end(fit); ++fvit)
+			for (geometry::CMesh::FaceVertexIter fvit = mesh->fv_begin(fit); fvit != mesh->fv_end(fit); ++fvit)
 			{
 				(*pPrimitives)[index++] = mesh->property(vProp_bufferIndex, fvit);
 			}
@@ -455,11 +455,11 @@ osg::Geometry *osg::convertOpenMesh2OSGGeometry(data::CMesh *mesh, bool vertexNo
 	{
 		index = 0;
 		int vindex = 0;
-		for (data::CMesh::FaceIter fit = mesh->faces_begin(); fit != mesh->faces_end(); ++fit)
+		for (geometry::CMesh::FaceIter fit = mesh->faces_begin(); fit != mesh->faces_end(); ++fit)
 		{
 			osg::Vec3 fn(mesh->normal(fit)[0], mesh->normal(fit)[1], mesh->normal(fit)[2]);
 
-			for (data::CMesh::FaceVertexIter fvit = mesh->fv_begin(fit); fvit != mesh->fv_end(fit); ++fvit)
+			for (geometry::CMesh::FaceVertexIter fvit = mesh->fv_begin(fit); fvit != mesh->fv_end(fit); ++fvit)
 			{
 				(*pVertices)[vindex] = osg::Vec3(mesh->point(fvit)[0], mesh->point(fvit)[1], mesh->point(fvit)[2]);				
 				(*pNormals)[vindex] = fn;
@@ -475,7 +475,7 @@ osg::Geometry *osg::convertOpenMesh2OSGGeometry(data::CMesh *mesh, bool vertexNo
     if (vertexNormals)
     {
         index = 0;
-        for (data::CMesh::VertexIter vit = mesh->vertices_begin(); vit != mesh->vertices_end(); ++vit)
+        for (geometry::CMesh::VertexIter vit = mesh->vertices_begin(); vit != mesh->vertices_end(); ++vit)
         {
             (*pNormals)[index] = osg::Vec3(mesh->normal(vit)[0], mesh->normal(vit)[1], mesh->normal(vit)[2]);
             ++index;
@@ -496,7 +496,7 @@ osg::Geometry *osg::convertOpenMesh2OSGGeometry(data::CMesh *mesh, bool vertexNo
     else
     {
         triindex = 0;
-        for (data::CMesh::FaceIter fit = mesh->faces_begin(); fit != mesh->faces_end(); ++fit)
+        for (geometry::CMesh::FaceIter fit = mesh->faces_begin(); fit != mesh->faces_end(); ++fit)
         {
             (*pNormals)[triindex] = osg::Vec3(mesh->normal(fit)[0], mesh->normal(fit)[1], mesh->normal(fit)[2]);
             ++triindex;
@@ -518,7 +518,7 @@ osg::Geometry *osg::convertOpenMesh2OSGGeometry(data::CMesh *mesh, bool vertexNo
 }
 
 
-osg::Geometry *osg::convertOpenMesh2OSGGeometry(data::CMesh *mesh, const osg::Vec4& color )
+osg::Geometry *osg::convertOpenMesh2OSGGeometry(geometry::CMesh *mesh, const osg::Vec4& color )
 {
     osg::Geometry *geometry = new osg::Geometry();
     
@@ -616,12 +616,15 @@ osg::Geometry *osg::convertOpenMesh2OSGGeometry(data::CMesh *mesh, const osg::Ve
 	index = 0;
     OpenMesh::VPropHandleT<int> vProp_bufferIndex;
     OpenMesh::VPropHandleT<int> vProp_flag;
+    
+    // THIS PROPERTY TIES OSG AND OPENMESH TOGETHER. IT IS USED IN ANOTHER PARTS OF BSP. DO NOT REMOVE IT. NEVER!
     mesh->add_property(vProp_bufferIndex, "bufferIndex");
+
 
 #if OSG_VERSION_GREATER_OR_EQUAL(3,1,10)
 	//
 #else
-    for (data::CMesh::VertexIter vit = mesh->vertices_begin(); vit != mesh->vertices_end() && index < numvert; ++vit)
+    for (geometry::CMesh::VertexIter vit = mesh->vertices_begin(); vit != mesh->vertices_end() && index < numvert; ++vit)
 	{
         mesh->property(vProp_bufferIndex, vit) = index;
         (*pVertices)[index] = osg::Vec3(mesh->point(vit)[0], mesh->point(vit)[1], mesh->point(vit)[2]);
@@ -633,10 +636,10 @@ osg::Geometry *osg::convertOpenMesh2OSGGeometry(data::CMesh *mesh, const osg::Ve
 	// Copy triangle vertex indexing
     triindex = 0;
     index = 0;
-    for (data::CMesh::FaceIter fit = mesh->faces_begin(); fit != mesh->faces_end() && triindex < numtris; ++fit)
+    for (geometry::CMesh::FaceIter fit = mesh->faces_begin(); fit != mesh->faces_end() && triindex < numtris; ++fit)
     {
 		osg::Vec3 fn(mesh->normal(fit)[0], mesh->normal(fit)[1], mesh->normal(fit)[2]);
-		for (data::CMesh::FaceVertexIter fvit = mesh->fv_begin(fit); fvit != mesh->fv_end(fit); ++fvit)
+		for (geometry::CMesh::FaceVertexIter fvit = mesh->fv_begin(fit); fvit != mesh->fv_end(fit); ++fvit)
 		{
 			(*pVertices)[index] = osg::Vec3(mesh->point(fvit)[0], mesh->point(fvit)[1], mesh->point(fvit)[2]);				
 			(*pNormals)[index] = fn;
@@ -649,9 +652,9 @@ osg::Geometry *osg::convertOpenMesh2OSGGeometry(data::CMesh *mesh, const osg::Ve
 	// Copy triangle vertex indexing
     triindex = 0;
     index = 0;
-    for (data::CMesh::FaceIter fit = mesh->faces_begin(); fit != mesh->faces_end() && triindex < numtris; ++fit)
+    for (geometry::CMesh::FaceIter fit = mesh->faces_begin(); fit != mesh->faces_end() && triindex < numtris; ++fit)
     {
-        for (data::CMesh::FaceVertexIter fvit = mesh->fv_begin(fit); fvit != mesh->fv_end(fit); ++fvit)
+        for (geometry::CMesh::FaceVertexIter fvit = mesh->fv_begin(fit); fvit != mesh->fv_end(fit); ++fvit)
         {
             (*pPrimitives)[index++] = mesh->property(vProp_bufferIndex, fvit);
         }
@@ -660,9 +663,6 @@ osg::Geometry *osg::convertOpenMesh2OSGGeometry(data::CMesh *mesh, const osg::Ve
         ++triindex;
     }
 #endif
-
-    // remove no longer needed bufferIndex property
-    mesh->remove_property(vProp_bufferIndex);
 
     geometry->dirtyDisplayList();
     geometry->dirtyBound();

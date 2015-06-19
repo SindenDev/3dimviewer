@@ -28,7 +28,6 @@
 
 #include "AppConfigure.h"
 
-
 #include "data/CActiveDataSet.h"
 #include "data/CDensityWindow.h"
 #include "data/CDensityData.h"
@@ -52,7 +51,6 @@
 #include <data/CRegionData.h>
 #include <data/CRegionColoring.h>
 #include <data/CVolumeTransformation.h>
-
 
 #include <VPL/Base/Logging.h>
 #include <VPL/Image/VolumeFunctions.h>
@@ -773,6 +771,7 @@ struct SCompareImagePosition
 // - added support for multi-frame dicom files
 
 CExamination::ELoadState CExamination::loadDicomData( data::CSerieInfo * serie,
+                                  data::sExtendedTags& tags,
                                   vpl::mod::CProgress::tProgressFunc & Progress,
                                   EDataSet Id,
                                   ESubsamplingType subsamplingType,
@@ -804,7 +803,7 @@ CExamination::ELoadState CExamination::loadDicomData( data::CSerieInfo * serie,
     vpl::img::CDicomSlice RepSlice;
 
     // Preload one of the slices
-    if (!serie->loadDicomFile(total_dicom_files / 2, RepSlice))
+    if (!serie->loadDicomFile(total_dicom_files / 2, RepSlice, tags))
     {
         return ELS_FAILED;
     }
@@ -837,7 +836,7 @@ CExamination::ELoadState CExamination::loadDicomData( data::CSerieInfo * serie,
     {
         // Load the dicom file including the image data
         tDicomSlices aux;
-        if (!serie->loadDicomFile(i, aux, true, bCompatibilityMode))
+        if (!serie->loadDicomFile(i, aux, tags, true, bCompatibilityMode))
         {
             return ELS_FAILED;
         }
@@ -854,7 +853,8 @@ CExamination::ELoadState CExamination::loadDicomData( data::CSerieInfo * serie,
             pSlice->m_ImageOrientationY.normalize();
 
             // Verify the image orientation
-            if (!(XAxis == pSlice->m_ImageOrientationX) || !(YAxis == pSlice->m_ImageOrientationY))
+            if ((vpl::img::CVector3D::dotProduct(XAxis, pSlice->m_ImageOrientationX) < 0.999999) || (vpl::img::CVector3D::dotProduct(YAxis, pSlice->m_ImageOrientationY) < 0.999999))
+            //if (!(XAxis == pSlice->m_ImageOrientationX) || !(YAxis == pSlice->m_ImageOrientationY))
             {
                 ++failures;
                 VPL_LOG_INFO("Warning: Differently oriented slice was found");
@@ -940,15 +940,24 @@ CExamination::ELoadState CExamination::loadDicomData( data::CSerieInfo * serie,
         tRank DiffRank;
         for (int j = 0; j < total_dicom_slices - 1; ++j)
         {
-            DiffRank.push_back(vpl::math::getAbs(slices[j]->getPosition() - slices[j + 1]->getPosition()));
+            double sliceThickness = vpl::math::getAbs(slices[j]->getPosition() - slices[j + 1]->getPosition());
+            if (sliceThickness > 0.0)
+            {
+                DiffRank.push_back(sliceThickness);
+            }
         }
-        
+
+        if (DiffRank.empty())
+        {
+            return ELS_FAILED;
+        }
+
         // Create ranking
         std::sort(DiffRank.begin(), DiffRank.end());
-        
+
         // Choose the optimal thickness as a median value
         //dThickness = DiffRank[total_dicom_slices / 2 - 1];
-        dThickness = DiffRank[(total_dicom_slices - 1) / 2];
+        dThickness = DiffRank[(DiffRank.size() - 1) / 2];
     }
 
     // Check the thickness
@@ -1158,15 +1167,24 @@ CExamination::ELoadState CExamination::loadDicomData( data::CSerieInfo * serie,
             tRank DiffRank;
             for (int j = 0; j < total_dicom_slices - 1; ++j)
             {
-                DiffRank.push_back(vpl::math::getAbs(slices[j]->getPosition() - slices[j + 1]->getPosition()));
+                double sliceThickness = vpl::math::getAbs(slices[j]->getPosition() - slices[j + 1]->getPosition());
+                if (sliceThickness > 0.0)
+                {
+                    DiffRank.push_back(sliceThickness);
+                }
             }
-            
+
+            if (DiffRank.empty())
+            {
+                return ELS_FAILED;
+            }
+
             // Create ranking
             std::sort(DiffRank.begin(), DiffRank.end());
-            
+
             // Choose the optimal thickness as a median value
-//            dThickness = DiffRank[total_dicom_slices / 2 - 1];
-            dThickness = DiffRank[(total_dicom_slices - 1) / 2];
+            //dThickness = DiffRank[total_dicom_slices / 2 - 1];
+            dThickness = DiffRank[(DiffRank.size() - 1) / 2];
         }
 
         // Check the thickness

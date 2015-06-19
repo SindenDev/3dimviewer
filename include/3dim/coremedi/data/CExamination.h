@@ -32,6 +32,8 @@
 #include <VPL/Image/Volume.h>
 #include <data/storage_ids_core.h>
 
+#include <data/CDicomLoader.h>
+
 namespace data
 {
 	struct SDensityWindow;
@@ -171,6 +173,7 @@ public:
 
     //! Loads the density data from serie info
     virtual ELoadState loadDicomData(data::CSerieInfo * serie,
+                               data::sExtendedTags& tags,
                                vpl::mod::CProgress::tProgressFunc & Progress,
                                EDataSet Id = PATIENT_DATA,
                                ESubsamplingType subsamplingType = EST_MAXIMUM_QUALITY,

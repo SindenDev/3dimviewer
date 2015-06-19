@@ -301,7 +301,7 @@ scene::CSceneXY::CSceneXY(OSGCanvas * canvas)
 //
 //\param direction   true to direction. 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-void scene::CSceneXY::sliceUpDown(bool direction)
+void scene::CSceneXY::sliceUpDown(int direction)
 {
     data::CObjectPtr<data::COrthoSliceXY> spSlice(APP_STORAGE.getEntry(data::Storage::SliceXY::Id));
     data::CObjectPtr<data::CActiveDataSet> spDataSet(APP_STORAGE.getEntry(data::Storage::ActiveDataSet::Id));
@@ -310,22 +310,11 @@ void scene::CSceneXY::sliceUpDown(bool direction)
     int position = spSlice->getPosition();
     spSlice.release();
 
-    if (direction)
-    {
-        ++position;
-
-        // Is it in range?
-        if (position < spVolume->getZSize())
-            VPL_SIGNAL(SigSetSliceXY).invoke(position);
-    }
-    else
-    {
-        --position;
-
-        // Is it in range?
-        if (position >= 0)
-            VPL_SIGNAL(SigSetSliceXY).invoke(position);
-    }
+	int oldPos = position;
+	position+=direction;
+	position = std::max(0, std::min( position, spVolume->getZSize()-1 ));
+	if (oldPos!=position)
+		VPL_SIGNAL(SigSetSliceXY).invoke(position);
 }
 
 //====================================================================================================================
@@ -355,7 +344,7 @@ scene::CSceneXZ::CSceneXZ(OSGCanvas * canvas)
 //
 //\param direction   true to direction. 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-void scene::CSceneXZ::sliceUpDown(bool direction)
+void scene::CSceneXZ::sliceUpDown(int direction)
 {
     data::CObjectPtr<data::COrthoSliceXZ> spSlice(APP_STORAGE.getEntry(data::Storage::SliceXZ::Id));
     data::CObjectPtr<data::CActiveDataSet> spDataSet(APP_STORAGE.getEntry(data::Storage::ActiveDataSet::Id));
@@ -364,22 +353,11 @@ void scene::CSceneXZ::sliceUpDown(bool direction)
     int position = spSlice->getPosition();
     spSlice.release();
 
-    if (direction)
-    {
-        ++position;
-
-        // Is it in range?
-        if (position < spVolume->getYSize())
-            VPL_SIGNAL(SigSetSliceXZ).invoke(position);
-    }
-    else
-    {
-        --position;
-
-        // Is it in range?
-        if (position >= 0)
-            VPL_SIGNAL(SigSetSliceXZ).invoke(position);
-    }
+	int oldPos = position;
+	position+=direction;
+	position = std::max(0, std::min( position, spVolume->getYSize()-1 ));
+	if (oldPos!=position)
+		VPL_SIGNAL(SigSetSliceXZ).invoke(position);
 }
 
 //====================================================================================================================
@@ -409,31 +387,20 @@ scene::CSceneYZ::CSceneYZ(OSGCanvas * canvas)
 //
 //\param direction   true to direction. 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-void scene::CSceneYZ::sliceUpDown(bool direction)
+void scene::CSceneYZ::sliceUpDown(int direction)
 {
     data::CObjectPtr<data::COrthoSliceYZ> spSlice(APP_STORAGE.getEntry(data::Storage::SliceYZ::Id));
     data::CObjectPtr<data::CActiveDataSet> spDataSet(APP_STORAGE.getEntry(data::Storage::ActiveDataSet::Id));
     data::CObjectPtr<data::CDensityData> spVolume(APP_STORAGE.getEntry(spDataSet->getId()));
 
     int position = spSlice->getPosition();
+	int oldPos = position;
     spSlice.release();
 
-    if (direction)
-    {
-        ++position;
-
-        // Is it in range?
-        if (position < spVolume->getXSize())
-            VPL_SIGNAL(SigSetSliceYZ).invoke(position);
-    }
-    else
-    {
-        --position;
-
-        // Is it in range?
-        if (position >= 0)
-            VPL_SIGNAL(SigSetSliceYZ).invoke(position);
-    }
+	position+=direction;
+	position = std::max(0, std::min( position, spVolume->getXSize()-1 ));
+	if (oldPos!=position)
+		VPL_SIGNAL(SigSetSliceYZ).invoke(position);
 }
 
 //====================================================================================================================

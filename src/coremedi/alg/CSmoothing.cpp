@@ -30,16 +30,16 @@
 ////////////////////////////////////////////////////////////
 //
 
-bool CSmoothing::Smooth(data::CMesh &mesh, int loops)
+bool CSmoothing::Smooth(geometry::CMesh &mesh, int loops)
 {
 /*
     setProgressMax(loops + 1);
     beginProgress();
     progress();
 
-    OpenMesh::Smoother::JacobiLaplaceSmootherT<data::CMesh> smoother(mesh);
-    OpenMesh::Smoother::SmootherT<data::CMesh>::Component component = OpenMesh::Smoother::SmootherT<data::CMesh>::Tangential_and_Normal;
-    OpenMesh::Smoother::SmootherT<data::CMesh>::Continuity continuity = OpenMesh::Smoother::SmootherT<data::CMesh>::C1;
+    OpenMesh::Smoother::JacobiLaplaceSmootherT<geometry::CMesh> smoother(mesh);
+    OpenMesh::Smoother::SmootherT<geometry::CMesh>::Component component = OpenMesh::Smoother::SmootherT<geometry::CMesh>::Tangential_and_Normal;
+    OpenMesh::Smoother::SmootherT<geometry::CMesh>::Continuity continuity = OpenMesh::Smoother::SmootherT<geometry::CMesh>::C1;
     smoother.initialize(component, continuity);
 
     // smoothing cycle
@@ -67,13 +67,13 @@ bool CSmoothing::Smooth(data::CMesh &mesh, int loops)
     progress();
 
     // add mesh custom property - new vertex position
-    OpenMesh::VPropHandleT<data::CMesh::Point>      new_positions_prop;
+    OpenMesh::VPropHandleT<geometry::CMesh::Point>      new_positions_prop;
     mesh.add_property(new_positions_prop);
 
-    data::CMesh::VertexIter                         v_it, v_end(mesh.vertices_end());               // mesh vertex iterator and end iterator
-    data::CMesh::VertexVertexIter                   vv_it;                                          // vertex circulator
-    data::CMesh::Point                              centr_point;                                    // position of actual (center) point
-    data::CMesh::Point                              vertex_vector;                                  // vector from actual (center) point to actual adjacent vertex
+    geometry::CMesh::VertexIter                         v_it, v_end(mesh.vertices_end());               // mesh vertex iterator and end iterator
+    geometry::CMesh::VertexVertexIter                   vv_it;                                          // vertex circulator
+    geometry::CMesh::Point                              centr_point;                                    // position of actual (center) point
+    geometry::CMesh::Point                              vertex_vector;                                  // vector from actual (center) point to actual adjacent vertex
 
     double                                          vertex_vector_length;                           // distance of actual vertex and adjacent actual vertex
     double                                          distance_weight;                                // actual adjacent distance weight

@@ -114,9 +114,12 @@ bool CSeriesSelectionDialog::setSeries(data::CSeries *pSeries)
 
         // Load dicom file
         vpl::img::CDicomSlice Slice;
-        if( !spInfo->loadDicomFile(spInfo->getNumOfDicomFiles() / 2, Slice) )
         {
-            continue;
+            data::sExtendedTags tags;
+            if (!spInfo->loadDicomFile(spInfo->getNumOfDicomFiles() / 2, Slice, tags))
+            {
+                continue;
+            }
         }
 
 		sEntry seriesEntry;
@@ -207,16 +210,16 @@ bool CSeriesSelectionDialog::setSeries(data::CSeries *pSeries)
         {   // column 3
 
             vpl::img::CDicomSlice SliceFirst;
-            if( !spInfo->loadDicomFile(0, SliceFirst) )
+            data::sExtendedTags tags;
+            if (!spInfo->loadDicomFile(0, SliceFirst, tags))
             {
                 Q_ASSERT(false); // could not load first slice
             }
             vpl::img::CDicomSlice SliceLast;
-            if( !spInfo->loadDicomFile(spInfo->getNumOfDicomFiles()-1, SliceLast) )
+            if (!spInfo->loadDicomFile(spInfo->getNumOfDicomFiles() - 1, SliceLast, tags))
             {
                 Q_ASSERT(false); // could not load first slice
             }
-
             QString imageInfo = QString(tr("%1 x %2 x %3 voxels\n"
                                         "%4 x %5 x %6 mm"
                                #ifdef _DEBUG

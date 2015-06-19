@@ -53,6 +53,8 @@ protected:
     QStringList             m_pluginFileNames;
     //! Plugins menu
     QMenu*                  m_pluginsMenu;
+	//! Plugins toolbar
+	QToolBar*               m_pluginsToolbar;
     //! List of dock widgets associated with panels from plugins - for debugging purpose
     QList<QDockWidget *>    m_panelsWidgets;
     QList<QMenu*>           m_menuWidgets;

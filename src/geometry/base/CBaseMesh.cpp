@@ -1,14 +1,32 @@
-////////////////////////////////////////////////////////////
-// $Id$
-////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+//
+// 3DimViewer
+// Lightweight 3D DICOM viewer.
+//
+// Copyright 2014-2015 3Dim Laboratory s.r.o.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//   http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+///////////////////////////////////////////////////////////////////////////////
+
 
 #ifdef _OPENMP
     #include <omp.h> // has to be included first, don't ask me why
 #endif
 
-#include <data/CBaseMesh.h>
+#include <geometry/base/CBaseMesh.h>
 
-namespace data
+namespace geometry
 {
 
 ////////////////////////////////////////////////////////////
@@ -24,7 +42,7 @@ CBaseMesh::CBaseMesh(const CBaseMesh &mesh) : OMMesh(mesh)
 {
 }
 
-CBaseMesh::CBaseMesh(const data::OMMesh &mesh)  : OMMesh(mesh)
+CBaseMesh::CBaseMesh(const geometry::OMMesh &mesh)  : OMMesh(mesh)
 {
 }
 
