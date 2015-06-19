@@ -602,6 +602,7 @@ void MainWindow::connectActions()
     connect(ui->actionGaussian_Filter, SIGNAL(triggered()), this, SLOT(filterGaussian()));
     connect(ui->actionMedian_Filter, SIGNAL(triggered()), this, SLOT(filterMedian()));
     connect(ui->action3D_Anisotropic_Filter, SIGNAL(triggered()), this, SLOT(filterAnisotropic()));
+	connect(ui->actionSharpening_Filter, SIGNAL(triggered()), this, SLOT(filterSharpen()));
 
     // Undo and redo
     connect(ui->actionUndo, SIGNAL(triggered()), this, SLOT(performUndo()));
@@ -3259,6 +3260,7 @@ void MainWindow::createSurfaceModel()
 	spModel->setColor(m_modelColor);
 	spModel->clearAllProperties();
 	spModel->setProperty("Created","1");
+	spModel->setTransformationMatrix(osg::Matrix::identity());
     spModel->setVisibility(true);
     APP_STORAGE.invalidate(spModel.getEntryPtr());
 
@@ -3686,6 +3688,115 @@ void MainWindow::filterMedian()
 			// Create reference to the new data
 			//spVolume->makeRef(*spFiltered);
 			mixVolumes(spVolume.get(),spFiltered.get(),dlg.getStrength());
+		}
+		else
+		{
+			showMessageBox(QMessageBox::Critical,tr("Filtering aborted!"));
+		}
+
+		// Update the data
+		APP_STORAGE.invalidate(spVolume.getEntryPtr());
+	}
+}
+
+
+// Slice filtering method for CFilterDialog
+void sharpenSliceFilter(int slice, int strength, QImage& result)
+{
+	QApplication::setOverrideCursor(QCursor(Qt::WaitCursor));
+
+	data::CObjectPtr<data::CActiveDataSet> spDataSet( APP_STORAGE.getEntry(data::Storage::ActiveDataSet::Id) );
+    data::CObjectPtr<data::CDensityData> spVolume( APP_STORAGE.getEntry(spDataSet->getId()) );
+	const vpl::tSize xSize=spVolume->getXSize();
+	const vpl::tSize ySize=spVolume->getYSize();
+	const vpl::tSize zSize=spVolume->getZSize();
+	
+	QImage img(xSize,ySize, QImage::Format_Indexed8);
+	QVector<QRgb> my_table;
+	for(int i = 0; i < 256; i++) 
+		my_table.push_back(qRgb(i,i,i));
+	img.setColorTable(my_table);
+
+	int minDensity = data::CDensityWindow::getMinDensity();
+	int maxDensity = data::CDensityWindow::getMaxDensity();
+	{
+#pragma omp parallel for
+		for(int y=0;y<ySize;y++)
+		{
+			vpl::img::CVolumeGauss3Filter<vpl::img::CDensityVolume> Filter; // getResponse can't run in parallel, therefore instance for each thread
+			uchar* scanLine = const_cast<uchar*>(img.constScanLine(y));		// to avoid deep copy
+			for(int x=0;x<xSize;x++)
+			{
+				int oval = spVolume->at(x,y,slice);
+				int val = Filter.getResponse(*spVolume,x,y,slice); 
+				val = oval + (oval-val)*3;
+				if (abs(val-oval)<10)
+					val = oval;
+				val = (val * strength + (100-strength) * oval)/100;
+				scanLine[x] = std::min(255,std::max(0,(int)val-minDensity)/(std::max(1,maxDensity-minDensity)/255));
+			}
+		}
+	}
+	result = img;
+
+	QApplication::restoreOverrideCursor();
+}
+
+
+void MainWindow::filterSharpen()
+{
+	CFilterDialog dlg(this,tr("Sharpen Filter"));
+	dlg.setFilter(&sharpenSliceFilter);
+	if (QDialog::Accepted==dlg.exec())
+	{
+	// Show simple progress dialog
+		CProgress progress(this);
+		progress.setLabelText(tr("Filtering volumetric data, please wait..."));
+		progress.show();
+
+		// Input and output data
+		data::CObjectPtr<data::CDensityData> spVolume( APP_STORAGE.getEntry(m_Examination.getActiveDataSet()) );
+		vpl::img::CDensityVolume::tSmartPtr spFiltered = new vpl::img::CDensityVolume(*spVolume);
+
+		// Median filtering
+		vpl::img::CVolumeGauss3Filter<vpl::img::CDensityVolume> Filter;
+		Filter.registerProgressFunc(vpl::mod::CProgress::tProgressFunc(&progress, &CProgress::Entry));
+		// initialize kernel (before multiple threads kick in)
+		float tmpPixel = float(Filter.getResponse(*spVolume.get(), 0, 0, 0));
+		spFiltered->at(0, 0, 0) = tmpPixel;
+		bool bResult = Filter(*spVolume, *spFiltered);
+
+		// Destroy the progress dialog
+		progress.hide();
+
+		// Show the result
+		if( bResult )
+		{
+			const vpl::tSize xSize=spVolume->getXSize();
+			const vpl::tSize ySize=spVolume->getYSize();
+			const vpl::tSize zSize=spVolume->getZSize();
+
+			int minDensity = data::CDensityWindow::getMinDensity();
+			int maxDensity = data::CDensityWindow::getMaxDensity();
+			int strength = dlg.getStrength();
+		#pragma omp parallel for
+			for(int z=0;z<zSize;z++)
+			{
+				for(int y=0;y<ySize;y++)
+				{
+					vpl::img::CVolumeGauss3Filter<vpl::img::CDensityVolume> Filter; // getResponse can't run in parallel, therefore instance for each thread
+					for(int x=0;x<xSize;x++)
+					{
+						int oval = spVolume->at(x,y,z);
+						int val = spFiltered->at(x,y,z);
+						val = oval + (oval-val)*3;
+						if (abs(val-oval)<10)
+							val = oval;
+						val = (val * strength + (100-strength) * oval)/100;
+						spVolume->at(x,y,z) = std::min(maxDensity, std::max(minDensity, val));
+					}
+				}
+			}
 		}
 		else
 		{
