@@ -168,6 +168,7 @@
     <addaction name="actionGaussian_Filter"/>
     <addaction name="actionMedian_Filter"/>
     <addaction name="action3D_Anisotropic_Filter"/>
+    <addaction name="actionSharpening_Filter"/>
     <addaction name="menuViewFilter"/>
    </widget>
    <widget class="QMenu" name="menuMeasurements">
@@ -1198,6 +1199,17 @@
   <action name="actionVolume_Filter">
    <property name="text">
     <string>Volume Filter...</string>
+   </property>
+  </action>
+  <action name="actionSharpening_Filter">
+   <property name="text">
+    <string>Sharpening Filter...</string>
+   </property>
+   <property name="toolTip">
+    <string>Applies sharpening filter on the volumetric data.</string>
+   </property>
+   <property name="statusTip">
+    <string>Applies sharpening filter on the volumetric data.</string>
    </property>
   </action>
  </widget>

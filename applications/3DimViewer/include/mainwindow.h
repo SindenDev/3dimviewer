@@ -549,6 +549,8 @@ private slots:
     void            filterMedian();
     //! Perform 3D anisotropic filtering of volumetric data
     void            filterAnisotropic();
+	//! Perform sharpening filtering of volumetric data
+    void            filterSharpen();
 	//! Helper volume mixing method
 	void			mixVolumes(vpl::img::CDensityVolume* main, vpl::img::CDensityVolume* temp, int mixing) const; // 0-100
 

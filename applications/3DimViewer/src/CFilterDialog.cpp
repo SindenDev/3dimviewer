@@ -66,13 +66,18 @@ CFilterDialog::CFilterDialog(QWidget *parent, const QString& title) :
     settings.beginGroup("FilterDialog");
 	m_strength = settings.value("strength",ui->sliderStrength->value()).toInt();
 	ui->sliderStrength->blockSignals(true);
+	ui->spinBoxStrength->blockSignals(true);
 	ui->sliderStrength->setValue(m_strength);
+	ui->spinBoxStrength->setValue(m_strength);
 	ui->sliderStrength->blockSignals(false);
+	ui->spinBoxStrength->blockSignals(false);
     resize(settings.value("size",minimumSize()).toSize());
     settings.endGroup();
 
-	connect(ui->sliderSlice,SIGNAL(valueChanged(int)),this,SLOT(sliceChanged(int)));
+	connect(ui->sliderSlice,SIGNAL(valueChanged(int)),this,SLOT(sliceChanged(int)));	
 	connect(ui->sliderStrength,SIGNAL(valueChanged(int)),this,SLOT(sliderStrengthChanged(int)));
+	connect(ui->sliderStrength,SIGNAL(valueChanged(int)),ui->spinBoxStrength,SLOT(setValue(int)));
+	connect(ui->spinBoxStrength,SIGNAL(valueChanged(int)),ui->sliderStrength,SLOT(setValue(int)));
 }
 
 CFilterDialog::~CFilterDialog()
