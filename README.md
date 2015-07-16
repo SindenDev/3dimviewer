@@ -20,13 +20,14 @@
 
 Table of Contents
 
-1 What is 3DimViewer?
-  1.1 Basic Features
-2 Installation
-  2.1 Compilation using MS Visual Studio
-  2.2 Compilation on Linux
-3 Bug Reporting
-4 Contacts
+    1 What is 3DimViewer?
+    1.1 Basic Features
+    2 Installation
+    2.1 Compilation using MS Visual Studio
+    2.2 Compilation on Linux
+    2.3 Patch for OpenMesh 3.x
+    3 Bug Reporting
+    4 Contacts
 
 
 1 What is 3DimViewer?
@@ -41,16 +42,16 @@ systems.
 1.1 Basic Features
 ------------------
 
-* Truly 3D viewer of volumetric data. 
+* Genuine 3D viewer of volumetric data. 
 * Multiplanar view (three orthogonal slices through the data). 
 * Adjustable density window. 
 * Strong DICOM dataset import. 
 * Distance and density measuring. 
-* Volume rendering. 
+* High quality Volume rendering for direct 3D visualization.
 * Tissue segmentation based on thresholding. 
 * Surface reconstruction of any segmented tissue. 
 * 3D surface rendering. 
-* Advanced functions available via loadable plugins. 
+* Advanced functions available via extension plugins. 
 
 
 ---
@@ -73,7 +74,7 @@ compile the 3DimViewer:
 
 All required prebuilt 3rd party libraries can be downloaded separately in a 
 single package. Alternatively, you can build them on your own. In that case, 
-we recommend you to build at least OpenSceneGraph, wxWidgets and MDSTk 
+we recommend you to build at least OpenSceneGraph, Qt and VPL
 libraries. A more comprehensive guide can be found in 
 ''doc/Installation.htm''. For a complete list of required 3rd party libraries 
 take a look at ''3rdParty.txt''.
@@ -143,6 +144,22 @@ viewer on Ubuntu 10.10 (32-bit version):
 * Final executable will be placed directly in the 
 ''applications/3DimViewer/bin' directory and loadable plugins in the 
 ''applications/3DimViewer/plugins'' directory.
+
+
+2.3 Patch for OpenMesh 3.x
+--------------------------
+
+A simple patch has to be applied to OpenMesh's *PolyConnectivity* files.
+Move implementations of the below methods from the *.cc* file to the corresponding *.hh* file.
+
+`/// Begin iterator for vertices
+VertexIter vertices_begin() { return VertexIter(*this, VertexHandle(0)); }
+/// Const begin iterator for vertices
+ConstVertexIter vertices_begin() const { return VertexIter(*this, VertexHandle(0)); }
+/// End iterator for vertices
+VertexIter vertices_end() { return ConstVertexIter(*this, VertexHandle(int(n_vertices()))); }
+/// Const end iterator for vertices
+ConstVertexIter vertices_end() const { return ConstVertexIter(*this, VertexHandle(int(n_vertices()))); }`
 
 
 ---
