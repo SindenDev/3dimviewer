@@ -20,14 +20,14 @@
 
 Table of Contents
 
-    1 What is 3DimViewer?
-    1.1 Basic Features
-    2 Installation
-    2.1 Compilation using MS Visual Studio
-    2.2 Compilation on Linux
-    2.3 Patch for OpenMesh 3.x
-    3 Bug Reporting
-    4 Contacts
+1. What is 3DimViewer?
+1.1. Basic Features
+2. Installation
+2.1. Compilation using MS Visual Studio
+2.2. Compilation on Linux
+2.3. Patch for OpenMesh 3.x
+3. Bug Reporting
+4. Contacts
 
 
 1 What is 3DimViewer?
@@ -152,14 +152,14 @@ viewer on Ubuntu 10.10 (32-bit version):
 A simple patch has to be applied to OpenMesh's *PolyConnectivity* files.
 Move implementations of the below methods from the *.cc* file to the corresponding *.hh* file.
 
-`/// Begin iterator for vertices
-VertexIter vertices_begin() { return VertexIter(*this, VertexHandle(0)); }
-/// Const begin iterator for vertices
-ConstVertexIter vertices_begin() const { return VertexIter(*this, VertexHandle(0)); }
-/// End iterator for vertices
-VertexIter vertices_end() { return ConstVertexIter(*this, VertexHandle(int(n_vertices()))); }
-/// Const end iterator for vertices
-ConstVertexIter vertices_end() const { return ConstVertexIter(*this, VertexHandle(int(n_vertices()))); }`
+    /// Begin iterator for vertices
+    VertexIter vertices_begin() { return VertexIter(*this, VertexHandle(0)); }
+    /// Const begin iterator for vertices
+    ConstVertexIter vertices_begin() const { return VertexIter(*this, VertexHandle(0)); }
+    /// End iterator for vertices
+    VertexIter vertices_end() { return ConstVertexIter(*this, VertexHandle(int(n_vertices()))); }
+    /// Const end iterator for vertices
+    ConstVertexIter vertices_end() const { return ConstVertexIter(*this, VertexHandle(int(n_vertices()))); }
 
 
 ---
