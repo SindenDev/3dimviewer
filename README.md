@@ -21,11 +21,11 @@
 Table of Contents
 
 1. What is 3DimViewer?
-1.1. Basic Features
+    1.1. Basic Features
 2. Installation
-2.1. Compilation using MS Visual Studio
-2.2. Compilation on Linux
-2.3. Patch for OpenMesh 3.x
+    2.1. Compilation using MS Visual Studio
+    2.2. Compilation on Linux
+    2.3. Patch for OpenMesh 3.x
 3. Bug Reporting
 4. Contacts
 
