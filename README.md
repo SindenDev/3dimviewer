@@ -184,6 +184,6 @@ or
 4 Contacts
 ==========
 
-3Dim Laboratory s.r.o.
-E-mail: info@3dim-laboratory.cz
-Web: http://www.3dim-laboratory.cz/
+* 3Dim Laboratory s.r.o.
+* E-mail: info@3dim-laboratory.cz
+* Web: http://www.3dim-laboratory.cz/
