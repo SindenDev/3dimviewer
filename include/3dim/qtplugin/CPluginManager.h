@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -117,6 +117,11 @@ public:
 
     //! Triggers action from a specified plugin, if available
     void    triggerPluginAction(const QString& pluginName, const QString& actionName);
+
+	std::map<int, vpl::base::CObject*>& getVplSignalsTable()
+	{
+		return m_vplSignals;
+	}
 };
 
 #endif // _QT_PLUGINMANAGER_H

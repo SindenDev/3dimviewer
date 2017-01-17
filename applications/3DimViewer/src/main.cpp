@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,34 +32,17 @@
 #include <QSettings>
 #include <QProxyStyle>
 #include <QCheckBox>
+#include <QSharedMemory>
 
 #include <app/CProductInfo.h>
 #include <C3DimApplication.h>
 #include <CSysInfo.h>
 
 #include <AppVersion.h>
-DECLARE_PRODUCT_INFO("3DimViewer", VER_MAJOR, VER_MINOR, VER_BUILD, app::EMPTY_NOTE)
+DECLARE_PRODUCT_INFO("3DimViewer", VER_MAJOR, VER_MINOR, VER_BUILD, EMPTY_NOTE)
 
 #include <data/CDataStorage.h>
 #include <VPL/Base/Logging.h>
-
-// Proxy style for custom icon size
-class MyProxyStyle : public QProxyStyle
-{
-public:
-    int pixelMetric(PixelMetric metric, const QStyleOption * option = 0, const QWidget * widget = 0 ) const
-    {
-        int s = QProxyStyle::pixelMetric(metric, option, widget);
-        if (metric == QStyle::PM_SmallIconSize) { // used by menu
-            s = 20; // looks better than 24 px when icons are downsized from 32 px
-        }
-        if (metric == QStyle::PM_ToolBarIconSize) {
-            s = 32;
-        }
-        return s;
-    }
-};
-
 
 // Windows error handling
 #ifdef _WIN32
@@ -175,6 +158,12 @@ int main(int argc, char *argv[])
     //       see http://developer.qt.nokia.com/doc/qt-4.8/appicon.html
     app.setWindowIcon(QIcon(":/icons/3dim.ico"));
 
+#if (QT_VERSION >= QT_VERSION_CHECK(5, 0, 0)) // with Qt5 enable depth buffer
+    QSurfaceFormat format = QSurfaceFormat::defaultFormat();
+    format.setDepthBufferSize(32);
+    QSurfaceFormat::setDefaultFormat(format);
+#endif
+
     // Remove trailing 'bin' from the current working directory
     //QString workDir = QDir::currentPath();
     QString workDir = QCoreApplication::applicationDirPath();
@@ -203,6 +192,16 @@ int main(int argc, char *argv[])
     
     QSettings settings;
 
+    bool bPossibleCrash = settings.value("CrashSentinel",false).toBool();
+#ifdef _WIN32
+	if (IsDebuggerPresent())
+		settings.setValue("CrashSentinel",false);
+	else
+		settings.setValue("CrashSentinel",true);
+#else
+    settings.setValue("CrashSentinel",true);
+#endif
+
     // Initialize the application storage
     // - Simple trick to prevent problems with two different instances of object factory
     //   used within the application and loadable plugins.
@@ -229,7 +228,7 @@ int main(int argc, char *argv[])
         std::string ssLogFile = file.fileName().toStdString();
 #endif
         VPL_LOG_ADD_FILE_APPENDER(ssLogFile);       
-        VPL_LOG_INFO("Logging enabled");
+        VPL_LOG_INFO("Logging enabled " << QDateTime::currentDateTime().toString(Qt::ISODate).toStdString());
     }
 
 	{	// write app version to log file
@@ -239,7 +238,18 @@ int main(int argc, char *argv[])
         #if defined (_WIN64) || defined (__APPLE__)
             software += " 64 bit";
         #endif
+
+#ifdef TRIDIM_USE_GDCM
+		software += " GDCM";
+#else
+		software += " DCMTK";
+#endif
+
+#ifdef __DATE__
+		VPL_LOG_INFO(software.toStdString() << " (" << __DATE__ << ")");
+#else
 		VPL_LOG_INFO(software.toStdString());
+#endif
     }
 
     // OpenMP settings
@@ -288,15 +298,15 @@ int main(int argc, char *argv[])
             QTextStream in(&file);
             QString style=in.readAll();
             style += C3DimApplication::getPlatformStyleSheetAddon(workDir+"/styles/"+styleSheet);
+			if (C3DimApplication::getDpiFactor()>=1.5)
+				style += C3DimApplication::getHiDpiStyleSheetAddon(workDir+"/styles/"+styleSheet);
             if (!style.isEmpty())
                 app.setStyleSheet(style);
         }
     }
 
     // set custom icon size
-    bool bigIcons=settings.value("BigIcons",true).toBool();
-    if (bigIcons)
-        app.setStyle(new MyProxyStyle);
+    app.setStyle(new BigIconsProxyStyle(settings.value("BigIcons",DEFAULT_BIG_ICONS).toBool()));
 
     // load translations
 #if QT_VERSION < 0x050000
@@ -403,6 +413,35 @@ int main(int argc, char *argv[])
 	// init system info (and write to log)
     CSysInfo* pSysInfo = CSysInfo::instance();
     pSysInfo->init(); 
+    if (!pSysInfo->isOpenGLOk())
+    {
+		settings.setValue("CrashSentinel",false);
+        QMessageBox msgBox(QMessageBox::Critical,QCoreApplication::applicationName(),QObject::tr("Your hardware doesn't meet the minimum requirements. OpenGL 2.1 or higher is required. Please upgrade the driver of your video card."),QMessageBox::Ok);
+        msgBox.exec();
+        return -1;
+    }
+
+    // log recent windows error log entries
+#ifdef _WIN32
+    if (bPossibleCrash && IsDebuggerPresent())
+        bPossibleCrash = false;
+#endif
+
+    // create shared memory to check more running instances
+    QSharedMemory shared("3D7BC3B6-8BBC-491F-8944-A637EED34211");
+    if( !shared.create( 512, QSharedMemory::ReadWrite) )
+    {
+        // use shared.attach() to access that memory if you need to
+        bPossibleCrash = false; // there is another instance running
+    }
+
+    if (bPossibleCrash)
+    {
+#ifdef _WIN32
+        getRecentEventLogAppEntries();
+#endif
+		app.showLog(QObject::tr("3DimViewer has detected that the previous run didn't finish correctly. Verify that you have the latest drivers for the video card."));
+    }
 
     // check configuration and show warning if below recommended
     bool bShowHWWarning = settings.value("HWConfigurationWarning",true).toBool();
@@ -435,5 +474,6 @@ int main(int argc, char *argv[])
 		// we can't deallocate plugins until MainWindow is deleted but we have to unload them before storage objects destruction
 		plugins.unloadPlugins(true);
 	}
+	settings.setValue("CrashSentinel",false);
 	return res;
 }

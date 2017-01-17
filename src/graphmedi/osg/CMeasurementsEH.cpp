@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -36,7 +36,7 @@ using namespace scene;
 
 //**************************************************
 // Constructor
-CMeasurementsEH::CMeasurementsEH( OSGCanvas * canvas,scene::CSceneOSG * scene, bool handleDistance /* = true */, bool handleDensity /* = true */, bool handleDensityUnderCursor /* = false */ )
+CMeasurementsEH::CMeasurementsEH( OSGCanvas * canvas,scene::CSceneBase * scene, bool handleDistance /* = true */, bool handleDensity /* = true */, bool handleDensityUnderCursor /* = false */ )
 : CEventHandlerBase( canvas )
 ,  m_scene( scene )
 ,  m_handleDistance( handleDistance )

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE TS>
-<TS version="2.0" language="cs_CZ" sourcelanguage="en">
+<TS version="2.1" language="cs_CZ" sourcelanguage="en">
 <context>
     <name>CGaugePanel</name>
     <message>
@@ -50,6 +50,18 @@
     <message>
         <source>Latest measured distance...</source>
         <translation>Poslední naměřená vzdálenost...</translation>
+    </message>
+    <message>
+        <source>Clear Measurements</source>
+        <translation>Vymazat výsledky měření</translation>
+    </message>
+    <message>
+        <source>Measure Distance [mm]</source>
+        <translation>Měřit vzdálenost [mm]</translation>
+    </message>
+    <message>
+        <source>Measure Density Value [Hu]</source>
+        <translation>Měřit hustotu [Hu]</translation>
     </message>
 </context>
 <context>

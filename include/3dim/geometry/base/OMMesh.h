@@ -3,7 +3,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2015 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -37,9 +37,9 @@ namespace geometry
 // define our OM mesh
 struct OMTraits : public OpenMesh::DefaultTraits
 {
-    VertexAttributes(OpenMesh::Attributes::Status | OpenMesh::Attributes::Normal);
+    VertexAttributes(OpenMesh::Attributes::Status | OpenMesh::Attributes::Normal | OpenMesh::Attributes::Color);
     FaceAttributes(OpenMesh::Attributes::Status | OpenMesh::Attributes::Normal);
-    EdgeAttributes(OpenMesh::Attributes::Status);
+	EdgeAttributes(OpenMesh::Attributes::Status | OpenMesh::Attributes::Normal);
     HalfedgeAttributes(OpenMesh::Attributes::Status);
 };
 

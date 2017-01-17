@@ -1,48 +1,48 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE TS>
-<TS version="2.0" language="cs_CZ" sourcelanguage="en">
+<TS version="2.1" language="cs_CZ" sourcelanguage="en">
 <context>
     <name>CDemoPlugin</name>
     <message>
-        <location filename="../cdemoplugin.cpp" line="34"/>
+        <location filename="../cdemoplugin.cpp" line="37"/>
         <source>Pick Value</source>
         <translation>Hodnota v místě</translation>
     </message>
     <message>
-        <location filename="../cdemoplugin.cpp" line="36"/>
+        <location filename="../cdemoplugin.cpp" line="39"/>
         <source>Click the button and then select any point the volume data.</source>
         <translation>Zmáčkněte tlačítko a kliknutím zadejte bod uvnitř dat.</translation>
     </message>
     <message>
-        <location filename="../cdemoplugin.cpp" line="41"/>
+        <location filename="../cdemoplugin.cpp" line="44"/>
         <source>Stroke Drawing Mode</source>
         <translation>Kreslení čáry</translation>
     </message>
     <message>
-        <location filename="../cdemoplugin.cpp" line="43"/>
-        <location filename="../cdemoplugin.cpp" line="51"/>
+        <location filename="../cdemoplugin.cpp" line="46"/>
+        <location filename="../cdemoplugin.cpp" line="54"/>
         <source>Click the button, then press Shift and start drawing using mouse.</source>
         <translation>Vyberte kreslící mód, stlačte Shift a začněte kreslit.</translation>
     </message>
     <message>
-        <location filename="../cdemoplugin.cpp" line="49"/>
+        <location filename="../cdemoplugin.cpp" line="52"/>
         <source>Polygon Drawing Mode</source>
         <translation>Kreslení polygonu</translation>
     </message>
     <message>
-        <location filename="../cdemoplugin.cpp" line="57"/>
-        <location filename="../cdemoplugin.cpp" line="59"/>
+        <location filename="../cdemoplugin.cpp" line="60"/>
+        <location filename="../cdemoplugin.cpp" line="62"/>
         <source>Show Regions</source>
         <translation>Zobrazit regiony</translation>
     </message>
     <message>
-        <location filename="../cdemoplugin.cpp" line="69"/>
-        <location filename="../cdemoplugin.cpp" line="120"/>
+        <location filename="../cdemoplugin.cpp" line="72"/>
+        <location filename="../cdemoplugin.cpp" line="123"/>
         <source>Demo Plugin</source>
         <translation>Ukázkový plugin</translation>
     </message>
     <message>
-        <location filename="../cdemoplugin.cpp" line="86"/>
+        <location filename="../cdemoplugin.cpp" line="89"/>
         <source>Demo Plugin ToolBar</source>
         <translation>Lišta demo pluginu</translation>
     </message>

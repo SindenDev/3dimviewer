@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -40,11 +40,12 @@ class CModelsWidget : public QWidget, public data::CObjectObserver<data::CModel>
 
     enum EColumns
     {
-        COL_NAME = 0,
+		COL_COLOR = 0,
+        COL_NAME,
         COL_VISIBLE,
 		COL_CUT,
-        COL_COLOR,
         COL_DELETE,
+		COL_INFO,
         COL_COUNT
     };
 
@@ -91,6 +92,12 @@ private slots:
 
 	//! Context menu handler for models table
 	void tableModelsContextMenu(QPoint p);
+
+	void showModelInfo();
+
+	void on_pushButtonBuyPlugins_clicked();
+
+	void on_pushButtonSaveModel_clicked();
 
 private:
     // GUI

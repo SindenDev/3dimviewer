@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,6 +28,24 @@ namespace data
 {
 
 ///////////////////////////////////////////////////////////////////////////////
+//! Virtual destructor.
+CStorageEntry::~CStorageEntry()
+{
+#ifdef _WIN32
+    if (0!=m_Id)
+    {
+        std::stringstream ss;
+        if (NULL != m_spData.get())
+            ss << "Deleting storage entry " << m_Id << " " << typeid(*m_spData.get()).name() << "\n";
+        else
+            ss << "Deleting storage entry " << m_Id << "\n";
+        std::string str = ss.str();
+        OutputDebugStringA(str.c_str());
+    }
+#endif
+}
+
+    ///////////////////////////////////////////////////////////////////////////////
 //
 
 void CStorageEntry::connect(CEntryObserver *pObserver)

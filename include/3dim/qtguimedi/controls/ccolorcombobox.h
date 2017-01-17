@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -35,6 +35,9 @@ class CColorComboBox : public data::CObjectObserver< data::CRegionColoring >
 protected:
     QComboBox*  m_pCombo;
 	bool		m_bSyncActive;
+
+	std::vector<int> m_mapping;
+
     void        comboAddColorItem(const QColor& color, const QString& itemName);
 public:
     CColorComboBox(QComboBox* pCombo=NULL);
@@ -50,6 +53,8 @@ public:
 
     //! Redraw data
     void objectChanged(data::CRegionColoring *pData);
+
+	int getRegionNumber(int index);
 };
 
 

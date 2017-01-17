@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -151,6 +151,27 @@ public:
     //! Checks if a given flag is present in any value in the list - this version does not care about other flags
     bool checkFlagAny(int Value) const;
     bool checkFlagAny(int Value, tFilter Filter) const;
+
+	//! checks for entry with (Value!=(Mask&Flags))
+	bool checkFlagsAnyNonEq(int Value, int Mask, const CChangedEntries::tFilter &Filter = tFilter()) const;
+
+	//! checks for entry with (Value==(Mask&Flags))
+	bool checkFlagsAnyEq(int Value, int Mask, const CChangedEntries::tFilter &Filter = tFilter()) const;
+
+	//! Checks for presence of a change that has one or more flags from the Mask set
+	bool checkFlagsAnySet(int Mask, const CChangedEntries::tFilter &Filter = tFilter()) const;
+
+	//! Checks for presence of a change that has one or more flags from the Mask zero
+	bool checkFlagsAnyNotSet(int Mask, const CChangedEntries::tFilter &Filter = tFilter()) const;
+
+	//! Checks for presence of a change that has flags that mach the mask
+	bool checkFlagsAllSet(int Mask, const CChangedEntries::tFilter &Filter = tFilter()) const;
+
+	//! Checks for presence of a change that has zero flags
+	bool checkFlagsAllZero(const CChangedEntries::tFilter &Filter = tFilter()) const;
+
+	//! Checks for presence of a change that has zero class specific flags
+	bool checkFlagsAllClassSpecificZero(const CChangedEntries::tFilter &Filter = tFilter()) const;
 
     //! Checks if there is some valid parent entry in the list different
     //! from the entry whose changed parent entries are listed.

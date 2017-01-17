@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,7 +22,7 @@
 
 #include <data/CCoordinatesConv.h>
 #include <data/CDensityData.h>
-#include <app/Signals.h>
+#include <coremedi/app/Signals.h>
 #include <VPL/Base/Logging.h>
 
 namespace data
@@ -91,14 +91,19 @@ CCoordinatesConv& CCoordinatesConv::operator =(const CCoordinatesConv& Conv)
     
 ///////////////////////////////////////////////////////////////////////////////
 
-void CCoordinatesConv::update(const CChangedEntries& Changes)
+void CCoordinatesConv::update(const CChangedEntries& Changes) // TODO: I think it should be better to save density object id because it can be missing in the changes list
 {
     // Find parent volume data that has been changed
-    CObjectPtr<CDensityData> spData( APP_STORAGE.findObject<CDensityData>(Changes) );
+	typedef CObjectHolder<CDensityData> tObjectHolder;
+	int id = APP_STORAGE.findEntryId<tObjectHolder>(Changes);
+	if (id != Storage::UNKNOWN)
+	{
+		CObjectPtr<CDensityData> spData( APP_STORAGE.getEntry(id) /* APP_STORAGE.findObject<CDensityData>(Changes) */ );
 
-    // Initialize the conversion
-    setVoxel(spData->getDX(), spData->getDY(), spData->getDZ());
-    setupScene(spData->getXSize(), spData->getYSize(), spData->getZSize());
+		// Initialize the conversion
+		setVoxel(spData->getDX(), spData->getDY(), spData->getDZ());
+		setupScene(spData->getXSize(), spData->getYSize(), spData->getZSize());
+	}
 }
 
 

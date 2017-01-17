@@ -1,6 +1,6 @@
 ///////////////////////////////////////////////////////////////////////////////
 // 
-// Copyright 2008-2015 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 
 #ifndef CGAUGEPANEL_H
@@ -27,12 +27,23 @@ public:
 
     //! set last read distance to panel
     void setDistance(double fValue);
+
+	//! Called on volume data change.
+	void onNewDensityData(data::CStorageEntry *pEntry);
+
+	void updateButtons(scene::CAppMode::tMode mode);
     
 private slots:
     void on_comboBoxMeasuringMode_currentIndexChanged(int index);
+	void on_pushButtonDensity_toggled(bool checked);
+	void on_pushButtonDistance_toggled(bool checked);
+	void on_pushButtonClear_clicked();
 
 private:
     Ui::CGaugePanel *ui;
+
+	//! Signal connection for volume data change
+	vpl::mod::tSignalConnection m_Connection;
 };
 
 #endif // CGAUGEPANEL_H

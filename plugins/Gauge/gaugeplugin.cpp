@@ -1,6 +1,6 @@
 ///////////////////////////////////////////////////////////////////////////////
 // 
-// Copyright 2008-2015 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 
 #include <QtGui>
@@ -19,7 +19,8 @@ GaugePlugin::GaugePlugin() : QObject(), PluginInterface()
     m_pMenu = NULL;
     m_pToolBar = NULL;
     m_pPanel = NULL;
-	setProperty("Icon",":/icons/measure_density.png");
+	setProperty("Icon",":/icons/icons/gaugeplugin.png");
+	setProperty("PanelIcon", ":/icons/icons/gaugeplugin_dock.png");
 }
 
 void  GaugePlugin::createActions()
@@ -101,26 +102,25 @@ QString  GaugePlugin::pluginID()
 
 void GaugePlugin::connectPlugin()
 {
-    m_ConnectionModeChanged = getAppMode()->getModeChangedSignal().connect( this, &GaugePlugin::sigModeChanged );
+	m_ConnectionModeChanged = PLUGIN_APP_MODE.getModeChangedSignal().connect(this, &GaugePlugin::sigModeChanged);
     m_ConnectionDensityMeasure = PLUGIN_APP_MODE.getDensityMeasureSignal().connect(this, &GaugePlugin::sigDensityMeasured);
     m_ConnectionDistanceMeasure = PLUGIN_APP_MODE.getDistanceMeasureSignal().connect(this, &GaugePlugin::sigDistanceMeasured);
 }
 
 void GaugePlugin::disconnectPlugin()
 {
-    getAppMode()->getModeChangedSignal().disconnect( m_ConnectionModeChanged );
+	PLUGIN_APP_MODE.getModeChangedSignal().disconnect(m_ConnectionModeChanged);
     PLUGIN_APP_MODE.getDensityMeasureSignal().disconnect(m_ConnectionDensityMeasure);
     PLUGIN_APP_MODE.getDistanceMeasureSignal().disconnect(m_ConnectionDistanceMeasure);
 }
 
 QAction* GaugePlugin::getAction(const QString &actionName)
 {
-    createActions();
-    if (actionName=="MeasureDensity")
+    if (actionName=="measure_density")
         return m_actionMeasureDensity;
-    if (actionName=="MeasureDistance")
+    if (actionName=="measure_distance")
         return m_actionMeasureDistance;
-    if (actionName=="ClearMeasurements")
+    if (actionName=="clear_measurements")
         return m_actionClearMeasurements;
     return NULL;
 }
@@ -134,6 +134,8 @@ void GaugePlugin::sigModeChanged( scene::CAppMode::tMode mode )
     m_actionMeasureDistance->setChecked(scene::CAppMode::COMMAND_DISTANCE_MEASURE==mode);
 	m_actionMeasureDensity->blockSignals(false);
 	m_actionMeasureDistance->blockSignals(false);
+
+	m_pPanel->updateButtons(mode);
 }
 
 void GaugePlugin::measureDensity(bool on)

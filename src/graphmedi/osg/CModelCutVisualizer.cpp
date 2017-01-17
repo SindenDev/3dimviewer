@@ -3,7 +3,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2015 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@ namespace osg
 //
 CModelCutVisualizer::CModelCutVisualizer(OSGCanvas *canvas, bool autoPositioning)
 {
+    setName("CModelCutVisualizer");
     m_canvas = canvas;
     m_autoPositioning = autoPositioning;
     m_validData = false;
@@ -73,6 +74,7 @@ CModelCutVisualizer::~CModelCutVisualizer()
 //
 void CModelCutVisualizer::setVisibility(bool show, bool forceRedraw)
 {
+    if (NULL == this) return;
     m_visible = show;
     m_transform->removeChild(m_geode);
     
@@ -104,11 +106,13 @@ void CModelCutVisualizer::updateData()
 //
 bool CModelCutVisualizer::isVisible()
 {
+    if (NULL == this) return false;
     return m_visible;
 }
 
 void CModelCutVisualizer::setColor( const osg::Vec4 & color )
 {
+    if (NULL == this) return;
     osg::Vec4Array * ca = dynamic_cast< osg::Vec4Array *>(m_geometry->getColorArray());
     if( ca == 0 )
         return;

@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 //
 ///////////////////////////////////////////////////////////////////////////////
 
+#include "mainwindow.h"
 #include <CPluginManager.h>
 #include <PluginInterface.h>
 
@@ -40,6 +41,7 @@
 #include <QDebug>
 #include <VPL/Base/Logging.h>
 #include <data/CModelManager.h>
+#include <actlog/ceventfilter.h>
 
 #if (QT_VERSION >= QT_VERSION_CHECK(5, 0, 0))
     #include <QStandardPaths>
@@ -95,7 +97,7 @@ void CPluginManager::loadPluginsInDir(QString dirName)
 #else
     foreach (QString fileName, pluginsDir.entryList(QDir::Files)) {
 #endif
-        QPluginLoader *loader = new QPluginLoader(pluginsDir.absoluteFilePath(fileName));
+		QPluginLoader *loader = new QPluginLoader(pluginsDir.absoluteFilePath(fileName));
         if (NULL!=loader)
         {
             QObject *plugin = loader->instance();
@@ -242,6 +244,21 @@ void CPluginManager::initSignalTable()
 	m_vplSignals[VPL_SIGNAL(SigGetModelColor).getId()]=&(VPL_SIGNAL(SigGetModelColor));
 	m_vplSignals[VPL_SIGNAL(SigSetModelColor).getId()]=&(VPL_SIGNAL(SigSetModelColor));
 	m_vplSignals[VPL_SIGNAL(SigUndoSnapshot).getId()]=&(VPL_SIGNAL(SigUndoSnapshot));
+	m_vplSignals[VPL_SIGNAL(SigSetColoring).getId()] = &(VPL_SIGNAL(SigSetColoring));
+	m_vplSignals[VPL_SIGNAL(SigSetContoursVisibility).getId()] = &(VPL_SIGNAL(SigSetContoursVisibility));
+	m_vplSignals[VPL_SIGNAL(SigGetContoursVisibility).getId()] = &(VPL_SIGNAL(SigGetContoursVisibility));
+	m_vplSignals[VPL_SIGNAL(SigVolumeOfInterestChanged).getId()] = &(VPL_SIGNAL(SigVolumeOfInterestChanged));
+	m_vplSignals[VPL_SIGNAL(SigEnableRegionColoring).getId()] = &(VPL_SIGNAL(SigEnableRegionColoring));
+	m_vplSignals[VPL_SIGNAL(SigShowVolumeOfInterestDialog).getId()] = &(VPL_SIGNAL(SigShowVolumeOfInterestDialog));
+	m_vplSignals[VPL_SIGNAL(SigGetModelCutVisibility).getId()] = &(VPL_SIGNAL(SigGetModelCutVisibility));
+	m_vplSignals[VPL_SIGNAL(SigSetModelCutVisibility).getId()] = &(VPL_SIGNAL(SigSetModelCutVisibility));
+	m_vplSignals[VPL_SIGNAL(SigGetSelectedModelId).getId()] = &(VPL_SIGNAL(SigGetSelectedModelId));
+	m_vplSignals[VPL_SIGNAL(SigEstimateDensityWindow).getId()] = &(VPL_SIGNAL(SigEstimateDensityWindow));
+	m_vplSignals[VPL_SIGNAL(SigSetDensityWindow).getId()] = &(VPL_SIGNAL(SigSetDensityWindow));
+	m_vplSignals[VPL_SIGNAL(SigSaveModel).getId()] = &(VPL_SIGNAL(SigSaveModel));
+    m_vplSignals[VPL_SIGNAL(SigNewTransformMatrixFromNote).getId()] = &(VPL_SIGNAL(SigNewTransformMatrixFromNote));
+
+
 }
 
 void CPluginManager::initPlugin(QObject* plugin, const QString& fileName)
@@ -299,7 +316,7 @@ void CPluginManager::initPlugin(QObject* plugin, const QString& fileName)
             pDW->setAllowedAreas(Qt::AllDockWidgetAreas);
             pDW->setFeatures(QDockWidget::DockWidgetClosable|QDockWidget::DockWidgetMovable);
             pDW->setObjectName(pPanel->objectName());
-			QString icon  = plugin->property("Icon").toString();
+			QString icon  = plugin->property("PanelIcon").toString();
 			if (icon.isEmpty())
 				pDW->setProperty("Icon",":/icons/page.png");
 			else
@@ -539,6 +556,13 @@ void CPluginManager::populateMenus(QObject *plugin)
                     }
                     // all actions are handled in one menu handler
                     connect(pPluginMenu,SIGNAL(triggered(QAction*)),this,SLOT(pluginMenuAction(QAction*)));
+
+					// connect menu actions to event filter
+                    IHasEventFilter *mw = dynamic_cast<IHasEventFilter *>(MainWindow::getInstance());
+                    if (mw != NULL)
+                    {
+                        connect(pPluginMenu, SIGNAL(triggered(QAction*)), &mw->getEventFilter(), SLOT(catchPluginMenuAction(QAction*)));
+                    }
                 }
                 connect(pPluginMenu,SIGNAL(aboutToShow()),this,SLOT(pluginMenuAboutToShow()));
                 m_pluginsMenu->addMenu(pPluginMenu);
@@ -557,8 +581,15 @@ void CPluginManager::populateMenus(QObject *plugin)
 					pActShowPanel->setIcon(QIcon(icon));
 				else
 					pActShowPanel->setIcon(QIcon(":/icons/3dim.ico"));
-                m_pluginsToolbar->addAction(pActShowPanel);				
-			}
+                m_pluginsToolbar->addAction(pActShowPanel);	
+
+                // connect plugin menu button to event filter
+                IHasEventFilter *mw = dynamic_cast<IHasEventFilter *>(MainWindow::getInstance());
+                if (mw != NULL)
+                {
+                    connect(pActShowPanel, SIGNAL(triggered()), &mw->getEventFilter(), SLOT(catchMenuAction()));
+                }
+            }
         }
     }
 }

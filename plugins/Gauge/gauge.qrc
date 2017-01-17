@@ -1,7 +1,9 @@
 <RCC>
     <qresource prefix="/icons">
+        <file>icons/gaugeplugin.png</file>
         <file alias="measure_density.png">icons/measure_density.png</file>
         <file alias="measure_distance.png">icons/measure_distance.png</file>
         <file alias="delete.png">icons/delete.png</file>
+        <file>icons/gaugeplugin_dock.png</file>
     </qresource>
 </RCC>

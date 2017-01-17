@@ -227,18 +227,35 @@ macro( ADD_LIB_QT5 )
     # Instruct CMake to run moc automatically when needed.
     #set(CMAKE_AUTOMOC ON)    
 
+    if (QT_BASIC)
     set(_components
         Core
         Gui
         Network
         Widgets
         PrintSupport
-        WebKit
-        WebKitWidgets
         OpenGL
         LinguistTools
+		    Sql
         Script
       )
+    else (QT_BASIC)
+    set(_components
+        Core
+        Gui
+        Network
+        Widgets
+        PrintSupport
+		    WebEngine
+        WebEngineCore
+        WebEngineWidgets
+        OpenGL
+        LinguistTools
+		    Sql
+        Script
+      )    
+    endif (QT_BASIC)
+    
     foreach(_component ${_components})
       find_package(Qt5${_component})
 #      list(APPEND QT_LIBRARIES ${Qt5${_component}_LIBRARIES})
@@ -276,17 +293,34 @@ macro ( ADD_LIB_QT )
 endmacro ( ADD_LIB_QT )
 
 macro( USE_LIB_QT5 )
+  if (QT_BASIC)
     set(_components
         Core
         Gui
         Network
         Widgets
         PrintSupport
-        WebKit
-        WebKitWidgets
         OpenGL
         LinguistTools
+		    Sql
+        Script
       )
+    else (QT_BASIC)
+    set(_components
+        Core
+        Gui
+        Network
+        Widgets
+        PrintSupport
+		    WebEngine
+        WebEngineCore
+        WebEngineWidgets
+        OpenGL
+        LinguistTools
+		    Sql
+        Script
+      )    
+    endif (QT_BASIC)      
     foreach(_component ${_components})
       qt5_use_modules(${PROJECT_NAME} ${_component}) 
     endforeach()      

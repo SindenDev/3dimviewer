@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,49 +27,123 @@
 
 namespace osg
 {
+    class CAttribute
+    {
+    public:
+        enum EAttributeType
+        {
+            EAT_VEC4 = 0,
+            EAT_VEC3,
+            EAT_VEC2,
+            EAT_FLOAT,
+        };
+
+    public:
+        int location;
+        std::string name;
+        EAttributeType type;
+
+    public:
+        CAttribute(int location, std::string name, EAttributeType type)
+            : location(location)
+            , name(name)
+            , type(type)
+        { }
+        ~CAttribute()
+        { }
+        static std::string getTypename(EAttributeType type)
+        {
+            switch (type)
+            {
+            case EAT_VEC4:
+                return "vec4";
+                break;
+
+            case EAT_VEC3:
+                return "vec3";
+                break;
+
+            case EAT_VEC2:
+                return "vec2";
+                break;
+
+            case EAT_FLOAT:
+                return "float";
+                break;
+
+            default:
+                return "";
+                break;
+            }
+        }
+    };
+
     class CPseudoMaterial : public osg::StateSet::Callback
     {
     protected:
+        std::set<osg::ref_ptr<osg::Object> > m_objects;
+
         std::vector<osg::ref_ptr<osg::Uniform> > m_uniforms;
+        std::vector<osg::ref_ptr<osg::Uniform> > m_internalUniforms;
+        std::vector<osg::CAttribute> m_attributes;
+
+        osg::ref_ptr<osg::Uniform> m_uniDummy;
 
         osg::ref_ptr<osg::Uniform> m_uniDiffuse;
         osg::ref_ptr<osg::Uniform> m_uniEmission;
         osg::ref_ptr<osg::Uniform> m_uniShininess;
         osg::ref_ptr<osg::Uniform> m_uniSpecularity;
 
-    private:
+    protected:
         osg::ref_ptr<osg::Shader> m_vertShader;
+        osg::ref_ptr<osg::Shader> m_geomShader;
         osg::ref_ptr<osg::Shader> m_fragShader;
         osg::ref_ptr<osg::Program> m_program;
 
+        bool m_twoSided;
+        bool m_flatShading;
+        bool m_dirty;
+
     public:
-        CPseudoMaterial();
+        CPseudoMaterial(bool twoSided = false, bool flatShading = false);
         ~CPseudoMaterial();
 
         osg::Uniform *uniform(std::string name);
 
-    private:
-        std::string compatibility();
-        std::string uniforms();
-        std::vector<std::pair<std::string, std::string> > vert2fragMembers();
-        std::string vert2fragStruct();
-        std::string vert2fragOuts();
-        std::string vert2fragIns();
-        std::string surfStruct();
-        std::string vertShaderSrc();
-        std::string insToStruct();
-        std::string fragShaderSrc();
+        void setFlatShading(bool flatShading);
+        void makeDirty();
+
+        void copyInternals(CPseudoMaterial *other);
+
+    protected:
+        virtual std::string programName() { return "// CPseudoMaterial"; }
+        virtual std::string vertVersion();
+        virtual std::string geomVersion();
+        virtual std::string fragVersion();
+        virtual std::string uniforms();
+        virtual std::string attributes();
+        virtual std::vector<std::pair<std::string, std::string> > shaderInOuts();
+        virtual std::string vertOuts();
+        virtual std::string geomIns();
+        virtual std::string geomOuts();
+        virtual std::string fragIns();
+        virtual std::string fragStruct();
+        virtual std::string surfStruct();
+        virtual std::string vertShaderSrc();
+        virtual std::string insToStruct();
+        virtual std::string fragShaderSrc();
+        virtual std::string geomShaderSrc();
 
     public:
-        void apply(osg::Node *node);
+        virtual void apply(osg::Object *object, osg::Node *shaderTesterNode = NULL);
 
-    private:
-        void revert(osg::StateSet *stateSet);
+        //! you really should know what you're doing if you try to call this
+        void revert(osg::Object *object);
 
     public:
         virtual void operator()(StateSet *stateSet, NodeVisitor *nodeVisitor);
 
-    private:
+    protected:
         virtual std::string surfaceShaderSrc();
     };
 
@@ -84,7 +158,8 @@ namespace osg
         CPseudoMaterial_Rim();
         ~CPseudoMaterial_Rim();
 
-    private:
+    protected:
+        virtual std::string programName() { return "// CPseudoMaterial_Rim"; }
         virtual std::string surfaceShaderSrc();
     };
 

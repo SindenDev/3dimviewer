@@ -24,6 +24,7 @@
         <file alias="show_xz_slice3.png">resources/show_xz_slice3.png</file>
         <file alias="show_yz_slice3.png">resources/show_yz_slice3.png</file>
         <file alias="delete.png">resources/delete.png</file>
+        <file alias="information.png">resources/information.png</file>
         <file alias="density_window.png">resources/density_window.png</file>
         <file alias="ortho_slices_window.png">resources/ortho_slices_window.png</file>
         <file alias="segmentation_window.png">resources/segmentation_window.png</file>
@@ -47,5 +48,12 @@
         <file>resources/fullscreen.png</file>
         <file>resources/regions.png</file>
         <file>resources/autoseg.png</file>
+        <file>resources/autosegicon.png</file>
+        <file>resources/magnifier_menu.png</file>
+        <file>resources/density_window_dock.png</file>
+        <file>resources/ortho_slices_window_dock.png</file>
+        <file>resources/segmentation_window_dock.png</file>
+        <file>resources/volume_rendering_window2_dock.png</file>
+        <file>resources/models_dock.png</file>
     </qresource>
 </RCC>

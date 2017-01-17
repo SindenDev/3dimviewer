@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -49,6 +49,9 @@ public:
     //! Sets the scene up
     void setupScene(data::CDensityData& data, bool bInitLimits = true);
 
+	//! Scales scene
+	virtual void scaleScene(vpl::img::CPoint3i volumeSize, vpl::img::CPoint3d voxelSize);
+
     //! Sets texture and texture coordinates of the reference image
     void setTextureAndCoordinates(osg::Texture2D * texture, float x_min, float x_max, float y_min, float y_max);
 
@@ -58,9 +61,6 @@ public:
     //! Returns current volume of interest.
     const data::SVolumeOfInterest& getLimits() const { return m_Limits; }
 
-    //! Default positioning of the scene
-    void defaultPositioning();
-
     //! Methods called on limit change.
     void updateMinX(int iValue);
     void updateMaxX(int iValue);
@@ -68,9 +68,6 @@ public:
     void updateMaxY(int iValue);
     void updateMinZ(int iValue);
     void updateMaxZ(int iValue);
-
-    //! Updates the geometry.
-    void updateScaleMatrices();
 
 protected:
     //! OpenGL canvas...
@@ -83,16 +80,16 @@ protected:
     osg::ref_ptr<CDraggerEventHandler> p_DraggerEventHandler;
 
     //! Dummy geometry ().
-    osg::ref_ptr<osg::MatrixTransform> p_DummyMatrix;
+	osg::ref_ptr<osg::MatrixTransform> p_DummyMatrix[4];
 
     //! Dummy geometry (semi-transparent cube)
-    osg::ref_ptr<CDummyCubeGeode> p_Dummy;
+    osg::ref_ptr<CDummyCubeGeode> p_Dummy[4];
 
-    //! Reference image scaling.
-    osg::ref_ptr<osg::MatrixTransform> p_SliceMatrix;
-
-    //! Reference image.
-    osg::ref_ptr<CSliceGeode> p_Slice;
+	//! Slices
+	osg::ref_ptr<osg::MatrixTransform> m_lines;
+	osg::ref_ptr<osg::MatrixTransform> m_transformedSliceScale;
+	osg::ref_ptr<osg::MatrixTransform> m_transformedSlice;
+	osg::ref_ptr<CSliceGeode> m_transformedSliceGeode;
 
     //! Pointers to each draggable limiter.
     osg::ref_ptr<CDraggableSlice> p_Limit[6];
@@ -102,6 +99,9 @@ protected:
 
     //! Real volume size.
     double m_dSizeX, m_dSizeY, m_dSizeZ;
+
+	//! Updates dummy geometry so that it fits current limits
+	virtual void updateDummyGeometry();
 
 protected:
     //! Constructor
@@ -120,6 +120,8 @@ public:
 
     //! Virtual destructor.
 	virtual ~CLimiterXY();
+	virtual void scaleScene(vpl::img::CPoint3i volumeSize, vpl::img::CPoint3d voxelSize);
+	virtual void updateDummyGeometry();
 };
 
 
@@ -134,6 +136,8 @@ public:
 
     //! Virtual destructor.
 	virtual ~CLimiterXZ();
+	virtual void scaleScene(vpl::img::CPoint3i volumeSize, vpl::img::CPoint3d voxelSize);
+	virtual void updateDummyGeometry();
 };
 
 
@@ -148,6 +152,8 @@ public:
 
     //! Virtual destructor.
 	virtual ~CLimiterYZ();
+	virtual void scaleScene(vpl::img::CPoint3i volumeSize, vpl::img::CPoint3d voxelSize);
+	virtual void updateDummyGeometry();
 };
 
 

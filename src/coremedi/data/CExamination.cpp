@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,8 +23,11 @@
 ///////////////////////////////////////////////////////////////////////////////
 // include files
 
+//should have define either TRIDIM_VIEWER or TRAUMATECH or something else
+#include <mainwindow.h>
+
 #include <data/CExamination.h>
-#include <app/Signals.h>
+#include <coremedi/app/Signals.h>
 
 #include "AppConfigure.h"
 
@@ -51,6 +54,9 @@
 #include <data/CRegionData.h>
 #include <data/CRegionColoring.h>
 #include <data/CVolumeTransformation.h>
+#include "data/CVolumeOfInterestData.h"
+
+
 
 #include <VPL/Base/Logging.h>
 #include <VPL/Image/VolumeFunctions.h>
@@ -66,6 +72,8 @@
 #undef min
 #undef max
 #include <limits>
+
+
 
 namespace data
 {
@@ -114,7 +122,25 @@ CExamination::CExamination() : CStorageInterface(APP_STORAGE)
     VPL_SIGNAL(SigSetRegionColor).connect(this, &CExamination::setRegionColor);
     VPL_SIGNAL(SigGetRegionColor).connect(this, &CExamination::getRegionColor);
 
-    CExamination::init();
+	CExamination::init();
+
+	{
+		data::CObjectPtr<data::COrthoSliceXY> spSliceXY(APP_STORAGE.getEntry(data::Storage::SliceXY::Id));
+		data::CSlicePropertyHandle<data::COrthoSliceXY, data::CRegionData, data::CRegionData::tVoxel> slicePropertyHandle_RegionMask;
+        spSliceXY->addProperty(slicePropertyHandle_RegionMask, "RegionMask", data::Storage::RegionData::Id, data::Storage::SliceXY::Id, data::CSlice::PROPERTY_CHANGED, new data::CValidSourceFunctor);
+	}
+
+	{
+		data::CObjectPtr<data::COrthoSliceXZ> spSliceXZ(APP_STORAGE.getEntry(data::Storage::SliceXZ::Id));
+		data::CSlicePropertyHandle<data::COrthoSliceXZ, data::CRegionData, data::CRegionData::tVoxel> slicePropertyHandle_RegionMask;
+        spSliceXZ->addProperty(slicePropertyHandle_RegionMask, "RegionMask", data::Storage::RegionData::Id, data::Storage::SliceXZ::Id, data::CSlice::PROPERTY_CHANGED, new data::CValidSourceFunctor);
+	}
+
+	{
+		data::CObjectPtr<data::COrthoSliceYZ> spSliceYZ(APP_STORAGE.getEntry(data::Storage::SliceYZ::Id));
+		data::CSlicePropertyHandle<data::COrthoSliceYZ, data::CRegionData, data::CRegionData::tVoxel> slicePropertyHandle_RegionMask;
+        spSliceYZ->addProperty(slicePropertyHandle_RegionMask, "RegionMask", data::Storage::RegionData::Id, data::Storage::SliceYZ::Id, data::CSlice::PROPERTY_CHANGED, new data::CValidSourceFunctor);
+	}
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -122,6 +148,14 @@ CExamination::CExamination() : CStorageInterface(APP_STORAGE)
 
 CExamination::~CExamination()
 {
+	data::CObjectPtr<data::COrthoSliceXY> spSliceXY(APP_STORAGE.getEntry(data::Storage::SliceXY::Id));
+	spSliceXY->disconnectProperties();
+
+	data::CObjectPtr<data::COrthoSliceXZ> spSliceXZ(APP_STORAGE.getEntry(data::Storage::SliceXZ::Id));
+	spSliceXZ->disconnectProperties();
+
+	data::CObjectPtr<data::COrthoSliceYZ> spSliceYZ(APP_STORAGE.getEntry(data::Storage::SliceYZ::Id));
+	spSliceYZ->disconnectProperties();
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -131,6 +165,7 @@ void CExamination::init()
 {
     using namespace Storage;
 
+	STORABLE_FACTORY.registerObject(RTGDensityWindow::Id, RTGDensityWindow::Type::create);
     STORABLE_FACTORY.registerObject(DensityWindow::Id, DensityWindow::Type::create);
 
     STORABLE_FACTORY.registerObject(ActiveDataSet::Id,
@@ -139,7 +174,7 @@ void CExamination::init()
                                     );
 
     CEntryDeps SliceDeps;
-    SliceDeps.insert(ActiveDataSet::Id).insert(DensityWindow::Id);
+	SliceDeps.insert(RTGDensityWindow::Id).insert(ActiveDataSet::Id).insert(DensityWindow::Id);
     SliceDeps.insert(RegionData::Id).insert(RegionColoring::Id);
 
     STORABLE_FACTORY.registerObject(SliceXY::Id, SliceXY::Type::create, SliceDeps);
@@ -182,14 +217,18 @@ void CExamination::init()
     STORABLE_FACTORY.registerObject(VolumeTransformation::Id, VolumeTransformation::Type::create, CEntryDeps());
 
     // Application settings
-    STORABLE_FACTORY.registerObject(AppSettings::Id, AppSettings::Type::create );
+    STORABLE_FACTORY.registerObject(AppSettings::Id, AppSettings::Type::create);
 
     // Saved entries
-    STORABLE_FACTORY.registerObject( SavedEntries::Id, SavedEntries::Type::create );
+    STORABLE_FACTORY.registerObject(SavedEntries::Id, SavedEntries::Type::create);
+
+	STORABLE_FACTORY.registerObject(VolumeOfInterestData::Id, VolumeOfInterestData::Type::create, CEntryDeps().insert(PatientData::Id));
+
 
     // Enforce object creation to initialize reverse dependencies
     APP_STORAGE.getEntry(AppSettings::Id);
 
+	APP_STORAGE.getEntry(RTGDensityWindow::Id);
     APP_STORAGE.getEntry(DensityWindow::Id);
     APP_STORAGE.getEntry(ActiveDataSet::Id);
 
@@ -208,8 +247,8 @@ void CExamination::init()
     APP_STORAGE.getEntry(AuxConv::Id);
     APP_STORAGE.getEntry(AuxVOI::Id);
 
-    APP_STORAGE.getEntry(RegionData::Id);
-    APP_STORAGE.getEntry(RegionColoring::Id);
+	APP_STORAGE.getEntry(RegionData::Id);
+	APP_STORAGE.getEntry(RegionColoring::Id);
 
     APP_STORAGE.getEntry(SceneManipulatorDummy::Id);
     APP_STORAGE.getEntry(DrawingOptions::Id);
@@ -222,6 +261,8 @@ void CExamination::init()
     APP_STORAGE.getEntry(UndoManager::Id);
 
     APP_STORAGE.getEntry(SavedEntries::Id);
+
+	APP_STORAGE.getEntry(VolumeOfInterestData::Id);
 
     // init volume undo
     {
@@ -237,10 +278,10 @@ void CExamination::init()
 ///////////////////////////////////////////////////////////////////////////////
 //
 
-const SDensityWindow &CExamination::getDensityWindow()
+const SDensityWindow &CExamination::getDensityWindow(int id)
 {
     // Get pointer to the density window
-    CObjectPtr<CDensityWindow> spWindow(APP_STORAGE.getEntry(Storage::DensityWindow::Id));
+    CObjectPtr<CDensityWindow> spWindow(APP_STORAGE.getEntry(id));
     return spWindow->getParams();
 }
 
@@ -295,10 +336,10 @@ SDensityWindow CExamination::estimateDensityWindow()
 ///////////////////////////////////////////////////////////////////////////////
 //
 
-void CExamination::setDensityWindow(int Center, int Width)
+void CExamination::setDensityWindow(int Center, int Width, int id)
 {
     // Get pointer to the density window
-    CObjectPtr<CDensityWindow> spWindow(APP_STORAGE.getEntry(Storage::DensityWindow::Id, Storage::NO_UPDATE));
+    CObjectPtr<CDensityWindow> spWindow(APP_STORAGE.getEntry(id, Storage::NO_UPDATE));
 
     if (spWindow->getCenter() == Center && spWindow->getWidth() == Width)
     {
@@ -770,14 +811,14 @@ struct SCompareImagePosition
 // - inverse projection to the orthogonal volume
 // - added support for multi-frame dicom files
 
-CExamination::ELoadState CExamination::loadDicomData( data::CSerieInfo * serie,
-                                  data::sExtendedTags& tags,
-                                  vpl::mod::CProgress::tProgressFunc & Progress,
-                                  EDataSet Id,
-                                  ESubsamplingType subsamplingType,
-                                  vpl::img::CVector3d subsampling,
-                                  bool bCompatibilityMode
-                                  )
+CExamination::ELoadState CExamination::loadDicomData(data::CSerieInfo * serie,
+    data::sExtendedTags& tags,
+    vpl::mod::CProgress::tProgressFunc & Progress,
+    EDataSet Id,
+    ESubsamplingType subsamplingType,
+    vpl::img::CVector3d subsampling,
+    bool bCompatibilityMode
+    )
 {
     if (Id == CUSTOM_DATA)
     {
@@ -854,7 +895,7 @@ CExamination::ELoadState CExamination::loadDicomData( data::CSerieInfo * serie,
 
             // Verify the image orientation
             if ((vpl::img::CVector3D::dotProduct(XAxis, pSlice->m_ImageOrientationX) < 0.999999) || (vpl::img::CVector3D::dotProduct(YAxis, pSlice->m_ImageOrientationY) < 0.999999))
-            //if (!(XAxis == pSlice->m_ImageOrientationX) || !(YAxis == pSlice->m_ImageOrientationY))
+                //if (!(XAxis == pSlice->m_ImageOrientationX) || !(YAxis == pSlice->m_ImageOrientationY))
             {
                 ++failures;
                 VPL_LOG_INFO("Warning: Differently oriented slice was found");
@@ -889,6 +930,50 @@ CExamination::ELoadState CExamination::loadDicomData( data::CSerieInfo * serie,
         return ELS_FAILED;
     }
 
+	//Correct slice position
+    if (slices.size() > 1)
+    {
+        double difference = vpl::math::getAbs(slices[0]->getPosition() - slices[1]->getPosition());
+        int difSliceNum = slices[0]->m_iSliceNumber - slices[1]->m_iSliceNumber;
+        //Slice position is not valid.
+        //Sometimes slices have the same values in tag Image Position (Patient), in this case  
+        //it's neccessary co compute real slice position from spacing between slices.
+        //Possibly dangerous, if slices are not correctly sorted
+        if (difference == 0.0)
+        {
+            //calculate image position from spacing between slices
+            double dX = slices[1]->getDX();
+            double f1, f2, f3;
+            f1 = f2 = f3 = 0;
+
+            vpl::img::CPoint3D zero_point(0, 0, 0);
+            vpl::img::CVector3D normal_image;
+
+            for (unsigned int i = 0; i < slices.size(); ++i)
+            {
+                f3 += dX;
+                std::vector<double> tmp;
+                tmp.push_back(f1);
+                tmp.push_back(f2);                
+                if (difSliceNum!=0)
+                    tmp.push_back(slices.at(i)->m_iSliceNumber * dX);
+                else
+                    tmp.push_back(f3);
+                
+
+                //set image position 
+                slices.at(i)->m_ImagePosition = vpl::img::CPoint3D(f1, f2, tmp[2]);
+
+                // slice position calculation
+                //Z-axis
+                normal_image.vectorProduct(slices.at(i)->m_ImageOrientationX, slices.at(i)->m_ImageOrientationY);
+                normal_image.normalize();
+
+                vpl::img::CVector3D position_vector(zero_point, slices.at(i)->m_ImagePosition);
+                slices.at(i)->setPosition(normal_image.dotProduct(normal_image, position_vector));
+            }
+        }
+    }
 
     // RANK SLICES ACCORDING TO THEIR POSITION
 

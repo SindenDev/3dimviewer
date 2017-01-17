@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -42,6 +42,14 @@
 namespace data
 {
 
+class CValidSourceFunctor
+{
+public:
+    CValidSourceFunctor() { }
+    ~CValidSourceFunctor() { }
+    virtual bool operator()() { return true; }
+};
+
 class CCSlicePropertyUpdateProvider
 {
 public:
@@ -51,25 +59,31 @@ public:
     ~CCSlicePropertyUpdateProvider()
     { }
 };
-    
+
 class CSliceBaseProperty
 {
 protected:
     std::string m_name;
     int m_propertySourceStorageId;
     int m_sliceStorageId;
+    int m_sliceInvalidationFlags;
     bool m_validData;
+    CValidSourceFunctor *m_validSourceFunctor;
 
 public:
-    CSliceBaseProperty(std::string name, int propertySourceStorageId, int sliceStorageId)
+    CSliceBaseProperty(std::string name, int propertySourceStorageId, int sliceStorageId, int sliceInvalidationFlags, CValidSourceFunctor *validSourceFunctor)
         : m_name(name)
         , m_propertySourceStorageId(propertySourceStorageId)
         , m_sliceStorageId(sliceStorageId)
+        , m_sliceInvalidationFlags(sliceInvalidationFlags)
         , m_validData(false)
+        , m_validSourceFunctor(validSourceFunctor)
     { }
 
     ~CSliceBaseProperty()
-    { }
+    {
+        delete m_validSourceFunctor;
+    }
 
     std::string name() const
     {
@@ -86,6 +100,16 @@ public:
         return m_sliceStorageId;
     }
 
+    int sliceInvalidationFlags() const
+    {
+        return m_sliceInvalidationFlags;
+    }
+
+    bool hasValidSource() const
+    {
+        return (*m_validSourceFunctor)();
+    }
+
     bool hasValidData() const
     {
         return m_validData;
@@ -93,7 +117,7 @@ public:
 
     virtual bool update(CCSlicePropertyUpdateProvider *updater) = 0;
 };
-    
+
 template <class StorageType, class ValueType>
 class CSlicePropertyLeanHandle
 {
@@ -165,8 +189,8 @@ private:
     typedef ValueType tValueType;
 
 public:
-    CSliceLeanProperty(std::string name, int propertySourceStorageId, int sliceStorageId)
-        : CSliceBaseProperty(name, propertySourceStorageId, sliceStorageId)
+    CSliceLeanProperty(std::string name, int propertySourceStorageId, int sliceStorageId, int sliceInvalidationFlags, CValidSourceFunctor *validSourceFunctor)
+        : CSliceBaseProperty(name, propertySourceStorageId, sliceStorageId, sliceInvalidationFlags, validSourceFunctor)
     { }
 
     ~CSliceLeanProperty()
@@ -177,8 +201,8 @@ template <class UpdateProvider, class StorageType, class ValueType>
 class CSliceProperty : public CSliceLeanProperty<StorageType, ValueType>
 {
 public:
-    CSliceProperty(std::string name, int propertySourceStorageId, int sliceStorageId)
-        : CSliceLeanProperty<StorageType, ValueType>(name, propertySourceStorageId, sliceStorageId)
+    CSliceProperty(std::string name, int propertySourceStorageId, int sliceStorageId, int sliceInvalidationFlags, CValidSourceFunctor *validSourceFunctor)
+        : CSliceLeanProperty<StorageType, ValueType>(name, propertySourceStorageId, sliceStorageId, sliceInvalidationFlags, validSourceFunctor)
     { }
 
     ~CSliceProperty()
@@ -186,8 +210,12 @@ public:
 
     virtual bool update(CCSlicePropertyUpdateProvider *updater)
     {
-        CObjectPtr<StorageType> spStorageObject(APP_STORAGE.getEntry(this->m_propertySourceStorageId));
-        this->m_validData = static_cast<UpdateProvider *>(updater)->updateProperty(spStorageObject.get(), this);
+        this->m_validData = false;
+        if (this->hasValidSource())
+        {
+            CObjectPtr<StorageType> spStorageObject(APP_STORAGE.getEntry(this->m_propertySourceStorageId));
+            this->m_validData = static_cast<UpdateProvider *>(updater)->updateProperty(spStorageObject.get(), this);
+        }
         return this->m_validData;
     }
 };
@@ -210,7 +238,7 @@ public:
     { }
 
     template <class UpdateProvider, class StorageType, class ValueType>
-    bool add(CSlicePropertyHandle<UpdateProvider, StorageType, ValueType> &handle, std::string name, int propertySourceStorageId, int sliceStorageId)
+    bool add(CSlicePropertyHandle<UpdateProvider, StorageType, ValueType> &handle, std::string name, int propertySourceStorageId, int sliceStorageId, int sliceInvalidationFlags, CValidSourceFunctor *validSourceFunctor)
     {
         for (std::map<int, CSliceBaseProperty *>::iterator it = m_properties.begin(); it != m_properties.end(); ++it)
         {
@@ -220,7 +248,7 @@ public:
             }
         }
 
-        CSliceBaseProperty *property = new CSliceProperty<UpdateProvider, StorageType, ValueType>(name, propertySourceStorageId, sliceStorageId);
+        CSliceBaseProperty *property = new CSliceProperty<UpdateProvider, StorageType, ValueType>(name, propertySourceStorageId, sliceStorageId, sliceInvalidationFlags, validSourceFunctor);
         m_properties[m_newId] = property;
         handle.setId(m_newId);
         handle.setName(name);
@@ -339,6 +367,13 @@ public:
     //! - Declares type tSmartPtr.
     VPL_SHAREDPTR(CSlice);
 
+	//! Helper flag passed to the invalidate() method.
+    enum 
+	{ 
+		PROPERTY_CHANGED = 1 << 1,
+		MODE_CHANGED = 1 << 3 
+	};
+
 public:
     //! Default constructor.
     CSlice();
@@ -347,9 +382,9 @@ public:
     virtual ~CSlice();
 
     template <class UpdateProvider, class StorageType, class ValueType>
-    bool addProperty(CSlicePropertyHandle<UpdateProvider, StorageType, ValueType> &handle, std::string name, int propertySourceStorageId, int sliceStorageId)
+    bool addProperty(CSlicePropertyHandle<UpdateProvider, StorageType, ValueType> &handle, std::string name, int propertySourceStorageId, int sliceStorageId, int sliceInvalidationFlags, CValidSourceFunctor *validSourceFunctor)
     {
-        bool retVal = m_properties.add(handle, name, propertySourceStorageId, sliceStorageId);
+        bool retVal = m_properties.add(handle, name, propertySourceStorageId, sliceStorageId, sliceInvalidationFlags, validSourceFunctor);
         if (retVal)
         {
             m_signalConnections[name] = APP_STORAGE.getEntrySignal(propertySourceStorageId).connect(this, &CSlice::onPropertySourceChanged);
@@ -418,6 +453,12 @@ public:
     //! Disconnect properties
     void disconnectProperties();
 
+    //! Get density data
+    const vpl::img::CDImage &getDensityData() const {return m_DensityData;}
+
+    //! Returns density value if inside, or -1000 if outside
+    double getDensity(int x, int y) const;
+
 protected:
     //! Density data.
     vpl::img::CDImage m_DensityData;
@@ -439,6 +480,8 @@ protected:
     //! Texture coordinates.
     float m_fTextureWidth, m_fTextureHeight;
 
+	vpl::tSize m_minX, m_minY, m_maxX, m_maxY;
+
 protected:
     //! Initializes all texture properties.
     void setupTexture();
@@ -451,7 +494,7 @@ protected:
     void updateTexture(bool bRecreateImage);
 
     //! Regenerates the internal RGB image from density and region data.
-    bool updateRGBData(bool bSizeChanged);
+    bool updateRGBData(bool bSizeChanged, int densityWindowId);
 
     //! Regenerates the internal RGB image from density data only.
     //! - Linear contrast enhancement algorithm.

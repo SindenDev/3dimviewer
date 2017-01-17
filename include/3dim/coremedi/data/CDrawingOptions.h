@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -49,7 +49,8 @@ public:
         DRAW_POINT   = 1,   // Return one point on mouse down, draw marker
         DRAW_LINE    = 2,   // Get two points ( mouse down -> mouse up, draw interactive gizmo )
         DRAW_STROKE  = 3,   // Draw stroke ( mouse down -> mouse up ), return as a points array
-        DRAW_LASO    = 4    // Draw stroke and one line is moving to the end position
+        DRAW_LASO    = 4,   // Draw stroke and one line is moving to the end position
+        DRAW_ARROW   = 5    // Should be similar to draw line but shows as arrow
     };
 
     //! Handler type - describes scene and handling type 

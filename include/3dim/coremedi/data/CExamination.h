@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -82,7 +82,7 @@ public:
 
     //! Returns current density window.
     //! - Method can be called directly, or using appropriate signal.
-    virtual const SDensityWindow &getDensityWindow();
+    virtual const SDensityWindow &getDensityWindow(int id);
 
     //! Calculates optimal density window regarding the active density data.
     //! - Linear contrast enhancement method.
@@ -91,7 +91,7 @@ public:
 
     //! Called upon to change the density window.
     //! - Method can be called directly, or using appropriate signal.
-    virtual void setDensityWindow(int Center, int Width);
+    virtual void setDensityWindow(int Center, int Width, int id);
 
     //! Called upon to change the coloring of density data.
     //! - Method can be called directly, or using appropriate signal.

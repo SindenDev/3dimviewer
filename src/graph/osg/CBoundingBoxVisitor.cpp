@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,9 +27,8 @@ using namespace osg;
 
 
 CBoundingBoxVisitor::CBoundingBoxVisitor() 
-	: NodeVisitor( NodeVisitor::TRAVERSE_ALL_CHILDREN ) 
+	: m_bSkipCameraNode(true)
 {
-	m_transformMatrix.makeIdentity();
 }
 
             
@@ -38,76 +37,10 @@ CBoundingBoxVisitor::~CBoundingBoxVisitor()
 }
 
 
-void CBoundingBoxVisitor::apply( osg::Geode &geode )
+
+void osg::CBoundingBoxVisitor::apply(osg::Camera &camera)
 {
-    osg::BoundingBox drawableBBox, bbox;
-//	osg::Drawable *drawable;
-
-    // update bounding box for each drawable
-	for(  unsigned int i = 0; i < geode.getNumDrawables(); ++i )
-	{
-//		drawable = geode.getDrawable( i );
-
-		// expand the overall bounding box
-        drawableBBox = OSGGETBOUND(geode.getDrawable( i ));
-        if (drawableBBox.valid())
-        {
-		    bbox.expandBy(drawableBBox);
-        }
-    }
-
-	// transform corners by current matrix
-	
-    if (bbox.valid())
-    {
-	    osg::BoundingBox bboxTrans;
-
-	    for( unsigned int i = 0; i < 8; ++i ) 
-	    {
-		    osg::Vec3 xvec = bbox.corner( i ) * m_transformMatrix;
-		    bboxTrans.expandBy( xvec );
-	    }
-
-	    // update the overall bounding box size
-	    m_boundingBox.expandBy( bboxTrans );
-    }
-
-    // continue traversing through the graph
-	traverse( geode );
-
-} // ::apply(osg::Geode &geode)
-
-        
-void CBoundingBoxVisitor::apply( osg::MatrixTransform &node )
-{
-    osg::Matrix tmpMatrix = m_transformMatrix;
-	m_transformMatrix = node.getMatrix() * m_transformMatrix;
-	
-	// continue traversing through the graph
-	traverse( node );
-
-    // restore matrix
-    m_transformMatrix = tmpMatrix;
-} // ::apply(osg::MatrixTransform &node)
-
-
-void CBoundingBoxVisitor::apply( osg::Billboard &node ){
-	
-	// important to handle billboard so that its size will
-	// not affect the geode size continue traversing the graph
-	
-	traverse( node );
-} // ::apply(osg::MatrixTransform &node)
-
-   
-// Get computed bounding box
-osg::BoundingBox &CBoundingBoxVisitor::getBoundBox() { return m_boundingBox; }  
-
-// reset visitor
-void CBoundingBoxVisitor::reset()
-{
-	NodeVisitor::reset();
-	m_boundingBox.init();
-	m_transformMatrix.makeIdentity();
+    if (!m_bSkipCameraNode)
+        traverse(camera);
 }
-
+   

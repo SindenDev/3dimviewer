@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,19 +23,17 @@
 #ifndef CDicom_H
 #define CDicom_H
 
+//VPL
 #include <VPL/Base/Object.h>
 #include <VPL/Base/SharedPtr.h>
+
+//for sExtendedTags and exceptions
+#include <data/CDicomLoader.h>
 
 // STL
 #include <vector>
 #include <string>
-
-
-///////////////////////////////////////////////////////////////////////////////
-// Forward declarations
-
-class DcmFileFormat;
-
+#include <VPL/System/String.h>
 
 namespace data
 {
@@ -72,54 +70,69 @@ public:
     //! Destructor.
     virtual ~CDicom();
 
-    //! Loads file by name.
-    bool loadFile( const std::string & file );
-
     //! Returns true if the dicom file was loaded succesfully.
-    bool ok() { return m_bOk; }
+    bool ok() const  { return m_bOk; }
 
     //! Returns the original filename.
-    const std::string& getFileName();
-
-
-    //! Returns patient name, or an empty string on failure.
-    std::string getPatientName();
-
-    //! Returns the study id string, or an empty string on failure.
-    std::string getStudyId();
-
-    //! Returns the serie id string, or an empty string on failure.
-    std::string getSerieId();
-
-    //! Returns the bits allocated tag value
-    int getBitsAllocated();
-
-    //! Returns the first slice number found in the DICOM file,
-    int getSliceId();
-
-    //! Returns all the slice numbers found in the DICOM file.
-    void getSliceIds(tDicomNumList& Numbers);
-
-
-    //! Resets the patient name.
-    bool setPatientName( const std::string & name );
-
-    //! Removes all sensitive data and substitutes given string for the patient name.
-    bool anonymize( const std::string & name );
-
-    //! Serializes dicom into a buffer.
-    long saveToBuffer( char * buffer, long length );
-
-    //! Compresses data with losslessJpeg
-    bool compressLosslessJPEG();
+    const std::string& getFileName() const { return m_sFileName; }
 
     //! Returns size of a specified file.
-    static long getFileSize( const std::string & file );
+    static long getFileSize(const std::string & file);
+
+    //! Loads file by name.
+    virtual bool loadFile(const std::string & file) = 0;
+
+    //! Returns patient name, or an empty string on failure.
+    virtual std::string getPatientName() = 0;
+
+    //! Returns the study id string, or an empty string on failure.
+    virtual std::string getStudyId() = 0;
+
+    //! Returns the serie id string, or an empty string on failure.
+    virtual std::string getSerieId() = 0;
+
+    //! Returns number of frames (for multiframe dicoms)
+    virtual int	getNumberOfFrames() = 0;
+
+    //! Returns the bits allocated tag value
+    virtual int getBitsAllocated() = 0;
+
+    //! Returns the first slice number found in the DICOM file,
+    virtual int getSliceId() = 0;
+
+    //! Returns all the slice numbers found in the DICOM file.
+    virtual void getSliceIds(tDicomNumList& Numbers) = 0;
+
+    //! Resets the patient name.
+    virtual bool setPatientName(const std::string & name) = 0;
+
+    //! Removes all sensitive data and substitutes given string for the patient name.
+    virtual bool anonymize(const std::string & name) = 0;
+
+    //! Serializes dicom into a buffer.
+    virtual long saveToBuffer(char * buffer, long length) = 0;
+
+    //! Compresses data with losslessJpeg
+    virtual bool compressLosslessJPEG() = 0;    
+   
+    //! Loads a single frame (i.e. slice) from a given dicom file.
+    virtual bool loadDicom(const vpl::sys::tString &dir,
+                        const std::string &filename,
+                        vpl::img::CDicomSlice &slice,
+                        sExtendedTags& tags,
+                        bool bLoadImageData = true) = 0;
+
+    //! Loads all frames/slices from a given dicom file.
+    //! - Returns the number of successfully read images.
+    virtual int loadDicom(const vpl::sys::tString &dir,
+                        const std::string &filename,
+                        tDicomSlices &slices,
+                        sExtendedTags& tags,
+                        bool bLoadImageData = true,
+                        bool bIgnoreBitsStoredTag = false) = 0;
 
 protected:
-    //! Pointer to the DCMTk main handle
-    DcmFileFormat *m_pHandle;
-
+    
     //! True if file was succesfully loaded.
     bool m_bOk;
 
@@ -135,11 +148,7 @@ protected:
 protected:
     //! Converts the slice position to a slice identifier.
     int convPos2Id( double a, double b, double c );
-
-    //! Computes hash of a null terminated string.
-    std::string	hash( const char * input );
 };
-
 
 } // namespace data
 

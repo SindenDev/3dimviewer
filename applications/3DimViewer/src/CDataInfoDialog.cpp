@@ -1,10 +1,10 @@
-///////////////////////////////////////////////////////////////////////////////
+﻿///////////////////////////////////////////////////////////////////////////////
 // $Id$
 //
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2013 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,90 +28,141 @@
 #include <QSettings>
 #include <QDateTime>
 #include <QDebug>
-
+#include <QClipboard>
 #include <data/CDensityData.h>
 #include <data/CModelManager.h>
 #include <data/CImageLoaderInfo.h>
 #include <data/CVolumeTransformation.h>
+#include <data/CRegionData.h>
+#include <data/CRegionColoring.h>
+
+
 
 ///////////////////////////////////////////////////////////////////////////////
 // DICOM tags dump
+
+#if defined (TRIDIM_USE_GDCM)
+//GDCM
+#include <gdcmReader.h>
+#include <gdcmStringFilter.h>
+
+bool dumpFileGDCM(CDataInfoDialog *pDialog, const char *ifname)
+{
+    // Read file
+    gdcm::Reader reader;
+    reader.SetFileName(ifname);
+    if (!reader.Read())
+    {
+        QString message = "Failed to read file ";
+        message += ifname;
+        QMessageBox::critical(pDialog, QApplication::applicationName(), message);
+        return false;
+    }
+
+    //String filter used to get tag values as strings
+    gdcm::StringFilter stringFilter;
+    stringFilter.SetFile(reader.GetFile());
+
+    //Get all data elements from dataset
+    const std::set<gdcm::DataElement> &dataElementSet = reader.GetFile().GetDataSet().GetDES();
+
+    foreach(gdcm::DataElement el, dataElementSet)
+    {
+        //Convert to string pair: first = parameter, second = value
+        std::pair<std::string, std::string> pair = stringFilter.ToStringPair(el);
+
+        //if empty or undifined do not add
+        if (!pair.first.empty() && !pair.second.empty() && pair.first != "?" && pair.second != "?")
+        {
+            pDialog->AddRow(QString::fromStdString(pair.first), QString::fromStdString(pair.second));
+
+        }
+    }
+
+    //Return true if we managed to get any data elements
+    return dataElementSet.size() > 0;
+}
+
+
+#else
 
 #include "dcmtk/config/osconfig.h"    /* make sure OS specific configuration is included first */
 #define HAVE_STD_STRING
 #include "dcmtk/ofstd/ofstring.h"
 #include <dcmtk/dcmdata/dcfilefo.h>
 
-bool dumpFile(
-	CDataInfoDialog *pDialog,
-	const char *ifname,
-	const E_FileReadMode readMode,
-	const E_TransferSyntax xfer,
-	const size_t printFlags,
-	const OFBool loadIntoMemory,
-	const OFBool stopOnErrors,
-	const OFBool convertToUTF8)
+//ORIGIINAL
+bool dumpFileDCTk(
+    CDataInfoDialog *pDialog,
+    const char *ifname,
+    const E_FileReadMode readMode,
+    const E_TransferSyntax xfer,
+    const size_t printFlags,
+    const OFBool loadIntoMemory,
+    const OFBool stopOnErrors,
+    const OFBool convertToUTF8)
 {
 #define COUT qDebug()
-	if (NULL==ifname || 0==ifname[0])
-		return false;
+    if (NULL == ifname || 0 == ifname[0])
+        return false;
 
-	DcmFileFormat dfile;
-	DcmObject *dset = &dfile;
-	if (readMode == ERM_dataset) 
-		dset = dfile.getDataset();
-	const OFCmdUnsignedInt maxReadLength = 4096; // default is 4 KB
-	OFCondition cond = dfile.loadFile(ifname, xfer, EGL_noChange, maxReadLength, readMode);
-	if (cond.bad())
-	{
-		qDebug() << "error invalid filename";
-		return false;
-	}
+    DcmFileFormat dfile;
+    DcmObject *dset = &dfile;
+    if (readMode == ERM_dataset)
+        dset = dfile.getDataset();
+    const OFCmdUnsignedInt maxReadLength = 4096; // default is 4 KB
+    OFCondition cond = dfile.loadFile(ifname, xfer, EGL_noChange, maxReadLength, readMode);
+    if (cond.bad())
+    {
+        qDebug() << "error invalid filename";
+        return false;
+    }
 
-	if (loadIntoMemory) 
-		dfile.loadAllDataIntoMemory();
+    if (loadIntoMemory)
+        dfile.loadAllDataIntoMemory();
 
 #ifdef WITH_LIBICONV
-	if (convertToUTF8)
-	{
-		qDebug() << "converting all element values that are affected by Specific Character Set (0008,0005) to UTF-8";
-		cond = dfile.convertToUTF8();
-		if (cond.bad())
-		{
-			qDebug() << "error converting file to UTF-8";
-			if (stopOnErrors) 
-				return false;
-		}
-	}
+    if (convertToUTF8)
+    {
+        qDebug() << "converting all element values that are affected by Specific Character Set (0008,0005) to UTF-8";
+        cond = dfile.convertToUTF8();
+        if (cond.bad())
+        {
+            qDebug() << "error converting file to UTF-8";
+            if (stopOnErrors) 
+                return false;
+        }
+}
 #endif
 
-	size_t pixelCounter = 0;
-	const char *pixelFileName = NULL;
-	OFString pixelFilenameStr;
+    size_t pixelCounter = 0;
+    const char *pixelFileName = NULL;
+    OFString pixelFilenameStr;
 
-	// dump file content 
-	std::stringstream out;
-	dset->print(out,printFlags, 0 /*level*/, pixelFileName, &pixelCounter);
-	QStringList sl = (QString::fromStdString(out.str())).split('\n');
-	foreach(QString str,sl)
-	{
-		if (!str.isEmpty())
-		{
-			QStringList entrySplit = str.split('#');
-			if (entrySplit.size()>1)
-			{
-				if (2==entrySplit.size())
-					pDialog->AddRow(entrySplit[1],entrySplit[0],QColor(QColor::Invalid),Qt::AlignLeft);
-				else
-					pDialog->AddRow(entrySplit[entrySplit.size()-1],str.left(str.length()-entrySplit[entrySplit.size()-1].length()-1),QColor(QColor::Invalid),Qt::AlignLeft);
-			}
-			else
-				pDialog->AddRow("",str,QColor(QColor::Invalid),Qt::AlignLeft);
-		}
-	}
-	return sl.size()>0;
+    // dump file content 
+    std::stringstream out;
+    dset->print(out, printFlags, 0 /*level*/, pixelFileName, &pixelCounter);
+    QStringList sl = (QString::fromStdString(out.str())).split('\n');
+    foreach(QString str, sl)
+    {
+        if (!str.isEmpty())
+        {
+            QStringList entrySplit = str.split('#');
+            if (entrySplit.size()>1)
+            {
+                if (2 == entrySplit.size())
+                    pDialog->AddRow(entrySplit[1], entrySplit[0], QColor(QColor::Invalid), Qt::AlignLeft);
+                else
+                    pDialog->AddRow(entrySplit[entrySplit.size() - 1], str.left(str.length() - entrySplit[entrySplit.size() - 1].length() - 1), QColor(QColor::Invalid), Qt::AlignLeft);
+            }
+            else
+                pDialog->AddRow("", str, QColor(QColor::Invalid), Qt::AlignLeft);
+        }
+    }
+    return sl.size()>0;
 }
 
+#endif
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -158,6 +209,8 @@ CDataInfoDialog::CDataInfoDialog(QWidget *parent) :
 {
     ui->setupUi(this);
 
+    ui->tableWidget->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(ui->tableWidget, SIGNAL(customContextMenuRequested(const QPoint &)), this, SLOT(tableContextMenu(const QPoint &)));
     {
         data::CObjectPtr<data::CDensityData> spVolume( APP_STORAGE.getEntry(data::Storage::PatientData::Id) );
 
@@ -236,6 +289,49 @@ CDataInfoDialog::CDataInfoDialog(QWidget *parent) :
 			AddRow(tr("Components"),QString::number(pMesh->componentCount()));
 			if (!pMesh->isClosed())
 				AddRow(tr("Closed"),tr("No"));
+            if (!spModel->getTransformationMatrix().isIdentity())
+            {
+                osg::Matrix mx = spModel->getTransformationMatrix();
+                for (int i = 0; i<4; i++)
+                    AddRow(i == 0 ? (tr("Matrix")) : "", QString("%1 %2 %3 %4").arg(mx(i, 0), 0, 'f', 3).arg(mx(i, 1), 0, 'f', 3).arg(mx(i, 2), 0, 'f', 3).arg(mx(i, 3), 0, 'f', 3));
+            }
+		}
+	}
+
+	// info on region data
+	{
+		data::CObjectPtr<data::CRegionColoring> spColoring( APP_STORAGE.getEntry(data::Storage::RegionColoring::Id) );
+		data::CObjectPtr< data::CRegionData > rVolume( APP_STORAGE.getEntry( data::Storage::RegionData::Id ) );
+		data::CObjectPtr<data::CDensityData> spVolume( APP_STORAGE.getEntry(data::Storage::PatientData::Id) );
+		const int xSize = rVolume->getXSize();
+		const int ySize = rVolume->getYSize();
+		const int zSize = rVolume->getZSize();
+		const double voxelSize = spVolume->getDX() * spVolume->getDY() * spVolume->getDZ();
+		const int nRegions = spColoring->getNumOfRegions();
+		std::map<int,int> rInfo;
+		for(int i = 0; i < nRegions; i++)
+			rInfo[i]=0;
+		for(int z=0; z<zSize; z++)
+		{
+			for(int y=0; y<ySize; y++)
+			{
+				for(int x=0; x<xSize; x++)
+				{
+					auto val = rVolume->at(x,y,z);
+					if (val!=0)
+						rInfo[val]++;
+				}
+			}
+		}
+		for(auto it = rInfo.begin(); it!=rInfo.end(); it++)
+		{
+			if (it->second>0)
+			{
+				auto color = spColoring->getColor( it->first );
+				AddRow(tr("Region %1").arg(it->first),"",QColor(color.getR(),color.getG(),color.getB()));
+				AddRow(tr("Voxels"),QString::number(it->second));
+				AddRow(tr("Volume"), QString::number(it->second * voxelSize, 'f', 2) + QString(" mm%1").arg(QChar(179)));
+			}
 		}
 	}
 
@@ -259,13 +355,24 @@ CDataInfoDialog::CDataInfoDialog(QWidget *parent) :
 #else
                 std::string file = list[0];
 #endif
-				E_FileReadMode readMode = ERM_autoDetect;
-				E_TransferSyntax xfer = EXS_Unknown;
-				size_t printFlags = DCMTypes::PF_shortenLongTagValues;
-				OFBool loadIntoMemory = OFTrue;
-				OFBool stopOnErrors = OFTrue;
-				OFBool convertToUTF8 = OFFalse;
-				dumpFile(this,file.c_str(),readMode,xfer,printFlags,loadIntoMemory,stopOnErrors,convertToUTF8);
+
+
+#if defined(TRIDIM_USE_GDCM)
+
+                dumpFileGDCM(this, file.c_str());
+
+#else
+                E_FileReadMode readMode = ERM_autoDetect;
+                E_TransferSyntax xfer = EXS_Unknown;
+                size_t printFlags = DCMTypes::PF_shortenLongTagValues;
+                OFBool loadIntoMemory = OFTrue;
+                OFBool stopOnErrors = OFTrue;
+                OFBool convertToUTF8 = OFFalse;
+                dumpFileDCTk(this, file.c_str(), readMode, xfer, printFlags, loadIntoMemory, stopOnErrors, convertToUTF8);
+#endif
+				
+
+                
 			}
 		}
 	}
@@ -305,4 +412,27 @@ CDataInfoDialog::~CDataInfoDialog()
     settings.setValue("size",size());
     settings.endGroup();
     delete ui;
+}
+
+void CDataInfoDialog::tableContextMenu(const QPoint &pos)
+{
+    QTableWidget* pTable = qobject_cast<QTableWidget*>(sender());
+    if (NULL != pTable)
+    {
+        QTableWidgetItem *item = pTable->itemAt(pos);
+        if (NULL != item)
+        {
+            QMenu *menu = new QMenu;
+            QAction* copyToClipboard = menu->addAction(tr("Copy"));
+            QAction* res = menu->exec(pTable->viewport()->mapToGlobal(pos));
+            if (NULL != res)
+            {
+                if (res == copyToClipboard)
+                {
+                    QClipboard *clipboard = QApplication::clipboard();
+                    clipboard->setText(item->text());
+                }
+            }
+        }
+    }
 }

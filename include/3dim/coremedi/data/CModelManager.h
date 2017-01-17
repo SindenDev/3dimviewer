@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -55,8 +55,8 @@ DECLARE_OBJECT(ImportedModel, CModel, 805);
 } // namespace Storage
 
 #define MAX_IMPORTED_MODELS 20
-
-#define MAX_MODELS  4 + MAX_IMPORTED_MODELS
+#define OTHER_MODELS 4
+#define MAX_MODELS  OTHER_MODELS + MAX_IMPORTED_MODELS
 
 /******************************************************************************
         CLASS CModelSnapshot
@@ -111,6 +111,9 @@ public:
     void setModel(int id, geometry::CMesh * pMesh);
 
     //! Selects model
+    void removeModel(int id);
+
+    //! Selects model
     void selectModel(int id);
 
     //! Returns ID of selected model
@@ -151,8 +154,26 @@ public:
     //! Restore state from the snapshot
     virtual void restore( CSnapshot * snapshot );
 
-    //! Creates and stores snapshot.
-    void createAndStoreSnapshot();
+    //! Creates and stores snapshot. Optional "child" snapshot
+    void createAndStoreSnapshot(CSnapshot *childSnapshot = NULL);
+
+	//! Update links between models after load
+	static void updateModelLinks();
+
+	//! Just for debugging - write models info
+	static void writeLinks();
+
+	//! Get base model of the given model
+	static std::string getBaseModel(int storage_id);
+
+	//! Does model with this uid exist?
+	static bool modelExists(const std::string &uid);
+
+	//! Get model storage id 
+	static int uidToStorageId(const std::string &uid);
+
+	//! Get model uid from storage id
+	static std::string storageIdToUId(int storage_id);
 
 protected:
     //! Dummy model.

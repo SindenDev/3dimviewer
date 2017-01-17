@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,8 +28,58 @@
 #include <osg/Geometry>
 #include <osg/Array>
 #include <osg/MatrixTransform>
+
+namespace geometry
+{
+    template <typename T>
+    T swizzle(const T &v, const std::string &s)
+    {
+        T o;
+        for (int i = 0; i < s.length(); ++i)
+        {
+            o[i] = v[((s[i] - 'w') + 3) % 4];
+        }
+        return o;
+    }
+}
+
 namespace osg
 {
+    ////////////////////////////////////////////////////////////////////////////////////////////////////
+    //!\brief	Donut geometry. 
+    ////////////////////////////////////////////////////////////////////////////////////////////////////
+    class CDonutGeometry : public osg::Geometry
+    {
+    public:
+        //! Default constructor
+        CDonutGeometry(unsigned int num_of_segments = 16, unsigned int num_of_segments2 = 5);
+
+        //! Modify geometry settings
+        void setSize(float r1, float r2);
+
+        //! Setup geometry, or force updates
+        void update();
+
+    protected:
+        //! Allocate needed data
+        bool allocateArrays(unsigned int num_segments1, unsigned int num_segments2);
+
+    protected:
+        //! Ring radius
+        float m_radius1;
+
+        //! Profile radius
+        float m_radius2;
+
+        //! Number of ring segments
+        unsigned int m_num_segments1;
+        //! Number of profile segments
+        unsigned int m_num_segments2;
+
+        osg::ref_ptr< osg::Vec3Array > m_points;
+        osg::ref_ptr< osg::Vec3Array > m_normals;
+        std::vector<osg::ref_ptr<osg::DrawElementsUInt>> m_drawElements;
+    };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //!\brief	Ring geometry - . 
@@ -249,6 +299,51 @@ protected:
 }; // class CRing3DGeometry
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
+//!\brief	Ring 3 d geometry. 
+////////////////////////////////////////////////////////////////////////////////////////////////////
+class CPill2DGeometry : public osg::Geometry
+{
+public:
+    //! Default constructor
+    CPill2DGeometry(unsigned int num_of_segments = 8);
+
+    //! Modify geometry settings
+    void setSize(float length, float radius, float width);
+
+    //! Setup geometry, or force updates
+    void update();
+
+protected:
+    //! Allocate needed data
+    bool allocateArrays(unsigned int num_segments);
+
+protected:
+    //! Length
+    float m_length;
+
+    //! Radius
+    float m_radius;
+
+    //! Width
+    float m_width;
+
+    //! Number of segments
+    unsigned int m_segments;
+
+    //! Ring geometry points
+    osg::ref_ptr<osg::Vec3Array> m_points;
+
+    //! Normals
+    osg::ref_ptr<osg::Vec3Array> m_normals;
+
+    //! Draw elements bindings
+    osg::ref_ptr<osg::DrawElementsUInt> m_de_cap1, m_de_cap2, m_de_per;
+
+    //! Geometry
+    osg::ref_ptr<osg::Geometry> m_geometry;
+}; // class CPill2DGeometry
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
 //!\brief	Sphere geometry. 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 class CSphereGeometry : public osg::Geometry
@@ -287,6 +382,79 @@ protected:
 	unsigned int m_num_segments;
 
 }; // class CSphereGeometry
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+//!\brief	Sphere geometry. 
+////////////////////////////////////////////////////////////////////////////////////////////////////
+class CSemiCircularArrowGeometry : public osg::Geometry
+{
+public:
+    //! Default constructor
+    CSemiCircularArrowGeometry(unsigned int num_of_segments = 16);
+
+    //! Modify geometry settings
+    void setRadius(float radius)
+    {
+        m_radius = radius;
+    }
+
+    //! Sets angular length of circular part of arrow (in degrees)
+    void setAngularLength(float angularLength)
+    {
+        m_angularLength = angularLength;
+    }
+
+    void setAngularOffset(float angularOffset)
+    {
+        m_angularOffset = angularOffset;
+    }
+
+    //! Sets width of arrow
+    void setWidth(float width)
+    {
+        m_width = width;
+    }
+
+    //! Sets angular length of arrow part itself (in degrees)
+    void setArrowLength(float arrowLength)
+    {
+        m_arrowLength = arrowLength;
+    }
+
+    //! Setup geometry, or force updates
+    void update();
+
+protected:
+    //! Allocate needed data
+    bool allocateArrays(unsigned int num_segments);
+
+protected:
+    //! Sphere radius
+    float m_radius;
+    float m_angularLength;
+    float m_angularOffset;
+    float m_width;
+    float m_arrowLength;
+
+    //! Geometry offset
+    osg::Vec3 m_offset;
+
+    //! Ring geometry points
+    osg::ref_ptr<osg::Vec3Array> m_points;
+
+    //! Normals
+    osg::ref_ptr<osg::Vec3Array> m_normals;
+
+    //! Colors
+    osg::ref_ptr<osg::Vec4Array> m_colors;
+
+    //! Draw elements bindings
+    osg::ref_ptr<osg::DrawElementsUInt> m_drawElements;
+
+    //! Number of segments
+    unsigned int m_num_segments;
+
+}; // class CSemiCircularArrowGeometry
 
 }
 

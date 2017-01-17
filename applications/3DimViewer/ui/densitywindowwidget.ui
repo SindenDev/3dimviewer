@@ -17,10 +17,19 @@
    </size>
   </property>
   <property name="windowTitle">
-   <string>Density Window</string>
+   <string>Brightness / Contrast</string>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout_2">
-   <property name="margin">
+   <property name="leftMargin">
+    <number>0</number>
+   </property>
+   <property name="topMargin">
+    <number>0</number>
+   </property>
+   <property name="rightMargin">
+    <number>0</number>
+   </property>
+   <property name="bottomMargin">
     <number>0</number>
    </property>
    <item>
@@ -50,10 +59,10 @@
           <item row="2" column="2">
            <widget class="QSpinBox" name="densityWindowWidth">
             <property name="toolTip">
-             <string>Adjusts width of density window.</string>
+             <string>Adjusts width of brightness and contrast window.</string>
             </property>
             <property name="statusTip">
-             <string>Adjusts width of density window.</string>
+             <string>Adjusts width of brightness and contrast window.</string>
             </property>
             <property name="maximum">
              <number>8500</number>
@@ -66,10 +75,10 @@
           <item row="1" column="2">
            <widget class="QSpinBox" name="densityWindowCenter">
             <property name="toolTip">
-             <string>Adjusts center of density window.</string>
+             <string>Adjusts center of brightness and contrast window.</string>
             </property>
             <property name="statusTip">
-             <string>Adjusts center of density window.</string>
+             <string>Adjusts center of brightness and contrast window.</string>
             </property>
             <property name="minimum">
              <number>-1500</number>
@@ -143,10 +152,10 @@
           <item>
            <widget class="QPushButton" name="pushButton">
             <property name="toolTip">
-             <string>Selects default setting of density window.</string>
+             <string>Selects default setting of brightness and contrast.</string>
             </property>
             <property name="statusTip">
-             <string>Selects default setting of density window.</string>
+             <string>Selects default setting of brightness and contrast.</string>
             </property>
             <property name="text">
              <string>Default</string>
@@ -156,10 +165,10 @@
           <item>
            <widget class="QPushButton" name="pushButton_2">
             <property name="toolTip">
-             <string>Analyzes data and selects optimal setting of density window.</string>
+             <string>Analyzes data and selects optimal setting of brightness and contrast.</string>
             </property>
             <property name="statusTip">
-             <string>Analyzes data and selects optimal setting of density window.</string>
+             <string>Analyzes data and selects optimal setting of brightness and contrast.</string>
             </property>
             <property name="text">
              <string>Find Optimal</string>
@@ -169,10 +178,10 @@
           <item>
            <widget class="QPushButton" name="pushButton_3">
             <property name="toolTip">
-             <string>Selects setting of density window optimal for showing bones.</string>
+             <string>Selects setting of brightness and contrast optimal for showing bones.</string>
             </property>
             <property name="statusTip">
-             <string>Selects setting of density window optimal for showing bones.</string>
+             <string>Selects setting of brightness and contrast optimal for showing bones.</string>
             </property>
             <property name="text">
              <string>Show Bones</string>

@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -202,6 +202,9 @@ scene::CSceneOrientationWidget::CSceneOrientationWidget(OSGCanvas *pCanvas,
 
     // Get colors from the storage
     data::CObjectPtr< data::CSceneWidgetParameters > ptrOptions( APP_STORAGE.getEntry(data::Storage::SceneWidgetsParameters::Id) );
+    double scaleFactor = ptrOptions->getWidgetsScale();
+    sx *= scaleFactor;
+    sy *= scaleFactor;
 
     // Rotation matrix transform
     m_transform = new osg::MatrixTransform( osg::Matrix::identity() );
@@ -251,6 +254,7 @@ void scene::CSceneOrientationWidget::createScene(void)
 
     // Get colors from the storage
     data::CObjectPtr< data::CSceneWidgetParameters > ptrCOptions( APP_STORAGE.getEntry(data::Storage::SceneWidgetsParameters::Id) );
+    double scaleFactor = ptrCOptions->getWidgetsScale();
 
     // Axes of the coordinate system
 #ifndef USE_BODY
@@ -275,7 +279,8 @@ void scene::CSceneOrientationWidget::createScene(void)
     osg::Vec4 shadowColor = ptrOptions->GetDropperFontShadowColor();
     std::string fontName = ptrOptions->GetDropperFontName();
 //    unsigned int fontSize = ptrOptions->GetDropperFontSize();
-    unsigned int fontSize = 24;
+    
+    unsigned int fontSize = 24 * scaleFactor;
     ptrOptions.release();
 
     // Assistant model
@@ -541,11 +546,13 @@ scene::CRulerWidget::CRulerWidget( OSGCanvas * pCanvas, int sx, int sy, const os
 
     // Get colors from the storage
     data::CObjectPtr< data::CSceneWidgetParameters > ptrOptions( APP_STORAGE.getEntry(data::Storage::SceneWidgetsParameters::Id) );
+    double scaleFactor = ptrOptions->getWidgetsScale();
+    m_rulerWidth *= scaleFactor;
  
 	// Create scale label 
 	m_labelScale = new osgWidget::Label();
 	m_labelScale->setFont( DEFAULT_FONT_NAME );
-	m_labelScale->setFontSize( 16.0 );
+	m_labelScale->setFontSize( 16.0 * scaleFactor );
 	m_labelScale->setFontColor( m_usedColor );
 	m_labelScale->setColor( osgWidget::Color( 0.0, 0.0, 0.0, 0.0 ) );
 	m_labelScale->setLabel("[mm]");
@@ -854,10 +861,14 @@ void scene::CRulerWidget::updateLabel()
 
 osgWidget::Label * scene::CSceneInfoWidget::createLabel( const std::string & text, const osg::Vec4 & color	)
 {
+   // correctly resize 
+	data::CObjectPtr< data::CSceneWidgetParameters > ptrOptions( APP_STORAGE.getEntry(data::Storage::SceneWidgetsParameters::Id) );
+	double scaleFactor = ptrOptions->getWidgetsScale();
+
 	// create and init label
 	osgWidget::Label * label = new osgWidget::Label();
     label->setFont( DEFAULT_FONT_NAME );
-    label->setFontSize( 14 );
+    label->setFontSize( 14 * scaleFactor );
     label->setFontColor( color );
     label->setColor( osgWidget::Color( 0.0, 0.0, 0.0, 0.0 ) );
     label->setLabel( text );

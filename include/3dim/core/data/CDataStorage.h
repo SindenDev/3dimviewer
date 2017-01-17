@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -60,14 +60,14 @@ namespace Storage
 VPL_DECLARE_EXCEPTION(CUnknowEntry, "Failed to recognize a storage entry")
 
 //! Maximal allowed value of an entry identifier.
-enum { MAX_ID = 2048 };
+enum { MAX_ID = 2500 };
 
 //! This flags can be passed to the invalidate() method.
 enum EInvalidateFlags
 {
     //! Flag used to enforce update() of all dependent entries during
     //! the invalidation of an entry.
-    FORCE_UPDATE            = 1 << 1,
+    FORCE_UPDATE            = 1 << 22,
 
     //! Flag used to notify entries that data storage is beeing reset.
     STORAGE_RESET           = 1 << 23
@@ -146,6 +146,14 @@ public:
     //! - Bottom-up implementation (the root item is proccesed last).
     template <class T>
     inline CPtrWrapper<CStorageEntry> findEntry(const CChangedEntries& Changes, int Flags = Storage::UPDATE);
+
+    //! Finds a storage entry containing data of a specified type
+    //! that is present in a given list of changed entries.
+    //! - Throws exception on failure.
+    //! - Uses RTTI and dynamic_cast<> operator.
+    //! - Bottom-up implementation (the root item is proccesed last).
+    template <class T>
+    inline int findEntryId(const CChangedEntries& Changes);
 
     //! Finds a storage entry containing object of a specified type
     //! that is present in a given list of changed entries.

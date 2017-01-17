@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,6 +22,9 @@
 
 #include <data/CUndoManager.h>
 #include <data/CDataStorage.h>
+#include <coremedi/app/Signals.h>
+
+//#include <osg/dbout.h>
 
 /******************************************************************************
 	CLASS CUndoManager
@@ -30,8 +33,7 @@
 ///////////////////////////////////////////////////////////////////////////////
 // Constructor
 data::CUndoManager::CUndoManager(  )
-    : m_currentSize( 0 )
-    , m_maxSize( 50000000 )
+    : m_maxSize( 150*1024*1024 )
     , m_timeCounter( 0 )
 {
     // Connect to the signals
@@ -65,34 +67,40 @@ void data::CUndoManager::insert(data::CSnapshot *item)
 	// Clear redo queue
 	clearRedo();
 
-	// compute ocuppied space
-	long newSize = item->getCompleteSize() + m_currentSize;
+	// compute occuppied space
+	long long newSize = item->getCompleteSize() + calcMemorySize();
 
 	// Make place
 	while(newSize > m_maxSize && (! m_undoQueue.empty() ) )
 	{
+//		DBOUT("Creating place. Max: " << m_maxSize << ", current: " << calcMemorySize() << ", wanted: " << newSize);
 		// remove and delete object from the front of the queue
 		data::CSnapshot * obj( m_undoQueue.front() );
-		newSize -= obj->getCompleteSize();
-
-		delete obj;
+		long long objSize = obj->getCompleteSize();
+		newSize -= objSize;
 		m_undoQueue.pop_front();
+		delete obj;
+		newSize = item->getCompleteSize() + calcMemorySize();
 	}
 
-   if( newSize > m_maxSize )
-   {
-      // Queue is empty but still not enough size
-      m_sigUndoChanged.invoke();
-      return;
-   }
+	// when saving an undo record, m_maxSize should be respected, but one large record can be up to 10*m_maxSize
+	if( newSize > m_maxSize * 10)
+	{
+		VPL_LOG_INFO("Undo limit exceeded too much above limit. Wanted size: " << newSize << ", enlarged limit: " << (10*m_maxSize));
+		// Queue is empty but still not enough size
+		m_sigUndoChanged.invoke();
+		return;
+	}
+//	DBOUT("Undo update " << newSize << "/" << m_maxSize);
 
 	// Set timestamp
-	item->setTime( getTime() );
+	item->setTime( getTime() );		//is not timestamp it's index
 
 	// insert item
 	m_undoQueue.push_back( item );
-	m_currentSize = newSize;
     m_sigUndoChanged.invoke();
+
+//	DBOUT("Current size:  " << calcMemorySize());
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -102,10 +110,7 @@ void data::CUndoManager::clearUndo()
 	tUndoItemsQueue::iterator i;
 
 	for( i = m_undoQueue.begin(); i != m_undoQueue.end(); ++i )
-	{
-		m_currentSize -= (*i)->getDataSize();
 		delete *i;
-	}
 
 	m_undoQueue.clear();
 }
@@ -117,10 +122,7 @@ void data::CUndoManager::clearRedo()
 	tUndoItemsQueue::iterator i;
 
 	for( i = m_redoQueue.begin(); i != m_redoQueue.end(); ++i )
-	{
-		m_currentSize -= (*i)->getDataSize();
 		delete *i;
-	}
 
 	m_redoQueue.clear();
 }
@@ -132,7 +134,6 @@ void data::CUndoManager::clearAll()
 {
     clearUndo();
     clearRedo();
-    m_currentSize = 0;
 }
 
 void data::CUndoManager::clear()
@@ -167,6 +168,8 @@ void data::CUndoManager::undo( int type )
 		m_undoQueue.erase( (++i).base() );
 	}
     m_sigUndoChanged.invoke();
+
+//	DBOUT("Current size:  " << calcMemorySize());
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -190,6 +193,8 @@ void data::CUndoManager::redo()
 	m_redoQueue.pop_front();
 
     m_sigUndoChanged.invoke();
+
+//	DBOUT("Current size:  " << calcMemorySize());
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -245,5 +250,19 @@ data::CSnapshot * data::CUndoManager::processSnapshot(CSnapshot *snapshot)
    }
 
    return s;
+}
+
+long long data::CUndoManager::calcMemorySize() const
+{
+	long long size(0);
+	tUndoItemsQueue::const_iterator it(m_undoQueue.begin()), itEnd(m_undoQueue.end());
+	for (; it != itEnd; ++it)
+		size += (*it)->getCompleteSize();
+
+	it = m_redoQueue.begin(); itEnd = m_redoQueue.end();
+	for (; it != itEnd; ++it)
+		size += (*it)->getCompleteSize();
+
+	return size;
 }
 

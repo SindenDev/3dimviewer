@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -36,6 +36,7 @@ scene::CWidgetOverlayNode::CWidgetOverlayNode(OSGCanvas * pCanvas)
     : m_viewer( pCanvas->getView() )
     , m_canvas( pCanvas )
 {
+    setName("CWidgetOverlayNode");
     m_viewer->addSlave(this, false);
 
     // Set projection matrix
@@ -46,6 +47,9 @@ scene::CWidgetOverlayNode::CWidgetOverlayNode(OSGCanvas * pCanvas)
 
     // Draw subgraph after main camera view
     this->setRenderOrder( osg::Camera::POST_RENDER );
+#if (QT_VERSION >= QT_VERSION_CHECK(5, 0, 0))
+    this->setFinalDrawCallback(new UnBindFboPostDrawCallback);
+#endif
 
     // Only clear the depth buffer
     this->setClearMask( GL_DEPTH_BUFFER_BIT );

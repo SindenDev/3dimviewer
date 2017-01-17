@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,6 +29,10 @@
 #include <QSettings>
 #include <QSpinBox>
 #include <QMessageBox>
+#include <QDate>
+#include <QDebug>
+#include <QMouseEvent>
+#include <QTextCodec>
 
 CSeriesSelectionDialog::CSeriesSelectionDialog(QWidget *parent, Qt::WindowFlags f) :
     QDialog(parent, f),
@@ -49,6 +53,13 @@ CSeriesSelectionDialog::CSeriesSelectionDialog(QWidget *parent, Qt::WindowFlags 
 
 	ui->tableWidget->setColumnWidth(1,std::max(128,(this->width()-180)/2));
 	ui->tableWidget->setFocus();
+	ui->tableWidget->setMouseTracking(true);
+	ui->tableWidget->viewport()->setMouseTracking(true);
+
+	ui->tableWidget->installEventFilter(this);
+	ui->tableWidget->viewport()->installEventFilter(this);
+
+	m_preview = new CSeriesSelectionDialogPreview(this, Qt::WindowTitleHint | Qt::WindowSystemMenuHint | Qt::WindowMaximizeButtonHint | Qt::WindowCloseButtonHint);
 }
 
 CSeriesSelectionDialog::~CSeriesSelectionDialog()
@@ -57,7 +68,41 @@ CSeriesSelectionDialog::~CSeriesSelectionDialog()
     settings.beginGroup("SeriesSelectionWindow");
     settings.setValue("size",size());
     settings.endGroup();
+	m_preview->close();
+	QApplication::restoreOverrideCursor();
     delete ui;
+}
+
+bool CSeriesSelectionDialog::eventFilter(QObject *obj, QEvent *event)
+{
+	if (obj == ui->tableWidget->viewport())
+	{
+		if (event->type() == QEvent::MouseMove)
+		{
+			QApplication::restoreOverrideCursor();
+
+			QMouseEvent *me = static_cast<QMouseEvent *>(event);
+
+			if (NULL == me)
+			{
+				return QObject::eventFilter(obj, event);;
+			}
+
+			QTableWidgetItem* item = ui->tableWidget->itemAt(me->x(), me->y());
+
+			if (NULL != item && item->data(Qt::UserRole).isValid())
+			{
+				m_Selection = item->data(Qt::UserRole).toInt();
+
+				if (m_Selection >= 0)
+				{
+					QApplication::setOverrideCursor(QCursor(QPixmap(":/icons/resources/magnifier_menu.png")));
+				}
+			}
+		}
+	}
+
+	return QObject::eventFilter(obj, event);
 }
 
 void CSeriesSelectionDialog::addInfoRow(const QString &info, bool bStudyID)
@@ -90,7 +135,8 @@ struct sEntry
 	QString info;
 	QString infoEx;
 	QString infoSize;
-	QPixmap preview;	
+	QPixmap preview;
+	QString date;
 };
 
 bool CSeriesSelectionDialog::setSeries(data::CSeries *pSeries)
@@ -99,6 +145,15 @@ bool CSeriesSelectionDialog::setSeries(data::CSeries *pSeries)
         return false;
 
     m_spSeries=pSeries;		
+
+    //use Unicode encoding, some values can be encoded in Unicode, e.g. german patient name
+#if defined(__APPLE__) &&  !defined(_LIBCPP_VERSION)
+    //Deleted in Qt 5.6
+    //TODO use define based on Qt version
+    QTextCodec::setCodecForTr(QTextCodec::codecForName("Unicode"));
+    QTextCodec::setCodecForCStrings(QTextCodec::codecForName("Unicode"));
+#endif
+    QTextCodec::setCodecForLocale(QTextCodec::codecForName("Unicode"));
 
 	// key is patient name
 	QMap<QString, QList<sEntry> > seriesData;
@@ -134,7 +189,7 @@ bool CSeriesSelectionDialog::setSeries(data::CSeries *pSeries)
 				seriesEntry.studyID = studyDate + " - " + seriesEntry.studyID;
 		}
 
-		QString patient = QString::fromStdString(Slice.m_sPatientName);
+        QString patient = QString::fromStdString(Slice.m_sPatientName);
 		// format patient name
         patient.replace("^"," ");
         int idxGroup = patient.indexOf('=');
@@ -143,11 +198,10 @@ bool CSeriesSelectionDialog::setSeries(data::CSeries *pSeries)
 		QString patientID = QString::fromStdString(Slice.m_sPatientId);
 		if (!patientID.isEmpty())
 			patient += " - " + patientID;
-
         {   // column 0
 
             // Gaussian filter
-            vpl::img::CGaussFilter<vpl::img::CDImage> Filter(7);
+            vpl::img::CGaussFilter<vpl::img::CDImage> Filter((vpl::tSize)7);
             vpl::img::CDImage Filtered(Slice);
             Slice.mirrorMargin();
             Filter(Slice, Filtered);
@@ -177,7 +231,7 @@ bool CSeriesSelectionDialog::setSeries(data::CSeries *pSeries)
 			seriesEntry.id  = i;
         }
         {   // column 1
-            QString patientName=QString::fromUtf8(Slice.m_sPatientName.c_str());
+            QString patientName=QString::fromUtf8(Slice.m_sPatientName.c_str());           
             if( !Slice.m_sPatientPosition.empty() )
             {
                 patientName+=", "+QString::fromUtf8(Slice.m_sPatientPosition.c_str());
@@ -191,6 +245,9 @@ bool CSeriesSelectionDialog::setSeries(data::CSeries *pSeries)
 			seriesDate = CDataInfoDialog::formatDicomDateAndTime(seriesDate,seriesTime);
 			if (seriesDate.isEmpty())
 				seriesDate = CDataInfoDialog::formatDicomDateAndTime(QString::fromUtf8(Slice.m_sStudyDate.c_str()),"");
+
+			seriesEntry.date = QString::fromUtf8(Slice.m_sStudyDate.c_str());
+
 			seriesDate += "\n";
             if( !Slice.m_sModality.empty() )
             {
@@ -244,7 +301,7 @@ bool CSeriesSelectionDialog::setSeries(data::CSeries *pSeries)
     }
 
 	// map is always sorted, sort also contained lists
-	{
+	/*{
 		QMap< QString, QList<sEntry> >::iterator it(seriesData.begin());
 		while(it!=seriesData.end())
 		{			
@@ -253,6 +310,24 @@ bool CSeriesSelectionDialog::setSeries(data::CSeries *pSeries)
 				int val = e1.studyID.compare(e2.studyID,Qt::CaseInsensitive);
 				if (0==val)
 					val = e1.seriesID.compare(e2.seriesID,Qt::CaseInsensitive);
+				return val;
+			});
+			it++;
+		}
+	}*/
+
+	// map is always sorted, sort also contained lists (by date)
+	{
+		QMap< QString, QList<sEntry> >::iterator it(seriesData.begin());
+		while (it != seriesData.end())
+		{
+			qSort(it.value().begin(), it.value().end(), [](const sEntry& e1, const sEntry& e2)->bool
+			{
+				QDate date1 = QDate::fromString(e1.date, "yyyyMMdd");
+				QDate date2 = QDate::fromString(e2.date, "yyyyMMdd");
+				bool val = date1.operator>(date2);
+				//if (0 == val)
+				//	val = e1.seriesID.compare(e2.seriesID, Qt::CaseInsensitive);
 				return val;
 			});
 			it++;
@@ -360,6 +435,8 @@ void CSeriesSelectionDialog::on_spinSubsampling_valueChanged(double value)
 
 void CSeriesSelectionDialog::on_tableWidget_cellDoubleClicked(int row, int column)
 {
+	QApplication::restoreOverrideCursor();
+
     QTableWidgetItem* item=ui->tableWidget->item(row,0);
     if (NULL!=item)
     {
@@ -369,3 +446,154 @@ void CSeriesSelectionDialog::on_tableWidget_cellDoubleClicked(int row, int colum
     }
 }
 
+void CSeriesSelectionDialog::on_tableWidget_cellClicked(int row, int column)
+{
+	if (column == 0)
+	{
+		QTableWidgetItem* item = ui->tableWidget->item(row, 0);
+
+		if (NULL != item && item->data(Qt::UserRole).isValid())
+		{
+			m_Selection = item->data(Qt::UserRole).toInt();
+
+			if (m_Selection >= 0)
+			{
+				showPreview();
+			}
+		}
+	}
+}
+
+void CSeriesSelectionDialog::showPreview()
+{
+	QApplication::restoreOverrideCursor();
+
+	// Get pointer to the series
+	data::CSerieInfo::tSmartPtr spInfo = m_spSeries->getSerie(m_Selection);
+	if (!spInfo.get())
+	{
+		return;
+	}
+
+	QApplication::setOverrideCursor(QCursor(Qt::WaitCursor));
+
+	spInfo->sortFilenamesByNumber();
+
+	m_preview->setSerie(spInfo);
+	m_preview->show();
+	m_preview->raise();
+
+	QApplication::restoreOverrideCursor();
+}
+
+CSeriesSelectionDialogPreview::CSeriesSelectionDialogPreview(QWidget *parent, Qt::WindowFlags f)
+	: QDialog(parent, f)
+	, m_dirty(true)
+{
+	m_slicePreview = new QLabel();
+	m_slider = new QSlider();
+
+	setMinimumSize(500, 500);
+	setWindowTitle(tr("Preview"));
+	setSizeGripEnabled(true);
+	QGridLayout* pLayout = new QGridLayout();
+	setLayout(pLayout);
+
+	m_slider->setOrientation(Qt::Vertical);
+	m_slider->setMinimum(0);
+	m_slider->setMaximum(0);
+
+	//QSpacerItem *item = new QSpacerItem(1, 1, QSizePolicy::Expanding, QSizePolicy::Fixed);
+
+	pLayout->addWidget(m_slicePreview, 0, 0);
+	pLayout->addWidget(m_slider, 0, 1);
+	//pLayout->setAlignment(Qt::AlignCenter);
+	//pLayout->addItem(item, 0, 2);
+
+	QObject::connect(m_slider, SIGNAL(valueChanged(int)), this, SLOT(sliceChanged(int)));
+}
+
+void CSeriesSelectionDialogPreview::setSerie(data::CSerieInfo::tSmartPtr serie)
+{
+	m_serie = serie;
+
+	m_dirty = false;
+
+	int slicesCnt = m_serie->getNumOfDicomFiles();
+	m_slider->setMaximum(slicesCnt - 1);
+
+	if (slicesCnt <= 1)
+	{
+		m_slider->setEnabled(false);
+		sliceChanged(0);
+	}
+	else
+	{
+		m_slider->setEnabled(true);
+		m_slider->setValue(slicesCnt / 2);
+		sliceChanged(slicesCnt / 2);
+	}
+}
+
+void CSeriesSelectionDialogPreview::sliceChanged(int val)
+{
+	if (m_dirty)
+		return;
+
+	// Load dicom file
+	vpl::img::CDicomSlice Slice;
+	{
+		data::sExtendedTags tags;
+		if (!m_serie->loadDicomFile(val, Slice, tags))
+		{
+			return;
+		}
+	}
+
+	// Size scaling
+	double xSize = Slice.getXSize();
+	double ySize = Slice.getYSize();
+
+	m_rSlice = xSize / ySize;
+
+	// Use default density window
+	data::CDensityWindow DensityWindow(data::DEFAULT_DENSITY_WINDOW);
+
+	m_bitmap = new QImage(xSize, ySize, QImage::Format_RGB32);
+	for (int y = 0; y < ySize; ++y)
+	{
+		for (int x = 0; x < xSize; ++x)
+		{
+			data::CColor4b Color = DensityWindow.getColorSafe(Slice.at(x, y));
+			if (Color.getR() == 255)
+			{
+				Color.getR() -= 1;
+			}
+			m_bitmap->setPixel(x, y, qRgb(Color.getR(), Color.getG(), Color.getB()));
+		}
+	}
+	
+	resizeImage();
+}
+
+void CSeriesSelectionDialogPreview::resizeImage()
+{
+	if (NULL == m_bitmap)
+		return;
+
+	double rWidget = (double)m_slicePreview->width() / m_slicePreview->height();
+
+	QPixmap pm(QPixmap::fromImage((rWidget > m_rSlice) ? m_bitmap->scaledToHeight(m_slicePreview->height(), Qt::SmoothTransformation) : m_bitmap->scaledToWidth(m_slicePreview->width(), Qt::SmoothTransformation)));
+
+	m_slicePreview->setPixmap(pm);
+}
+
+void CSeriesSelectionDialogPreview::resizeEvent(QResizeEvent *e)
+{
+	if (m_dirty)
+		return;
+
+	QDialog::resizeEvent(e);
+
+	resizeImage();
+}

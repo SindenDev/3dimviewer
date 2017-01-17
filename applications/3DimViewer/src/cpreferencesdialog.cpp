@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,16 +27,24 @@
 #include <QSettings>
 #include <QColorDialog>
 #include <QStyleFactory>
+#include <QShortcut>
 #include <C3DimApplication.h>
+#include <qtcompat.h>
+#include <QFileDialog>
+#include <mainwindow.h>
 
-CPreferencesDialog::CPreferencesDialog(const QDir &localeDir, QMenuBar* pMenuBar, QWidget *parent, Qt::WindowFlags f) :
-    QDialog(parent, f),
+CPreferencesDialog::CPreferencesDialog(const QDir &localeDir, QMenuBar* pMenuBar, CEventFilter &eventFilter, QWidget *parent, Qt::WindowFlags f) :
+    m_eventFilter(eventFilter),
+	QDialog(parent, f),
     ui(new Ui::CPreferencesDialog)
 {
     m_bColorsChanged = false;
     m_bChangesNeedRestart = false;
 	m_bChangedShortcuts = false;
     ui->setupUi(this);
+    //ui->comboBoxRenderingMode->setVisible(false);
+    //ui->labelRenderingMode->setVisible(false);
+
     // get current language
     QSettings settings;
     QString lngFile=settings.value("Language","").toString();
@@ -64,6 +72,9 @@ CPreferencesDialog::CPreferencesDialog(const QDir &localeDir, QMenuBar* pMenuBar
     // error logging
     bool bLoggingEnabled = settings.value("LoggingEnabled", QVariant(true)).toBool();
     ui->checkBoxLogging->setChecked(bLoggingEnabled);
+    // DICOM port
+    int nDicomPort = settings.value("DicomPort", DEFAULT_DICOM_PORT).toInt();
+    ui->spinBoxDicomPort->setValue(nDicomPort);
 	// Models linked to regions
 	bool bModelsLinkEnabled = settings.value("ModelRegionLinkEnabled", QVariant(DEFAULT_MODEL_REGION_LINK)).toBool();
 	ui->checkBoxLinkModels->setChecked(bModelsLinkEnabled);
@@ -79,6 +90,11 @@ CPreferencesDialog::CPreferencesDialog(const QDir &localeDir, QMenuBar* pMenuBar
     ui->radioButtonPathLastUsed->setChecked(savePathMode==0);
     ui->radioButtonPathProject->setChecked(savePathMode==1);
 
+	// name of saved files
+	int savedFilesNameMode = settings.value("SavedFilesNameMode", DEFAULT_SAVED_FILES_NAME_MODE).toInt();
+	ui->radioButtonPatientName->setChecked(savedFilesNameMode == 0);
+	ui->radioButtonFolderName->setChecked(savedFilesNameMode == 1);
+
     connect(this,SIGNAL(accepted()),this,SLOT(on_CPreferencesDialog_accepted()));
     QPushButton* resetButton = ui->buttonBox->button(QDialogButtonBox::RestoreDefaults);
     connect(resetButton, SIGNAL(clicked()), this, SLOT(resetDefaultsPressed()));
@@ -88,8 +104,8 @@ CPreferencesDialog::CPreferencesDialog(const QDir &localeDir, QMenuBar* pMenuBar
 
 	// shortcuts
 	ui->treeWidget->header()->setStretchLastSection(false);
-	ui->treeWidget->header()->setResizeMode(0, QHeaderView::Stretch);
-	ui->treeWidget->header()->setResizeMode(1, QHeaderView::ResizeToContents);
+	ui->treeWidget->header()->SETRESIZEMODE(0, QHeaderView::Stretch);
+	ui->treeWidget->header()->SETRESIZEMODE(1, QHeaderView::ResizeToContents);
 	ui->treeWidget->header()->setMinimumSectionSize(50);
 	if (NULL!=pMenuBar)
 	{
@@ -112,6 +128,31 @@ CPreferencesDialog::CPreferencesDialog(const QDir &localeDir, QMenuBar* pMenuBar
 
 	int page = settings.value("PreferencesPage",0).toInt();
     ui->listPages->setCurrentRow(page);	
+
+	// event filter stuff
+	ui->eFTypes->setEnabled(false);
+	ui->eFObjects->setEnabled(false);
+
+	connect(ui->eFShowLog, SIGNAL(clicked()), &m_eventFilter, SLOT(showEventFilterLog()));
+
+	connect(ui->eFBrowse, SIGNAL(clicked()), this, SLOT(showFileDialog()));
+	connect(ui->eFEnable, SIGNAL(stateChanged(int)), this, SLOT(showHideFilterOptions(int)));
+
+	ui->eFPath->setReadOnly(true);
+	ui->eFEnable->setChecked(settings.value("logEnabled", false).toBool());
+	ui->eFMouse->setChecked(settings.value("logMouseEnabled", true).toBool());
+	ui->eFKeyboard->setChecked(settings.value("logKeyboardEnabled", true).toBool());
+	ui->eFCustom->setChecked(settings.value("logCustomEnabled", true).toBool());
+
+	setMonitoredObjectsChecked();
+
+#if QT_VERSION < 0x050000
+	QString previousDir = settings.value("logOuputDir", QDesktopServices::storageLocation(QDesktopServices::HomeLocation)).toString();
+#else
+	QString previousDir = settings.value("logOuputDir", QStandardPaths::locate(QStandardPaths::HomeLocation, QString(), QStandardPaths::LocateDirectory)).toString();
+#endif
+
+	ui->eFPath->setText(previousDir);
 }
 
 CPreferencesDialog::~CPreferencesDialog()
@@ -125,6 +166,68 @@ CPreferencesDialog::~CPreferencesDialog()
         settings.endGroup();
     }
     delete ui;
+}
+
+void CPreferencesDialog::showFileDialog()
+{
+	QSettings settings;
+#if QT_VERSION < 0x050000
+	QString previousDir = settings.value("logOuputDir", QDesktopServices::storageLocation(QDesktopServices::HomeLocation)).toString();
+#else
+	QString previousDir = settings.value("logOuputDir", QStandardPaths::locate(QStandardPaths::HomeLocation, QString(), QStandardPaths::LocateDirectory)).toString();
+#endif
+
+	//show file dialog, which allows the user to select a folder
+	QFileDialog *dialog = new QFileDialog();
+	dialog->setFileMode(QFileDialog::Directory);
+	dialog->setOption(QFileDialog::ShowDirsOnly);
+
+	//get path to selected folder
+	QString path = dialog->getExistingDirectory(this, tr("Select Directory"), previousDir);
+
+	//show that path in ui
+	if (!path.isEmpty())
+	{
+		settings.setValue("logOuputDir", path);
+		ui->eFPath->setText(path);
+	}
+
+	delete dialog;
+}
+
+void CPreferencesDialog::showHideFilterOptions(int state)
+{
+    if (state == Qt::Checked)
+    {
+        ui->eFPath->setEnabled(true);
+        ui->eFBrowse->setEnabled(true);
+		ui->eFTypes->setEnabled(true);
+		ui->eFObjects->setEnabled(true);
+    }
+    else
+    {
+		ui->eFPath->setEnabled(false);
+		ui->eFBrowse->setEnabled(false);
+		ui->eFTypes->setEnabled(false);
+		ui->eFObjects->setEnabled(false);
+    }
+}
+
+void CPreferencesDialog::setMonitoredObjectsChecked()
+{
+	QSettings settings;
+	ui->eFMenu->setChecked(settings.value("logMenu", true).toBool());
+	ui->eFPushButtons->setChecked(settings.value("logButtons", true).toBool());
+	ui->eFSpinBoxes->setChecked(settings.value("logSpinBoxes", true).toBool());
+	ui->eFCheckBoxes->setChecked(settings.value("logCheckBoxes", true).toBool());
+	ui->eFRadioButtons->setChecked(settings.value("logRadioButtons", true).toBool());
+	ui->eFTextEdits->setChecked(settings.value("logTextEdits", true).toBool());
+	ui->eFComboBoxes->setChecked(settings.value("logComboBoxes", true).toBool());
+	ui->eFSliders->setChecked(settings.value("logSliders", true).toBool());
+	ui->eFOsgWindows->setChecked(settings.value("logOsgWindows", true).toBool());
+	ui->eFTabBars->setChecked(settings.value("logTabBars", true).toBool());
+	ui->eFLists->setChecked(settings.value("logLists", true).toBool());
+	ui->eFTables->setChecked(settings.value("logTables", true).toBool());
 }
 
 void CPreferencesDialog::pageChange(int index)
@@ -181,6 +284,36 @@ void CPreferencesDialog::on_CPreferencesDialog_accepted()
     if (ui->radioButtonPathProject->isChecked())
         savePathMode=1;
     settings.setValue("SavePathMode",savePathMode);
+
+	int savesFilesNameMode = DEFAULT_SAVED_FILES_NAME_MODE;
+	if (ui->radioButtonPatientName->isChecked())
+		savesFilesNameMode = 0;
+	if (ui->radioButtonFolderName->isChecked())
+		savesFilesNameMode = 1;
+	settings.setValue("SavedFilesNameMode", savesFilesNameMode);
+
+    const int nDicomPort = ui->spinBoxDicomPort->value();
+    if (settings.value("DicomPort").toInt() != nDicomPort)
+		settings.setValue("DicomPort", ui->spinBoxDicomPort->value());
+
+	// save event filter stuff
+	settings.setValue("logEnabled", ui->eFEnable->isChecked());
+	settings.setValue("logMouseEnabled", ui->eFMouse->isChecked());
+	settings.setValue("logKeyboardEnabled", ui->eFKeyboard->isChecked());
+	settings.setValue("logCustomEnabled", ui->eFCustom->isChecked());
+
+	settings.setValue("logMenu", ui->eFMenu->isChecked());
+	settings.setValue("logButtons", ui->eFPushButtons->isChecked());
+	settings.setValue("logSpinBoxes", ui->eFSpinBoxes->isChecked());
+	settings.setValue("logCheckBoxes", ui->eFCheckBoxes->isChecked());
+	settings.setValue("logRadioButtons", ui->eFRadioButtons->isChecked());
+	settings.setValue("logTextEdits", ui->eFTextEdits->isChecked());
+	settings.setValue("logComboBoxes", ui->eFComboBoxes->isChecked());
+	settings.setValue("logSliders", ui->eFSliders->isChecked());
+	settings.setValue("logOsgWindows", ui->eFOsgWindows->isChecked());
+	settings.setValue("logTabBars", ui->eFTabBars->isChecked());
+	settings.setValue("logLists", ui->eFLists->isChecked());
+	settings.setValue("logTables", ui->eFTables->isChecked());
 }
 
 void CPreferencesDialog::setButtonColor(QColor& targetColor, const QColor& sourceColor, QPushButton *targetButton)
@@ -239,6 +372,11 @@ void CPreferencesDialog::resetDefaultsPressed( )
     int savePathMode = DEFAULT_SAVE_PATH_MODE;
     ui->radioButtonPathLastUsed->setChecked(savePathMode==0);
     ui->radioButtonPathProject->setChecked(savePathMode==1);
+
+	int savesFilesNameMode = DEFAULT_SAVED_FILES_NAME_MODE;
+	ui->radioButtonPatientName->setChecked(savesFilesNameMode == 0);
+	ui->radioButtonFolderName->setChecked(savesFilesNameMode == 1);
+
 	// reset keyboard shortcuts
 	QSettings settings;
 	settings.beginGroup("Shortcuts");
@@ -246,6 +384,8 @@ void CPreferencesDialog::resetDefaultsPressed( )
 	m_bChangedShortcuts = false;
 	// reset tree widgets and actions
 	removeCustomShortcuts( ui->treeWidget->invisibleRootItem() );
+	// dicom port
+	ui->spinBoxDicomPort->setValue(DEFAULT_DICOM_PORT);
 }
 
 QTreeWidgetItem* CPreferencesDialog::addTreeRoot(QString name, QString description) 
@@ -290,7 +430,7 @@ QTreeWidgetItem* CPreferencesDialog::addTreeMenu(QMenu* m, QTreeWidgetItem *pare
 {
 	if (NULL==m)
 		return NULL;
-	if (0==m->objectName().compare("menuRecent",Qt::CaseInsensitive)) // ignore "Recent" menu
+    if (0==m->objectName().compare("menuRecent",Qt::CaseInsensitive) || m->objectName().isEmpty()) // ignore "Recent" and "empty" menu
 	{
 	}
 	else
@@ -326,7 +466,13 @@ void CPreferencesDialog::treeItemSelectionChanged()
 		foreach(QTreeWidgetItem *it, selItems)
 		{
 			if (0==it->childCount())
+            {
 				ui->lineEditShortCut->setText(it->text(1));
+                if (shortcutUsedCount(it->text(1))>1 && !it->text(1).isEmpty())
+                    ui->lineEditShortCut->setStyleSheet("color: #ff6060");
+                else
+                    ui->lineEditShortCut->setStyleSheet("");
+            }
 		}
 	}		
 }
@@ -336,6 +482,35 @@ void CPreferencesDialog::on_pushButtonSetShortcut_clicked()
 	QList<QTreeWidgetItem *> selItems = ui->treeWidget->selectedItems();
 	if (!selItems.empty())
 	{
+        QString wsShortcut = ui->lineEditShortCut->text();
+        // clear existing shortcut use
+        if (shortcutUsedCount(wsShortcut, true)>0)
+        {
+            int retval = QMessageBox::question(this,QCoreApplication::applicationName(),tr("Shortcut already used! Do you want to clear existing shortcut?"),QMessageBox::Yes|QMessageBox::No|QMessageBox::Cancel,QMessageBox::Yes);
+            if (QMessageBox::Cancel==retval)
+                return;
+            if (QMessageBox::Yes==retval)
+            {
+                // clear any existing matching shortcut
+                QList<QTreeWidgetItem*> lst = ui->treeWidget->findItems(wsShortcut,Qt::MatchExactly|Qt::MatchRecursive,1);
+                foreach(QTreeWidgetItem* item, lst)
+                {
+                    if (0==item->childCount())
+                    {                
+                        QAction* pAct=(QAction*)item->data(1,Qt::UserRole).value<void*>();
+                        if (NULL!=pAct)
+                        {
+                            m_bChangedShortcuts = true;
+                            QKeySequence ks;
+                            pAct->setShortcut(ks);
+                            pAct->setProperty("Shortcut","Custom");
+                            item->setText(1,ks.toString(QKeySequence::NativeText));
+                        }
+                    }                
+                }
+            }
+        }
+        // set shortcut
 		foreach(QTreeWidgetItem *it, selItems)
 		{
 			if (0==it->childCount())
@@ -344,8 +519,7 @@ void CPreferencesDialog::on_pushButtonSetShortcut_clicked()
 				if (NULL!=pAct)
 				{
 					m_bChangedShortcuts = true;
-
-					QKeySequence ks(ui->lineEditShortCut->text());					
+					QKeySequence ks(wsShortcut);					
 					pAct->setShortcut(ks);
 					pAct->setProperty("Shortcut","Custom");
 					ui->lineEditShortCut->setText(ks.toString(QKeySequence::NativeText));
@@ -353,6 +527,7 @@ void CPreferencesDialog::on_pushButtonSetShortcut_clicked()
 				}
 			}				
 		}
+        treeItemSelectionChanged();
 	}	
 }
 
@@ -378,14 +553,35 @@ void CPreferencesDialog::on_pushButtonClearShortcut_clicked()
 				}
 			}				
 		}
+        treeItemSelectionChanged();
 	}	
 }
 
-bool CPreferencesDialog::shortcutUsed(const QString& shortcut)
+int CPreferencesDialog::shortcutUsedCount(const QString& shortcut, bool bIgnoreSelected)
 {
-	QList<QTreeWidgetItem*> lst = ui->treeWidget->findItems(shortcut,Qt::MatchExactly|Qt::MatchRecursive,1);
-	return !lst.empty();
+    QList<QTreeWidgetItem*> lst = ui->treeWidget->findItems(shortcut,Qt::MatchExactly|Qt::MatchRecursive,1);
+    int cnt = lst.size();
+    if (cnt>0 && bIgnoreSelected)
+    {
+        QList<QTreeWidgetItem *> selItems = ui->treeWidget->selectedItems();
+        if (!selItems.isEmpty())
+        {
+            lst.removeAll(selItems.front());        
+            cnt = lst.size();
+        }
+    }
+    {
+        QList<QShortcut*> lstSct = MainWindow::getInstance()->findChildren<QShortcut*>();
+        foreach(QShortcut* pSct, lstSct)
+        {
+            QString wsKey = pSct->key().toString();
+            if (0==shortcut.compare(wsKey,Qt::CaseInsensitive))
+                cnt++;
+        }
+    }
+    return cnt;
 }
+
 
 bool CPreferencesDialog::eventFilter(QObject* obj, QEvent *event)
 {
@@ -419,7 +615,7 @@ bool CPreferencesDialog::eventFilter(QObject* obj, QEvent *event)
 			if (mod.testFlag(Qt::MetaModifier))
 				keyInt += Qt::META; 
 			ui->lineEditShortCut->setText(QKeySequence(keyInt).toString(QKeySequence::NativeText));
-			if (shortcutUsed(ui->lineEditShortCut->text()))
+			if (shortcutUsedCount(ui->lineEditShortCut->text(), true) > 0)
 				ui->lineEditShortCut->setStyleSheet("color: #ff0000");
 			else
 				ui->lineEditShortCut->setStyleSheet("");

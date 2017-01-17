@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,6 +32,7 @@
 
 #include <graph/osg/NodeMasks.h>
 
+#define SCALE_FRACTION 0.5
 
 //====================================================================================================================
 scene::CFrameGeode::CFrameGeode() : m_FrameGeometry(new osg::Geometry)
@@ -473,6 +474,61 @@ osg::Node* scene::CDraggableSlice::createDraggerHandle(osg::Vec3 center, osg::Ve
     return mtt;
 }
 
+/**
+ * \brief    Accept node visitors - used to compute current view matrix.
+ *
+ * \param [in,out]  nv  The node visitor.
+ */
+void scene::CDraggableSlice::accept(osg::NodeVisitor& nv)
+{
+    if (nv.validNodeMask(*this))
+    {
+        // If this is cull visitor...
+        if (nv.getVisitorType()==osg::NodeVisitor::CULL_VISITOR)
+        {
+            osgUtil::CullVisitor *cv(dynamic_cast<osgUtil::CullVisitor*>(&nv));
+            if(cv != 0)
+            {
+                m_viewMatrix = cv->getCurrentCamera()->getViewMatrix()*_matrix;
+
+                // Compute scale factor given by view matrix (we want to scale independently on zoom)
+                osg::Vec3 scale(m_viewMatrix.getScale());
+
+                m_scaleFactor = SCALE_FRACTION*std::min(scale[0], scale[1]);
+
+                // Set scale factor to the dragger if possible
+                if(p_Dragger != 0)
+                {
+                    osgManipulator::CTranslateOtherLineDragger * dragger(dynamic_cast<osgManipulator::CTranslateOtherLineDragger*>(p_Dragger.get()));
+                    if(dragger != 0)
+                        dragger->setScaleFactor(m_scaleFactor);
+                }
+            }
+            osg::CullStack* cs = dynamic_cast<osg::CullStack*>(&nv);
+            if(cs)
+            {
+                
+//                 m_viewMatrix = *cs->getModelViewMatrix();
+// 
+//                 // Compute scale factor given by view matrix (we want to scale independently on zoom)
+//                 osg::Vec3 scale(m_viewMatrix.getScale());
+// 
+//                 m_scaleFactor = std::min(scale[0], scale[1]);
+// 
+//                 // Set scale factor to the dragger if possible
+//                 if(p_Dragger != 0)
+//                 {
+//                     osgManipulator::CTranslateOtherLineDragger * dragger(dynamic_cast<osgManipulator::CTranslateOtherLineDragger*>(p_Dragger.get()));
+//                     if(dragger != 0)
+//                         dragger->setScaleFactor(m_scaleFactor);
+//                 }
+            }
+        }
+    }
+
+    osg::MatrixTransform::accept(nv);
+}
+
 //====================================================================================================================
 //====================================================================================================================
 scene::CDraggableSliceXY::CDraggableSliceXY( OSGCanvas * pCanvas, bool isOrtho, int SliceId, bool draggerHandle )
@@ -488,7 +544,7 @@ scene::CDraggableSliceXY::CDraggableSliceXY( OSGCanvas * pCanvas, bool isOrtho, 
     p_Selection = new scene::CPlaneXYUpdateSelection();
     
     // set up dummy draggable geometry
-    p_Dummy->setUpSquarePlaneXY();
+    p_Dummy->setUpSquarePlaneXY(false);
     p_Dummy->setColor( 0.0, 0.0, 1.0 );
 
     if (draggerHandle)
@@ -596,7 +652,7 @@ scene::CDraggableSliceXZ::CDraggableSliceXZ( OSGCanvas * pCanvas, bool isOrtho, 
     p_Selection = new scene::CPlaneXZUpdateSelection();
     
     // set up dummy draggable geometry
-    p_Dummy->setUpSquarePlaneXZ();
+    p_Dummy->setUpSquarePlaneXZ(false);
     p_Dummy->setColor( 0.0, 1.0, 0.0 );
 
     if (draggerHandle)
@@ -703,7 +759,7 @@ scene::CDraggableSliceYZ::CDraggableSliceYZ( OSGCanvas * pCanvas, bool isOrtho, 
     p_Selection = new scene::CPlaneYZUpdateSelection();
     
     // set up dummy draggable geometry
-    p_Dummy->setUpSquarePlaneYZ();
+    p_Dummy->setUpSquarePlaneYZ(false);
     p_Dummy->setColor( 1.0, 0.0, 0.0 );
 
     if (draggerHandle)

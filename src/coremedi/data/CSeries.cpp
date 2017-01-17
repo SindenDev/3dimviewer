@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,14 +21,24 @@
 ///////////////////////////////////////////////////////////////////////////////
 
 #include <data/CSeries.h>
-#include <data/DicomTagUtils.h>
-#include <data/CDicomLoader.h>
-#include <data/CDicom.h>
 #include <VPL/System/FileBrowser.h>
+#include <sstream>
+#include <iterator>
+#ifdef _WIN32
+#include <codecvt>
+#endif
+#if !defined(TRIDIM_USE_GDCM)
+
+#include <data/DicomTagUtils.h>
+
+#endif
 
 
 //==============================================================================================
-data::CSerieInfo::CSerieInfo() : m_sId( "" ), m_bHas8BitData(false)
+data::CSerieInfo::CSerieInfo() 
+: m_sId( "" )
+, m_bHas8BitData(false)
+, m_loadBuggySerie(false)
 {
 }
 
@@ -115,7 +125,19 @@ bool data::CSerieInfo::loadDicomFile(int FileNum, vpl::img::CDicomSlice& Slice, 
 {
     if( FileNum >= 0 && FileNum < int(m_DicomList.size()) )
     {
-		return loadDicomDCTk( m_DCMTkList[FileNum].directory, m_DCMTkList[FileNum].filename, Slice, tags, bLoadImageData );
+
+#if defined( TRIDIM_USE_GDCM )
+
+        CDicomGDCM dicom(this, m_loadBuggySerie);
+        if (dicom.loadFile(m_DCMTkList[FileNum].directory, m_DCMTkList[FileNum].filename))
+            return dicom.loadDicom(m_DCMTkList[FileNum].directory, m_DCMTkList[FileNum].filename, Slice, tags, bLoadImageData);
+
+        return false;
+#else
+        CDicomDCTk dicom;
+        return dicom.loadDicom( m_DCMTkList[FileNum].directory, m_DCMTkList[FileNum].filename, Slice, tags, bLoadImageData );
+#endif     
+  
     }
     else
     {
@@ -128,12 +150,61 @@ int data::CSerieInfo::loadDicomFile(int FileNum, tDicomSlices& Slices, sExtended
 {
     if( FileNum >= 0 && FileNum < int(m_DicomList.size()) )
     {
-        return loadDicomDCTk( m_DCMTkList[FileNum].directory, m_DCMTkList[FileNum].filename, Slices, tags, bLoadImageData, bCompatibilityMode );
+
+#   if defined( TRIDIM_USE_GDCM )
+
+        CDicomGDCM dicom(this,m_loadBuggySerie);
+        if (dicom.loadFile(m_DCMTkList[FileNum].directory, m_DCMTkList[FileNum].filename))
+            return dicom.loadDicom(m_DCMTkList[FileNum].directory, m_DCMTkList[FileNum].filename, Slices, tags, bLoadImageData, bCompatibilityMode);
+
+        return false;
+#else
+        CDicomDCTk dicom;
+        return dicom.loadDicom(m_DCMTkList[FileNum].directory, m_DCMTkList[FileNum].filename, Slices, tags, bLoadImageData, bCompatibilityMode);
+#endif  
+      
     }
     else
     {
         return 0;
     }
+}
+
+#if defined(__APPLE__) &&  !defined(_LIBCPP_VERSION)
+namespace std
+{
+    template<class InputIt, class OutputIt, class UnaryPredicate>
+    OutputIt copy_if(InputIt first, InputIt last, OutputIt d_first, UnaryPredicate pred)
+    {
+        while (first!=last)
+        {
+            if (pred(*first))
+                *d_first++ = *first;
+            first++;
+        }
+        return d_first;
+    }
+}
+#endif
+
+bool natural_less(const data::SDCMTkFilename& lhs, const data::SDCMTkFilename& rhs)
+{
+	std::string ls, rs;
+	std::copy_if(lhs.filename.begin(), lhs.filename.end(), std::back_inserter(ls), &isdigit);
+	std::copy_if(rhs.filename.begin(), rhs.filename.end(), std::back_inserter(rs), &isdigit);
+
+	std::stringstream ssl(ls);
+	std::stringstream ssr(rs);
+	unsigned long long l(0), r(0);
+	ssl >> l;
+	ssr >> r;
+
+	return l < r;
+}
+
+void data::CSerieInfo::sortFilenamesByNumber()
+{
+	std::sort(m_DCMTkList.begin(), m_DCMTkList.end(), natural_less);
 }
 
 //==============================================================================================
@@ -193,8 +264,23 @@ data::CSerieInfo * data::CSeries::addDicomFile( const vpl::sys::tString & path )
 #else
 	std::string convPath = vpl::sys::tStringConv::toUtf8(path);
 #endif
-	CDicom dicom;
-    if( dicom.loadFile( convPath ) )
+
+    bool bOk = false;
+
+#if defined( TRIDIM_USE_GDCM )
+
+    CDicomGDCM dicom;
+    bOk = dicom.preLoadFile(convPath);
+
+#else
+
+    CDicomDCTk dicom;
+    bOk = dicom.loadFile(convPath);
+
+#endif
+
+
+    if (bOk)
     {
         // Retrieve serie id
         std::string	id = dicom.getSerieId();
@@ -248,7 +334,7 @@ std::string data::wcs2ACP(const std::wstring &filename)
                 buffer[sizeC]=0;
                 convFilename=buffer;
             }
-            delete buffer;
+            delete[] buffer;
         }
     }
     return convFilename;
@@ -268,15 +354,32 @@ data::CSerieInfo * data::CSeries::addDicomFile( const vpl::sys::tString &dir, co
     std::string convFilename = vpl::sys::tStringConv::toUtf8(filename);
 #endif
 
-	CDicom dicom;
-    if( dicom.loadFile( convFilename ) )
+    bool bOk = false;
+
+#   if defined( TRIDIM_USE_GDCM )
+
+    CDicomGDCM dicom;
+    bOk = dicom.preLoadFile(dir, filename);
+
+#else
+
+    CDicomDCTk dicom;
+    bOk = dicom.loadFile(convFilename);
+
+#endif  
+
+    if (bOk)
     {
         // Retrieve serie id
         std::string	id = dicom.getSerieId();
         if( id.empty() )
         {
-			browser.setDirectory(oldDir);
-			return NULL;
+            int nFrames = dicom.getNumberOfFrames();
+            if (nFrames<7) // allow missing series id for multiframe dicoms
+            {
+			    browser.setDirectory(oldDir);
+			    return NULL;
+            }
         }
         CSerieInfo * serie = addSerie( id );
         if( !serie )

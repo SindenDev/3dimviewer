@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,9 +25,10 @@
 
 #include <data/COrthoSlice.h>
 
-#include <app/Signals.h>
+#include <coremedi/app/Signals.h>
 #include <data/CActiveDataSet.h>
 #include <data/CRegionData.h>
+#include <data/CVolumeOfInterestData.h>
 
 namespace data
 {
@@ -63,6 +64,8 @@ void COrthoSliceXY::update(const CChangedEntries& Changes)
         return;
     }
 
+	bool bRTGDensityWindowChanged(Changes.hasChanged(Storage::RTGDensityWindow::Id));
+
     CObjectPtr<CDensityData> spVolume(APP_STORAGE.getEntry(datasetId));
 
     // Modify the slice position
@@ -73,9 +76,40 @@ void COrthoSliceXY::update(const CChangedEntries& Changes)
     }
     else
     {
-        m_Position = vpl::math::getMax(m_Position, 0);
+        m_Position = vpl::math::getMax(m_Position, (vpl::tSize)0);
         m_Position = vpl::math::getMin(m_Position, spVolume->getZSize() - 1);
     }
+
+	// Image size
+	vpl::tSize XSize = spVolume->getXSize();
+	vpl::tSize YSize = spVolume->getYSize();
+
+	CObjectPtr<CVolumeOfInterestData> spVOI(APP_STORAGE.getEntry(Storage::VolumeOfInterestData::Id));
+
+	if (spVOI->isSet())
+	{
+		if (m_Position >= spVOI->getMinZ() && m_Position <= spVOI->getMaxZ())
+		{
+			m_minX = spVOI->getMinX();
+			m_minY = spVOI->getMinY();
+			m_maxX = spVOI->getMaxX();
+			m_maxY = spVOI->getMaxY();
+		}
+		else
+		{
+			m_minX = spVOI->getMaxX();
+			m_minY = spVOI->getMaxY();
+			m_maxX = spVOI->getMinX();
+			m_maxY = spVOI->getMinY();
+		}
+	}
+	else
+	{
+		m_minX = 0;
+		m_minY = 0;
+		m_maxX = XSize;
+		m_maxY = YSize;
+	}
 
     // Check the imaging mode
     if( m_Mode == MODE_MIP )
@@ -88,16 +122,12 @@ void COrthoSliceXY::update(const CChangedEntries& Changes)
     }
     else if( m_Mode == MODE_RTG )
     {
-        if( bDataChanged || Changes.checkFlagAny(MODE_CHANGED) )
+        if (bDataChanged || Changes.checkFlagAny(MODE_CHANGED) || bRTGDensityWindowChanged )
         {
             updateRTG(*spVolume);
         }
         return;
     }
-
-    // Image size
-    vpl::tSize XSize = spVolume->getXSize();
-    vpl::tSize YSize = spVolume->getYSize();
 
     // Has the size changed?
     bool bSizeChanged = (m_DensityData.getXSize() != XSize || m_DensityData.getYSize() != YSize);
@@ -131,7 +161,8 @@ void COrthoSliceXY::update(const CChangedEntries& Changes)
         }
         else
         {
-            m_RegionData.resize(0, 0);
+            if (m_RegionData.width()!=0 || m_RegionData.height()!=0)
+                m_RegionData.resize(0, 0);
         }
 
         // Unlock the region data
@@ -139,7 +170,8 @@ void COrthoSliceXY::update(const CChangedEntries& Changes)
     }
     else
     {
-        m_RegionData.resize(0, 0);
+        if (m_RegionData.width()!=0 || m_RegionData.height()!=0)
+            m_RegionData.resize(0, 0);
     }
 
     CSlicePropertyContainer::tPropertyList propertyList = m_properties.propertyList();
@@ -149,7 +181,7 @@ void COrthoSliceXY::update(const CChangedEntries& Changes)
     }
 
     // Update RGB data
-    bSizeChanged = updateRGBData(bSizeChanged);
+    bSizeChanged = updateRGBData(bSizeChanged, data::Storage::DensityWindow::Id);
 
     // Update the OSG texture
     updateTexture(bSizeChanged);
@@ -161,7 +193,7 @@ void COrthoSliceXY::update(const CChangedEntries& Changes)
 void COrthoSliceXY::updateMIP(const CDensityData& Volume)
 {
     // Check the volume size
-    if( Volume.getZSize() * Volume.getYSize() * Volume.getXSize() <= 0  )
+    if ((Volume.getXSize() <= 0) || (Volume.getYSize() <= 0) || (Volume.getZSize() <= 0))
     {
         return;
     }
@@ -187,8 +219,8 @@ void COrthoSliceXY::updateMIP(const CDensityData& Volume)
         }
     }
 
-    // Update RGB data
-    bSizeChanged = updateRGBData2(bSizeChanged);
+    // Update rgba data 
+	bSizeChanged = this->updateRGBData2(bSizeChanged);
 
     // Update the OSG texture
     updateTexture(bSizeChanged);
@@ -199,8 +231,13 @@ void COrthoSliceXY::updateMIP(const CDensityData& Volume)
 
 void COrthoSliceXY::updateRTG(const CDensityData& Volume)
 {
+	m_minX = 0;
+	m_minY = 0;
+	m_maxX = Volume.getXSize();
+	m_maxY = Volume.getYSize();
+
     // Check the volume size
-    if( Volume.getZSize() * Volume.getYSize() * Volume.getZSize() <= 0  )
+    if ((Volume.getXSize() <= 0) || (Volume.getYSize() <= 0) || (Volume.getZSize() <= 0))
     {
         return;
     }
@@ -213,6 +250,7 @@ void COrthoSliceXY::updateRTG(const CDensityData& Volume)
     m_RegionData.resize(0, 0);
 
     // RTG
+#pragma omp parallel for
     for( vpl::tSize j = 0; j < Volume.getYSize(); ++j )
     {
         for( vpl::tSize i = 0; i < Volume.getXSize(); ++i )
@@ -232,8 +270,22 @@ void COrthoSliceXY::updateRTG(const CDensityData& Volume)
         }
     }
 
-    // Update RGB data
-    bSizeChanged = updateRGBData2(bSizeChanged);
+    // Recalculate density window if it should be used and was not user-modified.
+    if (m_bUseDensityWindow)
+    {
+        // Get the density window
+		CObjectPtr<CDensityWindow> spDensityWindow(APP_STORAGE.getEntry(data::Storage::RTGDensityWindow::Id));
+
+        // Estimate optimal settings
+        if (!spDensityWindow->wasModified())
+            spDensityWindow->estimateOptimal(m_DensityData);
+    }
+
+    // Update rgba data 
+    if (!m_bUseDensityWindow)
+        bSizeChanged = this->updateRGBData2(bSizeChanged);
+    else
+		bSizeChanged = this->updateRGBData(bSizeChanged, data::Storage::RTGDensityWindow::Id);
 
     // Update the OSG texture
     updateTexture(bSizeChanged);
@@ -252,6 +304,8 @@ void COrthoSliceXZ::update(const CChangedEntries& Changes)
         return;
     }
 
+	bool bRTGDensityWindowChanged(Changes.hasChanged(Storage::RTGDensityWindow::Id));
+
     CObjectPtr<CDensityData> spVolume(APP_STORAGE.getEntry(datasetId));
 
     // Modify the slice position
@@ -262,9 +316,40 @@ void COrthoSliceXZ::update(const CChangedEntries& Changes)
     }
     else
     {
-        m_Position = vpl::math::getMax(m_Position, 0);
+        m_Position = vpl::math::getMax(m_Position, (vpl::tSize)0);
         m_Position = vpl::math::getMin(m_Position, spVolume->getYSize() - 1);
     }
+
+	// Image size
+	vpl::tSize XSize = spVolume->getXSize();
+	vpl::tSize ZSize = spVolume->getZSize();
+
+	CObjectPtr<CVolumeOfInterestData> spVOI(APP_STORAGE.getEntry(Storage::VolumeOfInterestData::Id));
+
+	if (spVOI->isSet())
+	{
+		if (m_Position >= spVOI->getMinY() && m_Position <= spVOI->getMaxY())
+		{
+			m_minX = spVOI->getMinX();
+			m_minY = spVOI->getMinZ();
+			m_maxX = spVOI->getMaxX();
+			m_maxY = spVOI->getMaxZ();
+		}
+		else
+		{
+			m_minX = spVOI->getMaxX();
+			m_minY = spVOI->getMaxZ();
+			m_maxX = spVOI->getMinX();
+			m_maxY = spVOI->getMinZ();
+		}
+	}
+	else
+	{
+		m_minX = 0;
+		m_minY = 0;
+		m_maxX = XSize;
+		m_maxY = ZSize;
+	}
 
     // Check the imaging mode
     if( m_Mode == MODE_MIP )
@@ -277,16 +362,12 @@ void COrthoSliceXZ::update(const CChangedEntries& Changes)
     }
     else if( m_Mode == MODE_RTG )
     {
-        if( bDataChanged || Changes.checkFlagAny(MODE_CHANGED) )
+        if (bDataChanged || Changes.checkFlagAny(MODE_CHANGED) || bRTGDensityWindowChanged)
         {
             updateRTG(*spVolume);
         }
         return;
     }
-
-    // Image size
-    vpl::tSize XSize = spVolume->getXSize();
-    vpl::tSize ZSize = spVolume->getZSize();
 
     // Has the size changed?
     bool bSizeChanged = (m_DensityData.getXSize() != XSize || m_DensityData.getYSize() != ZSize);
@@ -320,7 +401,8 @@ void COrthoSliceXZ::update(const CChangedEntries& Changes)
         }
         else
         {
-            m_RegionData.resize(0, 0);
+            if (m_RegionData.width()!=0 || m_RegionData.height()!=0)
+                m_RegionData.resize(0, 0);
         }
 
         // Unlock the region data
@@ -328,7 +410,8 @@ void COrthoSliceXZ::update(const CChangedEntries& Changes)
     }
     else
     {
-        m_RegionData.resize(0, 0);
+        if (m_RegionData.width()!=0 || m_RegionData.height()!=0)
+            m_RegionData.resize(0, 0);
     }
 
     CSlicePropertyContainer::tPropertyList propertyList = m_properties.propertyList();
@@ -338,7 +421,7 @@ void COrthoSliceXZ::update(const CChangedEntries& Changes)
     }
 
     // Update RGB data
-    bSizeChanged = updateRGBData(bSizeChanged);
+    bSizeChanged = updateRGBData(bSizeChanged, data::Storage::DensityWindow::Id);
 
     // Update the OSG texture
     updateTexture(bSizeChanged);
@@ -350,7 +433,7 @@ void COrthoSliceXZ::update(const CChangedEntries& Changes)
 void COrthoSliceXZ::updateMIP(const CDensityData& Volume)
 {
     // Check the volume size
-    if( Volume.getZSize() * Volume.getYSize() * Volume.getXSize() <= 0  )
+    if ((Volume.getXSize() <= 0) || (Volume.getYSize() <= 0) || (Volume.getZSize() <= 0))
     {
         return;
     }
@@ -388,8 +471,13 @@ void COrthoSliceXZ::updateMIP(const CDensityData& Volume)
 
 void COrthoSliceXZ::updateRTG(const CDensityData& Volume)
 {
+	m_minX = 0;
+	m_minY = 0;
+	m_maxX = Volume.getXSize();
+	m_maxY = Volume.getZSize();
+
     // Check the volume size
-    if( Volume.getZSize() * Volume.getYSize() * Volume.getZSize() <= 0  )
+    if ((Volume.getXSize() <= 0) || (Volume.getYSize() <= 0) || (Volume.getZSize() <= 0))
     {
         return;
     }
@@ -403,6 +491,7 @@ void COrthoSliceXZ::updateRTG(const CDensityData& Volume)
 
     // RTG
     // - Use "density window" to fill the RGB image
+#pragma omp parallel for
     for( vpl::tSize j = 0; j < Volume.getZSize(); ++j )
     {
         for( vpl::tSize i = 0; i < Volume.getXSize(); ++i )
@@ -422,8 +511,22 @@ void COrthoSliceXZ::updateRTG(const CDensityData& Volume)
         }
     }
 
-    // Update RGB data
-    bSizeChanged = updateRGBData2(bSizeChanged);
+    // Recalculate density window if it should be used and was not user-modified.
+    if (m_bUseDensityWindow)
+    {
+        // Get the density window
+		CObjectPtr<CDensityWindow> spDensityWindow(APP_STORAGE.getEntry(data::Storage::RTGDensityWindow::Id));
+
+        // Estimate optimal settings
+        if (!spDensityWindow->wasModified())
+            spDensityWindow->estimateOptimal(m_DensityData);
+    }
+
+    // Update rgba data 
+    if (!m_bUseDensityWindow)
+        bSizeChanged = this->updateRGBData2(bSizeChanged);
+    else
+		bSizeChanged = this->updateRGBData(bSizeChanged, data::Storage::RTGDensityWindow::Id);
 
     // Update the OSG texture
     updateTexture(bSizeChanged);
@@ -442,6 +545,8 @@ void COrthoSliceYZ::update(const CChangedEntries& Changes)
         return;
     }
 
+    bool bRTGDensityWindowChanged(Changes.hasChanged(Storage::RTGDensityWindow::Id));
+
     CObjectPtr<CDensityData> spVolume(APP_STORAGE.getEntry(datasetId));
 
     // Modify the slice position
@@ -452,9 +557,40 @@ void COrthoSliceYZ::update(const CChangedEntries& Changes)
     }
     else
     {
-        m_Position = vpl::math::getMax(m_Position, 0);
+        m_Position = vpl::math::getMax(m_Position, (vpl::tSize)0);
         m_Position = vpl::math::getMin(m_Position, spVolume->getXSize() - 1);
     }
+
+	// Image size
+	vpl::tSize YSize = spVolume->getYSize();
+	vpl::tSize ZSize = spVolume->getZSize();
+
+	CObjectPtr<CVolumeOfInterestData> spVOI(APP_STORAGE.getEntry(Storage::VolumeOfInterestData::Id));
+
+	if (spVOI->isSet())
+	{
+		if (m_Position >= spVOI->getMinX() && m_Position <= spVOI->getMaxX())
+		{
+			m_minX = spVOI->getMinY();
+			m_minY = spVOI->getMinZ();
+			m_maxX = spVOI->getMaxY();
+			m_maxY = spVOI->getMaxZ();
+		}
+		else
+		{
+			m_minX = spVOI->getMaxY();
+			m_minY = spVOI->getMaxZ();
+			m_maxX = spVOI->getMinY();
+			m_maxY = spVOI->getMinZ();
+		}
+	}
+	else
+	{
+		m_minX = 0;
+		m_minY = 0;
+		m_maxX = YSize;
+		m_maxY = ZSize;
+	}
 
     // Check the imaging mode
     if( m_Mode == MODE_MIP )
@@ -467,16 +603,12 @@ void COrthoSliceYZ::update(const CChangedEntries& Changes)
     }
     else if( m_Mode == MODE_RTG )
     {
-        if( bDataChanged || Changes.checkFlagAny(MODE_CHANGED) )
+        if( bDataChanged || Changes.checkFlagAny(MODE_CHANGED) || bRTGDensityWindowChanged )
         {
             updateRTG(*spVolume);
         }
         return;
     }
-
-    // Image size
-    vpl::tSize YSize = spVolume->getYSize();
-    vpl::tSize ZSize = spVolume->getZSize();
 
     // Has the size changed?
     bool bSizeChanged = (m_DensityData.getXSize() != YSize || m_DensityData.getYSize() != ZSize);
@@ -511,7 +643,8 @@ void COrthoSliceYZ::update(const CChangedEntries& Changes)
         }
         else
         {
-            m_RegionData.resize(0, 0);
+            if (m_RegionData.width()!=0 || m_RegionData.height()!=0)
+                m_RegionData.resize(0, 0);
         }
         
         // Unlock the region data
@@ -519,7 +652,8 @@ void COrthoSliceYZ::update(const CChangedEntries& Changes)
     }
     else
     {
-        m_RegionData.resize(0, 0);
+        if (m_RegionData.width()!=0 || m_RegionData.height()!=0)
+            m_RegionData.resize(0, 0);
     }
 
     CSlicePropertyContainer::tPropertyList propertyList = m_properties.propertyList();
@@ -529,7 +663,7 @@ void COrthoSliceYZ::update(const CChangedEntries& Changes)
     }
 
     // Update RGB data
-    bSizeChanged = updateRGBData(bSizeChanged);
+    bSizeChanged = updateRGBData(bSizeChanged, data::Storage::DensityWindow::Id);
 
     // Update the OSG texture
     updateTexture(bSizeChanged);
@@ -541,7 +675,7 @@ void COrthoSliceYZ::update(const CChangedEntries& Changes)
 void COrthoSliceYZ::updateMIP(const CDensityData& Volume)
 {
     // Check the volume size
-    if( Volume.getZSize() * Volume.getYSize() * Volume.getXSize() <= 0  )
+    if ((Volume.getXSize() <= 0) || (Volume.getYSize() <= 0) || (Volume.getZSize() <= 0))
     {
         return;
     }
@@ -579,8 +713,13 @@ void COrthoSliceYZ::updateMIP(const CDensityData& Volume)
 
 void COrthoSliceYZ::updateRTG(const CDensityData& Volume)
 {
+	m_minX = 0;
+	m_minY = 0;
+	m_maxX = Volume.getYSize();
+	m_maxY = Volume.getZSize();
+
     // Check the volume size
-    if( Volume.getZSize() * Volume.getYSize() * Volume.getZSize() <= 0  )
+    if ((Volume.getXSize() <= 0) || (Volume.getYSize() <= 0) || (Volume.getZSize() <= 0))
     {
         return;
     }
@@ -594,6 +733,7 @@ void COrthoSliceYZ::updateRTG(const CDensityData& Volume)
 
     // RTG
     // - Use "density window" to fill the RGB image
+#pragma omp parallel for
     for( vpl::tSize j = 0; j < Volume.getZSize(); ++j )
     {
         for( vpl::tSize i = 0; i < Volume.getYSize(); ++i )
@@ -613,9 +753,23 @@ void COrthoSliceYZ::updateRTG(const CDensityData& Volume)
         }
     }
 
-    // Update RGB data
+    // Recalculate density window if it should be used and was not user-modified.
+    if (m_bUseDensityWindow)
+    {
+        // Get the density window
+		CObjectPtr<CDensityWindow> spDensityWindow(APP_STORAGE.getEntry(data::Storage::RTGDensityWindow::Id));
 
-    bSizeChanged = updateRGBData2(bSizeChanged);
+        // Estimate optimal settings
+        if (!spDensityWindow->wasModified())
+            spDensityWindow->estimateOptimal(m_DensityData);
+    }
+
+    // Update rgba data 
+    if (!m_bUseDensityWindow)
+        bSizeChanged = this->updateRGBData2(bSizeChanged);
+    else
+		bSizeChanged = this->updateRGBData(bSizeChanged, data::Storage::RTGDensityWindow::Id);
+
 
     // Update the OSG texture
     updateTexture(bSizeChanged);

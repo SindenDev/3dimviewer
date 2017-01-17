@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -45,10 +45,10 @@ class CRegionInfo
 {
 public:
     //! Default constructor.
-    CRegionInfo() : m_ssName("Unnamed"), m_bVisible(true) {}
+	CRegionInfo() : m_ssName("Unnamed"), m_bVisible(true), m_bSelected(false), m_bAuxiliary(false) {}
 
     //! Just another constructor.
-    CRegionInfo(const std::string& Name) : m_ssName(Name), m_bVisible(true) {}
+	CRegionInfo(const std::string& Name) : m_ssName(Name), m_bVisible(true), m_bSelected(false), m_bAuxiliary(false) {}
 
     //! Changes the region name.
     CRegionInfo& setName(const std::string& ssName)
@@ -64,11 +64,31 @@ public:
         return *this;
     }
 
+	//! Sets region selection flag.
+	CRegionInfo& setSelected(bool bSelected)
+	{
+		m_bSelected = bSelected;
+		return *this;
+	}
+
+	//! Sets region auxiliary flag.
+	CRegionInfo& setAuxiliary(bool bAuxiliary)
+	{
+		m_bAuxiliary = bAuxiliary;
+		return *this;
+	}
+
     //! Returns region name.
     const std::string& getName() const { return m_ssName; }
 
     //! Returns if the region is visible.
     bool isVisible() const { return m_bVisible; }
+
+	//! Returns if the region is selected.
+	bool isSelected() const { return m_bSelected; }
+
+	//! Returns if the region is auxiliary.
+	bool isAuxiliary() const { return m_bAuxiliary; }
 
 	//! Serialize
 	template < class tpSerializer >
@@ -76,6 +96,8 @@ public:
 	{
 		Writer.write( m_ssName );
 		Writer.write( (unsigned char)m_bVisible );
+		//Writer.write((unsigned char)m_bSelected);
+		//Writer.write((unsigned char)m_bAuxiliary);
 	}
 
 	//! Deserialize
@@ -83,9 +105,18 @@ public:
 	void deserialize(vpl::mod::CChannelSerializer<tpSerializer> & Reader)
 	{
 		Reader.read( m_ssName );
+
         unsigned char b = 0;
 		Reader.read( b );
         m_bVisible = b;
+
+		/*b = 0;
+		Reader.read(b);
+		m_bSelected = b;
+
+		b = 0;
+		Reader.read(b);
+		m_bAuxiliary = b;*/
 	}
 
 protected:
@@ -94,6 +125,12 @@ protected:
 
     //! Visibility flag.
     bool m_bVisible;
+
+	//! Selection flag.
+	bool m_bSelected;
+
+	//! Auxiliary region flag (e.g. region created during supervoxels segmentation).
+	bool m_bAuxiliary;
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -242,6 +279,13 @@ public:
         return (i < 0 || i >= getNumOfRegions()) ? m_DummyRegion : m_Regions[i];
     }
 
+	void setRegionInfo(int i, const CRegionInfo &info)
+	{
+		if (i >= 0 || i < getNumOfRegions())
+		{
+			m_Regions[i] = info;
+		}
+	}
 
     //! Regenerates the object state according to any changes in the data storage.
     void update(const CChangedEntries& VPL_UNUSED(Changes))
@@ -267,16 +311,16 @@ public:
         m_Colors[9] = tColor(128, 128, 64, ALPHA);
 
         // Initialize regions
-        m_Regions[0].setName("Not classified").setVisibility(true);
-        m_Regions[1].setName("Region 1").setVisibility(true);
-        m_Regions[2].setName("Region 2").setVisibility(true);
-        m_Regions[3].setName("Region 3").setVisibility(true);
-        m_Regions[4].setName("Region 4").setVisibility(true);
-        m_Regions[5].setName("Region 5").setVisibility(true);
-        m_Regions[6].setName("Region 6").setVisibility(true);
-        m_Regions[7].setName("Region 7").setVisibility(true);
-        m_Regions[8].setName("Region 8").setVisibility(true);
-        m_Regions[9].setName("Region 9").setVisibility(true);
+        m_Regions[0].setName("Not classified").setVisibility(true).setSelected(false).setAuxiliary(false);
+		m_Regions[1].setName("Region 1").setVisibility(true).setSelected(false).setAuxiliary(false);
+		m_Regions[2].setName("Region 2").setVisibility(true).setSelected(false).setAuxiliary(false);
+		m_Regions[3].setName("Region 3").setVisibility(true).setSelected(false).setAuxiliary(false);
+		m_Regions[4].setName("Region 4").setVisibility(true).setSelected(false).setAuxiliary(false);
+		m_Regions[5].setName("Region 5").setVisibility(true).setSelected(false).setAuxiliary(false);
+		m_Regions[6].setName("Region 6").setVisibility(true).setSelected(false).setAuxiliary(false);
+		m_Regions[7].setName("Region 7").setVisibility(true).setSelected(false).setAuxiliary(false);
+		m_Regions[8].setName("Region 8").setVisibility(true).setSelected(false).setAuxiliary(false);
+		m_Regions[9].setName("Region 9").setVisibility(true).setSelected(false).setAuxiliary(false);
 
         m_Active = 1;
     }
@@ -388,15 +432,24 @@ public:
     {
 		const int xSize = std::min(regionImage.getXSize(),rgbImage.getXSize());
 		const int ySize = std::min(regionImage.getYSize(),rgbImage.getYSize());
+#pragma omp parallel for
 		for (int y = 0; y < ySize; ++y)
 		{
 			for (int x = 0; x < xSize; ++x)
             {
-                vpl::img::CRGBPixel pixel = rgbImage(x, y);
-                tColor prevColor = *(reinterpret_cast<tColor *>(&pixel));
-                tColor currColor = makeColor(regionImage(x, y));
-                tColor newColor = blendColors(currColor, prevColor);
-                rgbImage(x, y) = *(reinterpret_cast<vpl::img::tRGBPixel *>(&newColor));
+				if (getRegionInfo(regionImage(x, y)).isSelected())
+				{
+					tColor newColor(255, 255, 0, 255);
+					rgbImage(x, y) = *(reinterpret_cast<vpl::img::tRGBPixel *>(&newColor));
+				}
+				else
+				{
+					vpl::img::CRGBPixel pixel = rgbImage(x, y);
+					tColor prevColor = *(reinterpret_cast<tColor *>(&pixel));
+					tColor currColor = makeColor(regionImage(x, y));
+					tColor newColor = blendColors(currColor, prevColor);
+					rgbImage(x, y) = *(reinterpret_cast<vpl::img::tRGBPixel *>(&newColor));
+				}
             }
         }
     }

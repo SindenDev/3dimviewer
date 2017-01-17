@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,7 +25,7 @@
 
 #include <osg/CTriMesh.h>
 #include <osg/COnOffNode.h>
-#include <app/Signals.h>
+#include <coremedi/app/Signals.h>
 #include <osg/PolygonMode>
 #include <osg/CPseudoMaterial.h>
 
@@ -37,103 +37,110 @@
 
 namespace osg
 {
+    ///////////////////////////////////////////////////////////////////////////////
+    // Global functions
+    namespace ModelVisualizer
+    {
+        //! Setups all OSG properties required for correct visualization of a surface mesh.
+        //bool setupModelStateSet( osg::Node *pMesh );
+        bool setupModelStateSet(osg::Geode *pMesh);
+    }
 
-///////////////////////////////////////////////////////////////////////////////
-// Global functions
+    ///////////////////////////////////////////////////////////////////////////////
+    //! Surface model visualizer.
+    //! - Parameter T should be data::CModel class or any other derived from it.
+    //! - The parametr prescribes type of a storage item whose Id is given
+    //!   in the constructor.
+    template <class T>
+    class CAnyModelVisualizer : public COnOffNode, public scene::CObjectObserverOSG<T>
+    {
+    public:
+        //! Storage item type.
+        typedef T tModel;
 
-namespace ModelVisualizer
-{
+        //! Storage observer type.
+        typedef scene::CObjectObserverOSG<T> tObserver;
 
-//! Setups all OSG properties required for correct visualization of a surface mesh.
-//bool setupModelStateSet( osg::Node *pMesh );
-bool setupModelStateSet( osg::Geode *pMesh );
+        //! Materials
+        osg::ref_ptr<osg::CPseudoMaterial> m_materialRegular;
+        osg::ref_ptr<osg::CPseudoMaterial> m_materialSelected;
 
-}
+    public:
+        //! Constructor
+        CAnyModelVisualizer(int ModelId);
 
-///////////////////////////////////////////////////////////////////////////////
-//! Surface model visualizer.
-//! - Parameter T should be data::CModel class or any other derived from it.
-//! - The parametr prescribes type of a storage item whose Id is given
-//!   in the constructor.
+        //! Method called on OSG update callback.
+        virtual void updateFromStorage();
 
-template <class T>
-class CAnyModelVisualizer : public COnOffNode, public scene::CObjectObserverOSG<T>
-{
-public:
-    //! Storage item type.
-    typedef T tModel;
+        //! Update only part of mesh
+        virtual void updatePartOfMesh(const CTriMesh::tIdPosVec &handles);
 
-    //! Storage observer type.
-    typedef scene::CObjectObserverOSG<T> tObserver;
+        //! Get model id
+        int getId()
+        {
+            return m_ModelId;
+        }
 
-    //! Materials
-    osg::ref_ptr<osg::CPseudoMaterial> m_materialRegular;
-    osg::ref_ptr<osg::CPseudoMaterial> m_materialSelected;
+        //! Get model transform
+        osg::MatrixTransform* getModelTransform()
+        {
+            return m_pTransform.get();
+        }
 
-public:
-    //! Constructor
-    CAnyModelVisualizer(int ModelId);
+        //! Set/unset manual updates
+        void setManualUpdates(bool bSet)
+        {
+            m_bManualUpdate = bSet;
+        }
 
-    //! Method called on OSG update callback.
-    virtual void updateFromStorage();
+        //! Get manual updates flag value
+        bool getManualUpdates()
+        {
+            return m_bManualUpdate;
+        }
 
-	//! Update only part of mesh
-	virtual void updatePartOfMesh(const CTriMesh::tIdPosVec &handles);
+        //! Get mesh
+        CTriMesh *getMesh()
+        {
+            return m_pMesh;
+        }
 
-    //! Get model id
-    int getId() { return m_ModelId; }
+        const CTriMesh *getMesh() const
+        {
+            return m_pMesh;
+        }
 
-    //! Get model transform
-    osg::MatrixTransform* getModelTransform() { return m_pTransform.get(); }
+        //! Enable or disable wireframe mode
+        void showWireframe(bool bShow);
 
-	//! Set/unset manual updates
-	void setManualUpdates(bool bSet) {m_bManualUpdate = bSet;}
-	//! Get manual updates flag value
-	bool getManualUpdates() {return m_bManualUpdate;}
+    protected:
+        //! Build KD-tree for visualizer
+        void buildKDTree();
 
-	//! Get mesh
-	CTriMesh *getMesh() {return m_pMesh;}
-	const CTriMesh *getMesh() const {return m_pMesh;}
+    protected:
+        //! Identifier of a concrete model.
+        int m_ModelId;
 
-	//! Enable or disable wireframe mode
-	void showWireframe(bool bShow);
+        //! Triangles...
+        osg::ref_ptr<CTriMesh> m_pMesh;
 
-protected:
-	//! Build KD-tree for visualizer
-	void buildKDTree();
+        //! Matrix transform of the model
+        osg::ref_ptr<osg::MatrixTransform> m_pTransform;
 
-protected:
-	//! Identifier of a concrete model.
-    int m_ModelId;
+        //! Object is manually updated?
+        bool m_bManualUpdate;
 
-    //! Triangles...
-    osg::ref_ptr<CTriMesh> m_pMesh;
+        //! Should kd-tree be used?
+        bool m_bUseKDTree;
+    };
 
-    //! Matrix transform of the model
-    osg::ref_ptr<osg::MatrixTransform> m_pTransform;
+    ///////////////////////////////////////////////////////////////////////////////
+    //! Surface model visualizer.
+    typedef CAnyModelVisualizer<data::CModel> CModelVisualizer;
 
-	//! Object is manually updated?
-	bool m_bManualUpdate;
-
-	//! Should kd-tree be used?
-	bool m_bUseKDTree;
-};
-
-
-
-
-
-///////////////////////////////////////////////////////////////////////////////
-//! Surface model visualizer.
-
-typedef CAnyModelVisualizer<data::CModel> CModelVisualizer;
-
-
-///////////////////////////////////////////////////////////////////////////////
-// Method templates
-
-#include "CModelVisualizer.hxx"
-
+    ///////////////////////////////////////////////////////////////////////////////
+    // Method templates
+    #include "CModelVisualizer.hxx"
 
 } // namespace osg
 

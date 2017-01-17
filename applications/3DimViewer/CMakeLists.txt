@@ -4,7 +4,7 @@
 # 3DimViewer
 # Lightweight 3D DICOM viewer.
 #
-# Copyright 2008-2012 3Dim Laboratory s.r.o.
+# Copyright 2008-2016 3Dim Laboratory s.r.o.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -31,6 +31,8 @@ TRIDIM_EXECUTABLE( 3DimViewer )
 #-------------------------------------------------------------------------------
 # Find required 3rd party libraries
 
+set( QT_BASIC 1)
+
 ADD_LIB_QT()
 ADD_LIB_OSG()
 ADD_LIB_VPL()
@@ -49,7 +51,7 @@ else(APPLE)
     ADD_LIB_ZLIB()
   endif( BUILD_WITH_QT5 )
 endif(APPLE)
-
+  
 #-------------------------------------------------------------------------------
 # Options
 
@@ -57,7 +59,7 @@ set( QT3DIMVIEWER_PATH ${TRIDIM_EXECUTABLES_PATH}/3DimViewer )
 set( QT3DIMVIEWER_INCLUDE include )
 set( QT3DIMVIEWER_SRC src )
 set( QT3DIMVIEWER_UI ui )
-
+ 
 #-------------------------------------------------------------------------------
 # Some settings
 
@@ -67,7 +69,18 @@ include_directories( ${QT3DIMVIEWER_PATH}/${QT3DIMVIEWER_INCLUDE} )
 
 # required definitions for 3rd party libraries
 if( WIN32 )
-  add_definitions ( -DNOMINMAX /wd4005 /wd4099 )
+# disabled
+# 4005    'identifier' : macro redefinition
+# 4099    PDB 'filename' was not found with 'object/library' or at 'path'; linking object as if no debug info
+# 4481    nonstandard extension used: override specifier 'keyword'
+# 4189    local variable is initialized but not referenced
+# 4996    This function or variable may be unsafe. Consider using...
+# treat as errors
+# 4552    operator has no effect; expected operator with side-effect
+# 4701    potentially uninitialized local variable used
+# 4715    not all control paths return a value
+# 4716    function must return a value
+  add_definitions ( -DNOMINMAX /wd4005 /wd4099 /wd4481 /wd4189 /wd4996 /we4552 /we4701 /we4715 /we4716 ) 
 endif()
 
 # Fix for bad include
@@ -107,7 +120,15 @@ SOURCE_GROUP( "Header Files" REGULAR_EXPRESSION "^dummyrule$" )
 SOURCE_GROUP( "Source Files" REGULAR_EXPRESSION "^dummyrule$" )
 
 SOURCE_GROUP( "moc" REGULAR_EXPRESSION ".*/moc_[^/]*\\.cxx$" )
-SOURCE_GROUP( "ui" REGULAR_EXPRESSION ".*/ui_[^/]*\\.h$" )
+SOURCE_GROUP( "uih" REGULAR_EXPRESSION ".*/ui_[^/]*\\.h$" )
+
+source_group( "ui" REGULAR_EXPRESSION ".*/ui/[^/]*\\.ui$" )
+source_group( "qm" REGULAR_EXPRESSION ".*/[^/]*\\.qm$" )
+
+ADD_SOURCE_GROUPS( ${QT3DIMVIEWER_INCLUDE}
+                    ${QT3DIMVIEWER_SRC}                    
+                    zip
+                    )
 
 ADD_SOURCE_GROUPS2( ${QT3DIMVIEWER_INCLUDE}
                     ${QT3DIMVIEWER_SRC}
@@ -188,6 +209,7 @@ ADD_3DIM_LIB_TARGET( ${TRIDIM_GUIQTMEDI_LIB} )
 # Add required 3Dim plugins
 
 option( BUILD_PLUGINS "Should plugins be built?" ON )
+option( BUILD_WITH_GDCM "Do you want to use GDCM library?" OFF )
 
 if( BUILD_PLUGINS )
 
@@ -298,13 +320,38 @@ target_link_libraries( 3DimViewer
 			)
 endif()
 
+# Build with GDCM
+if( BUILD_WITH_GDCM )
+  
+  # Find the GDCM library
+  find_package( OurGDCM )
+  if( GDCM_FOUND )
+
+      set( TRIDIM_GDCM_INCLUDE_DIR ${GDCM_INCLUDE_DIR} CACHE STRING "Full path to the GDCM library header files." FORCE )        
+      set ( TRIDIM_GDCM_LIBS ${GDCM_LIBRARIES} CACHE STRING "Necessary GDCM libraries." FORCE)
+      
+      ADD_DEFINITIONS( -DTRIDIM_USE_GDCM )
+      target_link_libraries( 3DimViewer ${TRIDIM_GDCM_LIBS})
+      include_directories( ${TRIDIM_GDCM_INCLUDE_DIR} ) 
+ 
+  endif( GDCM_FOUND )
+
+endif( BUILD_WITH_GDCM )
+
 # Windows specific library
 if( WIN32 )
   target_link_libraries( 3DimViewer opengl32.lib )
   if ( BUILD_WITH_QT5 )
     target_link_libraries( 3DimViewer Qt5::WinMain)
     target_link_libraries( 3DimViewer	${ZLIB_LINKED_LIBS} )
-  endif( BUILD_WITH_QT5 )    
+  endif( BUILD_WITH_QT5 )
+  add_custom_command(
+      TARGET 3DimViewer
+      POST_BUILD COMMAND
+        mt.exe -manifest \"${CMAKE_CURRENT_SOURCE_DIR}/manifest.xml\" "-inputresource:\"$<TARGET_FILE:3DimViewer>\";#1" -outputresource:\"$<TARGET_FILE:3DimViewer>\";#1
+      COMMENT
+        "Appending manifest."
+  )  
 endif( WIN32 )
 
 # Copy Qt translations

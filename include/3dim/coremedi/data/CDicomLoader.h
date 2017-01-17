@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -33,6 +33,7 @@
 // STL
 #include <string>
 #include <set>
+
 
 namespace data
 {
@@ -116,36 +117,6 @@ protected:
     //! Allows any extension of dicom files.
     bool m_bAllowAnyExtension;
 };
-
-
-///////////////////////////////////////////////////////////////////////////////
-// Dicom dataset loader.
-
-//! Loads a single frame (i.e. slice) from a given dicom file.
-bool loadDicomDCTk(const vpl::sys::tString &dir,
-                   const std::string &filename,
-                   vpl::img::CDicomSlice &slice,
-                   sExtendedTags& tags,
-                   bool bLoadImageData = true);
-
-//! Loads all frames/slices from a given dicom file.
-//! - Returns the number of successfully read images.
-int loadDicomDCTk(const vpl::sys::tString &dir,
-                  const std::string &filename,
-                  tDicomSlices &slices,
-                  sExtendedTags& tags,
-                  bool bLoadImageData = true,
-                  bool bIgnoreBitsStoredTag = false);
-
-bool loadDicomDCTk2D(const vpl::sys::tString &dir,
-                     const std::string &filename,
-                     vpl::img::CDicomSlice &slice,
-                     sExtendedTags& tags,
-                     bool bLoadImageData,
-                     int nDesiredBits);
-
-//! Retrieves data from dicom file tags
-bool getDicomFileInfo( const vpl::sys::tString &dir, const std::string &filename, int& nFrames);
 
 } // namespace data
 

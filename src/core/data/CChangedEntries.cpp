@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -66,45 +66,61 @@ bool CChangedEntries::checkExactFlagsAll(int Value, int Mask, tFilter Filter) co
     {
         return false;
     }
-	// special case when testing for invalidation without flags
-	if (Value == Mask && Value == 0) 
-	{
-		tChanges::const_iterator itEnd = m_Changes.end();
-		if (Filter.size() == 0)
-		{
-			for( tChanges::const_iterator it = m_Changes.begin(); it != itEnd; ++it )
-			{
-				if (0!=it->second)
-					return false;
-			}
-		}
-		else
-		{
-			for( tChanges::const_iterator it = m_Changes.begin(); it != itEnd; ++it )
-			{
-				if (Filter.find(it->first) != Filter.end())
-				{
-					if (0!=it->second)
-						return false;
-				}
-			}
-		}
-		return true;
-	}
+    // special case when testing for invalidation without flags
+    if ((Value == Mask) && (Value == 0))
+    {
+        if (Filter.size() == 0)
+        {
+            for (tChanges::const_iterator it = m_Changes.begin(); it != m_Changes.end(); ++it)
+            {
+                if (0 != it->second)
+                {
+                    return false;
+                }
+            }
+            return true;
+        }
+        else
+        {
+            tChanges filteredChanges;
+            for (tChanges::const_iterator it = m_Changes.begin(); it != m_Changes.end(); ++it)
+            {
+                if (Filter.find(it->first) != Filter.end())
+                {
+                    filteredChanges.insert(*it);
+                }
+            }
 
-	// normal test
+            if (filteredChanges.size() == 0)
+            {
+                return false;
+            }
+            else
+            {
+                for (tChanges::const_iterator it = filteredChanges.begin(); it != filteredChanges.end(); ++it)
+                {
+                    if (0 != it->second)
+                    {
+                        return false;
+                    }
+                }
+                return true;
+            }
+        }
+    }
+
+    // normal test
     int Flags = 0x7fffffff;
-    tChanges::const_iterator itEnd = m_Changes.end();
     if (Filter.size() == 0)
     {
-        for( tChanges::const_iterator it = m_Changes.begin(); it != itEnd; ++it )
+        for (tChanges::const_iterator it = m_Changes.begin(); it != m_Changes.end(); ++it)
         {
             Flags &= it->second;
         }
     }
     else
     {
-        for( tChanges::const_iterator it = m_Changes.begin(); it != itEnd; ++it )
+        for (tChanges::const_iterator it = m_Changes.begin(); it != m_Changes.end(); ++it)
         {
             if (Filter.find(it->first) != Filter.end())
             {
@@ -134,45 +150,60 @@ bool CChangedEntries::checkExactFlagsAny(int Value, int Mask, tFilter Filter) co
     {
         return false;
     }
-	// special case when testing for invalidation without flags
-	if (Value == Mask && Value == 0) 
-	{
-		tChanges::const_iterator itEnd = m_Changes.end();
-		if (Filter.size() == 0)
-		{
-			for( tChanges::const_iterator it = m_Changes.begin(); it != itEnd; ++it )
-			{
-				if (0==it->second)
-					return true;
-			}
-		}
-		else
-		{
-			for( tChanges::const_iterator it = m_Changes.begin(); it != itEnd; ++it )
-			{
-				if (Filter.find(it->first) != Filter.end())
-				{
-					if (0==it->second)
-						return true;
-				}
-			}
-		}
-		return false;
-	}
+    // special case when testing for invalidation without flags
+    if (Value == Mask && Value == 0)
+    {
+        if (Filter.size() == 0)
+        {
+            for (tChanges::const_iterator it = m_Changes.begin(); it != m_Changes.end(); ++it)
+            {
+                if (0 == it->second)
+                {
+                    return true;
+                }
+            }
+        }
+        else
+        {
+            tChanges filteredChanges;
+            for (tChanges::const_iterator it = m_Changes.begin(); it != m_Changes.end(); ++it)
+            {
+                if (Filter.find(it->first) != Filter.end())
+                {
+                    filteredChanges.insert(*it);
+                }
+            }
+
+            if (filteredChanges.size() == 0)
+            {
+                return false;
+            }
+            else
+            {
+                for (tChanges::const_iterator it = filteredChanges.begin(); it != filteredChanges.end(); ++it)
+                {
+                    if (0 == it->second)
+                    {
+                        return true;
+                    }
+                }
+                return false;
+            }
+        }
+    }
 
 	// normal test
     int Flags = 0;
-    tChanges::const_iterator itEnd = m_Changes.end();
     if (Filter.size() == 0)
     {
-        for( tChanges::const_iterator it = m_Changes.begin(); it != itEnd; ++it )
+        for (tChanges::const_iterator it = m_Changes.begin(); it != m_Changes.end(); ++it)
         {
             Flags |= it->second;
         }
     }
     else
     {
-        for( tChanges::const_iterator it = m_Changes.begin(); it != itEnd; ++it )
+        for (tChanges::const_iterator it = m_Changes.begin(); it != m_Changes.end(); ++it)
         {
             if (Filter.find(it->first) != Filter.end())
             {
@@ -216,6 +247,71 @@ bool CChangedEntries::checkFlagAny(int Value) const
 bool CChangedEntries::checkFlagAny(int Value, tFilter Filter) const
 {
     return checkExactFlagsAny(Value, Value, Filter);
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
+bool CChangedEntries::checkFlagsAnyNonEq(int Value, int Mask, const CChangedEntries::tFilter &Filter) const
+{
+    if( m_Changes.empty() )
+        return false;
+
+    for (CChangedEntries::tChanges::const_iterator it = m_Changes.begin(); it != m_Changes.end(); ++it)
+    {
+        if (Filter.empty() || Filter.find(it->first) != Filter.end())
+        {
+            int Flags = it->second;
+			if (Value!=(Mask&Flags))
+				return true;
+        }
+    }
+	return false;
+}
+
+bool CChangedEntries::checkFlagsAnyEq(int Value, int Mask, const CChangedEntries::tFilter &Filter) const
+{
+    if( m_Changes.empty() )
+        return false;
+
+    for (CChangedEntries::tChanges::const_iterator it = m_Changes.begin(); it != m_Changes.end(); ++it)
+    {
+        if (Filter.empty() || Filter.find(it->first) != Filter.end())
+        {
+            int Flags = it->second;
+			if (Value==(Mask&Flags))
+				return true;
+        }
+    }
+	return false;
+}
+
+//! Checks for presence of a change that has one or more flags from the Mask set
+bool CChangedEntries::checkFlagsAnySet(int Mask, const CChangedEntries::tFilter &Filter) const
+{
+	return checkFlagsAnyNonEq(0,Mask,Filter);
+}
+
+//! Checks for presence of a change that has one or more flags from the Mask zero
+bool CChangedEntries::checkFlagsAnyNotSet(int Mask, const CChangedEntries::tFilter &Filter) const
+{
+	return checkFlagsAnyNonEq(Mask,Mask,Filter);
+}
+
+//! Checks for presence of a change that has zero flags
+bool CChangedEntries::checkFlagsAllZero(const CChangedEntries::tFilter &Filter) const
+{
+	return checkFlagsAnyEq(0,-1,Filter);
+}
+
+bool CChangedEntries::checkFlagsAllClassSpecificZero(const CChangedEntries::tFilter &Filter) const
+{
+	return checkFlagsAnyEq(0,(1 << 16) - 1,Filter);
+}
+
+//! Checks for presence of a change that has flags that mach the mask
+bool CChangedEntries::checkFlagsAllSet(int Mask, const CChangedEntries::tFilter &Filter) const
+{
+	return checkFlagsAnyEq(Mask,Mask,Filter);
 }
 
 ///////////////////////////////////////////////////////////////////////////////

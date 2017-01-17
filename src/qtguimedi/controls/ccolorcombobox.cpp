@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,7 +25,7 @@
 
 CColorComboBox::CColorComboBox(QComboBox *pCombo)
 {
-    m_pCombo=pCombo;
+	m_pCombo = pCombo;
 	m_bSyncActive = true;
 }
 
@@ -35,17 +35,21 @@ CColorComboBox::~CColorComboBox()
 
 void CColorComboBox::comboAddColorItem(const QColor& color, const QString& itemName)
 {
-    if (!m_pCombo) return;
-    QPixmap pix(12, 12);
-    QPainter painter(&pix);
-    if (color.isValid()) {
-        painter.setPen(Qt::gray);
-        painter.setBrush(QBrush(color));
-        painter.drawRect(0, 0, 12, 12);
-    }
-    QIcon icon;
-    icon.addPixmap(pix);
-    m_pCombo->addItem(icon,itemName,color);
+	if (!m_pCombo) return;
+
+	QPixmap pix(12, 12);
+	QPainter painter(&pix);
+
+	if (color.isValid())
+	{
+		painter.setPen(Qt::gray);
+		painter.setBrush(QBrush(color));
+		painter.drawRect(0, 0, 12, 12);
+	}
+
+	QIcon icon;
+	icon.addPixmap(pix);
+	m_pCombo->addItem(icon, itemName, color);
 }
 
 
@@ -59,48 +63,84 @@ void CColorComboBox::comboAddColorItem(const QColor& color, const QString& itemN
 
 void CColorComboBox::objectChanged(data::CRegionColoring *pData)
 {
-    if (!m_pCombo) return;
+	if (!m_pCombo) return;
 
-    m_pCombo->blockSignals(true);
+	m_pCombo->blockSignals(true);
 
 	int oldIndex = m_pCombo->currentIndex();
 
-   // Clear old data
-    m_pCombo->clear();
+	// Clear old data
+	m_pCombo->clear();
 
-   // Fill combo with data
+	// Fill combo with data
 
-   data::CRegionColoring::tColor color;
+	data::CRegionColoring::tColor color;
 
-   for( int i = 0; i < pData->getNumOfRegions(); ++i )
-   {
-      // Get color
-      color = pData->getColor( i );
+	m_mapping.clear();
+	m_mapping.resize(pData->getNumOfRegions() + 2);
 
-      QString regName = QString::fromUtf8(pData->getRegionInfo(i).getName().c_str());
-      QColor  qcolor(color.getR(), color.getG(), color.getB());
-      comboAddColorItem(qcolor,regName);
-   }
-   int index=pData->getActiveRegion();   
-   if (m_bSyncActive)
-	  m_pCombo->setCurrentIndex(index);
-   else
-	   if (oldIndex>=0 && oldIndex<m_pCombo->count())
-		   m_pCombo->setCurrentIndex(oldIndex);
-   m_pCombo->blockSignals(false);
+	int regIndex = 0;
+
+	for (int i = 0; i < pData->getNumOfRegions(); ++i)
+	{
+		while (pData->getRegionInfo(i).isAuxiliary())
+		{
+			++i;
+		}
+
+		if (i > pData->getNumOfRegions() - 1)
+		{
+			break;
+		}
+
+		m_mapping[i] = regIndex;
+
+		// Get color
+		color = pData->getColor(i);
+
+		QString regName = QString::fromUtf8(pData->getRegionInfo(i).getName().c_str());
+		QColor  qcolor(color.getR(), color.getG(), color.getB());
+		comboAddColorItem(qcolor, regName);
+
+		++regIndex;
+	}
+
+	int activeIndex = pData->getActiveRegion();
+
+	if (m_bSyncActive)
+	{
+		m_pCombo->setCurrentIndex(m_mapping[activeIndex]);
+	}
+	else
+	{
+		if (oldIndex >= 0 && oldIndex < m_pCombo->count())
+		{
+			m_pCombo->setCurrentIndex(oldIndex);
+		}
+	}
+
+	m_pCombo->blockSignals(false);
+}
+
+int CColorComboBox::getRegionNumber(int index)
+{
+	int pos = std::find(m_mapping.begin(), m_mapping.end(), index) - m_mapping.begin();
+
+	return (pos >= m_mapping.size()) ? 0 : pos;
 }
 
 void CColorComboBox::usualIndexChangedHandler(data::CDataStorage *pDataStorage, int index)
 {
-    Q_ASSERT(NULL!=pDataStorage);
+	Q_ASSERT(NULL != pDataStorage);
 
-    // Change the active region via data storage
-    data::CObjectPtr<data::CRegionColoring> spColoring( pDataStorage->getEntry(data::Storage::RegionColoring::Id) );
-    if( spColoring.get())
-    {
-        m_pCombo->blockSignals(true); // objectchanged of combo will be called, therefore we have to block signals
-        spColoring->setActiveRegion( index );
-        pDataStorage->invalidate(spColoring.getEntryPtr());
-        m_pCombo->blockSignals(false); // objectchanged of combo will be called, therefore we have to block signals
-    }
+	// Change the active region via data storage
+	data::CObjectPtr<data::CRegionColoring> spColoring(pDataStorage->getEntry(data::Storage::RegionColoring::Id));
+
+	if (spColoring.get())
+	{
+		m_pCombo->blockSignals(true); // objectchanged of combo will be called, therefore we have to block signals
+		spColoring->setActiveRegion(getRegionNumber(index));
+		pDataStorage->invalidate(spColoring.getEntryPtr());
+		m_pCombo->blockSignals(false); // objectchanged of combo will be called, therefore we have to block signals
+	}
 }

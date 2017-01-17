@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -50,6 +50,12 @@ public:
 	//! How am i supposed to know what this does
 	bool handle(const osgGA::GUIEventAdapter& ea, osgGA::GUIActionAdapter& aa, osg::Object*, osg::NodeVisitor*);
 
+    //! Set used density window id
+    void setWindowId(int id) { m_id = id; }
+
+    //! Get used density window id
+    int getWindowId() const { return m_id; }
+
 protected:
     //! Mouse position at the begining of the mouse dragging.
     float m_fPushX, m_fPushY;
@@ -59,6 +65,9 @@ protected:
 
     //! Previously set density window.
     int m_OldCenter, m_OldWidth;
+
+    //! Density window id
+    int m_id;
 };
 
 

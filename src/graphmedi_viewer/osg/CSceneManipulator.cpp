@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -386,4 +386,17 @@ void osg::CSceneManipulator::computeHomePosition( const osg::Camera *camera, boo
             osg::Vec3d(0.0f,0.0f,1.0f),
             true);
     }
+}
+
+/** Takes View matrix and manipulator distance*/
+void osg::CSceneManipulator::customSetPosition(const osg::Matrixd &matrix, const double distance) {
+
+    osg::Matrixd inverseMatrix = osg::Matrixd::inverse(matrix);
+    _distance = distance;
+    _center = osg::Vec3d(0., 0., -_distance) * inverseMatrix;
+    _rotation = inverseMatrix.getRotate();
+
+    // fix current rotation
+    if (getVerticalAxisFixed())
+        fixVerticalAxis(_center, _rotation, true);
 }

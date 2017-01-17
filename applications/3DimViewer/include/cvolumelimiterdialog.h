@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -77,6 +77,10 @@ protected:
     //! Volume of interest
     data::SVolumeOfInterest m_Limits;
 
+	//! Original dimensions of volume
+	vpl::img::CPoint3i m_volumeSize;
+	vpl::img::CPoint3d m_voxelSize;
+
     //! Ortho slices.
     data::COrthoSliceXY m_SliceXY;
     data::COrthoSliceXZ m_SliceXZ;
@@ -95,6 +99,10 @@ protected:
     void    updateMaxX(int iValue);
     void    updateMaxY(int iValue);
     void    updateMaxZ(int iValue);
+
+	//! Redraws all scenes
+	void refresh();
+
 private slots:
     void on_comboBoxMode_currentIndexChanged(int index);
     void on_buttonResetZoom_clicked();

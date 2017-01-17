@@ -153,7 +153,8 @@ extern int ZEXPORT zipOpenNewFileInZip OF((zipFile file,
                        uInt size_extrafield_global,
                        const char* comment,
                        int method,
-                       int level));
+                       int level,
+					   int flagBase));
 
 extern int ZEXPORT zipOpenNewFileInZip64 OF((zipFile file,
                        const char* filename,

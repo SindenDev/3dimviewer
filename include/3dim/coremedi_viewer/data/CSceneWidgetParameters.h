@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -89,6 +89,18 @@ public:
     //! Get ortho slice color
     const osg::Vec4 & getOrthoSliceColor( int id ) const { return m_orthoSlicesColors[id]; }
 
+	//! Set widgets scale
+	void setWidgetsScale(double scale) { m_widgetsScale = scale; }
+
+	//! Set default widgets scale
+	void setDefaultWidgetsScale(double scale) { m_defaultWidgetsScale = scale; }	
+
+	//! Get widgets scale
+	double getWidgetsScale() const { return m_widgetsScale; }
+
+	//! Get default widgets scale
+	double getDefaultWidgetsScale() const { return m_defaultWidgetsScale; }
+
 protected:
     //! Are widgets visible?
     bool m_bWidgetsVisible;
@@ -107,6 +119,12 @@ protected:
 
     //! Ortho slices color
     osg::Vec4 m_orthoSlicesColors[3];
+
+	//! Scaling factor for widgets
+	double m_widgetsScale;
+
+	//! Default widgets scale set on storage reset
+	double m_defaultWidgetsScale;
 
     friend class CDentalExamination;
 };

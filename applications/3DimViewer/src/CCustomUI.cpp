@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2015 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@
 #include <QMenu>
 #include <QStylePainter>
 #include <mainwindow.h>
+#include <C3DimApplication.h>
 
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -63,19 +64,6 @@ bool TabBarMouseFunctionalityEx::eventFilter(QObject *obj, QEvent *event)
 //////////////////////////////////////////////////////////////////////////////////////////////
 // Custom Dock Widget Title Bar
 
-#define DOCKBUTTON_SIZE     18
-#define DOCKTITLE_HEIGHT    22
-
-QSize CCustomDockWidgetTitle::minimumSizeHint() const
-{
-    QDockWidget *dw = qobject_cast<QDockWidget*>(parentWidget());
-    Q_ASSERT(dw != 0);
-    QSize result(DOCKTITLE_HEIGHT,DOCKTITLE_HEIGHT);
-    if (dw->features() & QDockWidget::DockWidgetVerticalTitleBar)
-        result.transpose();
-    return result;
-}
-
 CCustomDockWidgetTitle::CCustomDockWidgetTitle(int flags, QWidget *parent)
     : QWidget(parent)
 {
@@ -86,13 +74,18 @@ CCustomDockWidgetTitle::CCustomDockWidgetTitle(int flags, QWidget *parent)
     m_screenshotButton = NULL;
     m_slider = NULL;
 
+    double factor = C3DimApplication::getDpiFactor();
+    factor = 1 + (factor - 1)/2; // reduce upscale because our icons aren't that good
+    m_dockButtonSize = 18 * factor;
+    m_dockTitleHeight = 22 * factor;
+
     if (DWT_BUTTONS_CLOSE==(flags&DWT_BUTTONS_CLOSE))
     {
         m_closeButton = new QToolButton;
         m_closeButton->setAutoRaise(true);
         m_closeButton->setIcon(QIcon(":/icons/dock_icon_close.png"));
         m_closeButton->setMinimumSize(8,8);
-        m_closeButton->setMaximumSize(DOCKBUTTON_SIZE-2,DOCKBUTTON_SIZE);
+        m_closeButton->setMaximumSize(m_dockButtonSize-2,m_dockButtonSize);
         QObject::connect(m_closeButton,SIGNAL(clicked()), this, SLOT(btnCloseClicked()));
     }
     if (DWT_BUTTONS_MAXIMIZE==(flags&DWT_BUTTONS_MAXIMIZE))
@@ -101,15 +94,15 @@ CCustomDockWidgetTitle::CCustomDockWidgetTitle(int flags, QWidget *parent)
         m_maximizeButton->setAutoRaise(true);
         m_maximizeButton->setIcon(QIcon(":/icons/dock_icon_maximize.png"));
         m_maximizeButton->setMinimumSize(8,8);
-        m_maximizeButton->setMaximumSize(DOCKBUTTON_SIZE-2,DOCKBUTTON_SIZE);
+        m_maximizeButton->setMaximumSize(m_dockButtonSize-2,m_dockButtonSize);
         QObject::connect(m_maximizeButton,SIGNAL(clicked()), this, SLOT(btnMaximizeClicked()));
     }    
     {
         m_screenshotButton = new QToolButton;
         m_screenshotButton->setAutoRaise(true);
-        m_screenshotButton->setIcon(QIcon(":/icons/dock_icon_screenshot.png"));
+        m_screenshotButton->setIcon(QIcon(":/icons/dock_icon_screenshot.png"));       
         m_screenshotButton->setMinimumSize(8,8);
-        m_screenshotButton->setMaximumSize(DOCKBUTTON_SIZE-2,DOCKBUTTON_SIZE);
+        m_screenshotButton->setMaximumSize(m_dockButtonSize-2,m_dockButtonSize);
         QObject::connect(m_screenshotButton,SIGNAL(clicked()), this, SLOT(btnScreenshotClicked()));
     }    
     if (DWT_SLIDER_VR == (flags&DWT_SLIDER_VR))
@@ -205,6 +198,16 @@ CCustomDockWidgetTitle::~CCustomDockWidgetTitle()
 		APP_STORAGE.getEntrySignal(data::Storage::SliceYZ::Id).disconnect(m_ConnectionYZ);
 }
 
+QSize CCustomDockWidgetTitle::minimumSizeHint() const
+{
+    QDockWidget *dw = qobject_cast<QDockWidget*>(parentWidget());
+    Q_ASSERT(dw != 0);
+    QSize result(m_dockTitleHeight,m_dockTitleHeight);
+    if (dw->features() & QDockWidget::DockWidgetVerticalTitleBar)
+        result.transpose();
+    return result;
+}
+
 void CCustomDockWidgetTitle::paintEvent(QPaintEvent*)
 {
     QDockWidget *dw = qobject_cast<QDockWidget*>(parentWidget());
@@ -216,7 +219,7 @@ void CCustomDockWidgetTitle::paintEvent(QPaintEvent*)
         QStylePainter p(this);
         p.setBrush((QBrush(Qt::lightGray)));
         QStyleOptionDockWidgetV2 titleOpt;
-        QRect rect(0,0,dw->width(),DOCKTITLE_HEIGHT);
+        QRect rect(0,0,dw->width(),m_dockTitleHeight);
         titleOpt.rect=rect;
         titleOpt.floatable=0!=(dw->features()&QDockWidget::DockWidgetFloatable);
         titleOpt.movable=0!=(dw->features()&QDockWidget::DockWidgetMovable);
@@ -231,8 +234,8 @@ void CCustomDockWidgetTitle::paintEvent(QPaintEvent*)
         
         if (!iconPath.isEmpty())            
         {
-            QImage img(QImage(iconPath).scaledToHeight(DOCKTITLE_HEIGHT-6,Qt::SmoothTransformation));
-            p.drawImage(QRectF((DOCKTITLE_HEIGHT-img.width()+2)/2,(DOCKTITLE_HEIGHT-img.height()+1)/2,img.width(),img.height()),img);
+            QImage img(QImage(iconPath).scaledToHeight(m_dockTitleHeight-6,Qt::SmoothTransformation));
+            p.drawImage(QRectF((m_dockTitleHeight-img.width()+2)/2,(m_dockTitleHeight-img.height()+1)/2,img.width(),img.height()),img);
         }
 
         if (m_maximizeButton)

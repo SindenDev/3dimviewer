@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,9 +21,6 @@
 //////////////////////////////////////////////////////////////////////////////////////////////////
 
 #include <3dim/core/data/CAppSettings.h>
-
-// This header is here only for #ifdef qt_version line (determine if running on QT platform).
-#include <osg/OSGCanvas.h>
 
 #ifdef _WIN32
     #include <Shlobj.h>
@@ -85,11 +82,8 @@ data::CAppSettings::CAppSettings()
 #endif
 
     // Define default clear color
-#ifdef QT_VERSION
     m_clearColor = osg::Vec4f( 0.0, 0.0, 0.0, 1.0 );
-#else               
-    m_clearColor = osg::Vec4(0.2f, 0.2f, 0.4f, 1.0f);
-#endif
+    //m_clearColor = osg::Vec4(0.2f, 0.2f, 0.4f, 1.0f);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

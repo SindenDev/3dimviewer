@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2014 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,8 +25,12 @@
 
 #include <QGroupBox>
 #include <QProxyStyle>
+#include <QDesktopWidget>
+#include <QApplication>
 
-#define GROUPBOX_HEIGHT 22
+int dpiDependentGroupHeight(int height); // adjust height for current dpi
+
+#define GROUPBOX_HEIGHT dpiDependentGroupHeight(22)
 
 // Proxy style for group box that replaces checkbox with arrow
 class CCollapsibleGroupBoxStyle : public QProxyStyle

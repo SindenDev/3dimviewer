@@ -51,7 +51,7 @@ endif()
 
 ADD_SOURCE_GROUPS( ${TRIDIM_GUIQT_LIB_INCLUDE}
                    ${TRIDIM_GUIQT_LIB_SRC} 
-                   base controls dialogs osg osgQt
+                   base controls dialogs osg osgQt actlog
                    )
 
 if( TRIDIM_LIBRARY_EXT )

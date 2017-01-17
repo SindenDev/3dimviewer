@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -292,6 +292,8 @@ scene::CSceneXY::CSceneXY(OSGCanvas * canvas)
     m_unOrthoTransformMatrix = osg::Matrix::inverse(m_orthoTransformMatrix);
 
     this->setMatrix(m_orthoTransformMatrix);
+
+	this->p_DraggableSlice[0]->dummyThin(true);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -307,12 +309,12 @@ void scene::CSceneXY::sliceUpDown(int direction)
     data::CObjectPtr<data::CActiveDataSet> spDataSet(APP_STORAGE.getEntry(data::Storage::ActiveDataSet::Id));
     data::CObjectPtr<data::CDensityData> spVolume(APP_STORAGE.getEntry(spDataSet->getId()));
 
-    int position = spSlice->getPosition();
+    vpl::tSize position = spSlice->getPosition();
     spSlice.release();
 
-	int oldPos = position;
+	vpl::tSize oldPos = position;
 	position+=direction;
-	position = std::max(0, std::min( position, spVolume->getZSize()-1 ));
+    position = std::max((vpl::tSize)0, std::min(position, spVolume->getZSize() - 1));
 	if (oldPos!=position)
 		VPL_SIGNAL(SigSetSliceXY).invoke(position);
 }
@@ -335,6 +337,8 @@ scene::CSceneXZ::CSceneXZ(OSGCanvas * canvas)
     m_unOrthoTransformMatrix = osg::Matrix::inverse(m_orthoTransformMatrix);
 
     this->setMatrix(m_orthoTransformMatrix);
+
+	this->p_DraggableSlice[1]->dummyThin(true);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -350,12 +354,12 @@ void scene::CSceneXZ::sliceUpDown(int direction)
     data::CObjectPtr<data::CActiveDataSet> spDataSet(APP_STORAGE.getEntry(data::Storage::ActiveDataSet::Id));
     data::CObjectPtr<data::CDensityData> spVolume(APP_STORAGE.getEntry(spDataSet->getId()));
 
-    int position = spSlice->getPosition();
+    vpl::tSize position = spSlice->getPosition();
     spSlice.release();
 
-	int oldPos = position;
+    vpl::tSize oldPos = position;
 	position+=direction;
-	position = std::max(0, std::min( position, spVolume->getYSize()-1 ));
+    position = std::max((vpl::tSize)0, std::min(position, spVolume->getYSize() - 1));
 	if (oldPos!=position)
 		VPL_SIGNAL(SigSetSliceXZ).invoke(position);
 }
@@ -378,6 +382,8 @@ scene::CSceneYZ::CSceneYZ(OSGCanvas * canvas)
     m_unOrthoTransformMatrix = osg::Matrix::inverse(m_orthoTransformMatrix);
 
     this->setMatrix(m_orthoTransformMatrix);
+
+	this->p_DraggableSlice[2]->dummyThin(true);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -393,12 +399,12 @@ void scene::CSceneYZ::sliceUpDown(int direction)
     data::CObjectPtr<data::CActiveDataSet> spDataSet(APP_STORAGE.getEntry(data::Storage::ActiveDataSet::Id));
     data::CObjectPtr<data::CDensityData> spVolume(APP_STORAGE.getEntry(spDataSet->getId()));
 
-    int position = spSlice->getPosition();
-	int oldPos = position;
+    vpl::tSize position = spSlice->getPosition();
+    vpl::tSize oldPos = position;
     spSlice.release();
 
 	position+=direction;
-	position = std::max(0, std::min( position, spVolume->getXSize()-1 ));
+    position = std::max((vpl::tSize)0, std::min(position, spVolume->getXSize() - 1));
 	if (oldPos!=position)
 		VPL_SIGNAL(SigSetSliceYZ).invoke(position);
 }

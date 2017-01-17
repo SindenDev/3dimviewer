@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,7 +22,7 @@
 
 #include <data/CModel.h>
 #include <data/CDensityData.h>
-#include <app/Signals.h>
+#include <coremedi/app/Signals.h>
 
 ///////////////////////////////////////////////////////////////////////////////
 //
@@ -34,6 +34,7 @@ void data::CModel::init()
     m_transformationMatrix = osg::Matrix::identity();
 	m_properties.clear();
     m_bSelected = false;
+    m_bUseVertexColors = false;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -48,6 +49,7 @@ void data::CModel::update(const data::CChangedEntries& Changes)
         m_transformationMatrix = osg::Matrix::identity();
 		m_properties.clear();
         m_bSelected = false;
+        m_bUseVertexColors = false;
     }
 
 /*
@@ -69,6 +71,7 @@ data::CModel & data::CModel::operator = ( const data::CModel & model )
     m_Color = model.m_Color;
     m_transformationMatrix = model.m_transformationMatrix;
     m_bVisibility = model.m_bVisibility;
+    m_bUseVertexColors = model.m_bUseVertexColors;
     m_label = model.m_label;
 	m_properties = model.m_properties;
     return *this;
@@ -90,7 +93,7 @@ void data::CModel::restore(CSnapshot *snapshot)
     }
 
     data::CObjectPtr<data::CModel> spModel(APP_STORAGE.getEntry(storageId));
-    geometry::CMesh *mesh = getMesh();
+    geometry::CMesh* mesh = getMesh();
     if (mesh == NULL)
     {
         mesh = new geometry::CMesh;
@@ -109,6 +112,12 @@ void data::CModel::restore(CSnapshot *snapshot)
         if (!mesh->get_property_handle(vProp_VertexFlag, "property_vertex_flags"))
         {
             mesh->add_property(vProp_VertexFlag, "property_vertex_flags");
+
+            geometry::CMesh::VIter v_it(mesh->vertices_begin()), v_itEnd(mesh->vertices_end());
+            for (; v_it != v_itEnd; ++v_it)
+            {
+                mesh->property(vProp_VertexFlag, v_it) = 0;
+            }
         }
 
         for (int v = 0; v < vertices.size(); ++v)

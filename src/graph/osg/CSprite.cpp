@@ -3,7 +3,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2015 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -224,10 +224,20 @@ osg::CAdvSprite::~CAdvSprite()
 //
 osg::CSprite::CSpriteComputeBoundingBoxCallback::CSpriteComputeBoundingBoxCallback(CSprite *sprite)
 {
-    int w = sprite->m_texture->getImage()->s();
-    int h = sprite->m_texture->getImage()->t();
-    int d = w + h / 2;
-    m_boundingBox = osg::BoundingBox(osg::Vec3(-w / 2, -h / 2, -d / 2), osg::Vec3(w / 2, h / 2, d / 2));
+    if (NULL != sprite && NULL != sprite->m_texture.get() && NULL != sprite->m_texture->getImage()) // happened when png library was missing
+    {
+        int w = sprite->m_texture->getImage()->s();
+        int h = sprite->m_texture->getImage()->t();
+        int d = w + h / 2;
+        m_boundingBox = osg::BoundingBox(osg::Vec3(-w / 2, -h / 2, -d / 2), osg::Vec3(w / 2, h / 2, d / 2));
+    }
+    else
+    {
+        m_boundingBox.init();        
+#ifdef _WIN32
+        OutputDebugStringA("invalid sprite in CSpriteComputeBoundingBoxCallback");
+#endif
+    }
 }
 
 
@@ -448,6 +458,7 @@ void osg::CSprite::createGeometry()
 //
 osg::CSpriteNode::CSpriteNode(osg::CSprite *sprite)
 {
+    setName("CSpriteNode");
     m_sprite = sprite;
     addDrawable(m_sprite);
 }
@@ -457,6 +468,7 @@ osg::CSpriteNode::CSpriteNode(osg::CSprite *sprite)
 //
 osg::CSpriteNode::CSpriteNode(const CSpriteNode &spriteNode) : osg::Geode()
 {
+    setName("CSpriteNode");
     m_sprite = new CSprite(*spriteNode.m_sprite);
     addDrawable(m_sprite);
 }

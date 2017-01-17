@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -155,22 +155,29 @@ public:
     {
         if( node )
         {
-    	    node->addUpdateCallback(new tNodeCallback);
+			m_callback = new tNodeCallback;
+    	    node->addUpdateCallback(m_callback);
         }
     }
 
-    //! Modifies the update callback of a given Drawable.
-/*    void setupObserver(osg::Drawable * drawable)
-    {
-        if( drawable )
-        {
-    	    drawable->addUpdateCallback(new tDrawableCallback);
-        }
-    }*/
+	//! Removes the update callback of a given Node.
+	void freeObserver(osg::Node * node)
+	{
+		if (node)
+		{
+			if (m_callback)
+			{
+				node->removeUpdateCallback(m_callback);
+			}
+		}
+	}
 
 protected:
     //! Pointer to the OpenGL canvas.
     tCanvas *m_pCanvas;
+
+	//! Node callback
+	osg::ref_ptr<tNodeCallback> m_callback;
 };
 
 

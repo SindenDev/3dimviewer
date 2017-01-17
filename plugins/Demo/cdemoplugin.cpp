@@ -1,6 +1,6 @@
 ///////////////////////////////////////////////////////////////////////////////
 // 
-// Copyright 2008-2015 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 
 #include <QtGui>
@@ -19,6 +19,8 @@ CDemoPlugin::CDemoPlugin() : QObject(), PluginInterface()
     m_pToolBar = NULL;
     m_pPanel = NULL;
     m_colorComboBox = NULL;
+	setProperty("Icon", ":/icons/icons/demoplugin.png");
+	setProperty("PanelIcon", ":/icons/icons/demoplugin_dock.png");
 }
 
 CDemoPlugin::~CDemoPlugin()
@@ -39,7 +41,7 @@ void  CDemoPlugin::createActions()
     }
     if (!m_actionStroke)
     {
-        m_actionStroke = new QAction(QIcon(":/icons/icons/2.png"),tr("Stroke Drawing Mode"),NULL);
+        m_actionStroke = new QAction(QIcon(":/icons/icons/2.png"),tr("Brush Drawing Mode"),NULL);
 		m_actionStroke->setObjectName("actionStroke");
         m_actionStroke->setStatusTip(tr("Click the button, then press Shift and start drawing using mouse."));
         m_actionStroke->setCheckable(true);

@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@
 
 #include "AppConfigure.h"
 
+#include <C3DimApplication.h>
 #include <QtGui>
 #include <QDockWidget>
 #include <QLayout>
@@ -33,17 +34,22 @@
 #include <QPrinter>
 #include <QFileDialog>
 #include <QDesktopServices>
+#include <QGroupBox>
+#include <QLineEdit>
+#include <QComboBox>
 #if QT_VERSION >= 0x050000
     #include <QStandardPaths>
 #endif
 #include <QMap>
-
+#include <QCheckBox>
+#include <QRadioButton>
 #include <data/CDicomLoader.h>
 #include <data/CAppSettings.h>
 #include <data/CUndoManager.h>
 #include <data/CRegionData.h>
 #include <data/CImageLoaderInfo.h>
 #include <data/CVolumeTransformation.h>
+#include <data/CVolumeOfInterestData.h>
 
 #include <VPL/Module/Progress.h>
 #include <VPL/Module/Serialization.h>
@@ -74,11 +80,14 @@
 #include <CDataInfoDialog.h>
 #include <dialogs/cprogress.h>
 #include <CCustomUI.h>
-#include <C3DimApplication.h>
 #include <CFilterDialog.h>
+
+#include <data/CCustomData.h>
 
 #include <zlib.h>
 #include <zip/unzip.h>
+
+
 
 #ifdef _WIN32 // Windows specific
     #include <Windows.h>
@@ -95,16 +104,17 @@
 #include <sys/mount.h>
 #endif
 
-// for dicom save
-#include "dcmtk/config/osconfig.h"
-#include "dcmtk/ofstd/ofconapp.h"
-#include "dcmtk/dcmdata/dcuid.h"
-#include "dcmtk/dcmdata/dcfilefo.h"
-#include "dcmtk/dcmdata/dcdict.h"
-#include "dcmtk/dcmdata/dcdeftag.h"
-#include "dcmtk/dcmjpeg/djencode.h"
-#include "dcmtk/dcmjpeg/djrplol.h"
-#include "dcmtk/dcmdata/dcmetinf.h"
+#if defined( TRIDIM_USE_GDCM )
+
+#include <data/CDicomSaverGDCM.h>
+
+#else
+
+#include <data/CDicomSaverDCTk.h>
+#include <data/CDicomDCTk.h>
+#include <CDicomTransferDialog.h>
+
+#endif
 
 //#undef USE_PSVR
 
@@ -183,7 +193,9 @@ public:
 #undef CUSTOM_MAX_PATH
                     std::string s = pFileName;
                     QString file = m_tempDir;
-                    file += QString::fromStdString(s);
+					if (s.compare("/") != 0 && s.compare("\\") != 0)
+						file += QString::fromStdString(s);
+
                     if (file.endsWith('/') || file.endsWith('\\'))
                     {
                         QDir dir;
@@ -192,6 +204,14 @@ public:
                     }
                     else
                     {
+						// sometimes it was trying to create a file in non-existing directory,
+						// so make sure the directory is created (just create it)
+						QFileInfo fInfo(file);
+						QString dirPath = fInfo.dir().absolutePath();
+						QDir dir;
+						bool ok = dir.mkpath(dirPath);
+						Q_ASSERT(ok);
+
                         if (fi.uncompressed_size>0)
                         {
                             char* pDecompressed=new char[fi.uncompressed_size];
@@ -263,7 +283,8 @@ MainWindow* MainWindow::m_pMainWindow = NULL;
 MainWindow::MainWindow(QWidget *parent, CPluginManager* pPlugins) :
     QMainWindow(parent),
     ui(new Ui::MainWindow),
-	m_pPlugins(pPlugins)
+	m_pPlugins(pPlugins),
+	m_segmentationPluginsLoaded(false)
 {    
 	Q_ASSERT(NULL!=m_pPlugins);
     m_pMainWindow = this;
@@ -284,7 +305,6 @@ MainWindow::MainWindow(QWidget *parent, CPluginManager* pPlugins) :
     m_volumeRenderingPanel=NULL;
     m_realCentralWidget = NULL;
 	m_modelsPanel = NULL;
-    m_helpView=NULL;
     // we have to create a permanent central widget because of some sizing issues
     // when switching workspaces without central widget
     m_centralWidget = new QWidget();
@@ -296,7 +316,8 @@ MainWindow::MainWindow(QWidget *parent, CPluginManager* pPlugins) :
     // setup UI
     ui->setupUi(this);
 
-    setDockOptions(QMainWindow::VerticalTabs);
+    //setDockOptions(QMainWindow::VerticalTabs);
+	setDockOptions(QMainWindow::AllowTabbedDocks | QMainWindow::AllowNestedDocks | QMainWindow::VerticalTabs);
     setAcceptDrops(true);
     
     // set up status bar
@@ -305,10 +326,10 @@ MainWindow::MainWindow(QWidget *parent, CPluginManager* pPlugins) :
     ui->statusBar->addPermanentWidget(m_grayLevelLabel);
 
     // set blue background color
-    data::CObjectPtr<data::CAppSettings> settings( APP_STORAGE.getEntry(data::Storage::AppSettings::Id) );
-    settings->setClearColor(osg::Vec4(0.2f, 0.2f, 0.4f, 1.0f));
+    data::CObjectPtr<data::CAppSettings> spSettings( APP_STORAGE.getEntry(data::Storage::AppSettings::Id) );
+	spSettings->setClearColor(osg::Vec4(0.2f, 0.2f, 0.4f, 1.0f));
 
-//    setTabPosition(Qt::AllDockWidgetAreas, QTabWidget::North);
+	setTabPosition(Qt::AllDockWidgetAreas, QTabWidget::North);
     setCentralWidget(m_centralWidget);
 
     // connect actions to slots
@@ -320,12 +341,23 @@ MainWindow::MainWindow(QWidget *parent, CPluginManager* pPlugins) :
     // create OSG windows
     createOSGStuff();
 
+	VPL_SIGNAL(SigSetContoursVisibility).connect(this, &MainWindow::setContoursVisibility);
+	VPL_SIGNAL(SigGetContoursVisibility).connect(this, &MainWindow::getContoursVisibility);
+
+	VPL_SIGNAL(SigSetVolumeOfInterestVisibility).connect(this, &MainWindow::setVOIVisibility);
+	VPL_SIGNAL(SigGetVolumeOfInterestVisibility).connect(this, &MainWindow::getVOIVisibility);
+
+	VPL_SIGNAL(SigEnableRegionColoring).connect(this, &MainWindow::setRegionsVisibility);
+
+	VPL_SIGNAL(SigShowVolumeOfInterestDialog).connect(this, &MainWindow::limitVolume);
+
+	QSettings settings;
+
     setupDockWindows();
 
     // load application settings
     int nThreadingMode=0;
-    {   // read info on basic layout
-        QSettings settings;
+    {   // read info on basic layout		
         nThreadingMode=settings.value("Threading").toInt();
         m_localeDir=settings.value("LocaleDir").toString();
         settings.beginGroup("MainWindow");
@@ -375,8 +407,7 @@ MainWindow::MainWindow(QWidget *parent, CPluginManager* pPlugins) :
             }
         }
     }
-    // load all other app settings
-    loadAppSettings();
+    
 
     // setup working space
     setUpWorkspace();
@@ -384,11 +415,24 @@ MainWindow::MainWindow(QWidget *parent, CPluginManager* pPlugins) :
     // create panels
     createPanels();
 
+	std::map<int, vpl::base::CObject*>& vplSignalsTable = m_pPlugins->getVplSignalsTable();
+	vplSignalsTable[VPL_SIGNAL(SigShowPreviewDialog).getId()] = &(VPL_SIGNAL(SigShowPreviewDialog));
+	vplSignalsTable[VPL_SIGNAL(SigPreviewDialogClosed).getId()] = &(VPL_SIGNAL(SigPreviewDialogClosed));
+	vplSignalsTable[VPL_SIGNAL(SigShowInfoDialog).getId()] = &(VPL_SIGNAL(SigShowInfoDialog));
+	vplSignalsTable[VPL_SIGNAL(SigNumberOfRegionsChanged).getId()] = &(VPL_SIGNAL(SigNumberOfRegionsChanged));
+	vplSignalsTable[VPL_SIGNAL(SigVRChanged).getId()] = &(VPL_SIGNAL(SigVRChanged));
+	vplSignalsTable[VPL_SIGNAL(SigManSeg3DChanged).getId()] = &(VPL_SIGNAL(SigManSeg3DChanged));
+
     // load plugins
     Q_ASSERT(m_densityWindowPanel && m_densityWindowPanel->parentWidget());
     QDockWidget* dockPluginsTo=qobject_cast<QDockWidget*>(m_densityWindowPanel->parentWidget());
 	if (NULL!=m_pPlugins)
-		m_pPlugins->loadPlugins(this,&m_localeDir,dockPluginsTo);
+		m_pPlugins->loadPlugins(this,&m_localeDir,dockPluginsTo);	
+
+	if (findPluginByID("AutoSegAndFiltering"))
+	{
+		m_segmentationPluginsLoaded = true;
+	}
 
     // load last known layout
     readLayoutSettings(false);
@@ -407,6 +451,7 @@ MainWindow::MainWindow(QWidget *parent, CPluginManager* pPlugins) :
     // set threading mode
     if (1==nThreadingMode)
     {
+        VPL_LOG_INFO("Enabling multithreaded OpenGL");
         m_3DView->enableMultiThreaded();
         m_OrthoXYSlice->enableMultiThreaded();
         m_OrthoXZSlice->enableMultiThreaded();
@@ -423,18 +468,18 @@ MainWindow::MainWindow(QWidget *parent, CPluginManager* pPlugins) :
             if (0!=file.compare("3DimViewer.exe",Qt::CaseInsensitive) && 0!=file.compare("3DimViewerd.exe",Qt::CaseInsensitive) && !file.contains("unins",Qt::CaseInsensitive))
                 cntOther++;
         }
-        if (cntOther>0)
+        /*if (cntOther>0)
         {
-            ui->menuModel->addAction(tr("Process model"),this,SLOT(processSurfaceModelExtern()));
-        }
+            ui->menuModel->addAction(tr("Process Model"),this,SLOT(processSurfaceModelExtern()));
+        }*/
 #endif
-        QMenu* pMenu = ui->menuModel->addMenu(tr("Visualization"));
+        /*QMenu* pMenu = ui->menuModel->addMenu(tr("Visualization"));
         QAction* pSmooth = pMenu->addAction(tr("Smooth"),this,SLOT(modelVisualizationSmooth()));
 		pSmooth->setObjectName("smoothShading");
         QAction* pFlat = pMenu->addAction(tr("Flat"),this,SLOT(modelVisualizationFlat()));
 		pFlat->setObjectName("flatShading");
         QAction* pWire = pMenu->addAction(tr("Wire"),this,SLOT(modelVisualizationWire()));
-		pWire->setObjectName("noShading");
+		pWire->setObjectName("noShading");*/
     }
     // disable actions which are meant to be disabled :)
     ui->action3D_View->setEnabled(false); // always visible
@@ -472,7 +517,7 @@ MainWindow::MainWindow(QWidget *parent, CPluginManager* pPlugins) :
         }
     }
 
-	connect(ui->menuViewFilter,SIGNAL(aboutToShow()),this,SLOT(aboutToShowViewFilterMenu()));
+	connect(ui->menuData,SIGNAL(aboutToShow()),this,SLOT(aboutToShowViewFilterMenu()));
 	connect(ui->actionViewEqualize, SIGNAL(toggled(bool)), this, SLOT(setTextureFilterEqualize(bool)));
 	connect(ui->actionViewSharpen, SIGNAL(toggled(bool)), this, SLOT(setTextureFilterSharpen(bool)));
 
@@ -485,6 +530,60 @@ MainWindow::MainWindow(QWidget *parent, CPluginManager* pPlugins) :
 
 	// first event will open files from command line etc
     QTimer::singleShot(0, this, SLOT(firstEvent()));
+
+    connectActionsToEventFilter();
+	m_eventFilter.processSettings();
+
+	VPL_SIGNAL(SigShowPreviewDialog).connect(this, &MainWindow::showPreviewDialog);
+	VPL_SIGNAL(SigShowInfoDialog).connect(this, &MainWindow::showInfoDialog);
+
+	VPL_SIGNAL(SigSaveModel).connect(this, &MainWindow::saveSTLById);
+
+	data::CObjectPtr<data::CRegionData> spRegionData(APP_STORAGE.getEntry(data::Storage::RegionData::Id, data::Storage::NO_UPDATE));
+
+	ui->actionRegions_Visible->setChecked(spRegionData->isColoringEnabled());
+
+	if (!findPluginByID("DataExpress"))
+	{
+		ui->actionSend_Data->setVisible(false);
+	}
+
+	if (!m_segmentationPluginsLoaded)
+	{
+		ui->menuSegmentation->menuAction()->setVisible(false);
+		ui->actionRegions_Contours_Visible->setVisible(false);
+		ui->actionRegions_Visible->setVisible(false);
+	}
+	else
+	{
+		ui->actionModels_List_Panel->setEnabled(false);
+		ui->actionModels_List_Panel->setVisible(false);
+		m_modelsPanel->close();
+		m_modelsPanel->setEnabled(false);
+		m_modelsPanel->setVisible(false);
+		m_modelsPanel->parentWidget()->setEnabled(false);
+		m_modelsPanel->parentWidget()->setVisible(false);
+	}
+
+	ui->actionRegions_Contours_Visible->setChecked(!settings.value("ContoursVisibility", true).toBool());
+	ui->actionRegions_Contours_Visible->trigger();
+
+	m_Connection = APP_STORAGE.getEntrySignal(data::Storage::ActiveDataSet::Id).connect(this, &MainWindow::onNewDensityData);
+
+	// show the feedback request
+	settings.beginGroup("Feedback");
+	int starts = settings.value("NumberOfStarts", 0).toInt();
+
+	if (starts == 10 || (starts > 10 && starts % 50 == 0))
+		QTimer::singleShot(1500, this, SLOT(showFeedbackRequestDialog()));
+
+	settings.setValue("NumberOfStarts", starts + 1);
+	settings.endGroup();
+
+	// load all other app settings
+	loadAppSettings();
+
+	//m_volumeRenderingPanel->setVRMode();
 }
 
 MainWindow::~MainWindow()
@@ -510,7 +609,11 @@ MainWindow::~MainWindow()
         settings.endGroup();
     }
     APP_STORAGE.getEntrySignal(data::Storage::RegionData::Id).disconnect(m_conRegionData);
-    APP_MODE.getModeChangedSignal().disconnect( m_ConnectionModeChanged );
+    APP_MODE.getModeChangedSignal().disconnect(m_ConnectionModeChanged);
+    {   // clear undo before plugin unload because it can contain data allocated by plugins
+        data::CObjectPtr< data::CUndoManager > ptrManager(APP_STORAGE.getEntry(data::Storage::UndoManager::Id));
+        ptrManager->clear();
+    }
 	if (NULL!=m_pPlugins)
 		m_pPlugins->disconnectPlugins();
     delete ui;
@@ -533,6 +636,7 @@ void MainWindow::connectActions()
     connect(ui->actionPrint, SIGNAL(triggered()), this, SLOT(print()));
     connect(ui->actionShow_Data_Properties, SIGNAL(triggered()), this, SLOT(showDataProperties()));
     connect(ui->actionSend_Data, SIGNAL(triggered()), this, SLOT(sendDataExpressData()));
+	connect(ui->actionReceive_DICOM_Data, SIGNAL(triggered()), this, SLOT(receiveDicomData()));
 
     // Measurements menu
     connect(ui->actionMeasure_Density_Value, SIGNAL(triggered(bool)), SLOT(measureDensity(bool)));
@@ -546,6 +650,8 @@ void MainWindow::connectActions()
     connect(ui->actionShow_Help, SIGNAL(triggered()), this, SLOT(showHelp()));
     connect(ui->actionAbout_Plugins, SIGNAL(triggered()), this, SLOT(showAboutPlugins()));
     connect(ui->actionAbout, SIGNAL(triggered()), this, SLOT(showAbout()));
+	connect(ui->actionTutorials, SIGNAL(triggered()), this, SLOT(showTutorials()));
+	connect(ui->actionFeedback, SIGNAL(triggered()), this, SLOT(showFeedback()));
 
     // Toolbars
     connect(ui->actionMain_Toolbar, SIGNAL(triggered()), this, SLOT(showMainToolBar()));
@@ -569,6 +675,7 @@ void MainWindow::connectActions()
 	connect(ui->actionClose_Active_Panel, SIGNAL(triggered()), this, SLOT(closeActivePanel()));
 	connect(ui->actionPrevious_Panel, SIGNAL(triggered()), this, SLOT(prevPanel()));
 	connect(ui->actionNext_Panel, SIGNAL(triggered()), this, SLOT(nextPanel()));
+    connect(ui->actionTabify_Panels, SIGNAL(triggered()), this, SLOT(autoTabPanels()));
 
     // Information Widgets
     connect(ui->actionShow_Information_Widgets, SIGNAL(triggered(bool)), this, SLOT(showInformationWidgets(bool)));
@@ -584,10 +691,6 @@ void MainWindow::connectActions()
     connect(ui->actionCoronal_Slice, SIGNAL(triggered(bool)), this, SLOT(showCoronalSlice(bool)));
     connect(ui->actionSagittal_Slice, SIGNAL(triggered(bool)), this, SLOT(showSagittalSlice(bool)));
     connect(ui->actionVolume_Rendering, SIGNAL(triggered(bool)), this, SLOT(showMergedVR(bool)));
-
-    // Surface model
-    connect(ui->actionShow_Surface_Model, SIGNAL(triggered(bool)), this, SLOT(showSurfaceModel(bool)));
-    connect(ui->actionCreate_Surface_Model, SIGNAL(triggered()), this, SLOT(createSurfaceModel()));
 
     // Workspace switching
     connect(ui->actionWorkspace3DView, SIGNAL(triggered()), this, SLOT(setUpWorkSpace3D()));
@@ -608,8 +711,94 @@ void MainWindow::connectActions()
     connect(ui->actionUndo, SIGNAL(triggered()), this, SLOT(performUndo()));
     connect(ui->actionRedo, SIGNAL(triggered()), this, SLOT(performRedo()));
 
+	// Segmentation
+	connect(ui->actionLimit_Volume, SIGNAL(triggered()), this, SLOT(limitVolume()));
+	connect(ui->actionReset, SIGNAL(triggered()), this, SLOT(resetLimit()));
+	connect(ui->actionRegions_Visible, SIGNAL(triggered(bool)), this, SLOT(onMenuRegionsVisibleToggled(bool)));
+	connect(ui->actionRegions_Contours_Visible, SIGNAL(triggered(bool)), this, SLOT(onMenuContoursVisibleToggled(bool)));
+	connect(ui->actionVolume_of_Interest_Visible, SIGNAL(triggered(bool)), this, SLOT(onMenuVOIVisibleToggled(bool)));
+
+	//Model
+	connect(ui->actionSmooth, SIGNAL(triggered()), this, SLOT(modelVisualizationSmooth()));
+	connect(ui->actionFlat, SIGNAL(triggered()), this, SLOT(modelVisualizationFlat()));
+	connect(ui->actionWire, SIGNAL(triggered()), this, SLOT(modelVisualizationWire()));
+	connect(ui->actionShow_Surface_Model, SIGNAL(triggered(bool)), this, SLOT(showSurfaceModel(bool)));
+
     // other signals
     VPL_SIGNAL(SigVREnabledChange).connect(this, &MainWindow::onVREnabledChange);
+}
+
+void MainWindow::limitVolume()
+{
+	// Get the active dataset
+	//data::CObjectPtr<data::CDensityData> spData(APP_STORAGE.getEntry(data::Storage::PatientData::Id));
+
+	data::CObjectPtr< data::CActiveDataSet > ptrDataset(APP_STORAGE.getEntry(data::Storage::ActiveDataSet::Id));
+	data::CObjectPtr< data::CDensityData > pVolume(APP_STORAGE.getEntry(ptrDataset->getId()));
+
+	data::SVolumeOfInterest initLimits;
+
+	data::CObjectPtr<data::CVolumeOfInterestData> spVOI(APP_STORAGE.getEntry(data::Storage::VolumeOfInterestData::Id));
+
+	initLimits.m_MinX = spVOI->getMinX();
+	initLimits.m_MinY = spVOI->getMinY();
+	initLimits.m_MinZ = spVOI->getMinZ();
+	initLimits.m_MaxX = spVOI->getMaxX();
+	initLimits.m_MaxY = spVOI->getMaxY();
+	initLimits.m_MaxZ = spVOI->getMaxZ();
+
+	// and show the limiter dialog
+	CVolumeLimiterDialog vlDlg(this);
+	vlDlg.setVolume(pVolume.get(), false);
+	vlDlg.setLimits(initLimits);
+
+	if (QDialog::Accepted == vlDlg.exec())
+	{
+		const data::SVolumeOfInterest limits = vlDlg.getLimits();
+
+		spVOI->setLimits(limits.m_MinX, limits.m_MinY, limits.m_MinZ, limits.m_MaxX, limits.m_MaxY, limits.m_MaxZ);
+
+		VPL_SIGNAL(SigVolumeOfInterestChanged).invoke(true);
+
+		setVOIVisibility(true);
+	}
+	else
+	{
+		VPL_SIGNAL(SigVolumeOfInterestChanged).invoke(false);
+		setVOIVisibility(true);
+	}
+}
+
+void MainWindow::resetLimit()
+{
+	// Get the active dataset
+	//data::CObjectPtr<data::CDensityData> spData(APP_STORAGE.getEntry(data::Storage::PatientData::Id));
+	data::CObjectPtr<data::CVolumeOfInterestData> spVOI(APP_STORAGE.getEntry(data::Storage::VolumeOfInterestData::Id));
+
+	data::CObjectPtr< data::CActiveDataSet > ptrDataset(APP_STORAGE.getEntry(data::Storage::ActiveDataSet::Id));
+	data::CObjectPtr< data::CDensityData > pVolume(APP_STORAGE.getEntry(ptrDataset->getId()));
+
+	spVOI->setLimits(0, 0, 0, pVolume->getXSize() - 1, pVolume->getYSize() - 1, pVolume->getZSize() - 1);
+
+	VPL_SIGNAL(SigVolumeOfInterestChanged).invoke(false);
+
+	setVOIVisibility(false);
+}
+
+void MainWindow::connectActionsToEventFilter()
+{
+	QList<QAction*> actions = this->findChildren<QAction*>();
+
+	foreach(QAction *a, actions)
+	{
+		if (!a->objectName().isEmpty())
+		{
+			connect(a, SIGNAL(triggered()), &m_eventFilter, SLOT(catchMenuAction()));
+
+			if (!a->shortcut().isEmpty())
+				connect(a, SIGNAL(triggered()), this, SLOT(resetAppMode()));
+		}
+	}
 }
 
 void MainWindow::onVREnabledChange(bool value)
@@ -654,6 +843,7 @@ void MainWindow::createToolBars()
 	ui->panelsToolBar->addAction(ui->actionModels_List_Panel);
     
     QAction* pFullScreen = ui->appToolBar->addAction(QIcon(":/icons/resources/fullscreen.png"),tr("Fullscreen"));
+	pFullScreen->setObjectName("actionFullScreen");
     pFullScreen->setCheckable(true);
     connect(pFullScreen,SIGNAL(triggered(bool)),this,SLOT(fullscreen(bool)));
 }
@@ -746,9 +936,9 @@ void MainWindow::removeViewsParentWidget(QWidget* view)
 
 QDockWidget* MainWindow::getParentDockWidget(QWidget* view)
 {
-    if (NULL==view) return false;
+    if (NULL==view) return nullptr;
     QWidget* pParent=view->parentWidget();
-    if (NULL==pParent) return false;
+    if (NULL==pParent) return nullptr;
     QDockWidget* pDockW=qobject_cast<QDockWidget*>(pParent);
     return pDockW;
 }
@@ -892,12 +1082,12 @@ void MainWindow::setUpWorkspace()
 void MainWindow::createPanels()
 {
     m_densityWindowPanel = new CDensityWindowWidget();
-    QDockWidget *dockDWP = new QDockWidget(tr("Density Window"), this);
+    QDockWidget *dockDWP = new QDockWidget(tr("Brightness / Contrast"), this);
     dockDWP->setAllowedAreas(Qt::AllDockWidgetAreas);
     dockDWP->setFeatures(QDockWidget::DockWidgetClosable|QDockWidget::DockWidgetMovable ); // QDockWidget::DockWidgetFloatable
-    dockDWP->setObjectName("Density Window Panel");
+    dockDWP->setObjectName("Brightness / Contrast Panel");
     dockDWP->setWidget(m_densityWindowPanel);
-	dockDWP->setProperty("Icon",":/icons/density_window.png");
+	dockDWP->setProperty("Icon",":/icons/resources/density_window_dock.png");
     addDockWidget(Qt::RightDockWidgetArea, dockDWP);
 
     m_orthoSlicesPanel = new COrthoSlicesWidget();
@@ -906,16 +1096,16 @@ void MainWindow::createPanels()
     dockOrtho->setFeatures(QDockWidget::DockWidgetClosable|QDockWidget::DockWidgetMovable );
     dockOrtho->setObjectName("Ortho Slices Panel");
     dockOrtho->setWidget(m_orthoSlicesPanel);
-	dockOrtho->setProperty("Icon",":/icons/ortho_slices_window.png");
+	dockOrtho->setProperty("Icon",":/icons/resources/ortho_slices_window_dock.png");
     tabifyDockWidget(dockDWP, dockOrtho);
 
     m_segmentationPanel = new CSegmentationWidget();
-    QDockWidget *dockSeg = new QDockWidget(tr("Tissue Segmentation"), this);
+    QDockWidget *dockSeg = new QDockWidget(tr("Quick Tissue Model Creation"), this);
     dockSeg->setAllowedAreas(Qt::AllDockWidgetAreas);
     dockSeg->setFeatures(QDockWidget::DockWidgetClosable|QDockWidget::DockWidgetMovable);
-    dockSeg->setObjectName("Tissue Segmentation Panel");
+    dockSeg->setObjectName("Quick Tissue Model Creation Panel");
     dockSeg->setWidget(m_segmentationPanel);
-	dockSeg->setProperty("Icon",":/icons/segmentation_window.png");
+	dockSeg->setProperty("Icon",":/icons/resources/segmentation_window_dock.png");
     tabifyDockWidget(dockDWP, dockSeg);
 
     m_volumeRenderingPanel = new CVolumeRenderingWidget();
@@ -925,45 +1115,31 @@ void MainWindow::createPanels()
     dockVR->setFeatures(QDockWidget::DockWidgetClosable|QDockWidget::DockWidgetMovable);
     dockVR->setObjectName("Volume Rendering Panel");
     dockVR->setWidget(m_volumeRenderingPanel);
-	dockVR->setProperty("Icon",":/icons/volume_rendering_window2.png");
+	dockVR->setProperty("Icon",":/icons/resources/volume_rendering_window2_dock.png");
     dockVR->hide();
 //    dockVR->setProperty("Icon",":/icons/");
     tabifyDockWidget(dockDWP, dockVR);
 
     m_modelsPanel = new CModelsWidget();
-    QDockWidget *dockModels = new QDockWidget(tr("Models list"), this);
+    QDockWidget *dockModels = new QDockWidget(tr("Models List"), this);
     dockModels->setAllowedAreas(Qt::AllDockWidgetAreas);
     dockModels->setFeatures(QDockWidget::DockWidgetClosable|QDockWidget::DockWidgetMovable);
     dockModels->setObjectName("Models Panel");
     dockModels->setWidget(m_modelsPanel);
-	dockModels->setProperty("Icon",":/icons/resources/models.png");
+	dockModels->setProperty("Icon",":/icons/resources/models_dock.png");
     tabifyDockWidget(dockDWP, dockModels);
-
-    m_helpView = new QWebView();
-    loadHelp();
-    QDockWidget *dockHelp = new QDockWidget(tr("Help"), this);
-    dockHelp->setAllowedAreas(Qt::AllDockWidgetAreas);
-    dockHelp->setFeatures(QDockWidget::DockWidgetClosable|QDockWidget::DockWidgetMovable);
-    dockHelp->setObjectName("Help View");
-    dockHelp->setWidget(m_helpView);
-    dockHelp->hide();
-	dockHelp->setProperty("Icon",":/icons/3dim.ico");
-    tabifyDockWidget(dockDWP, dockHelp);
-
 
     connect(dockDWP, SIGNAL(visibilityChanged(bool)), this, SLOT(dockWidgetVisiblityChanged(bool)));
     connect(dockOrtho, SIGNAL(visibilityChanged(bool)), this, SLOT(dockWidgetVisiblityChanged(bool)));
     connect(dockSeg, SIGNAL(visibilityChanged(bool)), this, SLOT(dockWidgetVisiblityChanged(bool)));
     connect(dockVR, SIGNAL(visibilityChanged(bool)), this, SLOT(dockWidgetVisiblityChanged(bool)));
 	connect(dockModels, SIGNAL(visibilityChanged(bool)), this, SLOT(dockWidgetVisiblityChanged(bool)));
-	connect(dockHelp, SIGNAL(visibilityChanged(bool)), this, SLOT(dockWidgetVisiblityChanged(bool)));
 
     connect(dockDWP,SIGNAL(dockLocationChanged(Qt::DockWidgetArea)),this,SLOT(dockLocationChanged(Qt::DockWidgetArea))); 
     connect(dockOrtho,SIGNAL(dockLocationChanged(Qt::DockWidgetArea)),this,SLOT(dockLocationChanged(Qt::DockWidgetArea)));
     connect(dockSeg,SIGNAL(dockLocationChanged(Qt::DockWidgetArea)),this,SLOT(dockLocationChanged(Qt::DockWidgetArea)));
     connect(dockVR,SIGNAL(dockLocationChanged(Qt::DockWidgetArea)),this,SLOT(dockLocationChanged(Qt::DockWidgetArea)));
 	connect(dockModels,SIGNAL(dockLocationChanged(Qt::DockWidgetArea)),this,SLOT(dockLocationChanged(Qt::DockWidgetArea)));
-	connect(dockHelp,SIGNAL(dockLocationChanged(Qt::DockWidgetArea)),this,SLOT(dockLocationChanged(Qt::DockWidgetArea)));
 }
 
 QSizeF MainWindow::getRelativeSize(QWidget* widget)
@@ -1155,9 +1331,6 @@ void MainWindow::loadDefaultPerspective()
     pDock=getParentDockWidget(m_volumeRenderingPanel);
     tabifyDockWidget(pDock1,pDock);
     pDock->hide();
-    pDock=getParentDockWidget(m_helpView);
-    tabifyDockWidget(pDock1,pDock);
-    pDock->hide();
 	if (NULL!=m_pPlugins)
 		m_pPlugins->tabifyAndHidePanels(pDock1);
 #endif
@@ -1280,6 +1453,8 @@ bool MainWindow::openDICOM()
     if (!preOpen())
         return false;
 
+	setVOIVisibility(false);
+
     QSettings settings;
 #if QT_VERSION < 0x050000
     QString previousDir=settings.value("DICOMdir",QDesktopServices::storageLocation(QDesktopServices::HomeLocation)).toString();
@@ -1292,14 +1467,16 @@ bool MainWindow::openDICOM()
     if (fileName.isEmpty())
         return false;
 
-    settings.setValue("DICOMdir",fileName);
-    return openDICOM(fileName,fileName);
+    settings.setValue("DICOMdir", fileName);
+    return openDICOM(fileName, fileName, true);
 }
 
 bool MainWindow::openDICOMZIP()
 {
     if (!preOpen())
         return false;
+
+	setVOIVisibility(false);
 
     QSettings settings;
 #if QT_VERSION < 0x050000
@@ -1314,13 +1491,15 @@ bool MainWindow::openDICOMZIP()
         return false;
 
     QFileInfo pathInfo( fileName );
-    settings.setValue("DICOMdir",pathInfo.dir().absolutePath());
+    settings.setValue("DICOMdir", pathInfo.dir().absolutePath());
 
     return openDICOMZIP(fileName);
 }
 
 bool MainWindow::openDICOMZIP(QString fileName)
 {
+	setVOIVisibility(false);
+
     QString realName = fileName;
     QFileInfo pathInfo( fileName );
 
@@ -1333,11 +1512,13 @@ bool MainWindow::openDICOMZIP(QString fileName)
         QApplication::restoreOverrideCursor();
     }
     
-    return openDICOM(fileName,realName);
+    return openDICOM(fileName,realName, false);
 }
 
-bool MainWindow::openDICOM(const QString& fileName, const QString& realName)
+bool MainWindow::openDICOM(const QString& fileName, const QString& realName, bool fromFolder)
 {
+	setVOIVisibility(false);
+
     QString fileNameIn(fileName);
     // make sure that we pass in directory name and not a file name
     QFileInfo fi(fileNameIn);
@@ -1348,19 +1529,23 @@ bool MainWindow::openDICOM(const QString& fileName, const QString& realName)
     }
 #else    
     {
-        std::string ansiName = fi.absolutePath().toStdString();
+        //TODO Why is this here? is it neccessary? It's imposible not to select dir
+#if !defined( TRIDIM_USE_GDCM )
+                std::string ansiName = fi.absolutePath().toStdString();
         int nFrames = 0;
-        data::getDicomFileInfo( vpl::sys::tStringConv::fromUtf8(ansiName), fileNameIn.toStdString(), nFrames);
+        data::CDicomDCTk::getDicomFileInfo( vpl::sys::tStringConv::fromUtf8(ansiName), fileNameIn.toStdString(), nFrames);
 #define DICOM_MULTIFRAME_THRESHOLD  10
         if (nFrames<=DICOM_MULTIFRAME_THRESHOLD)
             fileNameIn = fi.dir().absolutePath();
+#endif
     }
 #endif
 
     // get ansi name for DCMTK
     // 2012/03/12: Modified by Majkl (Linux compatible code)
 //    std::string str = fileNameIn.toUtf8();
-    std::string str = fileNameIn.toStdString();
+	std::string str = fileNameIn.toStdString();
+
     data::sExtendedTags tags = { };
 
     {
@@ -1388,14 +1573,24 @@ bool MainWindow::openDICOM(const QString& fileName, const QString& realName)
         }
 
         // let the user select the desired series
-        CSeriesSelectionDialog dlg(this, Qt::WindowTitleHint | Qt::WindowSystemMenuHint | Qt::WindowCloseButtonHint);
-        if (!dlg.setSeries(spSeries))
-            return false;
+		CSeriesSelectionDialog dlg(this, Qt::WindowTitleHint | Qt::WindowSystemMenuHint | Qt::WindowMaximizeButtonHint | Qt::WindowCloseButtonHint);
+		if (!dlg.setSeries(spSeries))
+		{
+			QApplication::restoreOverrideCursor();
+			return false;
+		}
         if (QDialog::Accepted!=dlg.exec())
-            return false;
+		{
+			QApplication::restoreOverrideCursor();
+			return false;
+		}
         int iSelection=dlg.getSelection();
         if (iSelection<0)
-            return false;
+		{
+			QApplication::restoreOverrideCursor();
+			return false;
+		}
+		QApplication::restoreOverrideCursor();
         double ssX, ssY, ssZ;
         dlg.getSubsampling(ssX, ssY, ssZ);
 
@@ -1463,7 +1658,8 @@ bool MainWindow::openDICOM(const QString& fileName, const QString& realName)
         setWindowTitle(QApplication::applicationName() + " - " + realName + ", " + wsPatientName);
     }
 
-    postOpen(realName, true);
+    postOpen(realName, fromFolder);
+
     return true;
 }
 
@@ -1490,6 +1686,8 @@ void MainWindow::postOpen(const QString& filename, bool bDicomData)
     setProperty("ProjectName",m_wsProjectPath);
     addToRecentFiles(filename);
 	m_savedEntriesVersionList = getVersionList();
+
+	resetLimit();
 }
 
 void MainWindow::postSave(const QString& filename)
@@ -1543,6 +1741,8 @@ bool MainWindow::openVLM()
     if (!preOpen())
         return false;
 
+	setVOIVisibility(false);
+
     QSettings settings;
 #if QT_VERSION < 0x050000
     QString previousDir=settings.value("VLMdir",QDesktopServices::storageLocation(QDesktopServices::HomeLocation)).toString();
@@ -1585,6 +1785,8 @@ public:
 
 bool MainWindow::openVLM(const QString &wsFileName)
 {
+	setVOIVisibility(false);
+
     // 2012/03/12: Modified by Majkl (Linux compatible code)
 //    std::string ansiName = fileName.toUtf8();
     std::string ansiName = wsFileName.toStdString();
@@ -1645,6 +1847,7 @@ bool MainWindow::openVLM(const QString &wsFileName)
 						vpl::img::CDensityVolume VolumeData;
 						if( !vpl::mod::read(VolumeData, Channel, ProgressFunc) ) // try to load voxel data only
 						{
+							enableMenuActions();
 							return false;
 						}					
 						else
@@ -1659,6 +1862,7 @@ bool MainWindow::openVLM(const QString &wsFileName)
 			}
 			catch( const vpl::base::CException Exception )
 			{
+				enableMenuActions();
 				return false;	
 			}
 
@@ -1679,11 +1883,13 @@ bool MainWindow::openVLM(const QString &wsFileName)
     if (!bResult)
     {
         showMessageBox(QMessageBox::Critical,tr("Failed to read input volumetric data!"));
+		enableMenuActions();
         return false;
     }
     setWindowTitle(QApplication::applicationName()+" - "+wsFileName);
 
     postOpen(wsFileName, false);
+	enableMenuActions();
     return true;
 }
 
@@ -1748,12 +1954,14 @@ bool MainWindow::saveVLMAs()
     if( !bResult )
     {
         showMessageBox(QMessageBox::Critical,tr("Failed to save volumetric data!"));
+		enableMenuActions();
         return false;
     }
     else
     {
         postSave(fileName);
     }
+	enableMenuActions();
     return true;
 }
 
@@ -1805,13 +2013,13 @@ bool MainWindow::saveOriginalDICOM()
 	for ( int i = 0; i < spInfo->getNumOfFiles() && ok; i++ )
 	{
 		QString srcName = QString::fromStdString(vpl::sys::tStringConv::toUtf8(spInfo->getList()[i]));
+		srcName.replace("//", "/");
 		QFileInfo inputFileInfo( srcName );
 		QString dstName = fileName + "/" + fileList[i]; // (fileName + "/") + inputFileInfo.baseName() + "." + inputFileInfo.completeSuffix();
-		while (!QFile::copy(srcName,dstName) && ok)
+		if (!QFile::copy(srcName,dstName))
 		{
-			if (QMessageBox::No==QMessageBox::question(this,QCoreApplication::applicationName(),tr("Failed to copy file %1. Retry?").arg(inputFileInfo.baseName() + "." + inputFileInfo.completeSuffix()),QMessageBox::Yes,QMessageBox::No))
+			if (QMessageBox::critical(this,QCoreApplication::applicationName(),tr("Failed to copy file %1. Make sure, that the destination directory doesn't include a file with the same name.").arg(inputFileInfo.baseName() + "." + inputFileInfo.completeSuffix())))
 			{
-				ok = false;
 				break;
 			}
 		}
@@ -1824,25 +2032,19 @@ bool MainWindow::saveOriginalDICOM()
 	return ok;
 }
 
+
+
+
 // save dicom series (copy source files to a directory of your choice)
 bool MainWindow::saveDICOM()
-{	
-	data::CObjectPtr<data::CDensityData> spData( APP_STORAGE.getEntry(data::Storage::PatientData::Id) );    
-	const int sizeX = spData->getXSize();
-	const int sizeY = spData->getYSize();
-	const int sizeZ = spData->getZSize();
-	const double dX = spData->getDX();
-	const double dY = spData->getDY();
-	const double dZ = spData->getDZ();
-
-	QString SeriesID(spData->m_sSeriesUid.c_str());	
-	if (SeriesID.isEmpty())
-		SeriesID = "cs" + QString::number(spData->getDataCheckSum());
-	
-	// show dialog with options
+{		
     bool bSaveSegmented = false;
 	bool bSaveCompressed = false;
 	bool bSaveActive = false;
+	bool bSaveVOI = false;
+	bool bAnonymize = false;
+	QString anonymString = "Anonymous";
+	QString anonymID = "";
 	{
 		data::CObjectPtr<data::CRegionColoring> spColoring(APP_STORAGE.getEntry(data::Storage::RegionColoring::Id));
 		const int activeRegion(spColoring->getActiveRegion());
@@ -1853,56 +2055,83 @@ bool MainWindow::saveDICOM()
 		}
 		QColor  qcolor(color.getR(), color.getG(), color.getB());
 
-        QDialog dlg(NULL,Qt::WindowTitleHint | Qt::WindowSystemMenuHint | Qt::WindowCloseButtonHint);
-        dlg.setWindowTitle(tr("Save DICOM"));
+        QDialog dlg(this,Qt::WindowTitleHint | Qt::WindowSystemMenuHint | Qt::WindowCloseButtonHint);
+        dlg.setWindowTitle(tr("Save / Anonymize DICOM"));
         //dlg.setMinimumSize(500,300);
 		dlg.setSizeGripEnabled(true);
         QGridLayout* pLayout = new QGridLayout();
         dlg.setLayout(pLayout);
-		QRadioButton rbCurrent(tr("Save all data"));
+
+		QGroupBox *box1 = new QGroupBox();
+		box1->setTitle(tr("Image Data Manipulation"));
+		QGridLayout *gl1 = new QGridLayout();
+
+		if (m_segmentationPluginsLoaded)
+		{
+			pLayout->addWidget(box1, 0, 0);
+		}
+
+		QRadioButton rbCurrent(tr("Save All Data"));
 		rbCurrent.setChecked(true);
-        pLayout->addWidget(&rbCurrent,0,0);
-        QRadioButton rbSegmented(tr("Save all segmented areas"));
-        pLayout->addWidget(&rbSegmented,1,0);
-		QRadioButton rbActiveOnly(tr("Save active region only"));
-        pLayout->addWidget(&rbActiveOnly,2,0);
+		gl1->addWidget(&rbCurrent, 0, 0);
+        QRadioButton rbSegmented(tr("Save All Segmented Areas"));
+		gl1->addWidget(&rbSegmented, 1, 0);
+		QRadioButton rbActiveOnly(tr("Save Active Region Only"));
+		gl1->addWidget(&rbActiveOnly, 2, 0);
 		QLabel labelRegion;
 		labelRegion.setMinimumWidth(32);
 		labelRegion.setMaximumWidth(32);
 		labelRegion.setStyleSheet(QString("background-color: %1").arg(qcolor.name()));
-		pLayout->addWidget(&labelRegion,2,1);
+		gl1->addWidget(&labelRegion, 2, 1);
+		QRadioButton rbVOI(tr("Save Data in Volume of Interest"));
+		gl1->addWidget(&rbVOI, 3, 0);
+		box1->setLayout(gl1);
+
+		QGroupBox *box2 = new QGroupBox();
+		box2->setTitle(tr("DICOM Properties"));
+		QGridLayout *gl2 = new QGridLayout();
+		pLayout->addWidget(box2, 2, 0);
 		QCheckBox cbCompress(tr("Compress"));
-		pLayout->addWidget(&cbCompress,3,0);
+		gl2->addWidget(&cbCompress, 0, 0);
+		box2->setLayout(gl2);
+
+		QGroupBox *box3 = new QGroupBox();
+		box3->setTitle(tr("Anonymize As"));
+		box3->setCheckable(true);
+		box3->setChecked(false);
+		QGridLayout *gl3 = new QGridLayout();
+		pLayout->addWidget(box3, 1, 0);
+		QLabel nameLabel(tr("Name:"));
+		QLineEdit anonymEdit;
+		anonymEdit.setText(tr("Anonymous"));
+		gl3->addWidget(&nameLabel, 0, 0);
+		gl3->addWidget(&anonymEdit, 0, 1);
+		QLabel idLabel(tr("Id:"));
+		QLineEdit anonymIDEdit;
+		anonymIDEdit.setText("");
+		gl3->addWidget(&idLabel, 1, 0);
+		gl3->addWidget(&anonymIDEdit, 1, 1);		
+		box3->setLayout(gl3);
+
 		QDialogButtonBox* pButtonBox = new QDialogButtonBox;
 		pButtonBox->setStandardButtons(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
         pButtonBox->setCenterButtons(true);
         connect(pButtonBox, SIGNAL(accepted()), &dlg, SLOT(accept()));
 		connect(pButtonBox, SIGNAL(rejected()), &dlg, SLOT(reject()));
-        pLayout->addWidget(pButtonBox,4,0,1,2);
+        pLayout->addWidget(pButtonBox,5,0,1,2);
+
 		if (QDialog::Accepted!=dlg.exec())
 			return false;
+
 		bSaveSegmented = rbSegmented.isChecked() || rbActiveOnly.isChecked();
 		bSaveCompressed = cbCompress.isChecked();
 		bSaveActive = rbActiveOnly.isChecked();
+		bSaveVOI = rbVOI.isChecked();
+		bAnonymize = box3->isChecked();
+		anonymString = anonymEdit.text();
+		anonymID = anonymIDEdit.text();
 	}
-
-	if (bSaveSegmented)
-	{
-		QObject* pPlugin=findPluginByID("RegionControl");
-		if (NULL!=pPlugin)
-		{
-			PluginLicenseInterface *iPlugin = qobject_cast<PluginLicenseInterface *>(pPlugin);
-			if (iPlugin)
-			{
-				if (!iPlugin->canExport(SeriesID))
-				{
-					QMessageBox::warning(this,QCoreApplication::applicationName(),tr("Segmented areas can't be exported with the current product license."));
-					return false;
-				}
-			}
-		}
-	}
-
+    
     QSettings settings;
 	QString previousDir = getSaveLoadPath("dstDICOMdir");
     if (previousDir.isEmpty())
@@ -1912,6 +2141,8 @@ bool MainWindow::saveDICOM()
     QString fileName = QFileDialog::getExistingDirectory(this,tr("Please, choose a directory where to save current DICOM dataset..."),previousDir);
     if (fileName.isEmpty())
         return false;
+
+	fileName = QString(fileName.toUtf8());
 
 	// check directory contents and show warning if it contains any previously saved dicom files
 	{
@@ -1929,237 +2160,92 @@ bool MainWindow::saveDICOM()
 
     settings.setValue("dstDICOMdir",fileName);
 
-    // Show simple progress dialog
+    //pointer do data storage
+    data::CObjectPtr<data::CDensityData> spData(APP_STORAGE.getEntry(data::Storage::PatientData::Id));
+
+    QString SeriesID(spData->m_sSeriesUid.c_str());
+    if (SeriesID.isEmpty())
+        SeriesID = "cs" + QString::number(spData->getDataCheckSum());
+
+    if (bSaveSegmented)
+    {
+        QObject* pPlugin = MainWindow::getInstance()->findPluginByID("RegionAndModelControl");
+
+        if (NULL != pPlugin)
+        {
+            PluginLicenseInterface *iPlugin = qobject_cast<PluginLicenseInterface *>(pPlugin);
+            if (iPlugin)
+            {
+                if (!iPlugin->canExport(SeriesID))
+                {
+                    QMessageBox::warning(nullptr, QCoreApplication::applicationName(), "Segmented areas can't be exported with the current product license.");
+                    return false;
+                }
+            }
+        }
+    }
+    //// Show simple progress dialog
     CProgress progress(this);
     progress.setLabelText(tr("Saving DICOM data, please wait..."));
     progress.show();
 
+
+
+    bool bOk = false ;
+
 #ifdef WIN32
-	// path in ACP
 	std::wstring uniName = (const wchar_t*)fileName.utf16();
-	std::string ansiName = wcs2ACP(uniName);
-#else // UTF8
-	std::string ansiName = fileName.toStdString();
-#endif
-
-#ifdef __APPLE__
-	std::auto_ptr<qint16> ptr(new qint16[2*sizeX*sizeY]);
+	std::string dirName = wcs2ACP(uniName);
 #else
-    std::unique_ptr<qint16> ptr(new qint16[2*sizeX*sizeY]);
+	std::string dirName = fileName.toStdString();
 #endif
 
-	// TODO: check whether the top 3 slices are not empty ones (used for volume size alignment)
+    vpl::mod::CProgress::tProgressFunc ProgressFunc(&progress, &CProgress::Entry);
+    try
+    {
+#if defined( TRIDIM_USE_GDCM )
+        
+            data::CDicomSaverGDCM saver;
+			bOk = saver.saveSerie(dirName, bSaveSegmented, bSaveCompressed, bSaveActive, 
+                bSaveVOI, bAnonymize, anonymString.toStdString(), anonymID.toStdString(), ProgressFunc);   
+        
+#else        
+            data::CDicomSaverDCTk saver;
+			bOk = saver.saveSerie(dirName, bSaveSegmented, bSaveCompressed, bSaveActive,
+                bSaveVOI, bAnonymize, anonymString.toStdString(), anonymID.toStdString(), ProgressFunc);
+#endif
 
-	char uid[128]={};
-	char studyUIDStr[128]={};
-	char seriesUIDStr[128]={};
-	dcmGenerateUniqueIdentifier(uid, SITE_INSTANCE_UID_ROOT);
-	dcmGenerateUniqueIdentifier(studyUIDStr, SITE_STUDY_UID_ROOT);
-	dcmGenerateUniqueIdentifier(seriesUIDStr, SITE_SERIES_UID_ROOT);
+    }
+    catch (std::exception &e)
+    {
+        showMessageBox(QMessageBox::Critical, tr(e.what()));
+		enableMenuActions();
+        return false;
+    }
 
-    DJEncoderRegistration::registerCodecs(); // register JPEG codecs
 
-	bool bOk = true;
-	for(int z=0; z<sizeZ && bOk; z++)
-	{
-		if (!progress.Entry(z,sizeZ))
-		{
-			bOk = false;
-			break;
-		}
-
-		// prepare pixel data
+    // update license info
+    if (bOk)
+    {
+        // update license info
         if (bSaveSegmented)
-        {			
-            data::CObjectPtr< data::CRegionData > rVolume( APP_STORAGE.getEntry( data::Storage::RegionData::Id ) );
-            if (rVolume->getSize()==spData->getSize())
+        {
+            QObject* pPlugin = MainWindow::getInstance()->findPluginByID("RegionAndModelControl");
+            if (NULL != pPlugin)
             {
-				if (bSaveActive)
-				{
-					data::CObjectPtr<data::CRegionColoring> spColoring(APP_STORAGE.getEntry(data::Storage::RegionColoring::Id));
-					const int activeRegion(spColoring->getActiveRegion());
-					qint16* pData = ptr.get();
-					for(int y=0;y<sizeY;y++)
-					{
-						for(int x=0;x<sizeX;x++)
-						{
-							if (rVolume->at(x,y,z)==activeRegion)
-								*pData = std::max(spData->at(x,y,z)+1024,0);
-							else
-								*pData = 0;
-							pData++;
-						}
-					}
-				}
-				else
-				{
-					qint16* pData = ptr.get();
-					for(int y=0;y<sizeY;y++)
-					{
-						for(int x=0;x<sizeX;x++)
-						{
-							if (rVolume->at(x,y,z)!=0)
-								*pData = std::max(spData->at(x,y,z)+1024,0);
-							else
-								*pData = 0;
-							pData++;
-						}
-					}
-				}
+                PluginLicenseInterface *iPlugin = qobject_cast<PluginLicenseInterface *>(pPlugin);
+                if (iPlugin)
+                {
+                    iPlugin->wasExported(SeriesID);
+                }
             }
         }
-        else // all data
-        {
-			qint16* pData = ptr.get();
-			for(int y=0;y<sizeY;y++)
-			{
-				for(int x=0;x<sizeX;x++)
-				{
-					*pData=std::max(spData->at(x,y,z)+1024,0);
-					pData++;
-				}
-			}
-        }
+    }
 
-		// create dicom structures
-		DcmFileFormat fileFormat; 
-		DcmDataset *pDataset = fileFormat.getDataset();
+    postSave(fileName);
 
-		{	// set dicom tags		
-			pDataset->putAndInsertString(DCM_SOPInstanceUID, uid);
-			pDataset->putAndInsertString(DCM_SOPClassUID, UID_SecondaryCaptureImageStorage);
+	enableMenuActions();
 
-			if (spData->m_sStudyUid.empty())
-				pDataset->putAndInsertString(DCM_StudyInstanceUID,studyUIDStr);
-			else
-				pDataset->putAndInsertString(DCM_StudyInstanceUID, spData->m_sStudyUid.c_str());				
-
-			if (spData->m_sSeriesUid.empty())
-				pDataset->putAndInsertString(DCM_SeriesInstanceUID,seriesUIDStr);
-			else
-				pDataset->putAndInsertString(DCM_SeriesInstanceUID, spData->m_sSeriesUid.c_str());
-		
-			pDataset->putAndInsertString(DCM_Manufacturer, "3Dim Laboratory");
-			{
-				app::CProductInfo info=app::getProductInfo();
-				std::string product=QString("%1 %2.%3.%4").arg(QCoreApplication::applicationName()).arg(info.getVersion().getMajorNum()).arg(info.getVersion().getMinorNum()).arg(info.getVersion().getBuildNum()).toStdString();
-				pDataset->putAndInsertString(DCM_ManufacturerModelName, product.c_str());
-			}
-
-			pDataset->putAndInsertString( DCM_PatientName,  spData->m_sPatientName.c_str() );
-			pDataset->putAndInsertString( DCM_PatientID,  spData->m_sPatientId.c_str() );
-			pDataset->putAndInsertString( DCM_PatientSex,  spData->m_sPatientSex.c_str() );
-			pDataset->putAndInsertString( DCM_PatientPosition,  spData->m_sPatientPosition.c_str() );
-			pDataset->putAndInsertString( DCM_PatientComments,  spData->m_sPatientDescription.c_str() );
-			pDataset->putAndInsertString( DCM_PatientBirthDate,  spData->m_sPatientBirthday.c_str() );
-
-			pDataset->putAndInsertString( DCM_SeriesDescription,  spData->m_sSeriesDescription.c_str() );
-			pDataset->putAndInsertString( DCM_StudyDescription,  spData->m_sStudyDescription.c_str() );
-
-			pDataset->putAndInsertString( DCM_SeriesDate,  spData->m_sSeriesDate.c_str() );
-			pDataset->putAndInsertString( DCM_SeriesTime,  spData->m_sSeriesTime.c_str() );
-
-			pDataset->putAndInsertString( DCM_StudyDate,  spData->m_sStudyDate.c_str() );
-
-			pDataset->putAndInsertString( DCM_Modality,  spData->m_sModality.c_str() );
-			pDataset->putAndInsertString( DCM_ScanOptions,  spData->m_sScanOptions.c_str() );
-				
-			pDataset->putAndInsertString(DCM_ImageOrientationPatient,"1.000000\0.000000\0.000000\0.000000\1.000000\0.000000");
-
-			std::stringstream spacing;
-			spacing << std::fixed << std::setprecision(6) << dX << "\\" << dY;
-			std::string sspacing = spacing.str();
-			pDataset->putAndInsertString(DCM_PixelSpacing,sspacing.c_str());
-			pDataset->putAndInsertUint16(DCM_Rows,sizeY);
-			pDataset->putAndInsertUint16(DCM_Columns,sizeX);
-			pDataset->putAndInsertUint16(DCM_PixelRepresentation,0); // 1 signed, 0 unsigned
-			//pDataset->putAndInsertUint16(DCM_NumberOfFrames,1);
-			pDataset->putAndInsertUint16(DCM_SamplesPerPixel,1); // count of channels			
-			pDataset->putAndInsertString( DCM_PhotometricInterpretation,  "MONOCHROME2" );
-			//pDataset->putAndInsertUint16(DCM_PlanarConfiguration,0);
-			pDataset->putAndInsertUint16(DCM_BitsAllocated,16);
-			pDataset->putAndInsertUint16(DCM_BitsStored,16);
-			pDataset->putAndInsertUint16(DCM_HighBit, 15);								
-			pDataset->putAndInsertString(DCM_RescaleIntercept, "-1024");
-			pDataset->putAndInsertString(DCM_RescaleSlope, "1");
-			//pDataset->putAndInsertString(DCM_WindowCenter, "0");
-			//pDataset->putAndInsertString(DCM_WindowWidth, "1000");
-			{
-				data::CObjectPtr<data::CVolumeTransformation> spVolumeTransformation(APP_STORAGE.getEntry(data::Storage::VolumeTransformation::Id));
-				osg::Matrix volTransform = spVolumeTransformation->getTransformation();
-				osg::Vec3 offLoad = - volTransform.getTrans();
-
-				std::stringstream pos;				
-				pos << std::fixed << std::setprecision(6) << spData->m_ImagePosition.x() + offLoad[0] << "\\" << spData->m_ImagePosition.y() + offLoad[1] << "\\" << spData->m_ImagePosition.z() + offLoad[2] + z * dZ;
-				std::string spos = pos.str();
-				pDataset->putAndInsertString( DCM_ImagePositionPatient,  spos.c_str() );
-			}
-			{
-				std::stringstream thickness;
-				thickness << dZ;
-				pDataset->putAndInsertString(DCM_SliceThickness,thickness.str().c_str());				
-			}
-			pDataset->putAndInsertUint16(DCM_InstanceNumber,z);
-
-			pDataset->putAndInsertUint16Array(DCM_PixelData, (Uint16*)ptr.get(), sizeX*sizeY); 
-		}
-
-		// data compression
-		E_TransferSyntax xfer = EXS_Unknown;
-		if(bSaveCompressed)
-        {
-            DJ_RPLossless params; // codec parameters, we use the defaults        			
-            // this causes the lossless JPEG version of the dataset to be created
-        #if defined(PACKAGE_VERSION_NUMBER) && (PACKAGE_VERSION_NUMBER == 361)
-            pDataset->chooseRepresentation(EXS_JPEGProcess14SV1, &params);
-        #else
-            pDataset->chooseRepresentation(EXS_JPEGProcess14SV1TransferSyntax, &params);
-        #endif
-
-            // check if everything went well
-        #if defined(PACKAGE_VERSION_NUMBER) && (PACKAGE_VERSION_NUMBER == 361)
-            if (pDataset->canWriteXfer(EXS_JPEGProcess14SV1))
-			{
-				xfer = EXS_JPEGProcess14SV1;
-        #else
-            if (pDataset->canWriteXfer(EXS_JPEGProcess14SV1TransferSyntax))
-			{
-				xfer = EXS_JPEGProcess14SV1TransferSyntax;
-        #endif
-            }
-        }
-			
-		{	// save file
-			std::stringstream ss;
-			ss << ansiName << "/" << z << ".dcm";
-			std::string curFile = ss.str();
-
-			if (xfer == EXS_Unknown)
-				xfer = EXS_LittleEndianExplicit;
-			OFCondition status = fileFormat.saveFile(curFile.c_str(), xfer);
-			if (status.bad())
-				bOk = false;
-		}
-	}
-    DJEncoderRegistration::cleanup(); // deregister JPEG codecs
-
-	if (bOk)
-	{
-		// update license info
-		if (bSaveSegmented)
-		{
-			QObject* pPlugin=findPluginByID("RegionControl");
-			if (NULL!=pPlugin)
-			{
-				PluginLicenseInterface *iPlugin = qobject_cast<PluginLicenseInterface *>(pPlugin);
-				if (iPlugin)
-				{
-					iPlugin->wasExported(SeriesID);
-				}
-			}
-		}
-		postSave(fileName);
-	}
 	return bOk;
 }
 
@@ -2173,13 +2259,13 @@ bool MainWindow::openSTL()
 #endif
 
     previousDir = getSaveLoadPath("STLdir");
-    QString fileName = QFileDialog::getOpenFileName(this,tr("Choose an input binary STL model to load..."),previousDir,tr("Stereo litography model (*.stl);;Polygon file format (*.ply)"));
-    if (fileName.isEmpty())
+    QString filePath = QFileDialog::getOpenFileName(this,tr("Choose an input binary STL model to load..."),previousDir,tr("Stereo litography model (*.stl);;Polygon file format (*.ply)"));
+	if (filePath.isEmpty())
         return false;
 
-    QFileInfo pathInfo( fileName );
+	QFileInfo pathInfo(filePath);
     settings.setValue("STLdir",pathInfo.dir().absolutePath());
-    return openSTL(fileName);
+	return openSTL(filePath, pathInfo.fileName());
 }
 
 struct sGeodeInfo
@@ -2230,16 +2316,16 @@ void parseChildren(osg::Node* pNode, const osg::Matrix& matrix, std::vector<sGeo
 }
 
 
-bool MainWindow::openSTL(const QString& fileName)
+bool MainWindow::openSTL(const QString& filePath, const QString& fileName)
 {
 #ifdef WIN32
     // OpenMesh needs path in ACP
-    std::wstring uniName = (const wchar_t*)fileName.utf16();
+	std::wstring uniName = (const wchar_t*)filePath.utf16();
     std::string ansiName = wcs2ACP(uniName);
 #else
     // 2012/03/12: Modified by Majkl (Linux compatible code)
-    //std::string ansiName = fileName.toUtf8();
-    std::string ansiName = fileName.toStdString();
+    //std::string ansiName = filePath.toUtf8();
+	std::string ansiName = filePath.toStdString();
 #endif
 
     QApplication::setOverrideCursor(QCursor(Qt::WaitCursor));
@@ -2436,9 +2522,11 @@ bool MainWindow::openSTL(const QString& fileName)
                 if (pMesh->n_faces()>0)
                 {
                     //pModel->setMesh(pMesh);
-                    pModel->setLabel(m_modelLabel);
+                    pModel->setLabel(fileName.toStdString());
 					pModel->setColor(m_modelColor);
                     pModel->setVisibility(true);
+					pModel->setRegionId(-1);
+					pModel->setLinkedWithRegion(false);
 
                     pModel->setTransformationMatrix(osg::Matrix::identity());
                     APP_STORAGE.invalidate(pModel.getEntryPtr());                        
@@ -2471,9 +2559,11 @@ bool MainWindow::openSTL(const QString& fileName)
 			loadedID = id;
             data::CObjectPtr<data::CModel> spModel( APP_STORAGE.getEntry(id) );
             spModel->setMesh(pMesh);
-			spModel->setLabel(m_modelLabel);
+			spModel->setLabel(fileName.toStdString());
 			spModel->setColor(m_modelColor);
             spModel->setVisibility(true);
+			spModel->setRegionId(-1);
+			spModel->setLinkedWithRegion(false);
 			spModel->clearAllProperties();
 			spModel->setTransformationMatrix(osg::Matrix::identity());
             APP_STORAGE.invalidate(spModel.getEntryPtr());         			
@@ -2492,7 +2582,7 @@ bool MainWindow::openSTL(const QString& fileName)
 			spModel->setTransformationMatrix(osg::Matrix::translate(-pos.getX(),-pos.getY(),-pos.getZ()) * spVolumeTransformation->getTransformation());
 			APP_STORAGE.invalidate(spModel.getEntryPtr());         			
 		}
-        addToRecentFiles(fileName);
+        addToRecentFiles(filePath);
 	}
     QApplication::restoreOverrideCursor();
     return result;
@@ -2500,8 +2590,14 @@ bool MainWindow::openSTL(const QString& fileName)
 
 bool MainWindow::saveSTL()
 {
-    // Try to get selected model id
-    int storage_id(m_modelsPanel->getSelectedModelStorageId());
+	// Try to get selected model id
+	int storage_id((!m_segmentationPluginsLoaded) ? m_modelsPanel->getSelectedModelStorageId() : VPL_SIGNAL(SigGetSelectedModelId).invoke2());
+
+	return saveSTLById(storage_id);
+}
+
+bool MainWindow::saveSTLById(int storage_id)
+{
     if(storage_id == -1)
     {
 		int nValid = 0;
@@ -2524,7 +2620,7 @@ bool MainWindow::saveSTL()
 		else
 		{
 			showMessageBox(QMessageBox::Critical, tr("No model selected!"));
-			showModelsListPanel(true);
+			//showModelsListPanel(true);
 			return false;
 		}
     }
@@ -2754,6 +2850,7 @@ void MainWindow::actionsEnabler()
         ui->actionSegmentation_Panel->setChecked(m_segmentationPanel->parentWidget()->isVisible());
     if (NULL!=m_volumeRenderingPanel && NULL!=m_volumeRenderingPanel->parentWidget())
         ui->actionVolume_Rendering_Panel->setChecked(m_volumeRenderingPanel->parentWidget()->isVisible());
+
 	if (NULL!=m_modelsPanel && NULL!=m_modelsPanel->parentWidget())
         ui->actionModels_List_Panel->setChecked(m_modelsPanel->parentWidget()->isVisible());
 }
@@ -2884,6 +2981,17 @@ void MainWindow::showModelsListPanel(bool bShow)
 
 void MainWindow::createOSGStuff()
 {
+	{
+		double dpiFactor = 1;
+		QDesktopWidget* pDesktop=QApplication::desktop();
+		if (NULL!=pDesktop)
+			dpiFactor = std::max(1.0,pDesktop->logicalDpiX()/96.0);
+		data::CObjectPtr<data::CSceneWidgetParameters> spWidgets( APP_STORAGE.getEntry(data::Storage::SceneWidgetsParameters::Id) );
+        dpiFactor = 1 + (dpiFactor - 1)/2; // reduce upscale
+		spWidgets->setDefaultWidgetsScale(dpiFactor);
+		spWidgets->setWidgetsScale(dpiFactor);
+		APP_STORAGE.invalidate( spWidgets.getEntryPtr() );
+	}
 	// 3D view
 	{
 		m_3DView = new CVolumeRendererWindow();
@@ -2915,11 +3023,17 @@ void MainWindow::createOSGStuff()
 		m_draw3DEH = new osgGA::CISScene3DEH( m_3DView, m_Scene3D.get() );
 		m_3DView->addEventHandler( m_draw3DEH.get() );
 
+		// Initialize the model manager
+		for (int i = 0; i < MAX_IMPORTED_MODELS; ++i)
+		{
+			m_draw3DEH->AddNode(m_modelVisualizers[i]);
+		}
+
 		// Window drawing event handler
 		m_drawW3DEH = new osgGA::CISWindowEH(m_3DView, m_Scene3D.get());
 
 		// Modify drawing EH osg::StateSet 
-		m_drawW3DEH->setLineFlags( osg::CLineGeode::USE_RENDER_BIN | osg::CLineGeode::DISABLE_DEPTH_TEST );
+        m_drawW3DEH->setLineFlags(osg::CLineGeode::USE_RENDER_BIN | osg::CLineGeode::DISABLE_DEPTH_TEST | osg::CLineGeode::ENABLE_TRANSPARENCY );
 		m_drawW3DEH->setZ( 0.5 );
 
 		m_3DView->addEventHandler( m_drawW3DEH.get() );
@@ -2952,6 +3066,12 @@ void MainWindow::createOSGStuff()
 			m_importedModelCutSliceXY[i]->setColor(osg::Vec4(1.0,1.0,0.0,1.0));
 			m_SceneXY->addChild(m_importedModelCutSliceXY[i]);
 		}
+
+		m_xyVizualizer = new osg::CRegionsVisualizerForSliceXY(osg::Matrix::identity(), data::Storage::SliceXY::Id, m_OrthoXYSlice);
+		m_SceneXY->addChild(m_xyVizualizer);
+
+		m_xyVOIVizualizer = new osg::CVolumeOfInterestVisualizerForSliceXY(osg::Matrix::identity(), data::Storage::SliceXY::Id, m_OrthoXYSlice);
+		m_SceneXY->addChild(m_xyVOIVizualizer);
 	}
 
     // XZ Slice
@@ -2976,6 +3096,12 @@ void MainWindow::createOSGStuff()
 			m_importedModelCutSliceXZ[i]->setColor(osg::Vec4(1.0,1.0,0.0,1.0));
 			m_SceneXZ->addChild(m_importedModelCutSliceXZ[i]);
 		}
+
+		m_xzVizualizer = new osg::CRegionsVisualizerForSliceXZ(osg::Matrix::rotate(osg::DegreesToRadians(-90.0), osg::Vec3(1.0, 0.0, 0.0)), data::Storage::SliceXZ::Id, m_OrthoXZSlice);
+		m_SceneXZ->addChild(m_xzVizualizer);
+
+		m_xzVOIVizualizer = new osg::CVolumeOfInterestVisualizerForSliceXZ(osg::Matrix::rotate(osg::DegreesToRadians(-90.0), osg::Vec3(1.0, 0.0, 0.0)), data::Storage::SliceXZ::Id, m_OrthoXZSlice);
+		m_SceneXZ->addChild(m_xzVOIVizualizer);
 	}
 
     // YZ Slice
@@ -3000,7 +3126,18 @@ void MainWindow::createOSGStuff()
 			m_importedModelCutSliceYZ[i]->setColor(osg::Vec4(1.0,1.0,0.0,1.0));
 			m_SceneYZ->addChild(m_importedModelCutSliceYZ[i]);
 		}
+
+		m_yzVizualizer = new osg::CRegionsVisualizerForSliceYZ(osg::Matrix::rotate(osg::DegreesToRadians(-90.0), osg::Vec3(1.0, 0.0, 0.0)) * osg::Matrix::rotate(osg::DegreesToRadians(-90.0), osg::Vec3(0.0, 1.0, 0.0)), data::Storage::SliceYZ::Id, m_OrthoYZSlice);
+		m_SceneYZ->addChild(m_yzVizualizer);
+
+		m_yzVOIVizualizer = new osg::CVolumeOfInterestVisualizerForSliceYZ(osg::Matrix::rotate(osg::DegreesToRadians(-90.0), osg::Vec3(1.0, 0.0, 0.0)) * osg::Matrix::rotate(osg::DegreesToRadians(-90.0), osg::Vec3(0.0, 1.0, 0.0)), data::Storage::SliceYZ::Id, m_OrthoYZSlice);
+		m_SceneYZ->addChild(m_yzVOIVizualizer);
 	}
+
+	m_contoursVisible = true;
+	m_VOIVisible = true;
+
+	setVOIVisibility(false);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -3262,11 +3399,13 @@ void MainWindow::createSurfaceModel()
 	spModel->setProperty("Created","1");
 	spModel->setTransformationMatrix(osg::Matrix::identity());
     spModel->setVisibility(true);
+	spModel->setLinkedWithRegion(false);
+	spModel->setRegionId(-1);
     APP_STORAGE.invalidate(spModel.getEntryPtr());
 
 	// if model-region linking is not enabled, hide previously created models on creation of a new one
 	QSettings settings;
-	bool bModelsLinked = settings.value("ModelRegionLinkEnabled", QVariant(false)).toBool();
+	bool bModelsLinked = settings.value("ModelRegionLinkEnabled", QVariant(DEFAULT_MODEL_REGION_LINK)).toBool();
 	if (!bModelsLinked)
 	{
 		for(int i = 0; i < MAX_IMPORTED_MODELS; ++i)
@@ -3298,9 +3437,11 @@ void MainWindow::createSurfaceModel()
 
 void MainWindow::showPreferencesDialog()
 {	
-    CPreferencesDialog dlg(m_localeDir, ui->menuBar, this, Qt::WindowTitleHint | Qt::WindowSystemMenuHint | Qt::WindowCloseButtonHint);
+	CPreferencesDialog dlg(m_localeDir, ui->menuBar, m_eventFilter, this, Qt::WindowTitleHint | Qt::WindowSystemMenuHint | Qt::WindowCloseButtonHint);
     if (QDialog::Accepted==dlg.exec())
     {
+        m_eventFilter.processSettings();
+
         if (dlg.colorsChanged())
         {
             QSettings savedSettings;
@@ -3344,7 +3485,12 @@ void MainWindow::showAbout()
 {
     app::CProductInfo info=app::getProductInfo();
     QString product=QString("%1 %2.%3.%4 %5").arg(QCoreApplication::applicationName()).arg(info.getVersion().getMajorNum()).arg(info.getVersion().getMinorNum()).arg(info.getVersion().getBuildNum()).arg(QString::fromStdString(info.getNote()));
-    QMessageBox msgBox(this);
+    QMessageBox msgBox(this);	
+	msgBox.setStandardButtons(QMessageBox::Ok);
+	QPushButton* feedbackButton = msgBox.addButton(tr("Give Us Your Feedback..."), QMessageBox::AcceptRole);
+	QObject::connect(feedbackButton, SIGNAL(clicked()), this, SLOT(showFeedback()));
+	msgBox.setDefaultButton(feedbackButton);
+	msgBox.setEscapeButton(QMessageBox::Ok);
     msgBox.setIconPixmap(QPixmap(":/icons/3dim.ico"));
     msgBox.setWindowTitle(tr("About ") + QCoreApplication::applicationName());
     msgBox.setText(product + "\n"
@@ -3365,49 +3511,56 @@ void MainWindow::showAbout()
         "See the License for the specific language governing permissions and\n"
         "limitations under the License."
         ));
-    msgBox.exec();
+
+	msgBox.exec();
 }
 
-void MainWindow::loadHelp()
+void MainWindow::showFeedback()
 {
-    if (!m_helpView)
-		return;
-    // is anything loaded?
-    QUrl currentUrl=m_helpView->url();
-    QString urlPath=currentUrl.path();
-    if (!urlPath.isEmpty()) return;
-    //
-    QSettings settings;
-    QString lngFile=settings.value("Language","").toString();
-    QString path;
-    QString basePath=qApp->applicationDirPath();
-    if (!QFileInfo(basePath+"/doc").exists())
-    {
-        QDir dir(basePath);
-        dir.cdUp();
-        basePath=dir.absolutePath();
-    }
+	QDesktopServices::openUrl(QUrl("http://www.3dim-laboratory.cz/en/software/3dimviewer/usersurvey/"));
+}
 
-    if (!lngFile.isEmpty())
-    {
-        path=basePath+"/doc/help_"+QLocale::system().name()+".html";
-        QFileInfo pathInfo( path );
-        if (!pathInfo.exists())
-            path=basePath+"/doc/help.html";
-    }
-    else
-        path=basePath+"/doc/help.html";
-    QUrl helpUrl(path);
-    helpUrl.setScheme("file");
-    m_helpView->load(helpUrl);
+void MainWindow::showTutorials()
+{
+	QDesktopServices::openUrl(QUrl("http://www.3dim-laboratory.cz/en/software/3dimviewer/tutorials/"));
 }
 
 void MainWindow::showHelp()
 {
-    Q_ASSERT(m_helpView);
+	// help moved to pdf file
 
-    m_helpView->parentWidget()->show();
-    m_helpView->parentWidget()->raise();
+	QSettings settings;
+	QString lngFile = settings.value("Language", "").toString();
+	QString path;
+	QString basePath = qApp->applicationDirPath();
+	if (!QFileInfo(basePath + "/doc").exists())
+	{
+		QDir dir(basePath);
+		dir.cdUp();
+		basePath = dir.absolutePath();
+	}
+
+	if (!lngFile.isEmpty())
+	{
+		path = basePath + "/doc/help_" + QLocale::system().name() + ".pdf";
+		QFileInfo pathInfo(path);
+		if (!pathInfo.exists())
+			path = basePath + "/doc/help.pdf";
+	}
+	else
+		path = basePath + "/doc/help.pdf";
+
+	if (!path.isEmpty())
+	{
+		QFile file(path);
+		if (file.exists())
+		{
+			if (!QDesktopServices::openUrl(QUrl::fromLocalFile(file.fileName())))
+				QMessageBox::critical(NULL, QCoreApplication::applicationName(), tr("A PDF viewer is required to view help!"));
+		}
+		else
+			QMessageBox::critical(NULL, QCoreApplication::applicationName(), tr("Help file is missing!"));
+	}    
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -3481,6 +3634,9 @@ void MainWindow::filterGaussian()
 	dlg.setFilter(&gaussianSliceFilter);
 	if (QDialog::Accepted==dlg.exec())
 	{
+		if (QMessageBox::Yes != QMessageBox::warning(this, QCoreApplication::applicationName(), tr("By applying the filter you will modify and ovewrite the original density data! Do you want to proceed?"), QMessageBox::Yes, QMessageBox::No))
+			return;
+
 	// Show simple progress dialog
 		CProgress progress(this);
 		progress.setLabelText(tr("Filtering volumetric data, please wait..."));
@@ -3581,6 +3737,9 @@ void MainWindow::filterAnisotropic()
 	dlg.setFilter(&anisotropicSliceFilter);
 	if (QDialog::Accepted==dlg.exec())
 	{
+		if (QMessageBox::Yes != QMessageBox::warning(this, QCoreApplication::applicationName(), tr("By applying the filter you will modify and ovewrite the original density data! Do you want to proceed?"), QMessageBox::Yes, QMessageBox::No))
+			return;
+
 		static const double dKappa = 150.0;
 		static const int iNumOfIters = 5.0;
 
@@ -3665,6 +3824,9 @@ void MainWindow::filterMedian()
 	dlg.setFilter(&medianSliceFilter);
 	if (QDialog::Accepted==dlg.exec())
 	{
+		if (QMessageBox::Yes != QMessageBox::warning(this, QCoreApplication::applicationName(), tr("By applying the filter you will modify and ovewrite the original density data! Do you want to proceed?"), QMessageBox::Yes, QMessageBox::No))
+			return;
+
 	// Show simple progress dialog
 		CProgress progress(this);
 		progress.setLabelText(tr("Filtering volumetric data, please wait..."));
@@ -3749,6 +3911,9 @@ void MainWindow::filterSharpen()
 	dlg.setFilter(&sharpenSliceFilter);
 	if (QDialog::Accepted==dlg.exec())
 	{
+		if (QMessageBox::Yes != QMessageBox::warning(this, QCoreApplication::applicationName(), tr("By applying the filter you will modify and ovewrite the original density data! Do you want to proceed?"), QMessageBox::Yes, QMessageBox::No))
+			return;
+
 	// Show simple progress dialog
 		CProgress progress(this);
 		progress.setLabelText(tr("Filtering volumetric data, please wait..."));
@@ -3887,7 +4052,7 @@ void MainWindow::print()
 
         QPainter painter (&printer);
 
-        QGLWidget* myWidget=m_3DView;
+        BASEGLWidget* myWidget=m_3DView;
         double xscale = printer.pageRect().width()/double(myWidget->width());
         double yscale = printer.pageRect().height()/double(myWidget->height());
         double scale = qMin(xscale, yscale);
@@ -3896,8 +4061,17 @@ void MainWindow::print()
                         printer.pageRect().y(),
                         scale*myWidget->width(),
                         scale*myWidget->height());
-
+#if (QT_VERSION >= QT_VERSION_CHECK(5, 0, 0))
+        QImage fb;
+        QOpenGLWidget* pQt5GlWidget = dynamic_cast<QOpenGLWidget*>(myWidget);
+        if (NULL != pQt5GlWidget)
+            fb = pQt5GlWidget->grabFramebuffer();
+        QGLWidget* pQt4GlWidget = dynamic_cast<QGLWidget*>(myWidget);
+        if (NULL != pQt4GlWidget)
+            fb = pQt4GlWidget->grabFrameBuffer();
+#else
         QImage fb=myWidget->grabFrameBuffer();
+#endif
         painter.drawImage(destRect,fb);
     }
 }
@@ -3925,6 +4099,22 @@ void MainWindow::sendDataExpressData()
     }
 }
 
+void MainWindow::receiveDicomData()
+{
+    //TODO show dialog to notify user, that this function is not implemented when using GDMC?
+#if !defined(TRIDIM_USE_GDCM)
+    CDicomTransferDialog dlg(this);
+    dlg.exec();
+    if (!dlg.m_openDicomFolder.isEmpty())
+    {
+		openDICOM(dlg.m_openDicomFolder, dlg.m_openDicomFolder, false);
+    }
+#else
+    QMessageBox::critical(this, QCoreApplication::applicationName(),tr("Not implemented"),QMessageBox::Ok);
+#endif
+
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 // Measurements menu implementation
 
@@ -3946,19 +4136,19 @@ void MainWindow::triggerPluginAction(const QString& pluginName, const QString& a
 //! Measure Density using Gauge plugin
 void MainWindow::measureDensity(bool on)
 {
-    triggerPluginAction("Gauge","MeasureDensity");
+    triggerPluginAction("Gauge","measure_density");
 }
 
 //! Measure Distance using Gauge plugin
 void MainWindow::measureDistance(bool on)
 {
-    triggerPluginAction("Gauge","MeasureDistance");
+    triggerPluginAction("Gauge","measure_distance");
 }
 
 //! Clear Measurements using Gauge plugin
 void MainWindow::clearMeasurements()
 {
-    triggerPluginAction("Gauge","ClearMeasurements");
+    triggerPluginAction("Gauge","clear_measurements");
 }
 
 void MainWindow::loadLookupTables(QSettings &settings, std::map<std::string, CLookupTable> &luts)
@@ -3998,7 +4188,12 @@ void MainWindow::loadLookupTables(QSettings &settings, std::map<std::string, CLo
                 for (int p = 0; p < pointCount; ++p)
                 {
                     settings.beginGroup(QString("Point%1").arg(p));
-                    double position = settings.value("Position").toDouble();
+                    double positionOrig = settings.value("Position").toDouble();
+                    double positionX = settings.value("PositionX", positionOrig).toDouble();
+                    double positionY = settings.value("PositionY", 0.0).toDouble();
+                    double density = settings.value("Density", true).toBool();
+                    double gradient = settings.value("Gradient", false).toBool();
+                    double radius = settings.value("Radius", 0.0).toDouble();
                     osg::Vec4 color;
                     color.r() = settings.value("ColorR").toFloat();
                     color.g() = settings.value("ColorG").toFloat();
@@ -4006,7 +4201,7 @@ void MainWindow::loadLookupTables(QSettings &settings, std::map<std::string, CLo
                     color.a() = settings.value("ColorA").toFloat();
                     settings.endGroup(); // point
 
-                    lut->addPoint(c, position, color);
+                    lut->addPoint(c, osg::Vec2d(positionX, positionY), color, density, gradient, radius);
                 }
                 settings.endGroup(); // component
             }
@@ -4066,12 +4261,16 @@ void MainWindow::saveLookupTables(QSettings &settings, std::map<std::string, CLo
             for (int p = 0; p < it->second.pointCount(c); ++p)
             {
                 settings.beginGroup(QString("Point%1").arg(p));
-                settings.setValue("Position", it->second.pointPosition(c, p));
+                settings.setValue("PositionX", it->second.pointPosition(c, p).x());
+                settings.setValue("PositionY", it->second.pointPosition(c, p).y());
                 osg::Vec4 color = it->second.pointColor(c, p);
                 settings.setValue("ColorR", color.r());
                 settings.setValue("ColorG", color.g());
                 settings.setValue("ColorB", color.b());
                 settings.setValue("ColorA", color.a());
+                settings.setValue("Density", it->second.pointDensity(c, p));
+                settings.setValue("Gradient", it->second.pointGradient(c, p));
+                settings.setValue("Radius", it->second.pointRadius(c, p));
                 settings.endGroup(); // point
             }
             settings.endGroup(); // component
@@ -4092,7 +4291,11 @@ void MainWindow::saveAppSettings()
     settings.setValue("VRQuality", renderer.getQuality());
 	if (PSVR::PSVolumeRendering::CUSTOM!=renderer.getShader()) // don't save vr shader info when custom shader is selected
 	{
-		settings.setValue("VRShader", renderer.getShader());
+		int shader = renderer.getShader();
+		if (shader == PSVR::PSVolumeRendering::CUSTOM)
+			shader = PSVR::PSVolumeRendering::SURFACE;
+
+		settings.setValue("VRShader", shader);
 		settings.setValue("VRLUT", renderer.getLut());
 	}
     settings.setValue("ShowXYSlice",VPL_SIGNAL(SigGetPlaneXYVisibility).invoke2());
@@ -4125,7 +4328,7 @@ void MainWindow::firstEvent()
     QString wsSTLName = qApp->property("OpenSTL").toString();
     if (!wsSTLName.isEmpty())
     {
-        openSTL(wsSTLName);
+        openSTL(wsSTLName, "Model");
     }
     QString wsDICOMName = qApp->property("OpenDICOM").toString();
     if (!wsDICOMName.isEmpty())
@@ -4133,7 +4336,7 @@ void MainWindow::firstEvent()
         if (wsDICOMName.endsWith(".zip",Qt::CaseInsensitive))
             openDICOMZIP(wsDICOMName);
         else
-            openDICOM(wsDICOMName,wsDICOMName);
+            openDICOM(wsDICOMName, wsDICOMName, true);
     }
 }
 
@@ -4255,7 +4458,8 @@ void  MainWindow::saveScreenshot(OSGCanvas* pCanvas)
             QFileInfo baseFI( baseFileName );
             settings.setValue("ScreenShotDir",baseFI.dir().absolutePath());
 #define SCREENSHOT_SAVE_QUALITY     95
-            pImage->save(baseFileName,0,SCREENSHOT_SAVE_QUALITY);
+            if (!pImage->save(baseFileName, 0, SCREENSHOT_SAVE_QUALITY))
+                QMessageBox::critical(this, QCoreApplication::applicationName(), tr("Save failed! Please check available diskspace and try again."), QMessageBox::Ok);
         }
         delete pImage;
     }
@@ -4346,15 +4550,25 @@ void  MainWindow::saveSlice(OSGCanvas* pCanvas, int mode)
 // updates status bar info on density about cursor
 void MainWindow::densityMeasureHandler(double value)
 {
-    m_grayLevelLabel->setText(QString(tr("Density Level: %1").arg(value)));
+	data::CObjectPtr<data::CDensityData> spData(APP_STORAGE.getEntry(data::Storage::PatientData::Id));
+
+	QString dataType = QString::fromStdString(spData->m_sModality);
+
+    m_grayLevelLabel->setText(QString((dataType == "MR") ? tr("Intensity Level: %1") : tr("Density Level: %1")).arg(value));
 }
 
 void MainWindow::updateTabIcons()
-{    
-    // check event filters
+{   
+    double sizeFactor = C3DimApplication::getDpiFactor();
+    // check event filters and update icon size
     QList<QTabBar*> tabs = findChildren<QTabBar*>();
     foreach (QTabBar * tabBar, tabs)
+    {
         tabBar->installEventFilter(&m_tabsEventFilter);
+        if (sizeFactor>1)
+            tabBar->setIconSize(QSize(20*sizeFactor,20*sizeFactor));
+    }
+
     // search for all tab bars and all dockable widgets
     QList<QDockWidget*> dws = findChildren<QDockWidget*>();
     foreach (QTabBar * tabBar, tabs)
@@ -4426,6 +4640,7 @@ void MainWindow::addToRecentFiles(const QString& wsFileName)
         }
         actions = ui->menuRecent->actions();
         QAction * pAction = new QAction(wsStdPath,this);
+		pAction->setObjectName("actionRecent");
         connect(pAction,SIGNAL(triggered()),this,SLOT(onRecentFile()));
         pAction->setProperty("Path",wsStdPath);
         if (actions.isEmpty())
@@ -4455,12 +4670,12 @@ void MainWindow::onRecentFile()
                 openVLM(path);
             else
                 if (!suffix.isEmpty() && modelFormats.contains(suffix,Qt::CaseInsensitive))
-                    openSTL(path);
+                    openSTL(path, fi.fileName());
                 else
                     if (path.endsWith(".zip",Qt::CaseInsensitive))
                         openDICOMZIP(path);
                     else
-                        openDICOM(path,path);
+                        openDICOM(path, path, true);
         }
     }
 }
@@ -4498,9 +4713,16 @@ QMenu * MainWindow::createPopupMenu ()
     qSort(dws.begin(),dws.end(),dockWidgetNameCompare);
     foreach (QDockWidget * dw, dws)
     {
+		if (dw->objectName() == "Models Panel" && m_segmentationPluginsLoaded)
+		{
+			continue;
+		}
+
         if (dw->toggleViewAction()->isEnabled())
             pPanelsMenu->addAction(dw->toggleViewAction());            
     }
+    pPanelsMenu->addSeparator();
+    pPanelsMenu->addAction(ui->actionTabify_Panels);
 
     QMenu* pToolbarsMenu = pMenu->addMenu(tr("Toolbars"));
     QList<QToolBar*> toolbars = MainWindow::getInstance()->findChildren<QToolBar*>();
@@ -4645,7 +4867,7 @@ void MainWindow::dropEvent(QDropEvent* event)
             {
                 if (path.endsWith(".dcm",Qt::CaseInsensitive) || path.endsWith(".dicom",Qt::CaseInsensitive))
                 {
-                    bOpenedSomething |= openDICOM(path,path);
+                    bOpenedSomething |= openDICOM(path, path, true);
                 }
                 else
                 {
@@ -4653,14 +4875,14 @@ void MainWindow::dropEvent(QDropEvent* event)
                     QString suffix = fi.isDir()?"":fi.suffix().toLower();
                     if (!suffix.isEmpty() && modelFormats.contains(suffix,Qt::CaseInsensitive))
                     {
-                        bOpenedSomething |= openSTL(path);
+                        bOpenedSomething |= openSTL(path, fi.fileName());
                     }
                     else
                     {
                         if (path.endsWith(".zip",Qt::CaseInsensitive))
                             bOpenedSomething |= openDICOMZIP(path);
                         else
-                            bOpenedSomething |= openDICOM(path,path);
+                            bOpenedSomething |= openDICOM(path, path, true);
                     }
                 }
             }
@@ -4677,7 +4899,8 @@ void MainWindow::dropEvent(QDropEvent* event)
 
 void MainWindow::processSurfaceModelExtern()
 {
-    int model_id(m_modelsPanel->getSelectedModelStorageId());
+	int model_id((!m_segmentationPluginsLoaded) ? m_modelsPanel->getSelectedModelStorageId() : VPL_SIGNAL(SigGetSelectedModelId).invoke2());
+
     if(model_id < 0)
     {
         showMessageBox(QMessageBox::Critical, tr("No model selected!"));
@@ -4833,8 +5056,6 @@ void MainWindow::modelVisualizationWire()
 {
     for(size_t i = 0; i < MAX_IMPORTED_MODELS; ++i)
         m_modelVisualizers[i]->setModelVisualization(osg::CModelVisualizerEx::EMV_WIRE);
-//     data::CObjectPtr<data::CModel> spModel( APP_STORAGE.getEntry(data::Storage::BonesModel::Id) );
-//     APP_STORAGE.invalidate(spModel.getEntryPtr());
     m_3DView->Refresh(false);
 }
 
@@ -4874,8 +5095,8 @@ int MainWindow::findPossibleModelId()
 	m_modelColor = data::CColor4f(1.0, 1.0, 0.0);
 	m_modelLabel = std::string("Model");
 
-	QSettings settings;
-	if(settings.value("ModelRegionLinkEnabled", QVariant(false)).toBool())
+	/*QSettings settings;
+	if (settings.value("ModelRegionLinkEnabled", QVariant(DEFAULT_MODEL_REGION_LINK)).toBool())
 	{
 		// Get active region
 		data::CObjectPtr<data::CRegionColoring> spColoring(APP_STORAGE.getEntry(data::Storage::RegionColoring::Id));
@@ -4891,7 +5112,7 @@ int MainWindow::findPossibleModelId()
 			data::CRegionColoring::tColor rc(spColoring->getColor(active_region));
 			m_modelColor = data::CColor4f(rc.getR()/255.0f, rc.getG()/255.0f, rc.getB()/255.0f, rc.getA()/255.0f);
 		}
-	}
+	}*/
 
 	// Id not found yet
 	if(id < 0)
@@ -5026,6 +5247,7 @@ void MainWindow::loadShortcutsForMenu(QMenu* menu, QSettings& settings)
 							QKeySequence ks(res.toString()); // TODO: check whether the action is used
 							a->setShortcut(ks);
 							a->setProperty("Shortcut","Custom");
+							connect(a, SIGNAL(triggered()), this, SLOT(resetAppMode()));
 						}
 					}
 				}
@@ -5220,3 +5442,382 @@ void MainWindow::closeActivePanel()
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+
+void MainWindow::onMenuContoursVisibleToggled(bool visible)
+{
+	VPL_SIGNAL(SigSetContoursVisibility).invoke(visible);
+}
+
+void MainWindow::onMenuRegionsVisibleToggled(bool visible)
+{
+	VPL_SIGNAL(SigEnableRegionColoring).invoke(visible);
+}
+
+void MainWindow::onMenuVOIVisibleToggled(bool visible)
+{
+	VPL_SIGNAL(SigSetVolumeOfInterestVisibility).invoke(visible);
+}
+
+void MainWindow::setRegionsVisibility(bool visible)
+{
+	ui->actionRegions_Visible->blockSignals(true);
+	ui->actionRegions_Visible->setChecked(visible);
+	ui->actionRegions_Visible->blockSignals(false);
+}
+
+void MainWindow::setContoursVisibility(bool visible)
+{
+	QSettings settings;
+	settings.setValue("ContoursVisibility", visible);
+
+	ui->actionRegions_Contours_Visible->blockSignals(true);
+	ui->actionRegions_Contours_Visible->setChecked(visible);
+	ui->actionRegions_Contours_Visible->blockSignals(false);
+
+	if (visible && !m_contoursVisible)
+	{
+		m_SceneXY->addChild(m_xyVizualizer);
+		m_SceneXZ->addChild(m_xzVizualizer);
+		m_SceneYZ->addChild(m_yzVizualizer);
+
+		m_contoursVisible = true;
+	}
+	else if (!visible && m_contoursVisible)
+	{
+		m_SceneXY->removeChild(m_xyVizualizer);
+		m_SceneXZ->removeChild(m_xzVizualizer);
+		m_SceneYZ->removeChild(m_yzVizualizer);
+
+		m_contoursVisible = false;
+	}
+
+	data::CObjectPtr<data::CRegionColoring> spColoring(APP_STORAGE.getEntry(data::Storage::RegionColoring::Id));
+
+	APP_STORAGE.invalidate(spColoring.getEntryPtr());
+}
+
+bool MainWindow::getContoursVisibility()
+{
+	return m_contoursVisible;
+}
+
+bool MainWindow::getVOIVisibility()
+{
+	return m_VOIVisible;
+}
+
+void MainWindow::showPreviewDialog(const QString& title, CPreviewDialogData& data, int dataType)
+{
+	CPreviewDialog dlg(this, title, data);
+
+	bool accepted = false;
+
+	if (QDialog::Accepted == dlg.exec())
+	{
+		accepted = true;
+	}
+	else
+	{
+		accepted = false;
+	}
+
+	VPL_SIGNAL(SigPreviewDialogClosed).invoke(accepted, data, dataType);
+}
+
+void MainWindow::showInfoDialog(const QString& title, const QString& rowsTitles, const QString& rowsValues, const QColor& color)
+{
+	CInfoDialog dlg(this, title);
+
+	QStringList titles = rowsTitles.split(';');
+	QStringList values = rowsValues.split(';');
+
+	Q_ASSERT(!titles.empty() && titles.size() == values.size());
+
+	dlg.addRow(titles[0], values[0], color);
+
+	for (int i = 1; i < titles.size(); ++i)
+	{
+		dlg.addRow(titles[i], values[i]);
+	}
+
+	dlg.exec();
+}
+
+void MainWindow::setVOIVisibility(bool visible)
+{
+	ui->actionVolume_of_Interest_Visible->blockSignals(true);
+	ui->actionVolume_of_Interest_Visible->setChecked(visible);
+	ui->actionVolume_of_Interest_Visible->blockSignals(false);
+
+	data::CObjectPtr<data::CVolumeOfInterestData> spVOI(APP_STORAGE.getEntry(data::Storage::VolumeOfInterestData::Id));
+
+	if (visible && !m_VOIVisible)
+	{
+		m_SceneXY->addChild(m_xyVOIVizualizer);
+		m_SceneXZ->addChild(m_xzVOIVizualizer);
+		m_SceneYZ->addChild(m_yzVOIVizualizer);
+
+		m_VOIVisible = true;
+		spVOI->setSetFlag(true);
+	}
+	else if (!visible && m_VOIVisible)
+	{
+		m_SceneXY->removeChild(m_xyVOIVizualizer);
+		m_SceneXZ->removeChild(m_xzVOIVizualizer);
+		m_SceneYZ->removeChild(m_yzVOIVizualizer);
+
+		m_VOIVisible = false;
+		spVOI->setSetFlag(false);
+	}
+
+	APP_STORAGE.invalidate(spVOI.getEntryPtr());
+
+	data::CObjectPtr< data::COrthoSliceXY > pXY(APP_STORAGE.getEntry(data::Storage::SliceXY::Id));
+	data::CObjectPtr< data::COrthoSliceXZ > pXZ(APP_STORAGE.getEntry(data::Storage::SliceXZ::Id));
+	data::CObjectPtr< data::COrthoSliceYZ > pYZ(APP_STORAGE.getEntry(data::Storage::SliceYZ::Id));
+
+	APP_STORAGE.invalidate(pXY.getEntryPtr());
+	APP_STORAGE.invalidate(pXZ.getEntryPtr());
+	APP_STORAGE.invalidate(pYZ.getEntryPtr());
+}
+
+void MainWindow::onNewDensityData(data::CStorageEntry *pEntry)
+{
+	m_volumeRenderingPanel->setVRMode();
+
+	data::CObjectPtr<data::CDensityData> spData(APP_STORAGE.getEntry(data::Storage::PatientData::Id));
+	QString dataType = QString::fromStdString(spData->m_sModality);
+
+	{
+		QList<QAction *> actions = this->findChildren<QAction *>();
+
+		foreach(QAction *a, actions)
+		{
+			a->setToolTip((dataType == "MR") ? a->toolTip().replace("densit", "intensit") : a->toolTip().replace("intensit", "densit"));
+			a->setStatusTip((dataType == "MR") ? a->toolTip().replace("densit", "intensit") : a->toolTip().replace("intensit", "densit"));
+			a->setToolTip((dataType == "MR") ? a->toolTip().replace("Densit", "Intensit") : a->toolTip().replace("Intensit", "Densit"));
+			a->setStatusTip((dataType == "MR") ? a->toolTip().replace("Densit", "Intensit") : a->toolTip().replace("Intensit", "Densit"));
+			a->setText((dataType == "MR") ? a->text().replace("densit", "intensit") : a->text().replace("intensit", "densit"));
+			a->setText((dataType == "MR") ? a->text().replace("Densit", "Intensit") : a->text().replace("Intensit", "Densit"));
+			a->setToolTip((dataType == "MR") ? a->toolTip().replace("denzit", "intenzit") : a->toolTip().replace("intenzit", "denzit"));
+			a->setStatusTip((dataType == "MR") ? a->toolTip().replace("denzit", "intenzit") : a->toolTip().replace("intenzit", "denzit"));
+			a->setToolTip((dataType == "MR") ? a->toolTip().replace("Denzit", "Intenzit") : a->toolTip().replace("Intenzit", "Denzit"));
+			a->setStatusTip((dataType == "MR") ? a->toolTip().replace("Denzit", "Intenzit") : a->toolTip().replace("Intenzit", "Denzit"));
+			a->setText((dataType == "MR") ? a->text().replace("denzit", "intenzit") : a->text().replace("intenzit", "denzit"));
+			a->setText((dataType == "MR") ? a->text().replace("Denzit", "Intenzit") : a->text().replace("Intenzit", "Denzit"));
+		}
+	}
+
+	{
+		QList<QSpinBox *> spinBoxes = this->findChildren<QSpinBox *>();
+
+		foreach(QSpinBox *s, spinBoxes)
+		{
+			s->setToolTip((dataType == "MR") ? s->toolTip().replace("densit", "intensit") : s->toolTip().replace("intensit", "densit"));
+			s->setStatusTip((dataType == "MR") ? s->toolTip().replace("densit", "intensit") : s->toolTip().replace("intensit", "densit"));
+			s->setToolTip((dataType == "MR") ? s->toolTip().replace("Densit", "Intensit") : s->toolTip().replace("Intensit", "Densit"));
+			s->setStatusTip((dataType == "MR") ? s->toolTip().replace("Densit", "Intensit") : s->toolTip().replace("Intensit", "Densit"));
+			s->setToolTip((dataType == "MR") ? s->toolTip().replace("denzit", "intenzit") : s->toolTip().replace("intenzit", "denzit"));
+			s->setStatusTip((dataType == "MR") ? s->toolTip().replace("denzit", "intenzit") : s->toolTip().replace("intenzit", "denzit"));
+			s->setToolTip((dataType == "MR") ? s->toolTip().replace("Denzit", "Intenzit") : s->toolTip().replace("Intenzit", "Denzit"));
+			s->setStatusTip((dataType == "MR") ? s->toolTip().replace("Denzit", "Intenzit") : s->toolTip().replace("Intenzit", "Denzit"));
+		}
+	}
+
+	{
+		QList<QPushButton *> pushButtons = this->findChildren<QPushButton *>();
+
+		foreach(QPushButton *b, pushButtons)
+		{
+			b->setToolTip((dataType == "MR") ? b->toolTip().replace("densit", "intensit") : b->toolTip().replace("intensit", "densit"));
+			b->setStatusTip((dataType == "MR") ? b->toolTip().replace("densit", "intensit") : b->toolTip().replace("intensit", "densit"));
+			b->setToolTip((dataType == "MR") ? b->toolTip().replace("Densit", "Intensit") : b->toolTip().replace("Intensit", "Densit"));
+			b->setStatusTip((dataType == "MR") ? b->toolTip().replace("Densit", "Intensit") : b->toolTip().replace("Intensit", "Densit"));
+			b->setText((dataType == "MR") ? b->text().replace("densit", "intensit") : b->text().replace("intensit", "densit"));
+			b->setText((dataType == "MR") ? b->text().replace("Densit", "Intensit") : b->text().replace("Intensit", "Densit"));
+			b->setToolTip((dataType == "MR") ? b->toolTip().replace("denzit", "intenzit") : b->toolTip().replace("intenzit", "denzit"));
+			b->setStatusTip((dataType == "MR") ? b->toolTip().replace("denzit", "intenzit") : b->toolTip().replace("intenzit", "denzit"));
+			b->setToolTip((dataType == "MR") ? b->toolTip().replace("Denzit", "Intenzit") : b->toolTip().replace("Intenzit", "Denzit"));
+			b->setStatusTip((dataType == "MR") ? b->toolTip().replace("Denzit", "Intenzit") : b->toolTip().replace("Intenzit", "Denzit"));
+			b->setText((dataType == "MR") ? b->text().replace("denzit", "intenzit") : b->text().replace("intenzit", "denzit"));
+			b->setText((dataType == "MR") ? b->text().replace("Denzit", "Intenzit") : b->text().replace("Intenzit", "Denzit"));
+		}
+	}
+
+	{
+		QList<QCheckBox *> checkBoxes = this->findChildren<QCheckBox *>();
+
+		foreach(QCheckBox *c, checkBoxes)
+		{
+			c->setToolTip((dataType == "MR") ? c->toolTip().replace("densit", "intensit") : c->toolTip().replace("intensit", "densit"));
+			c->setStatusTip((dataType == "MR") ? c->toolTip().replace("densit", "intensit") : c->toolTip().replace("intensit", "densit"));
+			c->setToolTip((dataType == "MR") ? c->toolTip().replace("Densit", "Intensit") : c->toolTip().replace("Intensit", "Densit"));
+			c->setStatusTip((dataType == "MR") ? c->toolTip().replace("Densit", "Intensit") : c->toolTip().replace("Intensit", "Densit"));
+			c->setText((dataType == "MR") ? c->text().replace("densit", "intensit") : c->text().replace("intensit", "densit"));
+			c->setText((dataType == "MR") ? c->text().replace("Densit", "Intensit") : c->text().replace("Intensit", "Densit"));
+			c->setToolTip((dataType == "MR") ? c->toolTip().replace("denzit", "intenzit") : c->toolTip().replace("intenzit", "denzit"));
+			c->setStatusTip((dataType == "MR") ? c->toolTip().replace("denzit", "intenzit") : c->toolTip().replace("intenzit", "denzit"));
+			c->setToolTip((dataType == "MR") ? c->toolTip().replace("Denzit", "Intenzit") : c->toolTip().replace("Intenzit", "Denzit"));
+			c->setStatusTip((dataType == "MR") ? c->toolTip().replace("Denzit", "Intenzit") : c->toolTip().replace("Intenzit", "Denzit"));
+			c->setText((dataType == "MR") ? c->text().replace("denzit", "intenzit") : c->text().replace("intenzit", "denzit"));
+			c->setText((dataType == "MR") ? c->text().replace("Denzit", "Intenzit") : c->text().replace("Intenzit", "Denzit"));
+		}
+	}
+
+	{
+		QList<QLabel *> labels = this->findChildren<QLabel *>();
+
+		foreach(QLabel *l, labels)
+		{
+			l->setToolTip((dataType == "MR") ? l->toolTip().replace("densit", "intensit") : l->toolTip().replace("intensit", "densit"));
+			l->setStatusTip((dataType == "MR") ? l->toolTip().replace("densit", "intensit") : l->toolTip().replace("intensit", "densit"));
+			l->setToolTip((dataType == "MR") ? l->toolTip().replace("Densit", "Intensit") : l->toolTip().replace("Intensit", "Densit"));
+			l->setStatusTip((dataType == "MR") ? l->toolTip().replace("Densit", "Intensit") : l->toolTip().replace("Intensit", "Densit"));
+			l->setText((dataType == "MR") ? l->text().replace("densit", "intensit") : l->text().replace("intensit", "densit"));
+			l->setText((dataType == "MR") ? l->text().replace("Densit", "Intensit") : l->text().replace("Intensit", "Densit"));
+			l->setToolTip((dataType == "MR") ? l->toolTip().replace("denzit", "intenzit") : l->toolTip().replace("intenzit", "denzit"));
+			l->setStatusTip((dataType == "MR") ? l->toolTip().replace("denzit", "intenzit") : l->toolTip().replace("intenzit", "denzit"));
+			l->setToolTip((dataType == "MR") ? l->toolTip().replace("Denzit", "Intenzit") : l->toolTip().replace("Intenzit", "Denzit"));
+			l->setStatusTip((dataType == "MR") ? l->toolTip().replace("Denzit", "Intenzit") : l->toolTip().replace("Intenzit", "Denzit"));
+			l->setText((dataType == "MR") ? l->text().replace("denzit", "intenzit") : l->text().replace("intenzit", "denzit"));
+			l->setText((dataType == "MR") ? l->text().replace("Denzit", "Intenzit") : l->text().replace("Intenzit", "Denzit"));
+		}
+	}
+
+	{
+		QList<QGroupBox *> qroupBoxes = this->findChildren<QGroupBox *>();
+
+		foreach(QGroupBox *g, qroupBoxes)
+		{
+			g->setTitle((dataType == "MR") ? g->title().replace("densit", "intensit") : g->title().replace("intensit", "densit"));
+			g->setTitle((dataType == "MR") ? g->title().replace("Densit", "Intensit") : g->title().replace("Intensit", "Densit"));
+			g->setTitle((dataType == "MR") ? g->title().replace("denzit", "intenzit") : g->title().replace("intenzit", "denzit"));
+			g->setTitle((dataType == "MR") ? g->title().replace("Denzit", "Intenzit") : g->title().replace("Intenzit", "Denzit"));
+		}
+	}
+
+	{
+		QList<QLineEdit *> edits = this->findChildren<QLineEdit *>();
+
+		foreach(QLineEdit *e, edits)
+		{
+			e->setToolTip((dataType == "MR") ? e->toolTip().replace("densit", "intensit") : e->toolTip().replace("intensit", "densit"));
+			e->setStatusTip((dataType == "MR") ? e->toolTip().replace("densit", "intensit") : e->toolTip().replace("intensit", "densit"));
+			e->setToolTip((dataType == "MR") ? e->toolTip().replace("Densit", "Intensit") : e->toolTip().replace("Intensit", "Densit"));
+			e->setStatusTip((dataType == "MR") ? e->toolTip().replace("Densit", "Intensit") : e->toolTip().replace("Intensit", "Densit"));
+			e->setToolTip((dataType == "MR") ? e->toolTip().replace("denzit", "intenzit") : e->toolTip().replace("intenzit", "denzit"));
+			e->setStatusTip((dataType == "MR") ? e->toolTip().replace("denzit", "intenzit") : e->toolTip().replace("intenzit", "denzit"));
+			e->setToolTip((dataType == "MR") ? e->toolTip().replace("Denzit", "Intenzit") : e->toolTip().replace("Intenzit", "Denzit"));
+			e->setStatusTip((dataType == "MR") ? e->toolTip().replace("Denzit", "Intenzit") : e->toolTip().replace("Intenzit", "Denzit"));
+		}
+	}
+
+	{
+		QList<QComboBox *> combos = this->findChildren<QComboBox *>();
+
+		foreach(QComboBox *c, combos)
+		{
+			c->setToolTip((dataType == "MR") ? c->toolTip().replace("densit", "intensit") : c->toolTip().replace("intensit", "densit"));
+			c->setStatusTip((dataType == "MR") ? c->toolTip().replace("densit", "intensit") : c->toolTip().replace("intensit", "densit"));
+			c->setToolTip((dataType == "MR") ? c->toolTip().replace("Densit", "Intensit") : c->toolTip().replace("Intensit", "Densit"));
+			c->setStatusTip((dataType == "MR") ? c->toolTip().replace("Densit", "Intensit") : c->toolTip().replace("Intensit", "Densit"));
+			c->setToolTip((dataType == "MR") ? c->toolTip().replace("denzit", "intenzit") : c->toolTip().replace("intenzit", "denzit"));
+			c->setStatusTip((dataType == "MR") ? c->toolTip().replace("denzit", "intenzit") : c->toolTip().replace("intenzit", "denzit"));
+			c->setToolTip((dataType == "MR") ? c->toolTip().replace("Denzit", "Intenzit") : c->toolTip().replace("Intenzit", "Denzit"));
+			c->setStatusTip((dataType == "MR") ? c->toolTip().replace("Denzit", "Intenzit") : c->toolTip().replace("Intenzit", "Denzit"));
+		}
+	}
+
+	{
+		QList<QSlider *> combos = this->findChildren<QSlider *>();
+
+		foreach(QSlider *s, combos)
+		{
+			s->setToolTip((dataType == "MR") ? s->toolTip().replace("densit", "intensit") : s->toolTip().replace("intensit", "densit"));
+			s->setStatusTip((dataType == "MR") ? s->toolTip().replace("densit", "intensit") : s->toolTip().replace("intensit", "densit"));
+			s->setToolTip((dataType == "MR") ? s->toolTip().replace("Densit", "Intensit") : s->toolTip().replace("Intensit", "Densit"));
+			s->setStatusTip((dataType == "MR") ? s->toolTip().replace("Densit", "Intensit") : s->toolTip().replace("Intensit", "Densit"));
+			s->setToolTip((dataType == "MR") ? s->toolTip().replace("denzit", "intenzit") : s->toolTip().replace("intenzit", "denzit"));
+			s->setStatusTip((dataType == "MR") ? s->toolTip().replace("denzit", "intenzit") : s->toolTip().replace("intenzit", "denzit"));
+			s->setToolTip((dataType == "MR") ? s->toolTip().replace("Denzit", "Intenzit") : s->toolTip().replace("Intenzit", "Denzit"));
+			s->setStatusTip((dataType == "MR") ? s->toolTip().replace("Denzit", "Intenzit") : s->toolTip().replace("Intenzit", "Denzit"));
+		}
+	}
+}
+
+void MainWindow::showFeedbackRequestDialog()
+{
+	//app::CProductInfo info = app::getProductInfo();
+	//QString product = QString("%1 %2.%3.%4 %5").arg(QCoreApplication::applicationName()).arg(info.getVersion().getMajorNum()).arg(info.getVersion().getMinorNum()).arg(info.getVersion().getBuildNum()).arg(QString::fromStdString(info.getNote()));
+	QMessageBox msgBox(this);
+	msgBox.setEscapeButton(QMessageBox::Cancel);
+	QPushButton* feedbackButton = msgBox.addButton(tr("Give Us Your Feedback..."), QMessageBox::YesRole);
+	QObject::connect(feedbackButton, SIGNAL(clicked()), this, SLOT(showFeedback()));
+	msgBox.setDefaultButton(feedbackButton);
+	msgBox.setIconPixmap(QPixmap(":/icons/3dim.ico"));
+	msgBox.setWindowTitle(QCoreApplication::applicationName());
+	msgBox.setText(tr("We are surveying users about their experience and satisfaction with 3DimViewer. We appreciate your response. Thank you."));
+
+	msgBox.exec();
+}
+
+void MainWindow::resetAppMode() // actions activated via shortcuts with Ctrl/Shift leave mouse mode in a temporary mode, we need to reset it
+{
+    QAction* pAction = qobject_cast<QAction*>(sender());
+    if (NULL!=pAction)
+    {
+        QKeySequence ks = pAction->shortcut();
+        QString kss = ks.toString();
+        // restore mouse mode only when a modifier could be used - todo: detect whether a shortcut was really used, this is just a workaround
+        if (!ks.isEmpty() && (kss.contains("Meta") || kss.contains("Alt") || kss.contains("Ctrl") || kss.contains("Shift"))) 
+	        APP_MODE.restore();
+    }
+}
+
+// after some actions (like saving dicom series), menu actions remained grey, until the mouse cursor went over them
+// this function handles these situations
+void MainWindow::enableMenuActions()
+{
+	QList<QMenu *> menus = this->findChildren<QMenu *>();
+
+	foreach(QMenu *m, menus)
+	{
+		m->setEnabled(false);
+		m->setEnabled(true);
+	}
+}
+
+//! Autotab all panels in all widget areas
+void MainWindow::autoTabPanels()
+{
+    std::vector<QDockWidget*> dwa[4];
+    QList<QDockWidget*> dws = findChildren<QDockWidget*>();
+    foreach(QDockWidget* dw,dws)
+    {
+        Qt::DockWidgetArea area = dockWidgetArea(dw);
+        switch(area)
+        {
+        case Qt::LeftDockWidgetArea: dwa[0].push_back(dw); break;
+        case Qt::RightDockWidgetArea: dwa[1].push_back(dw); break;
+        case Qt::TopDockWidgetArea: dwa[2].push_back(dw); break;
+        case Qt::BottomDockWidgetArea: dwa[3].push_back(dw); break;
+        }
+    }
+    for(int i = 0;i < 4; i++)
+    {
+        if (dwa[i].empty()) continue;
+        QList<QDockWidget*> tabbed = tabifiedDockWidgets(dwa[i][0]);
+        //std::remove_if doesn't erase anything from the vector, since it doesn't have access to it. 
+        // Instead, it moves the elements you want to keep to the start of the range, leaving the 
+        // remaining elements in a valid but unspecified state, and returns the new end.
+        // You can use the "erase-remove" idiom to actually erase them from the vector:
+        dwa[i].erase(std::remove_if(dwa[i].begin(),dwa[i].end(),[&](QDockWidget* dw) -> bool { 
+            return tabbed.contains(dw);
+        }),dwa[i].end());
+        // tabify only untabbed widgets to preserve order of the already tabbed ones
+        for(int j = 1; j<dwa[i].size();j++)
+        {
+            tabifyDockWidget(dwa[i][0],dwa[i][j]);
+        }
+    }
+}

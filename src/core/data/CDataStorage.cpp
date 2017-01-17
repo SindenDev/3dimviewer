@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@
 #include <VPL/Base/Logging.h>
 #include <VPL/System/Sleep.h>
 
+#define STORAGE_ENTRY_CLASS_FLAGS		16
 
 namespace data
 {
@@ -53,7 +54,7 @@ void CDataStorage::invalidate(CStorageEntry *pEntry, int Flags)
 
 	if( !m_bCanInvalidate )
 	{
-		fakeInvalidate( pEntry, Flags );
+		fakeInvalidate( pEntry, Flags);
 		return;
 	}
 
@@ -98,6 +99,7 @@ CPtrWrapper<CStorageEntry> CDataStorage::getEntry(int Id, int Flags)
 
     // Get pointer to the entry
     CStorageEntry *pEntry = m_Storage[Id].get();
+    assert(NULL!=pEntry);
 
     // Is the entry initialized?
     if( pEntry->getId() != Id )
@@ -107,6 +109,15 @@ CPtrWrapper<CStorageEntry> CDataStorage::getEntry(int Id, int Flags)
          // Check the entry again
          if( pEntry->getId() != Id )
          {
+#ifdef _WIN32
+             // output storage entry id
+             {
+                 std::stringstream ss;
+                 ss << "Initializing storage entry " << Id << " ";
+                 std::string str = ss.str();
+                 OutputDebugStringA(str.c_str());
+             }
+#endif
              // Set the entry Id
              pEntry->setId(Id);
              
@@ -127,6 +138,28 @@ CPtrWrapper<CStorageEntry> CDataStorage::getEntry(int Id, int Flags)
                      VPL_LOG_INFO("CDataStorage::getEntry(): " << Exception.what() << ", Id = " << pEntry->getId());
                  }
              }
+
+#ifdef _WIN32
+             // output class name
+             if (NULL!=pEntry->getStorableDataPtr())
+             {
+                 std::stringstream ss;
+                 ss << " " << typeid(*pEntry->getStorableDataPtr()).name();
+                 std::string str = ss.str();
+                 OutputDebugStringA(str.c_str());
+             }
+             else
+                 OutputDebugStringA(" null data");             
+
+             // output thread id
+             if(0){
+                 std::stringstream ss;
+                 ss << " thread " << GetCurrentThreadId();
+                 std::string str = ss.str();
+                 OutputDebugStringA(str.c_str());
+             }
+             OutputDebugStringA("\n");
+#endif
              
              // Update reverse dependencies
              createReverseDeps(Id, getFactory().getDeps(Id));
@@ -188,7 +221,8 @@ void CDataStorage::invalidateDeps(CStorageEntry *pRoot, CEntryDeps& List, int Fl
             pEntry->makeDirty(pRoot->getId(), Flags);
 
             // Invalidate all child nodes
-            invalidateDeps(pEntry, List, Flags);
+			const int depsInvalidateFlags = Flags & (-1 - ((1 << STORAGE_ENTRY_CLASS_FLAGS) - 1) ); // clear class specific flags, because they were valid for pRoot, but not for pEntry
+            invalidateDeps(pEntry, List, depsInvalidateFlags);
         }
     }
 }
@@ -312,6 +346,23 @@ void CDataStorage::reset()
 
     // Notify observers of all entries
     Invalidated.forEach( SNotifyDeps(m_Storage) );
+
+    /* update all dirty entries - we perform storage reset and deserialization without updates in between,
+       that causes that objects receive sequence of changes including the change with STORAGE_RESET and some objects
+       therefore reset themselves after deserialization which is of course bad  */
+    for (it = m_Storage.begin(); it != itEnd; ++it)
+    {
+        CStorageEntry *pEntry = it->get();
+        if (pEntry->getId() == Storage::UNKNOWN)
+        {
+            continue;
+        }
+        if (pEntry->isDirty())
+        {
+            pEntry->update();
+            pEntry->notify();
+        }
+    }
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -411,7 +462,7 @@ void CDataStorage::fakeInvalidate( CStorageEntry *pEntry, int Flags /*= 0*/ )
 
 	m_invalidatedEntries[id].insert(id, Flags);
 
-	// Invalidate all dependent entries
+	// Invalidate all dependent entries	
 	fakeInvaldateDeps(pEntry, Flags);
 }
 
@@ -437,7 +488,8 @@ void CDataStorage::fakeInvaldateDeps( CStorageEntry *pRoot, int Flags /*= 0*/ )
 			m_invalidatedDeps[pEntry->getId()].insert( pRoot->getId(), Flags );
 
 			// "Invalidate all child nodes
-			fakeInvaldateDeps(pEntry, Flags);
+			const int depsInvalidateFlags = Flags & (-1 - ((1 << STORAGE_ENTRY_CLASS_FLAGS) - 1) ); // clear class specific flags
+			fakeInvaldateDeps(pEntry, depsInvalidateFlags);
 		}
 	}
 }

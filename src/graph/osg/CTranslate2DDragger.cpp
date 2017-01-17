@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -37,6 +37,7 @@ CTranslate2DDragger::CTranslate2DDragger()
 	: m_bNoGeometryTransform( true )
     , m_bTranslating(false)
 {
+    setName("CTranslate2DDragger");
 	m_initialPlane.set(osg::Vec3(0.0, 0.0, 1.0), osg::Vec3(0.0, 0.0, 0.0));
 	_projector = new PlaneProjector(m_initialPlane);
 	_polygonOffset = new osg::PolygonOffset(-1.0f,-1.0f);

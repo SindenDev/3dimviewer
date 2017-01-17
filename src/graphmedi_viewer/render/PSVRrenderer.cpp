@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -45,7 +45,9 @@
 #include <render/PSVRshaders.h>
 #include <render/CGraficCardDesc.h>
 #include <osg/CSceneOSG.h>
-#include "cvolumerendererwindow.h"
+#include "render/cvolumerendererwindow.h"
+#include <render/glErrorReporting.h>
+#include <osg/CSceneManipulator.h>
 
 #include <VPL/Math/Base.h>
 #include <VPL/Math/Random.h>
@@ -54,7 +56,8 @@
 #include <VPL/Image/VolumeFilters/Sobel.h>
 #include <VPL/Image/VolumeFilters/Gaussian.h>
 
-#include <app/Signals.h>
+#include <coremedi/app/Signals.h>
+
 
 //#define ROUNDING_MASK 0xFFFFFFFE
 #define ROUNDING_MASK 0xFFFFFFFC
@@ -71,6 +74,40 @@
     #define glDeleteVertexArraysX glDeleteVertexArrays
     #define glIsVertexArrayX      glIsVertexArray
 #endif
+
+bool reportErrors(std::string functionName)
+{
+    std::string errorString = glGetErrors(functionName);
+    if (!errorString.empty())
+    {
+        VPL_LOG_ERROR(errorString);
+        return true;
+    }
+    return false;
+}
+
+#define tridimGlError(name, errorExp, glExp) glExp; { if (reportErrors(name)) { errorExp; } }
+#define tridimGlBool(name, glExp) tridimGlError(name, return false, glExp)
+#define tridimGl(name, glExp) tridimGlError(name, return, glExp)
+#define tridimGlR(name, glExp) glExp; reportErrors(name);
+
+class CContextGuardian
+{
+    OSGCanvas* m_pCanvas;
+    bool m_bCurrent;
+public:
+    CContextGuardian(OSGCanvas* pCanvas) : m_pCanvas(pCanvas), m_bCurrent(false)
+    {
+        if (NULL!=m_pCanvas)
+            m_bCurrent = m_pCanvas->getGraphicWindow()->makeCurrentImplementation();
+    }
+    ~CContextGuardian()
+    {
+        if (NULL!=m_pCanvas)
+            m_pCanvas->getGraphicWindow()->releaseContextImplementation();
+    }
+    bool isCurrent() const { return m_bCurrent; }
+};
 
 namespace PSVR
 {
@@ -620,7 +657,23 @@ PSVolumeRendering::PSVolumeRendering()
 
     // create default lookup tables
     createLookupTables();
+
+	noteMatrixSignalConnection = VPL_SIGNAL(SigNewTransformMatrixFromNote).connect(this, &PSVolumeRendering::setNewTransformMatrix);
 }
+
+
+void PSVolumeRendering::setNewTransformMatrix(osg::Matrix& newTransformMatrix, double distance) {
+
+    auto cameraManipulator = dynamic_cast<osg::CSceneManipulator *>(this->getCanvas()->getView()->getCameraManipulator());
+
+    if (cameraManipulator == nullptr)
+        return;
+
+    cameraManipulator->customSetPosition(newTransformMatrix, distance);
+
+    this->redraw();
+}
+
 
 ///////////////////////////////////////////////////////////////////////////////
 //
@@ -717,18 +770,15 @@ unsigned int PSVolumeRendering::internalCreateCustomShader(std::string vertexSha
         return 0;
     }
 
-    if (!m_pCanvas->getGraphicWindow()->makeCurrentImplementation())
-    {
+    CContextGuardian guard(m_pCanvas);
+    if (!guard.isCurrent())
         return 0;
-    }
 
     GLuint vertexShaderId, fragmentShaderId, programId;
     if (!createShaderProgram(fragmentShaderSource.c_str(), vertexShaderSource.c_str(), &fragmentShaderId, &vertexShaderId, &programId))
     {
-        m_pCanvas->getGraphicWindow()->releaseContextImplementation();
         return 0;
     }
-    m_pCanvas->getGraphicWindow()->releaseContextImplementation();
 
     m_programShaders[programId].push_back(fragmentShaderId);
     m_programShaders[programId].push_back(vertexShaderId);
@@ -738,10 +788,9 @@ unsigned int PSVolumeRendering::internalCreateCustomShader(std::string vertexSha
 
 void PSVolumeRendering::internalDeleteCustomShader(unsigned int shaderId)
 {
-    if (!m_pCanvas->getGraphicWindow()->makeCurrentImplementation())
-    {
+    CContextGuardian guard(m_pCanvas);
+    if (!guard.isCurrent())
         return;
-    }
 
     if ((getShader() == CUSTOM) && (m_customShaderId == shaderId))
     {
@@ -756,8 +805,6 @@ void PSVolumeRendering::internalDeleteCustomShader(unsigned int shaderId)
     glDeleteProgram(shaderId);
 
     m_programShaders.erase(shaderId);
-
-    m_pCanvas->getGraphicWindow()->releaseContextImplementation();
 }
 
 void PSVolumeRendering::internalUseCustomShader(unsigned int shaderId)
@@ -769,32 +816,42 @@ void PSVolumeRendering::internalUseCustomShader(unsigned int shaderId)
 
 void PSVolumeRendering::setParameter(unsigned int shaderId, std::string name, int value)
 {
+    if (0 == shaderId) return;
     GLint pos = glGetUniformLocation(shaderId, name.c_str());
-    glUniform1i(pos, value);
+    reportErrors("glGetUniformLocation");
+    tridimGlR("glUniform1i", glUniform1i(pos, value););
 }
 
 void PSVolumeRendering::setParameter(unsigned int shaderId, std::string name, float value)
 {
+    if (0 == shaderId) return;
     GLint pos = glGetUniformLocation(shaderId, name.c_str());
-    glUniform1f(pos, value);
+    reportErrors("glGetUniformLocation");
+    tridimGlR("glUniform1f", glUniform1f(pos, value););
 }
 
 void PSVolumeRendering::setParameter(unsigned int shaderId, std::string name, osg::Vec2 value)
 {
+    if (0 == shaderId) return;
     GLint pos = glGetUniformLocation(shaderId, name.c_str());
-    glUniform2f(pos, value.x(), value.y());
+    reportErrors("glGetUniformLocation");
+    tridimGlR("glUniform2f", glUniform2f(pos, value.x(), value.y()););
 }
 
 void PSVolumeRendering::setParameter(unsigned int shaderId, std::string name, osg::Vec3 value)
 {
+    if (0 == shaderId) return;
     GLint pos = glGetUniformLocation(shaderId, name.c_str());
-    glUniform3f(pos, value.x(), value.y(), value.z());
+    reportErrors("glGetUniformLocation");
+    tridimGlR("glUniform3f", glUniform3f(pos, value.x(), value.y(), value.z()););
 }
 
 void PSVolumeRendering::setParameter(unsigned int shaderId, std::string name, osg::Vec4 value)
 {
+    if (0 == shaderId) return;
     GLint pos = glGetUniformLocation(shaderId, name.c_str());
-    glUniform4f(pos, value.x(), value.y(), value.z(), value.w());
+    reportErrors("glGetUniformLocation");
+    tridimGlR("glUniform4f", glUniform4f(pos, value.x(), value.y(), value.z(), value.w()););
 }
 
 void PSVolumeRendering::setParameter(unsigned int shaderId, std::string name, osg::Matrix value)
@@ -804,32 +861,40 @@ void PSVolumeRendering::setParameter(unsigned int shaderId, std::string name, os
 
 void PSVolumeRendering::setParameter(unsigned int shaderId, std::string name, int *value, int count)
 {
+    if (0 == shaderId) return;
     GLint pos = glGetUniformLocation(shaderId, name.c_str());
-    glUniform1iv(pos, count, value);
+    reportErrors("glGetUniformLocation");
+    tridimGlR("glUniform1iv", glUniform1iv(pos, count, value););
 }
 
 void PSVolumeRendering::setParameter(unsigned int shaderId, std::string name, float *value, int count)
 {
+    if (0 == shaderId) return;
     GLint pos = glGetUniformLocation(shaderId, name.c_str());
-    glUniform1fv(pos, count, value);
+    reportErrors("glGetUniformLocation");
+    tridimGlR("glUniform1fv", glUniform1fv(pos, count, value););
 }
 
 void PSVolumeRendering::setParameter(unsigned int shaderId, std::string name, osg::Vec2 *value, int count)
 {
+    if (0 == shaderId) return;
     GLint pos = glGetUniformLocation(shaderId, name.c_str());
+    reportErrors("glGetUniformLocation");
     osg::Vec2::value_type *temp = new osg::Vec2::value_type[2 * count];
     for (int i = 0; i < count; ++i)
     {
         temp[i * 2 + 0] = value[i][0];
         temp[i * 2 + 1] = value[i][1];
     }
-    glUniform2fv(pos, count, temp);
+    tridimGlR("glUniform2fv", glUniform2fv(pos, count, temp););
     delete temp;
 }
 
 void PSVolumeRendering::setParameter(unsigned int shaderId, std::string name, osg::Vec3 *value, int count)
 {
+    if (0 == shaderId) return;
     GLint pos = glGetUniformLocation(shaderId, name.c_str());
+    reportErrors("glGetUniformLocation");
     osg::Vec3::value_type *temp = new osg::Vec3::value_type[3 * count];
     for (int i = 0; i < count; ++i)
     {
@@ -837,13 +902,15 @@ void PSVolumeRendering::setParameter(unsigned int shaderId, std::string name, os
         temp[i * 3 + 1] = value[i][1];
         temp[i * 3 + 2] = value[i][2];
     }
-    glUniform3fv(pos, count, temp);
+    tridimGlR("glUniform3fv",glUniform3fv(pos, count, temp););
     delete temp;
 }
 
 void PSVolumeRendering::setParameter(unsigned int shaderId, std::string name, osg::Vec4 *value, int count)
 {
+    if (0 == shaderId) return;
     GLint pos = glGetUniformLocation(shaderId, name.c_str());
+    reportErrors("glGetUniformLocation");
     osg::Vec4::value_type *temp = new osg::Vec4::value_type[4 * count];
     for (int i = 0; i < count; ++i)
     {
@@ -852,13 +919,15 @@ void PSVolumeRendering::setParameter(unsigned int shaderId, std::string name, os
         temp[i * 4 + 2] = value[i][2];
         temp[i * 4 + 3] = value[i][3];
     }
-    glUniform4fv(pos, count, temp);
+    tridimGlR("glUniform4fv", glUniform4fv(pos, count, temp););
     delete temp;
 }
 
 void PSVolumeRendering::setParameter(unsigned int shaderId, std::string name, osg::Matrix *value, int count)
 {
+    if (0 == shaderId) return;
     GLint pos = glGetUniformLocation(shaderId, name.c_str());
+    reportErrors("glGetUniformLocation");
     float *temp = new float[16 * count];
     for (int m = 0; m < count; ++m)
     {
@@ -867,7 +936,7 @@ void PSVolumeRendering::setParameter(unsigned int shaderId, std::string name, os
             temp[m * 16 + i] = value[m].ptr()[i];
         }
     }
-    glUniformMatrix4fv(pos, count, false, temp);
+    tridimGlR("glUniformMatrix4fv", glUniformMatrix4fv(pos, count, false, temp););
     delete temp;
 }
 
@@ -878,11 +947,9 @@ unsigned int PSVolumeRendering::internalCreateCustomVolume()
         return 0;
     }
 
-    if (!m_pCanvas->getGraphicWindow()->makeCurrentImplementation())
-    {
-        m_pCanvas->getGraphicWindow()->releaseContextImplementation();
+    CContextGuardian guard(m_pCanvas);
+    if (!guard.isCurrent())
         return 0;
-    }
 
     unsigned int textureId = 0;
     glGenTextures(1, &textureId);
@@ -896,8 +963,6 @@ unsigned int PSVolumeRendering::internalCreateCustomVolume()
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
     glBindTexture(GL_TEXTURE_3D, currBinding);
-
-    m_pCanvas->getGraphicWindow()->releaseContextImplementation();
 
     return textureId;
 }
@@ -1275,38 +1340,59 @@ void PSVolumeRendering::resetLookupTables()
     updateLookupTables();
 }
 
-void PSVolumeRendering::updateLookupTables()
+void PSVolumeRendering::updateLookupTables(std::string lutName)
 {
-    updateLookupTable(m_lookupTables["MIP_SOFT"],       m_internalLookupTables[MIP_SOFT],       m_skipConditions[MIP_SOFT]);
-    updateLookupTable(m_lookupTables["MIP_HARD"],       m_internalLookupTables[MIP_HARD],       m_skipConditions[MIP_HARD]);
-    updateLookupTable(m_lookupTables["XRAY_SOFT"],      m_internalLookupTables[XRAY_SOFT],      m_skipConditions[XRAY_SOFT]);
-    updateLookupTable(m_lookupTables["XRAY_HARD"],      m_internalLookupTables[XRAY_HARD],      m_skipConditions[XRAY_HARD]);
-    updateLookupTable(m_lookupTables["SHA_AIR"],        m_internalLookupTables[SHA_AIR],        m_skipConditions[SHA_AIR]);
-    updateLookupTable(m_lookupTables["SHA_TRAN"],       m_internalLookupTables[SHA_TRAN],       m_skipConditions[SHA_TRAN]);
-    updateLookupTable(m_lookupTables["SHA_BONE0"],      m_internalLookupTables[SHA_BONE0],      m_skipConditions[SHA_BONE0]);
-    updateLookupTable(m_lookupTables["SHA_BONE1"],      m_internalLookupTables[SHA_BONE1],      m_skipConditions[SHA_BONE1]);
-    updateLookupTable(m_lookupTables["SHA_BONE2"],      m_internalLookupTables[SHA_BONE2],      m_skipConditions[SHA_BONE2]);
-    updateLookupTable(m_lookupTables["SURFACE_SKIN"],   m_internalLookupTables[SURFACE_SKIN],   m_skipConditions[SURFACE_SKIN]);
-    updateLookupTable(m_lookupTables["SURFACE_BONE"],   m_internalLookupTables[SURFACE_BONE],   m_skipConditions[SURFACE_BONE]);
+    std::vector<std::pair<int, std::string> > luts;
+    luts.push_back(std::pair<int, std::string>(MIP_SOFT,     "MIP_SOFT"));
+    luts.push_back(std::pair<int, std::string>(MIP_HARD,     "MIP_HARD"));
+    luts.push_back(std::pair<int, std::string>(XRAY_SOFT,    "XRAY_SOFT"));
+    luts.push_back(std::pair<int, std::string>(XRAY_HARD,    "XRAY_HARD"));
+    luts.push_back(std::pair<int, std::string>(SHA_AIR,      "SHA_AIR"));
+    luts.push_back(std::pair<int, std::string>(SHA_TRAN,     "SHA_TRAN"));
+    luts.push_back(std::pair<int, std::string>(SHA_BONE0,    "SHA_BONE0"));
+    luts.push_back(std::pair<int, std::string>(SHA_BONE1,    "SHA_BONE1"));
+    luts.push_back(std::pair<int, std::string>(SHA_BONE2,    "SHA_BONE2"));
+    luts.push_back(std::pair<int, std::string>(SURFACE_SKIN, "SURFACE_SKIN"));
+    luts.push_back(std::pair<int, std::string>(SURFACE_BONE, "SURFACE_BONE"));
+
+    #pragma omp parallel for
+    for (int i = 0; i < luts.size(); ++i)
+    {
+        if ((lutName.empty()) || (lutName == m_lookupTables[luts[i].second].name()))
+        {
+            updateLookupTable(m_lookupTables[luts[i].second], m_internalLookupTables[luts[i].first], m_skipConditions[luts[i].first]);
+        }
+    }
 
     setLut(getLut());
 }
 
-void PSVolumeRendering::updateLookupTable(CLookupTable &lookupTable, unsigned short *internalLookupTable, float &skipCondition)
+void PSVolumeRendering::updateLookupTable(CLookupTable &lookupTable, unsigned short *internalLookupTable, osg::Vec4 &skipCondition)
 {
-    for (int i = LUT_1D_SIZE - 1; i >= 0; --i)
+    skipCondition[0] = 1.0;
+    skipCondition[1] = 0.0;
+    skipCondition[2] = 1.0;
+    skipCondition[3] = 0.0;
+
+    for (int y = LUT_2D_H - 1; y >= 0; --y)
     {
-        double position = double(i) / double(LUT_1D_SIZE);
-        osg::Vec4 color = lookupTable.color(position);
-
-        internalLookupTable[4 * i + 0] = static_cast<unsigned short>(color.r() * 65535.0);
-        internalLookupTable[4 * i + 1] = static_cast<unsigned short>(color.g() * 65535.0);
-        internalLookupTable[4 * i + 2] = static_cast<unsigned short>(color.b() * 65535.0);
-        internalLookupTable[4 * i + 3] = static_cast<unsigned short>((1.0 - color.a()) * 65535.0);
-
-        if (color.a() > 0.0f)
+        for (int x = LUT_2D_W - 1; x >= 0; --x)
         {
-            skipCondition = position;
+            osg::Vec2 position = osg::Vec2(double(x) / double(LUT_2D_W), double(y) / double(LUT_2D_H));
+            osg::Vec4 color = lookupTable.color(position);
+
+            internalLookupTable[4 * (y * LUT_2D_W + x) + 0] = static_cast<unsigned short>(color.r() * 65535.0);
+            internalLookupTable[4 * (y * LUT_2D_W + x) + 1] = static_cast<unsigned short>(color.g() * 65535.0);
+            internalLookupTable[4 * (y * LUT_2D_W + x) + 2] = static_cast<unsigned short>(color.b() * 65535.0);
+            internalLookupTable[4 * (y * LUT_2D_W + x) + 3] = static_cast<unsigned short>((1.0 - color.a()) * 65535.0);
+
+            if (color.a() > 0.0f)
+            {
+                skipCondition[0] = std::min(skipCondition[0], position[0]);
+                skipCondition[1] = std::max(skipCondition[1], position[0]);
+                skipCondition[2] = std::min(skipCondition[2], position[1]);
+                skipCondition[3] = std::max(skipCondition[3], position[1]);
+            }
         }
     }
 }
@@ -1371,16 +1457,11 @@ bool PSVolumeRendering::canStart()
     tLock Lock(*this);
 
     // Set the current OpenGL rendering context
-    if (!m_pCanvas->getGraphicWindow()->makeCurrentImplementation())
-    {
+    CContextGuardian guard(m_pCanvas);
+    if (!guard.isCurrent())
         return false;
-    }
-
+    
     bool bResult = internalCanStart();
-
-    // Release the graphic context
-    m_pCanvas->getGraphicWindow()->releaseContextImplementation();
-
     return bResult;
 }
 
@@ -1396,9 +1477,14 @@ void PSVolumeRendering::uploadData(vpl::img::CDensityVolume * pData)
     tLock Lock(*this);
 
     // Store reference to the data
-    vpl::img::CDensityVolume *workingPtr;
+	vpl::img::CDensityVolume *workingPtr;
 
-    data::CObjectPtr<data::CDensityData> spVolumeData(APP_STORAGE.getEntry(VPL_SIGNAL(SigGetActiveDataSet).invoke2()));
+	int datasetID = data::PATIENT_DATA;
+	{	// get active data set
+		data::CObjectPtr<data::CActiveDataSet> spDataSet(APP_STORAGE.getEntry(data::Storage::ActiveDataSet::Id));
+		datasetID = spDataSet->getId();
+	}
+    data::CObjectPtr<data::CDensityData> spVolumeData(APP_STORAGE.getEntry(datasetID));
     workingPtr = spVolumeData.get();
 
     m_spParams->RealXSize = float(workingPtr->getXSize() * workingPtr->getDX());
@@ -1426,8 +1512,8 @@ void PSVolumeRendering::createLookupTables()
     m_skipConditions.clear();
     for (int i = 0; i < LOOKUPS_COUNT; ++i)
     {
-        m_internalLookupTables.push_back(new unsigned short[4 * LUT_1D_SIZE]);
-        m_skipConditions.push_back(0.0f);
+        m_internalLookupTables.push_back(new unsigned short[4 * LUT_2D_W * LUT_2D_H]);
+        m_skipConditions.push_back(osg::Vec4(0.0f, 1.0f, 0.0f, 1.0f));
     }
 
     CLookupTable &mipSoft = m_lookupTables["MIP_SOFT"];
@@ -1446,113 +1532,113 @@ void PSVolumeRendering::createLookupTables()
     mipSoft.clear();
     mipSoft.addComponent();
     mipSoft.setName(0, "component0");
-    mipSoft.addPoint(0, 0.000, osg::Vec4(0.000, 0.000, 0.000, 0.000));
-    mipSoft.addPoint(0, 0.123, osg::Vec4(0.870, 0.705, 0.262, 1.000));
-    mipSoft.addPoint(0, 0.246, osg::Vec4(0.000, 0.000, 0.000, 0.000));
+    mipSoft.addPoint(0, osg::Vec2d(0.000, 0.0), osg::Vec4(0.000, 0.000, 0.000, 0.000), true, false, 0.0);
+    mipSoft.addPoint(0, osg::Vec2d(0.123, 0.0), osg::Vec4(0.870, 0.705, 0.262, 1.000), true, false, 0.0);
+    mipSoft.addPoint(0, osg::Vec2d(0.246, 0.0), osg::Vec4(0.000, 0.000, 0.000, 0.000), true, false, 0.0);
 
     mipHard.setName("MIP hard");
     mipHard.clear();
     mipHard.addComponent();
     mipHard.setName(0, "component0");
-    mipHard.addPoint(0, 0.174, osg::Vec4(0.000, 0.000, 0.000, 0.000));
-    mipHard.addPoint(0, 0.533, osg::Vec4(0.988, 0.988, 0.988, 1.000));
-    mipHard.addPoint(0, 1.000, osg::Vec4(1.000, 1.000, 1.000, 1.000));
+    mipHard.addPoint(0, osg::Vec2d(0.174, 0.0), osg::Vec4(0.000, 0.000, 0.000, 0.000), true, false, 0.0);
+    mipHard.addPoint(0, osg::Vec2d(0.533, 0.0), osg::Vec4(0.988, 0.988, 0.988, 1.000), true, false, 0.0);
+    mipHard.addPoint(0, osg::Vec2d(1.000, 0.0), osg::Vec4(1.000, 1.000, 1.000, 1.000), true, false, 0.0);
 
     xraySoft.setName("X-ray soft");
     xraySoft.clear();
     xraySoft.addComponent();
     xraySoft.setName(0, "component0");
-    xraySoft.addPoint(0, 0.038, osg::Vec4(0.000, 0.000, 0.000, 0.000));
-    xraySoft.addPoint(0, 0.130, osg::Vec4(0.341, 0.266, 0.101, 0.139));
-    xraySoft.addPoint(0, 0.309, osg::Vec4(0.015, 0.039, 0.109, 0.000));
-    xraySoft.addPoint(0, 0.310, osg::Vec4(0.000, 0.000, 0.000, 0.000));
+    xraySoft.addPoint(0, osg::Vec2d(0.038, 0.0), osg::Vec4(0.000, 0.000, 0.000, 0.000), true, false, 0.0);
+    xraySoft.addPoint(0, osg::Vec2d(0.130, 0.0), osg::Vec4(0.341, 0.266, 0.101, 0.139), true, false, 0.0);
+    xraySoft.addPoint(0, osg::Vec2d(0.309, 0.0), osg::Vec4(0.015, 0.039, 0.109, 0.000), true, false, 0.0);
+    xraySoft.addPoint(0, osg::Vec2d(0.310, 0.0), osg::Vec4(0.000, 0.000, 0.000, 0.000), true, false, 0.0);
 
     xrayHard.setName("X-ray hard");
     xrayHard.clear();
     xrayHard.addComponent();
     xrayHard.setName(0, "component0");
-    xrayHard.addPoint(0, 0.147, osg::Vec4(0.000, 0.000, 0.000, 1.000));
-    xrayHard.addPoint(0, 0.148, osg::Vec4(0.043, 0.070, 0.101, 1.000));
-    xrayHard.addPoint(0, 1.000, osg::Vec4(1.000, 1.000, 1.000, 1.000));
+    xrayHard.addPoint(0, osg::Vec2d(0.147, 0.0), osg::Vec4(0.000, 0.000, 0.000, 1.000), true, false, 0.0);
+    xrayHard.addPoint(0, osg::Vec2d(0.148, 0.0), osg::Vec4(0.043, 0.070, 0.101, 1.000), true, false, 0.0);
+    xrayHard.addPoint(0, osg::Vec2d(1.000, 0.0), osg::Vec4(1.000, 1.000, 1.000, 1.000), true, false, 0.0);
 
     shadingAir.setName("Shading - air");
     shadingAir.clear();
     shadingAir.addComponent();
     shadingAir.setName(0, "component0");
-    shadingAir.addPoint(0, 0.105, osg::Vec4(0.000, 0.000, 0.000, 0.000));
-    shadingAir.addPoint(0, 0.106, osg::Vec4(0.000, 0.000, 0.000, 0.040));
-    shadingAir.addPoint(0, 0.139, osg::Vec4(0.407, 0.988, 0.960, 0.204));
-    shadingAir.addPoint(0, 0.162, osg::Vec4(0.000, 0.000, 0.000, 0.000));
+    shadingAir.addPoint(0, osg::Vec2d(0.105, 0.0), osg::Vec4(0.000, 0.000, 0.000, 0.000), true, false, 0.0);
+    shadingAir.addPoint(0, osg::Vec2d(0.106, 0.0), osg::Vec4(0.000, 0.000, 0.000, 0.040), true, false, 0.0);
+    shadingAir.addPoint(0, osg::Vec2d(0.139, 0.0), osg::Vec4(0.407, 0.988, 0.960, 0.204), true, false, 0.0);
+    shadingAir.addPoint(0, osg::Vec2d(0.162, 0.0), osg::Vec4(0.000, 0.000, 0.000, 0.000), true, false, 0.0);
 
     shadingTransparent.setName("Shading - transparent");
     shadingTransparent.clear();
     shadingTransparent.addComponent();
     shadingTransparent.setName(0, "component0");
-    shadingTransparent.addPoint(0, 0.071, osg::Vec4(0.000, 0.000, 0.000, 0.000));
-    shadingTransparent.addPoint(0, 0.129, osg::Vec4(0.988, 0.000, 0.000, 0.034));
-    shadingTransparent.addPoint(0, 0.181, osg::Vec4(0.952, 0.968, 0.019, 0.034));
-    shadingTransparent.addPoint(0, 0.223, osg::Vec4(0.082, 0.980, 0.000, 0.051));
-    shadingTransparent.addPoint(0, 0.273, osg::Vec4(0.529, 1.000, 0.952, 0.170));
-    shadingTransparent.addPoint(0, 0.412, osg::Vec4(0.788, 0.843, 1.000, 1.000));
-    shadingTransparent.addPoint(0, 1.000, osg::Vec4(0.007, 0.027, 0.980, 1.000));
+    shadingTransparent.addPoint(0, osg::Vec2d(0.071, 0.0), osg::Vec4(0.000, 0.000, 0.000, 0.000), true, false, 0.0);
+    shadingTransparent.addPoint(0, osg::Vec2d(0.129, 0.0), osg::Vec4(0.988, 0.000, 0.000, 0.034), true, false, 0.0);
+    shadingTransparent.addPoint(0, osg::Vec2d(0.181, 0.0), osg::Vec4(0.952, 0.968, 0.019, 0.034), true, false, 0.0);
+    shadingTransparent.addPoint(0, osg::Vec2d(0.223, 0.0), osg::Vec4(0.082, 0.980, 0.000, 0.051), true, false, 0.0);
+    shadingTransparent.addPoint(0, osg::Vec2d(0.273, 0.0), osg::Vec4(0.529, 1.000, 0.952, 0.170), true, false, 0.0);
+    shadingTransparent.addPoint(0, osg::Vec2d(0.412, 0.0), osg::Vec4(0.788, 0.843, 1.000, 1.000), true, false, 0.0);
+    shadingTransparent.addPoint(0, osg::Vec2d(1.000, 0.0), osg::Vec4(0.007, 0.027, 0.980, 1.000), true, false, 0.0);
 
     shadingBone0.setName("Shading - bone (skull)");
     shadingBone0.clear();
     shadingBone0.addComponent();
     shadingBone0.setName(0, "bone");
     shadingBone0.setAlphaFactor(0, 0.172);
-    shadingBone0.addPoint(0, 0.265, osg::Vec4(1.000, 0.992, 0.949, 0.000));
-    shadingBone0.addPoint(0, 0.273, osg::Vec4(1.000, 0.988, 0.917, 1.000));
+    shadingBone0.addPoint(0, osg::Vec2d(0.265, 0.0), osg::Vec4(1.000, 0.992, 0.949, 0.000), true, false, 0.0);
+    shadingBone0.addPoint(0, osg::Vec2d(0.273, 0.0), osg::Vec4(1.000, 0.988, 0.917, 1.000), true, false, 0.0);
     shadingBone0.addComponent();
     shadingBone0.setName(1, "skin");
     shadingBone0.setAlphaFactor(1, 0.028);
-    shadingBone0.addPoint(1, 0.126, osg::Vec4(1.000, 0.498, 0.498, 0.000));
-    shadingBone0.addPoint(1, 0.170, osg::Vec4(1.000, 0.498, 0.498, 1.000));
-    shadingBone0.addPoint(1, 0.223, osg::Vec4(1.000, 0.498, 0.498, 0.000));
+    shadingBone0.addPoint(1, osg::Vec2d(0.126, 0.0), osg::Vec4(1.000, 0.498, 0.498, 0.000), true, false, 0.0);
+    shadingBone0.addPoint(1, osg::Vec2d(0.170, 0.0), osg::Vec4(1.000, 0.498, 0.498, 1.000), true, false, 0.0);
+    shadingBone0.addPoint(1, osg::Vec2d(0.223, 0.0), osg::Vec4(1.000, 0.498, 0.498, 0.000), true, false, 0.0);
 
     shadingBone1.setName("Shading - bone (spine)");
     shadingBone1.clear();
     shadingBone1.addComponent();
     shadingBone1.setName(0, "bone");
     shadingBone1.setAlphaFactor(0, 0.217);
-    shadingBone1.addPoint(0, 0.190, osg::Vec4(1.000, 0.992, 0.949, 0.000));
-    shadingBone1.addPoint(0, 0.201, osg::Vec4(1.000, 0.988, 0.917, 1.000));
+    shadingBone1.addPoint(0, osg::Vec2d(0.190, 0.0), osg::Vec4(1.000, 0.992, 0.949, 0.000), true, false, 0.0);
+    shadingBone1.addPoint(0, osg::Vec2d(0.201, 0.0), osg::Vec4(1.000, 0.988, 0.917, 1.000), true, false, 0.0);
     shadingBone1.addComponent();
     shadingBone1.setName(1, "skin");
     shadingBone1.setAlphaFactor(1, 0.028);
-    shadingBone1.addPoint(1, 0.126, osg::Vec4(1.000, 0.498, 0.498, 0.000));
-    shadingBone1.addPoint(1, 0.170, osg::Vec4(1.000, 0.498, 0.498, 1.000));
-    shadingBone1.addPoint(1, 0.223, osg::Vec4(1.000, 0.498, 0.498, 0.000));
+    shadingBone1.addPoint(1, osg::Vec2d(0.126, 0.0), osg::Vec4(1.000, 0.498, 0.498, 0.000), true, false, 0.0);
+    shadingBone1.addPoint(1, osg::Vec2d(0.170, 0.0), osg::Vec4(1.000, 0.498, 0.498, 1.000), true, false, 0.0);
+    shadingBone1.addPoint(1, osg::Vec2d(0.223, 0.0), osg::Vec4(1.000, 0.498, 0.498, 0.000), true, false, 0.0);
 
     shadingBone2.setName("Shading - bone (pelvis)");
     shadingBone2.clear();
     shadingBone2.addComponent();
     shadingBone2.setName(0, "bone");
     shadingBone2.setAlphaFactor(0, 0.172);
-    shadingBone2.addPoint(0, 0.184, osg::Vec4(1.000, 0.992, 0.949, 0.000));
-    shadingBone2.addPoint(0, 0.198, osg::Vec4(1.000, 0.988, 0.917, 1.000));
+    shadingBone2.addPoint(0, osg::Vec2d(0.184, 0.0), osg::Vec4(1.000, 0.992, 0.949, 0.000), true, false, 0.0);
+    shadingBone2.addPoint(0, osg::Vec2d(0.198, 0.0), osg::Vec4(1.000, 0.988, 0.917, 1.000), true, false, 0.0);
     shadingBone2.addComponent();
     shadingBone2.setName(1, "skin");
     shadingBone2.setAlphaFactor(1, 0.037);
-    shadingBone2.addPoint(1, 0.111, osg::Vec4(1.000, 0.498, 0.498, 0.000));
-    shadingBone2.addPoint(1, 0.149, osg::Vec4(1.000, 0.498, 0.498, 1.000));
-    shadingBone2.addPoint(1, 0.193, osg::Vec4(1.000, 0.498, 0.498, 0.000));
+    shadingBone2.addPoint(1, osg::Vec2d(0.111, 0.0), osg::Vec4(1.000, 0.498, 0.498, 0.000), true, false, 0.0);
+    shadingBone2.addPoint(1, osg::Vec2d(0.149, 0.0), osg::Vec4(1.000, 0.498, 0.498, 1.000), true, false, 0.0);
+    shadingBone2.addPoint(1, osg::Vec2d(0.193, 0.0), osg::Vec4(1.000, 0.498, 0.498, 0.000), true, false, 0.0);
 
     surfaceSkin.setName("Surface - skin");
     surfaceSkin.clear();
     surfaceSkin.addComponent();
     surfaceSkin.setName(0, "component0");
-    surfaceSkin.addPoint(0, 0.000, osg::Vec4(0.000, 0.000, 0.000, 0.000));
-    surfaceSkin.addPoint(0, 0.102, osg::Vec4(1.000, 0.996, 0.988, 1.000));
-    surfaceSkin.addPoint(0, 1.000, osg::Vec4(0.498, 0.498, 0.498, 1.000));
+    surfaceSkin.addPoint(0, osg::Vec2d(0.000, 0.0), osg::Vec4(0.000, 0.000, 0.000, 0.000), true, false, 0.0);
+    surfaceSkin.addPoint(0, osg::Vec2d(0.102, 0.0), osg::Vec4(1.000, 0.996, 0.988, 1.000), true, false, 0.0);
+    surfaceSkin.addPoint(0, osg::Vec2d(1.000, 0.0), osg::Vec4(0.498, 0.498, 0.498, 1.000), true, false, 0.0);
 
     surfaceBone.setName("Surface - bones");
     surfaceBone.clear();
     surfaceBone.addComponent();
     surfaceBone.setName(0, "component0");
-    surfaceBone.addPoint(0, 0.172, osg::Vec4(0.000, 0.000, 0.000, 0.000));
-    surfaceBone.addPoint(0, 0.173, osg::Vec4(0.380, 0.258, 0.066, 0.000));
-    surfaceBone.addPoint(0, 0.269, osg::Vec4(1.000, 1.000, 1.000, 1.000));
+    surfaceBone.addPoint(0, osg::Vec2d(0.172, 0.0), osg::Vec4(0.000, 0.000, 0.000, 0.000), true, false, 0.0);
+    surfaceBone.addPoint(0, osg::Vec2d(0.173, 0.0), osg::Vec4(0.380, 0.258, 0.066, 0.000), true, false, 0.0);
+    surfaceBone.addPoint(0, osg::Vec2d(0.269, 0.0), osg::Vec4(1.000, 1.000, 1.000, 1.000), true, false, 0.0);
 
     updateLookupTables();
 }
@@ -1644,9 +1730,13 @@ float getFilteredVal(vpl::img::CDensityVolume * pVolume, int x, int y, int z)
 
 bool PSVolumeRendering::internalUploadData()
 {
-    vpl::img::CDensityVolume *workingPtr;
-    data::CObjectPtr<data::CDensityData> spVolumeData(APP_STORAGE.getEntry(VPL_SIGNAL(SigGetActiveDataSet).invoke2()));
-    workingPtr = spVolumeData.get();
+	int datasetID = data::PATIENT_DATA;
+	{	// get active data set
+		data::CObjectPtr<data::CActiveDataSet> spDataSet(APP_STORAGE.getEntry(data::Storage::ActiveDataSet::Id));
+		datasetID = spDataSet->getId();
+	}
+    data::CObjectPtr<data::CDensityData> spVolumeData(APP_STORAGE.getEntry(datasetID));
+    vpl::img::CDensityVolume *workingPtr = spVolumeData.get();
 
     if (!workingPtr || workingPtr->getZSize() <= 0)
     {
@@ -1977,8 +2067,7 @@ bool PSVolumeRendering::internalCanStart()
 
     // Check size of graphic card memory
     try
-    {
-        vr::CGraficCardDesc Desc;
+    {        
         //std::string ssName = Desc.getAdapterName();
         unsigned int uiMem = Desc.getAdapterRAM();
         if (uiMem < 256)
@@ -2000,15 +2089,17 @@ bool PSVolumeRendering::internalCanStart()
     {
         m_GlewInit = -1;
         glewExperimental = GL_TRUE;
-        if (glewInit() == GLEW_OK)
-        {
+        int res = glewInit();
+        if (res == GLEW_OK)
             m_GlewInit = 1;
-        }
+        if (res == GLEW_ERROR_NO_GL_VERSION)
+            m_GlewInit = 0; // no valid context, try again later
     }
-    if (m_GlewInit < 0)
+    if (m_GlewInit <= 0)
     {
         m_Error |= GLEW_INIT_FAILED;
-        VPL_LOG_INFO("Error: Cannot initialize the GLEW library!");
+        if (m_GlewInit != 0) // will try again later
+            VPL_LOG_INFO("Error: Cannot initialize the GLEW library!");
         return false;
     }
 
@@ -2206,15 +2297,16 @@ bool PSVolumeRendering::internalInitRendering()
     ///////////////////////////////////////////////////////////////////////////
     // setup 1D lookup texture in OpenGL and pre-load the first one
     glActiveTexture(GL_TEXTURE2);
-    glBindTexture(GL_TEXTURE_1D, m_spGLData->LookUpTexture);
+    glBindTexture(GL_TEXTURE_2D, m_spGLData->LookUpTexture);
     //glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     //glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     //glPixelStorei(GL_UNPACK_ALIGNMENT, 2);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
-    glTexImage1D(GL_TEXTURE_1D, 0, GL_RGBA16, LUT_1D_SIZE, 0, GL_RGBA, GL_UNSIGNED_SHORT, m_internalLookupTables[0]);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16, LUT_2D_W, LUT_2D_H, 0, GL_RGBA, GL_UNSIGNED_SHORT, m_internalLookupTables[0]);
 
     // load shaders from string constants
     ///////////////////////////////////////////////////////////////////////////
@@ -3102,10 +3194,10 @@ bool PSVolumeRendering::internalSetLUT(PSVolumeRenderingParams *pParams)
 {
     // upload new 1D texture
     glActiveTexture(GL_TEXTURE2);
-    glBindTexture(GL_TEXTURE_1D, m_spGLData->LookUpTexture);
+    glBindTexture(GL_TEXTURE_2D, m_spGLData->LookUpTexture);
     //glPixelStorei(GL_UNPACK_ALIGNMENT, 2);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
-    glTexImage1D(GL_TEXTURE_1D, 0, GL_RGBA16, LUT_1D_SIZE, 0, GL_RGBA, GL_UNSIGNED_SHORT, m_internalLookupTables[pParams->selectedLut]);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16, LUT_2D_W, LUT_2D_H, 0, GL_RGBA, GL_UNSIGNED_SHORT, m_internalLookupTables[pParams->selectedLut]);
 
     return true;
 }
@@ -3511,12 +3603,14 @@ void PSVolumeRendering::renderVolume()
         internalSetLUT(&Params);
     }
 
+    glGetErrors(""); // reset gl errors
+
     // general OpenGL settings
     //glClearColor(0.2f, 0.2f, 0.4f, 0.0f);
-    glClearDepth(1.0f);
-    glEnable(GL_DEPTH_TEST);
+    tridimGl("glClearDepth", glClearDepth(1.0f););
+    tridimGl("glEnable", glEnable(GL_DEPTH_TEST););
     //glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST);
-    glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_FASTEST);
+    tridimGl("glHint", glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_FASTEST););
 
     // reset to most likely original state
     //glActiveTexture(GL_TEXTURE0);
@@ -3525,31 +3619,31 @@ void PSVolumeRendering::renderVolume()
     vpl::img::CPoint3D renderingSize = getRenderingSize(&Params, Flags);
 
     // Store the current matrix
-    glMatrixMode(GL_MODELVIEW);
-    glPushMatrix();
+    tridimGl("glMatrixMode", glMatrixMode(GL_MODELVIEW););
+    tridimGl("glPushMatrix", glPushMatrix(););
 
     // save current render target
     GLint framebuffer;
-    glGetIntegerv(GL_FRAMEBUFFER_BINDING, &framebuffer);
+    tridimGl("glGetIntegerv", glGetIntegerv(GL_FRAMEBUFFER_BINDING, &framebuffer););
 
     // save current viewport size
     GLint viewport[4];
-    glGetIntegerv(GL_VIEWPORT, viewport);
+    tridimGl("glGetIntegerv", glGetIntegerv(GL_VIEWPORT, viewport););
 
     // Setup depth texture
-    glActiveTexture(GL_TEXTURE5);
-    glBindTexture(GL_TEXTURE_2D, m_spGLData->GeometryDepthTexture);
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, viewport[2], viewport[3], 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
-    glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, viewport[2], viewport[3]);
+    tridimGl("glActiveTexture", glActiveTexture(GL_TEXTURE5););
+    tridimGl("glBindTexture", glBindTexture(GL_TEXTURE_2D, m_spGLData->GeometryDepthTexture););
+    tridimGl("glPixelStorei", glPixelStorei(GL_UNPACK_ALIGNMENT, 4););
+    tridimGl("glTexImage2D", glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, viewport[2], viewport[3], 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL););
+    tridimGl("glCopyTexSubImage2D", glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, viewport[2], viewport[3]););
 
     // and change it to small off-screen texture
-    glViewport(0, 0, renderingSize.x(), renderingSize.y());
+    tridimGl("glViewport", glViewport(0, 0, renderingSize.x(), renderingSize.y()););
 
     // modify OSG transformation matrix
-    glScalef(Params.RealXSize * 0.5f, Params.RealXSize * 0.5f, Params.RealXSize * 0.5f);
+    tridimGl("glScalef", glScalef(Params.RealXSize * 0.5f, Params.RealXSize * 0.5f, Params.RealXSize * 0.5f););
 
-    glEnable(GL_CULL_FACE);
+    tridimGl("glEnable", glEnable(GL_CULL_FACE););
 
     int val;
     // if fast redraw is not set, render volume
@@ -3559,35 +3653,35 @@ void PSVolumeRendering::renderVolume()
         GLenum drawBuffers1[] = { GL_COLOR_ATTACHMENT0_EXT, GL_COLOR_ATTACHMENT1_EXT };
 
         // render front side polygons of the box
-        glCullFace(GL_BACK); // cull back-facing polygons
-        glDepthFunc(GL_LESS); // keep front-most fragments
-        glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, m_spGLData->OffScreenFramebuffer0);
-        glFramebufferTexture3DEXT(GL_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0_EXT, GL_TEXTURE_3D, m_spGLData->RaysStartEnd, 0, 0);
-        glDrawBuffers(1, drawBuffers0);
-        glUseProgram(m_spGLData->PshaderFBO); // use special small shader
-        glClearDepth(1.0);
-        glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        tridimGl("glCullFace", glCullFace(GL_BACK)); // cull back-facing polygons
+        tridimGl("glDepthFunc", glDepthFunc(GL_LESS)); // keep front-most fragments
+        tridimGl("glBindFramebufferEXT", glBindFramebufferEXT(GL_DRAW_FRAMEBUFFER_EXT, m_spGLData->OffScreenFramebuffer0));
+        tridimGl("glFramebufferTexture3DEXT", glFramebufferTexture3DEXT(GL_DRAW_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0_EXT, GL_TEXTURE_3D, m_spGLData->RaysStartEnd, 0, 0));
+        tridimGl("glDrawBuffers", glDrawBuffers(1, drawBuffers0));
+        tridimGl("glUseProgram", glUseProgram(m_spGLData->PshaderFBO)); // use special small shader
+        tridimGl("glClearDepth", glClearDepth(1.0));
+        tridimGl("glClearColor", glClearColor(0.0f, 0.0f, 0.0f, 0.0f));
+        tridimGl("glClear", glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT));
         renderBox(&Params, m_Triangles);
 
         // render back side polygons of the box
-        glCullFace(GL_FRONT); // cull front-facing polygons
-        glDepthFunc(GL_GREATER); // keep back-most fragments
-        glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, m_spGLData->OffScreenFramebuffer1);
-        glFramebufferTexture3DEXT(GL_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0_EXT, GL_TEXTURE_3D, m_spGLData->RaysStartEnd, 0, 1);
-        glDrawBuffers(1, drawBuffers0);
-        glUseProgram(m_spGLData->PshaderFBO); // use special small shader
-        glClearDepth(0.0);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        tridimGl("glCullFace", glCullFace(GL_FRONT)); // cull front-facing polygons
+        tridimGl("glDepthFunc", glDepthFunc(GL_GREATER)); // keep back-most fragments
+        tridimGl("glBindFramebufferEXT", glBindFramebufferEXT(GL_DRAW_FRAMEBUFFER_EXT, m_spGLData->OffScreenFramebuffer1));
+        tridimGl("glFramebufferTexture3DEXT", glFramebufferTexture3DEXT(GL_DRAW_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0_EXT, GL_TEXTURE_3D, m_spGLData->RaysStartEnd, 0, 1));
+        tridimGl("glDrawBuffers", glDrawBuffers(1, drawBuffers0));
+        tridimGl("glUseProgram", glUseProgram(m_spGLData->PshaderFBO)); // use special small shader
+        tridimGl("glClearDepth", glClearDepth(0.0));
+        tridimGl("glClear", glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT));
         renderBox(&Params, m_Triangles);
 
         // render back side polygons of the box - this time using VR shaders and related stuff
-        glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, m_spGLData->ResizeFramebuffer); // render to texture
-        glFramebufferTexture2DEXT(GL_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0_EXT, GL_TEXTURE_2D, m_spGLData->RTTexture, 0);
-        glFramebufferTexture2DEXT(GL_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT1_EXT, GL_TEXTURE_2D, m_spGLData->DEPTexture, 0);
-        glDrawBuffers(2, drawBuffers1);
-        glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        tridimGl("glBindFramebufferEXT", glBindFramebufferEXT(GL_DRAW_FRAMEBUFFER_EXT, m_spGLData->ResizeFramebuffer)); // render to texture
+        tridimGl("glFramebufferTexture2DEXT", glFramebufferTexture2DEXT(GL_DRAW_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0_EXT, GL_TEXTURE_2D, m_spGLData->RTTexture, 0));
+        tridimGl("glFramebufferTexture2DEXT", glFramebufferTexture2DEXT(GL_DRAW_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT1_EXT, GL_TEXTURE_2D, m_spGLData->DEPTexture, 0));
+        tridimGl("glDrawBuffers", glDrawBuffers(2, drawBuffers1););
+        tridimGl("glClearColor", glClearColor(0.0f, 0.0f, 0.0f, 0.0f));
+        tridimGl("glClear", glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT));
 
         // use volume rendering shader
         unsigned int selectedShader = 0;
@@ -3599,31 +3693,31 @@ void PSVolumeRendering::renderVolume()
         {
             selectedShader = m_spGLData->PshaderRayCast[Params.selectedShader];
         }
-        glUseProgram(selectedShader);
+        tridimGl("glUseProgram", glUseProgram(selectedShader));
 
         // bind textures
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_3D, m_spGLData->VolumeTexture);
+        tridimGl("glActiveTexture", glActiveTexture(GL_TEXTURE0));
+        tridimGl("glBindTexture", glBindTexture(GL_TEXTURE_3D, m_spGLData->VolumeTexture));
         setParameter(selectedShader, "t3D", 0);
 
-        glActiveTexture(GL_TEXTURE1);
-        glBindTexture(GL_TEXTURE_3D, (Params.selectedShader != CUSTOM ? m_spGLData->AuxVolumeTexture : m_spGLData->CustomAuxVolumeTexture));
+        tridimGl("glActiveTexture", glActiveTexture(GL_TEXTURE1));
+        tridimGl("glBindTexture", glBindTexture(GL_TEXTURE_3D, (Params.selectedShader != CUSTOM ? m_spGLData->AuxVolumeTexture : m_spGLData->CustomAuxVolumeTexture)));
         setParameter(selectedShader, "tSkip3D", 1);
 
-        glActiveTexture(GL_TEXTURE2);
-        glBindTexture(GL_TEXTURE_1D, m_spGLData->LookUpTexture);
+        tridimGl("glActiveTexture", glActiveTexture(GL_TEXTURE2));
+        tridimGl("glBindTexture", glBindTexture(GL_TEXTURE_2D, m_spGLData->LookUpTexture));
         setParameter(selectedShader, "LookUp", 2);
 
-        glActiveTexture(GL_TEXTURE3);
-        glBindTexture(GL_TEXTURE_2D, m_spGLData->NoiseTexture);
+        tridimGl("glActiveTexture", glActiveTexture(GL_TEXTURE3));
+        tridimGl("glBindTexture", glBindTexture(GL_TEXTURE_2D, m_spGLData->NoiseTexture));
         setParameter(selectedShader, "Noise", 3);
 
-        glActiveTexture(GL_TEXTURE4);
-        glBindTexture(GL_TEXTURE_3D, m_spGLData->RaysStartEnd);
-        setParameter(selectedShader, "tRaysStartEnd", 4);
+        tridimGl("glActiveTexture", glActiveTexture(GL_TEXTURE4));
+        tridimGl("glBindTexture", glBindTexture(GL_TEXTURE_3D, m_spGLData->RaysStartEnd));
+        setParameter(selectedShader, "tRaysStartEnd", 4);        
 
-        glActiveTexture(GL_TEXTURE5);
-        glBindTexture(GL_TEXTURE_2D, m_spGLData->GeometryDepthTexture);
+        tridimGl("glActiveTexture", glActiveTexture(GL_TEXTURE5));
+        tridimGl("glBindTexture", glBindTexture(GL_TEXTURE_2D, m_spGLData->GeometryDepthTexture));
         setParameter(selectedShader, "Depth", 5);
 
         // nothing in Texture Unit #6
@@ -3633,8 +3727,8 @@ void PSVolumeRendering::renderVolume()
 
         if (Params.selectedShader == CUSTOM)
         {
-            glActiveTexture(GL_TEXTURE7);
-            glBindTexture(GL_TEXTURE_3D, m_currentVolume);
+            tridimGl("glActiveTexture", glActiveTexture(GL_TEXTURE7));
+            tridimGl("glBindTexture", glBindTexture(GL_TEXTURE_3D, m_currentVolume));
             setParameter(selectedShader, "tCustom3D", 7);
         }
 
@@ -3678,38 +3772,38 @@ void PSVolumeRendering::renderVolume()
         renderBox(&Params, m_Triangles);
 
         // restore culling and depth func
-        glCullFace(GL_BACK);
-        glDepthFunc(GL_LESS);
-        glClearDepth(1.0);
+        tridimGl("glCullFace", glCullFace(GL_BACK));
+        tridimGl("glDepthFunc", glDepthFunc(GL_LESS));
+        tridimGl("glClearDepth", glClearDepth(1.0));
     }
 
     // now RESIZE rendered texture to fit window
     // AND RENDER BICUBIC RESIZED IMAGE TO WHOLE WINDOW - SCREEN
-    glUseProgram(m_spGLData->PshaderResize);
-    glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, framebuffer);
-    glViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
+    tridimGl("glUseProgram", glUseProgram(m_spGLData->PshaderResize));
+    tridimGl("glBindFramebufferEXT", glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, framebuffer));
+    tridimGl("glViewport", glViewport(viewport[0], viewport[1], viewport[2], viewport[3]));
 
-    glActiveTexture(GL_TEXTURE4);
-    glBindTexture(GL_TEXTURE_2D, m_spGLData->RTTexture);
+    tridimGl("glActiveTexture", glActiveTexture(GL_TEXTURE4));
+    tridimGl("glBindTexture", glBindTexture(GL_TEXTURE_2D, m_spGLData->RTTexture));
     setParameter(m_spGLData->PshaderResize, "image", 4);
 
-    glActiveTexture(GL_TEXTURE5);
-    glBindTexture(GL_TEXTURE_2D, m_spGLData->DEPTexture);
+    tridimGl("glActiveTexture", glActiveTexture(GL_TEXTURE5));
+    tridimGl("glBindTexture", glBindTexture(GL_TEXTURE_2D, m_spGLData->DEPTexture));
     setParameter(m_spGLData->PshaderResize, "outdepth", 5);
 
-    glActiveTexture(GL_TEXTURE6);
-    glBindTexture(GL_TEXTURE_1D, m_spGLData->BicKerTexture);
+    tridimGl("glActiveTexture", glActiveTexture(GL_TEXTURE6));
+    tridimGl("glBindTexture", glBindTexture(GL_TEXTURE_1D, m_spGLData->BicKerTexture));
     setParameter(m_spGLData->PshaderResize, "kernel", 6);
 
     setParameter(m_spGLData->PshaderResize, "resolution", osg::Vec2(renderingSize.x(), renderingSize.y()));
 
     // end of parameters
 
-    glColor3f(0, 1, 1); // no use
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glDepthFunc(GL_ALWAYS);
-    glDisable(GL_CULL_FACE);
+    tridimGl("glColor3f", glColor3f(0, 1, 1)); // no use
+    tridimGl("glEnable", glEnable(GL_BLEND));
+    tridimGl("glBlendFunc", glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA));
+    tridimGl("glDepthFunc", glDepthFunc(GL_ALWAYS));
+    tridimGl("glDisable", glDisable(GL_CULL_FACE););
     //GLint binding;
     //glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &binding);
 
@@ -3810,6 +3904,7 @@ bool PSVolumeRendering::init()
 
     if (testFlag(INIT_INVALID))
     {
+        CContextGuardian guard(m_pCanvas);
         if (!internalInitRendering())
         {
             m_FailureCounter++;

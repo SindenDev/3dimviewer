@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -121,7 +121,7 @@ bool CRotate2DDragger::handle(const osgManipulator::PointerInfo &pi, const osgGA
                 double angle; osg::Vec3 axis;
 
                 rotation.getRotate(angle, axis);
-                if(angle < 0.01)
+                if(angle < osg::DegreesToRadians(0.01))
                     return true;
 
                 cmd->setRotation(rotation);

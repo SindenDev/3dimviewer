@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -33,6 +33,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 data::CSceneWidgetParameters::CSceneWidgetParameters(void)
    : m_bWidgetsVisible( DEF_WIDGETS_VISIBILITY )
+   , m_widgetsScale(1)
+   , m_defaultWidgetsScale(1)
 {
 	
 }
@@ -69,6 +71,8 @@ void data::CSceneWidgetParameters::init(void)
    m_orthoSlicesColors[ 1 ] = RGB256(0, 255, 0, 255 ); // Coronal slice
    m_orthoSlicesColors[ 2 ] = RGB256(255, 0, 0, 255 ); // Sagittal slice
 
+   // Widgets scale
+   m_widgetsScale = m_defaultWidgetsScale;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

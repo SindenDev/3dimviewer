@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -41,7 +41,12 @@
 #include <QWidget>
 #include <osg/Array>
 
+#include <qdebug.h>
+#include <Signals.h>
+#include <PluginInterface.h>
+
 #include <render/CVolumeRenderer.h>
+#include <render/CGraficCardDesc.h>
 
 // STL
 #include <vector>
@@ -179,7 +184,7 @@ public:
 
     // lookup tables
     virtual void resetLookupTables();
-    virtual void updateLookupTables();
+    virtual void updateLookupTables(std::string lutName = "");
 
 protected:
     // custom volume
@@ -199,7 +204,8 @@ private:
     std::map<unsigned int, std::vector<unsigned int> > m_programShaders;
     unsigned int m_customShaderId;
     std::vector<unsigned short *> m_internalLookupTables;
-    std::vector<float> m_skipConditions;
+    std::vector<osg::Vec4> m_skipConditions;
+    vr::CGraficCardDesc Desc;
 
 public:
     //! Returns pointer to the used canvas.
@@ -262,8 +268,11 @@ private:
     void createLookupTables();
 
     //! Updates internal lookup table (converts from point representation to pixel representation)
-    void updateLookupTable(CLookupTable &lookupTable, unsigned short *internalLookupTable, float &skipCondition);
+    void updateLookupTable(CLookupTable &lookupTable, unsigned short *internalLookupTable, osg::Vec4 &skipCondition);
 
+    void setNewTransformMatrix(osg::Matrix& newTransformMatrix, double distance);
+
+	vpl::mod::tSignalConnection noteMatrixSignalConnection;
 public:
     // Methods for VR control
     int getLut() const;
@@ -498,11 +507,9 @@ protected:
         //! Init size of volumes
         INIT_SIZE = 32,
 
-        //! Number of 1D color lookup tables.
-        NUM_OF_LUTS_1D = LOOKUPS_COUNT,
-
         //! Size of the 1D color lookup tables.
-        LUT_1D_SIZE = 4096,
+        LUT_2D_W = 4096,
+        LUT_2D_H = 128,
 
         //! Size of the noise table.
         NOISE_SIZE = 1024

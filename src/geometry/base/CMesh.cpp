@@ -3,7 +3,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2015 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -1176,7 +1176,7 @@ CMesh::CMesh()
 }
 
 //! Copy constructor
-CMesh::CMesh(const CMesh &mesh) : vpl::base::CObject(), CBaseMesh(mesh), m_octree(NULL), m_octreeVersion(0)
+CMesh::CMesh(const CMesh &mesh) : vpl::base::CObject(), CBaseMesh(mesh), m_octree(NULL), m_octreeVersion(0), m_pp(mesh.m_pp)
 {
     if (mesh.m_octree != NULL)
     {
@@ -1273,6 +1273,9 @@ bool CMesh::cutByXPlane(geometry::CMesh *source, osg::Vec3Array *vertices, osg::
         return false;
     }
 
+	if (0==source->n_vertices())
+		return true;
+
     CMeshCutter meshCutter;
     meshCutter.initialize(vertices, indices, planePosition);
     meshCutter.cutX(source);
@@ -1287,6 +1290,9 @@ bool CMesh::cutByYPlane(geometry::CMesh *source, osg::Vec3Array *vertices, osg::
     {
         return false;
     }
+
+	if (0==source->n_vertices())
+		return true;
 
     CMeshCutter meshCutter;
     meshCutter.initialize(vertices, indices, planePosition);
@@ -1303,6 +1309,9 @@ bool CMesh::cutByZPlane(geometry::CMesh *source, osg::Vec3Array *vertices, osg::
         return false;
     }
 
+	if (0==source->n_vertices())
+		return true;
+
     CMeshCutter meshCutter;
     meshCutter.initialize(vertices, indices, planePosition);
     meshCutter.cutZ(source);
@@ -1317,6 +1326,9 @@ bool CMesh::cutByPlane(geometry::CMesh *source, osg::Vec3Array *vertices, osg::D
     {
         return false;
     }
+
+	if (0==source->n_vertices())
+		return true;
 
     CMeshCutter meshCutter;
     meshCutter.initialize(vertices, indices, plane, worldMatrix);

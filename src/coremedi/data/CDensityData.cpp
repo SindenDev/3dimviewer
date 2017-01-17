@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -68,6 +68,7 @@ CDensityData::CDensityData(const CDensityData& Data)
 	, m_sStudyDescription(Data.m_sStudyDescription)
 	, m_sSeriesDescription(Data.m_sSeriesDescription)
 	, m_sScanOptions(Data.m_sScanOptions)
+    , m_sMediaStorage(Data.m_sMediaStorage)
 {
     m_volumeUndo.setVolumePtr(this);
 }
@@ -84,14 +85,23 @@ CDensityData::~CDensityData()
 
 void CDensityData::update(const CChangedEntries& Changes)
 {
-    // AuxData should be re-initialized because PatientData has been changed
-    if( Changes.checkIdentity(data::Storage::AuxData::Id)
-            && Changes.hasChanged(data::Storage::PatientData::Id)
-            && !Changes.hasChanged(data::Storage::AuxData::Id) // prevent data wipe when the aux data were loaded together with patient data
-            && !Changes.checkFlagAll(DENSITY_MODIFIED) )
+	data::CChangedEntries::tFilter filter;
+	filter.insert(data::Storage::PatientData::Id);
+	filter.insert(data::Storage::AuxData::Id);
+
+    if( Changes.checkFlagAny(data::Storage::STORAGE_RESET) )
     {
-            // Re-initialize the data
-            this->init();
+        init();
+    }
+
+    // AuxData should be re-initialized because PatientData has been changed
+    if (Changes.checkIdentity(data::Storage::AuxData::Id)
+        && Changes.hasChanged(data::Storage::PatientData::Id)
+        && !Changes.hasChanged(data::Storage::AuxData::Id) // prevent data wipe when the aux data were loaded together with patient data
+        && !Changes.checkFlagAll(DENSITY_MODIFIED, filter))
+    {
+        // Re-initialize the data
+        //this->init(); // Why is it necessary to wipe AUX data when PATIENT data are loaded? Aren't they separate datasets?
     }
     // Does nothing...
 }
@@ -101,6 +111,8 @@ void CDensityData::update(const CChangedEntries& Changes)
 
 void CDensityData::init()
 {
+	enableDummyMode(true);
+
     resize(INIT_SIZE, INIT_SIZE, INIT_SIZE);
 
     m_dDX = m_dDY = m_dDZ = 1.0;
@@ -152,6 +164,8 @@ void CDensityData::takeDicomData(vpl::img::CDicomSlice & DicomSlice)
 	m_sStudyDescription = DicomSlice.m_sStudyDescription;
 	m_sSeriesDescription = DicomSlice.m_sSeriesDescription;
 	m_sScanOptions = DicomSlice.m_sScanOptions;
+
+    m_sMediaStorage = DicomSlice.m_sMediaStorage;
 }
 
 void CDensityData::setImagePosition(double x, double y, double z)

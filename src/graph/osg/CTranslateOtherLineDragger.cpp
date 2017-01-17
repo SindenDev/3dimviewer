@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -99,9 +99,9 @@ bool CTranslateOtherLineDragger::handle (const PointerInfo& pointer, const osgGA
                 cmd->setLocalToWorldAndWorldToLocal(_projector->getLocalToWorld(),_projector->getWorldToLocal());
 
                 if(!ptRotation.zeroRotation())
-                    cmd->setTranslation(ptRotation * (projectedPoint - _startProjectedPoint));
+                    cmd->setTranslation((ptRotation * (projectedPoint - _startProjectedPoint)) * m_scaleFactor);
                 else
-                    cmd->setTranslation(projectedPoint - _startProjectedPoint);
+                    cmd->setTranslation((projectedPoint - _startProjectedPoint) * m_scaleFactor);
 /*                
                 osg::Vec3 tr(cmd->getTranslation());
 

@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -61,12 +61,9 @@ public:
         DEFAULT_MODE = MODE_SLICE
     };
 
-    //! Helper flag passed to the invalidate() method.
-    enum { MODE_CHANGED = 1 << 3 };
-
 public:
     //! Constructor.
-    COrthoSlice(EPlane Plane) : m_Plane(Plane), m_Position(0), m_Mode(DEFAULT_MODE) {}
+    COrthoSlice(EPlane Plane) : m_Plane(Plane), m_Position(0), m_Mode(DEFAULT_MODE), m_bUseDensityWindow(true) {}
 
     //! Destructor.
     virtual ~COrthoSlice() {}
@@ -135,10 +132,13 @@ protected:
     EPlane m_Plane;
 
     //! Slice position.
-    int m_Position;
+    vpl::tSize m_Position;
 
     //! Current rendering mode.
     EMode m_Mode;
+
+    //! Should be density window applied when recomputing MIP and RTG?
+    bool m_bUseDensityWindow;
 };
 
 

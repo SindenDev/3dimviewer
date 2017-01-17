@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -85,9 +85,13 @@ public:
     //! Input density value.
     typedef vpl::img::tDensityPixel tPixel;
 
+protected:
+    bool m_overrideRegionColoring;
+
 public:
     //! Default constructor.
     CColoringFunc()
+        : m_overrideRegionColoring(false)
     { }
 
     //! Virtual destructor.
@@ -114,6 +118,11 @@ public:
     //! - Returns tColor() in case of no special coloring
     //!   is required for a given density value.
     virtual tColor makeColor(const tPixel& Density) = 0;
+
+    bool overrideRegionColoring() const
+    {
+        return m_overrideRegionColoring;
+    }
 };
 
 //! Conversion functor returning unsigned char (= byte) RGBA colors.

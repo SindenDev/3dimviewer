@@ -3,7 +3,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2015 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,8 +30,13 @@
 #define MASK_OVERLAY_ITEM_DRAGGER 1 << 3
 #define MASK_DRAGGER_GEOMETRY 1 << 4
 #define IMPLANT_DRAGGER_EH_MASK 1 << 5
-#define OVERLAY_ITEM_EH_MASK 1 << 6
-#define MASK_NERVE_DRAGGER 1 << 7
+#define TOOTH_DRAGGER_EH_MASK 1 << 6
+#define OVERLAY_ITEM_EH_MASK 1 << 7
+#define MASK_NERVE_DRAGGER 1 << 8
+#define MASK_CURVE_DRAGGER 1 << 9
+#define MASK_MODEL_DRAGGER 1 << 10
+#define MASK_CEPHALO_SHAPE_DRAGGER 1 << 11
+#define MASK_CEPHALO_LANDMARK_DRAGGER 1 << 12
 
 // NodeMasks_H_included
 #endif

@@ -82,10 +82,12 @@ macro( TRIDIM_DLL_LIBRARY_ADDQT )
         Network
         Widgets
         PrintSupport
-        WebKit
-        WebKitWidgets
+#		WebKit
+#		WebKitWidgets
+#		WebEngine
         OpenGL
         LinguistTools
+        Script
       )
     foreach(_component ${_components})
       #message( warning "${TARGET} lib ${TRIDIM_LIBRARY_NAME} qt5 module ${_component}" )
@@ -150,10 +152,12 @@ macro( TRIDIM_QT5_LIBRARY_BUILD )
         Network
         Widgets
         PrintSupport
-        WebKit
-        WebKitWidgets
+#		WebKit
+#		WebKitWidgets
+#		WebEngine
         OpenGL
         LinguistTools
+        Script
       )
     foreach(_component ${_components})
       qt5_use_modules(${TRIDIM_LIBRARY_NAME} ${_component}) 

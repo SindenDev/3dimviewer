@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@
 ///////////////////////////////////////////////////////////////////////////////
 
 #include <drawing/CISEventHandler.h>
-#include <app/Signals.h>
+#include <coremedi/app/Signals.h>
 
 using namespace osgGA;
 
@@ -92,6 +92,9 @@ bool CISEventHandler::handle(const osgGA::GUIEventAdapter &ea, osgGA::GUIActionA
         point.m_modKeyMask = ea.getModKeyMask();
         point.m_buttonMask = ea.getButtonMask();
         point.m_buttonEvent = ea.getButton();
+
+        if (point.m_buttonMask == osgGA::GUIEventAdapter::MIDDLE_MOUSE_BUTTON || osgGA::GUIEventAdapter::SCROLL == ea.getEventType())
+            return false;
 
         switch ( ea.getEventType() )
         {
@@ -482,7 +485,7 @@ bool CISWindowEH::handle(const osgGA::GUIEventAdapter &ea, osgGA::GUIActionAdapt
     {
         rv = false;
     }
-
+	
     // Test application mode
     if ((UseHandler()) && (m_handlingMode != data::CDrawingOptions::DRAW_NOTHING))
     {
@@ -490,6 +493,9 @@ bool CISWindowEH::handle(const osgGA::GUIEventAdapter &ea, osgGA::GUIActionAdapt
         point.m_modKeyMask = ea.getModKeyMask();
         point.m_buttonMask = ea.getButtonMask();
         point.m_buttonEvent = ea.getButton();
+
+        if (point.m_buttonMask == osgGA::GUIEventAdapter::MIDDLE_MOUSE_BUTTON || osgGA::GUIEventAdapter::SCROLL==ea.getEventType())
+            return false;
 
         switch (ea.getEventType())
         {
@@ -502,7 +508,7 @@ bool CISWindowEH::handle(const osgGA::GUIEventAdapter &ea, osgGA::GUIActionAdapt
 
             m_buttonMask = point.m_buttonMask;
 
-            // Call callback
+			// Call callback
             OnMousePush(point);
 
             return true;
@@ -575,7 +581,7 @@ void CISWindowEH::OnMouseDrag(const osgGA::CMousePoint &point)
 
     osg::Vec3 pointWindow = osg::Vec3(point.m_pointWindow, 0.0f);
     osg::Vec3 pointScene = point.m_point;
-
+    
     if ((pointWindow - m_pointsWindow->back()).length() < m_pointDistanceLimit)
     {
         return;
@@ -597,12 +603,87 @@ void CISWindowEH::OnMouseDrag(const osgGA::CMousePoint &point)
             m_pointsWindow->push_back(originWindow);
             m_pointsWindow->push_back(pointWindow);
             m_line->clear();
-            m_line->getLineVertices()->clear();
             m_line->getLineVertices()->push_back(originScene);
             m_line->getLineVertices()->push_back(pointScene);
             m_line->getLineVertices()->dirty();
             break;
         }
+
+    case data::CDrawingOptions::DRAW_ARROW:
+    {
+        osg::Vec3 originWindow = m_pointsWindow->front();
+        osg::Vec3 originScene = arr->front();
+        m_pointsWindow->clear();
+        m_line->clear();
+
+        //extract inverse rotation of scene... hmm.. this almost works..
+        osg::Matrix view = m_canvas->getView()->getCamera()->getViewMatrix();
+        osg::Matrix proj = m_canvas->getView()->getCamera()->getProjectionMatrix();
+
+        auto view2 = osg::Matrix::inverse(view);
+        auto proj2 = osg::Matrix::inverse(proj);
+    
+        float width = m_canvas->width();
+        float height = m_canvas->height();
+
+
+        osg::Vec3 arrowDirection = originWindow - pointWindow;
+        float arrow_length = arrowDirection.length();
+
+        float arrow_side_length = arrow_length / 5.0f;
+
+        arrowDirection.normalize();
+
+        osg::Vec3 left_point, right_point;
+
+        osg::Matrix rotation_right = osg::Matrix::rotate(osg::DegreesToRadians(35.0f), osg::Vec3(0.0f, 0.0f, 1.0f));
+        osg::Matrix rotation_left = osg::Matrix::rotate(osg::DegreesToRadians(-35.0f), osg::Vec3(0.0f, 0.0f, 1.0f));
+
+        right_point = arrowDirection * rotation_right;
+        right_point *= arrow_side_length;
+        right_point += pointWindow;
+
+        left_point = arrowDirection * rotation_left;
+        left_point *= arrow_side_length;
+        left_point += pointWindow;
+
+
+        std::vector<osg::Vec3> arrow_path;
+
+        arrow_path.push_back(originWindow);
+        arrow_path.push_back(pointWindow);
+
+        arrow_path.push_back(right_point);
+        arrow_path.push_back(pointWindow);
+        arrow_path.push_back(left_point);
+
+        for (size_t i = 0; i < arrow_path.size(); ++i){
+            osg::Vec3 point = arrow_path.at(i);
+
+            m_pointsWindow->push_back(point);
+
+            //normalize to (-1, 1)
+            float x = (point.x() - width / 2.0f) / (width / 2.0f);
+            float y = (point.y() - height / 2.0f) / (height / 2.0f);
+            point.set(x, y, 0.0f);
+
+
+            //transform to scene
+            point = (point * proj2) * view2;
+
+            m_line->AddPoint(point);
+
+        }
+
+        m_line->getLineVertices()->dirty();   
+        break;
+    }
+	case data::CDrawingOptions::DRAW_STROKE:
+	{
+		m_line->AddPoint(point.m_point);
+		m_pointsWindow->push_back(pointWindow);
+		break;
+	}
 
     default:
         break;

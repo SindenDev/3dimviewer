@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -73,7 +73,7 @@ public:
     {}
 
 	//! Virtual destructor.
-    virtual ~CStorageEntry() {}
+    virtual ~CStorageEntry();
 
 
     //! Returns identifier of the entry.
@@ -164,6 +164,7 @@ public:
         T *pData = dynamic_cast<T *>(m_spData.get());
         if( !pData )
         {
+			VPL_LOG_INFO("Typecast to " << typeid(T).name() << " failed for " << (NULL==m_spData.get() || NULL==m_spData->getName()? "null" : m_spData->getName()) << " id " << this->m_Id);
             throw Storage::CTypecastFailed();
         }
         return pData;

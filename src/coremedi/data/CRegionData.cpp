@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -97,7 +97,14 @@ void CRegionData::update(const CChangedEntries& Changes)
     vpl::tSize ZSize = spData->getZSize();
     if( getXSize() != XSize || getYSize() != YSize || getZSize() != ZSize )
     {
-        if( XSize * YSize * ZSize < getXSize() * getYSize() * getZSize() )
+        unsigned long rx = XSize;
+        unsigned long ry = YSize;
+        unsigned long rz = ZSize;
+        unsigned long dx = spData->getXSize();
+        unsigned long dy = spData->getYSize();
+        unsigned long dz = spData->getZSize();
+
+        if (rx * ry * rz < dx * dy * dz)
         {
             // Enforce data deallocation
             resize(0, 0, 0, 0);
@@ -144,7 +151,7 @@ bool CRegionData::hasData()
 ///////////////////////////////////////////////////////////////////////////////
 //
 
-//void CRegionData::()
+//void CregionData::()
 //{
 //
 //}
@@ -154,4 +161,3 @@ bool CRegionData::hasData()
 
 ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
-

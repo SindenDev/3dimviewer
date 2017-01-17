@@ -3,7 +3,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2015 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -65,13 +65,21 @@ namespace geometry
         void set(double a, double b, double c, double d) { m_p = Vec4(a, b, c, d); }
 
         //! Initialize by another plane
-        void set(const CPlane &p) { m_p = p.m_p; }
+        void set(const CPlane &p)
+		{
+			m_p = p.m_p;
+			m_center = p.m_center;
+		}
 
         //! Initialize by normal and point
         void set(const Vec3 &normal, const Vec3 &point);
 
         //! Initialize by three (not collinear) points
         void set(const Vec3 &v0, const Vec3 &v1, const Vec3 &v2);
+
+		void setCenter(Vec3 &center) { m_center = center; }
+
+		inline Vec3& getCenter() { return m_center; }
 
         //! Flip plane orientation
         void flip() { m_p = -m_p; }
@@ -130,14 +138,25 @@ namespace geometry
         //! Transform the plane by providing a pre inverted matrix.
         inline void transformProvidingInverse(const Matrix &matrix)
         {
-            Vec4 vec(matrix.operator*(m_p));
+            Vec4 vec(matrix.operator*<double,4> (m_p));
             set(vec);
             makeUnitLength();
         }
 
+		//! Shifts plane by given distance in the direction of the normal
+		//! Negative values shift the plane in the opposite direction
+		inline void shift(double distance)
+		{
+			Vec3 newCenter(m_center[0] + (distance * m_p[0]), m_center[1] + (distance * m_p[1]), m_center[2] + (distance * m_p[2]));
+			m_p[3] = 0.0 - (m_p[0] * newCenter[0]) - (m_p[1] * newCenter[1]) - (m_p[2] * newCenter[2]);
+			m_center = newCenter;
+		}
+
     protected:
         //! Plane definition 
         Vec4 m_p;
+
+		Vec3 m_center;
 
         //! Plane bounding box corners
     }; // class CPlane
