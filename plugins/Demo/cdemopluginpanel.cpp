@@ -1,12 +1,12 @@
 ///////////////////////////////////////////////////////////////////////////////
 // 
-// Copyright 2008-2015 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 
 #include "cdemopluginpanel.h"
 #include "ui_cdemopluginpanel.h"
 
-#include <app/Signals.h>
+#include <coremedi/app/Signals.h>
 #include <data/CRegionData.h>
 
 #include <drawing/CISEventHandler.h>
@@ -161,9 +161,9 @@ void CDemoPluginPanel::handleStroke( const osg::Vec3Array * points, const int ha
     int iRegion = getCurrentRegion();
     for( osg::Vec3Array::const_iterator i = points->begin(); i != points->end(); ++i )
     {
-        int x = vpl::math::round2Int(i->x());
-        int y = vpl::math::round2Int(i->y());
-        int z = vpl::math::round2Int(i->z());
+        int x = (int)(i->x()); //vpl::math::round2Int(i->x());
+        int y = (int)(i->y());
+        int z = (int)(i->z()); 
 
         if( pVolume->checkPosition(x, y, z) )
         {
@@ -191,9 +191,9 @@ void CDemoPluginPanel::handlePolygon( const osg::Vec3Array * points, const int h
     int iRegion = getCurrentRegion();
     for( osg::Vec3Array::const_iterator i = points->begin(); i != points->end(); ++i )
     {
-        int x = vpl::math::round2Int(i->x());
-        int y = vpl::math::round2Int(i->y());
-        int z = vpl::math::round2Int(i->z());
+        int x = (int)(i->x()); // vpl::math::round2Int(i->x());
+        int y = (int)(i->y()); // vpl::math::round2Int(i->y());
+        int z = (int)(i->z()); // vpl::math::round2Int(i->z());
 
         if( pVolume->checkPosition(x, y, z) )
         {

@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -49,7 +49,8 @@ public:
           m_mouseStartPoint(s),
           m_mouseEndPoint(e),
           m_tmpMouseStartPoint(s),
-          m_tmpMouseEndPoint(e)
+          m_tmpMouseEndPoint(e),
+          m_scaleFactor(1.0)
     {		
         // compute zero rotation
        ptRotation.makeRotate(e, e);
@@ -66,7 +67,8 @@ public:
         m_mouseStartPoint(ps),
         m_mouseEndPoint(pe),
         m_tmpMouseStartPoint(ps),
-        m_tmpMouseEndPoint(pe)
+        m_tmpMouseEndPoint(pe),
+        m_scaleFactor(1.0)
     {
         ptRotation.makeRotate(pe - ps, te - ts);
         tpRotation.makeRotate(te - ts, pe - ps);
@@ -103,6 +105,12 @@ public:
         return translation;
     }
 
+    //! Set scale factor
+    void setScaleFactor(float sf) {m_scaleFactor = sf;}
+
+    //! Get current scale factor
+    float getScaleFactor() const {return m_scaleFactor;}
+
 protected:
     //! Starting point of movement line.
     osg::Vec3 m_movementStartPoint;
@@ -127,6 +135,9 @@ protected:
 
     //! Rotation from translation line to the projection line.
     osg::Quat tpRotation;
+
+    //! Used scale factor
+    float m_scaleFactor;
 };
 
 

@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,7 +30,7 @@
 #include "ui_modelswidget.h"
 #include <data/CModelManager.h>
 #include "qtcompat.h"
-#include <app/Signals.h>
+#include <coremedi/app/Signals.h>
 #include <Signals.h>
 #include <data/CDensityData.h>
 #include <mainwindow.h>
@@ -46,6 +46,10 @@
 
 #include <data/CActiveDataSet.h>
 
+#include <cinfodialog.h>
+
+#include <QDesktopServices>
+#include <QUrl>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -62,7 +66,7 @@ CModelsWidget::CModelsWidget(QWidget *parent /*= 0*/)
 
 	// Set model-region link status
 	QSettings settings;
-	m_bModelsLinked = settings.value("ModelRegionLinkEnabled", QVariant(false)).toBool();
+	m_bModelsLinked = settings.value("ModelRegionLinkEnabled", QVariant(true)).toBool();
 
     // Create table
     ui->tableModels->clearContents();
@@ -74,11 +78,13 @@ CModelsWidget::CModelsWidget(QWidget *parent /*= 0*/)
 	ui->tableModels->setColumnWidth(COL_CUT, 30);	
     ui->tableModels->setColumnWidth(COL_COLOR, 40);
     ui->tableModels->setColumnWidth(COL_DELETE, 30);
+	ui->tableModels->setColumnWidth(COL_INFO, 30);
     ui->tableModels->horizontalHeader()->SETRESIZEMODE(COL_NAME, QHeaderView::Stretch);
-    ui->tableModels->horizontalHeader()->SETRESIZEMODE(COL_VISIBLE, QHeaderView::Fixed);
-	ui->tableModels->horizontalHeader()->SETRESIZEMODE(COL_CUT, QHeaderView::Fixed);
-    ui->tableModels->horizontalHeader()->SETRESIZEMODE(COL_COLOR, QHeaderView::Fixed);    
+    ui->tableModels->horizontalHeader()->SETRESIZEMODE(COL_VISIBLE, QHeaderView::ResizeToContents);
+	ui->tableModels->horizontalHeader()->SETRESIZEMODE(COL_CUT, QHeaderView::ResizeToContents);
+    ui->tableModels->horizontalHeader()->SETRESIZEMODE(COL_COLOR, QHeaderView::ResizeToContents);    
     ui->tableModels->horizontalHeader()->SETRESIZEMODE(COL_DELETE, QHeaderView::ResizeToContents); 
+	ui->tableModels->horizontalHeader()->SETRESIZEMODE(COL_INFO, QHeaderView::ResizeToContents);
 	ui->tableModels->setContextMenuPolicy(Qt::CustomContextMenu);
 	QObject::connect(ui->tableModels, SIGNAL(customContextMenuRequested(QPoint)), this, SLOT(tableModelsContextMenu(QPoint)));
 
@@ -194,9 +200,11 @@ void CModelsWidget::updateTable()
             const data::CColor4f& color = pModel->getColor();
             QColor qcolor;
             qcolor.setRgbF(color.getR(), color.getG(), color.getB(), color.getA());
-            QString str = "* { background-color: " + qcolor.name() + " }";
+            QString str = "QPushButton { background-color: " + qcolor.name() + " } QToolTip { background-color: white }";
             ti_color->setStyleSheet(str);            
             ti_color->setProperty("Color",qcolor.rgba());
+
+			ti_color->setToolTip(tr("Click here to change model color"));
 
             // Remove button
             QPushButton* ti_remove = new QPushButton();
@@ -204,7 +212,17 @@ void CModelsWidget::updateTable()
             ti_remove->setIcon(QIcon(":/icons/delete.png"));
             ti_remove->setFlat(true);
             ti_remove->setObjectName("DeleteButton");
+			ti_remove->setToolTip(tr("Remove model"));
             QObject::connect(ti_remove, SIGNAL(clicked()), this, SLOT(onModelRemoveButton()));
+
+			// Info button
+			QPushButton* ti_info= new QPushButton();
+			ti_info->setProperty("StorageID", storage_id);
+			ti_info->setIcon(QIcon(":/icons/information.png"));
+			ti_info->setFlat(true);
+			ti_info->setObjectName("InfoButton");
+			ti_info->setToolTip(tr("Show information about model"));
+			QObject::connect(ti_info, SIGNAL(clicked()), this, SLOT(showModelInfo()));
 
             // Modify table row
             int row_id( ui->tableModels->rowCount() - 1);
@@ -213,6 +231,15 @@ void CModelsWidget::updateTable()
 			ui->tableModels->setItem(row_id, COL_CUT, ti_cut);
             ui->tableModels->setCellWidget(row_id, COL_COLOR, ti_color);
             ui->tableModels->setCellWidget(row_id, COL_DELETE, ti_remove);
+			ui->tableModels->setCellWidget(row_id, COL_INFO, ti_info);
+
+			geometry::CMesh *pMesh = pModel->getMesh();
+
+			QString toolTip = tr("Triangles: ") + QString::number(pMesh->n_faces()) + tr(", Nodes: ") + QString::number(pMesh->n_vertices()) + tr(", Components: ") + QString::number(pMesh->componentCount());
+
+			ui->tableModels->item(row_id, COL_NAME)->setToolTip(toolTip);
+			ui->tableModels->item(row_id, COL_VISIBLE)->setToolTip(toolTip);
+			ui->tableModels->item(row_id, COL_CUT)->setToolTip(toolTip);
         }
 
     }
@@ -249,7 +276,7 @@ void CModelsWidget::onModelColorButton()
 
     // Change button color property to the selected color
     pb->setProperty("Color", selectedColor.rgba());
-    QString str = "* { background-color: " + selectedColor.name() + " }";
+    QString str = "* { background-color: " + selectedColor.name() + " }  QToolTip { background-color: white }";
     pb->setStyleSheet(str);            
 
     // Change model color
@@ -264,6 +291,11 @@ void CModelsWidget::onModelColorButton()
 //!\brief   Executes the model remove button action.
 void CModelsWidget::onModelRemoveButton()
 {
+	if (QMessageBox::No == QMessageBox::question(NULL, QCoreApplication::applicationName(), tr("Do you really want to remove this model?"), QMessageBox::Yes | QMessageBox::No))
+	{
+		return;
+	}
+
     // Get button
     QPushButton *pb(qobject_cast<QPushButton *>(sender()));
 
@@ -310,7 +342,7 @@ void CModelsWidget::onModelItemChanged(QTableWidgetItem *item)
             data::CObjectPtr<data::CModel> spModel( APP_STORAGE.getEntry(storage_id) );
             spModel->setLabel(item->text().toStdString());
             m_bMyChange = true;
-            APP_STORAGE.invalidate(spModel.getEntryPtr(), data::CModel::MESH_NOT_CHANGED);
+            APP_STORAGE.invalidate(spModel.getEntryPtr(), data::CModel::LABEL_CHANGED);
 
 			modelToRegion(storage_id - data::Storage::ImportedModel::Id, COL_NAME);
         }
@@ -328,7 +360,7 @@ void CModelsWidget::onModelItemChanged(QTableWidgetItem *item)
                 {
                     spModel->setVisibility(bVisible);
                     m_bMyChange = true;
-                    APP_STORAGE.invalidate(spModel.getEntryPtr(), data::CModel::MESH_NOT_CHANGED);
+                    APP_STORAGE.invalidate(spModel.getEntryPtr(), data::CModel::VISIBILITY_CHANGED);
                 }
             }
         }
@@ -359,7 +391,7 @@ int CModelsWidget::getSelectedModelStorageId()
 {
     // Get selected index list
     QModelIndexList selectedList = ui->tableModels->selectionModel()->selectedRows();
-    if(selectedList.size() == 0)
+    if(selectedList.empty())
         return -1;
 
     // Get item row
@@ -385,8 +417,11 @@ int CModelsWidget::getSelectedModelStorageId()
 
 bool CModelsWidget::isRegionLinked(int id)
 {
-	data::CObjectPtr<data::CRegionColoring> spColoring(APP_STORAGE.getEntry(data::Storage::RegionColoring::Id));
-	return m_bModelsLinked && id >= 0 && id < MAX_IMPORTED_MODELS && id < spColoring->getNumOfRegions();
+	//data::CObjectPtr<data::CRegionColoring> spColoring(APP_STORAGE.getEntry(data::Storage::RegionColoring::Id));
+	//return m_bModelsLinked && id >= 0 && id < MAX_IMPORTED_MODELS && id < spColoring->getNumOfRegions();
+
+	data::CObjectPtr<data::CModel> spModel(APP_STORAGE.getEntry(id + data::Storage::ImportedModel::Id));
+	return (spModel->getRegionId() != -1) ? true : false;
 }
 
 /**
@@ -412,14 +447,14 @@ void CModelsWidget::modelToRegion(int id, int what)
 	switch(what)
 	{
 	case COL_NAME:
-		spColoring->getRegionInfo(id).setName(spModel->getLabel());
+		spColoring->getRegionInfo(spModel->getRegionId()).setName(spModel->getLabel());
 		break;
 
 	case COL_COLOR:
 		{
 			data::CColor4f mc(spModel->getColor());
 			data::CRegionColoring::tColor rc(mc.getR()*255, mc.getG()*255, mc.getB()*255, mc.getA()*255);
-			spColoring->setColor(id, rc);
+			spColoring->setColor(spModel->getRegionId(), rc);
 		}
 		break;
 
@@ -459,10 +494,10 @@ void CModelsWidget::modelsToRegions()
 			continue;
 
 		// Set label and color
-		spColoring->getRegionInfo(i).setName(spModel->getLabel());
+		spColoring->getRegionInfo(spModel->getRegionId()).setName(spModel->getLabel());
 		data::CColor4f mc(spModel->getColor());
 		data::CRegionColoring::tColor rc(mc.getR()*255, mc.getG()*255, mc.getB()*255, mc.getA()*255);
-		spColoring->setColor(i, rc);
+		spColoring->setColor(spModel->getRegionId(), rc);
 	}
 
 	// Invalidate coloring
@@ -574,4 +609,46 @@ void CModelsWidget::tableModelsContextMenu(QPoint p)
 			}			
 		}
 	}
+}
+
+void CModelsWidget::showModelInfo()
+{
+	// Get button
+	QPushButton *pb(qobject_cast<QPushButton *>(sender()));
+
+	if (pb == 0)
+		return;
+
+	// Try to get property
+	int index(pb->property("StorageID").toInt());
+	if (index < data::Storage::ImportedModel::Id || index >= data::Storage::ImportedModel::Id + MAX_IMPORTED_MODELS)
+		return;
+
+	// Get model
+	data::CObjectPtr<data::CModel> spModel(APP_STORAGE.getEntry(index));
+
+	if (!spModel->hasData())
+		return;
+
+	CInfoDialog info(NULL, tr("Model Information"));
+
+	geometry::CMesh *pMesh = spModel->getMesh();
+	data::CColor4f color = spModel->getColor();
+
+	info.addRow(tr("Name"), QString::fromStdString(spModel->getLabel()), QColor(color.getR() * 255, color.getG() * 255, color.getB() * 255));
+	info.addRow(tr("Triangles"), QString::number(pMesh->n_faces()));
+	info.addRow(tr("Nodes"), QString::number(pMesh->n_vertices()));
+	info.addRow(tr("Components"), QString::number(pMesh->componentCount()));
+
+	info.exec();
+}
+
+void CModelsWidget::on_pushButtonBuyPlugins_clicked()
+{
+	QDesktopServices::openUrl(QUrl("http://www.3dim-laboratory.cz/software/plugins/"));
+}
+
+void CModelsWidget::on_pushButtonSaveModel_clicked()
+{
+	VPL_SIGNAL(SigSaveModel).invoke2(getSelectedModelStorageId());
 }

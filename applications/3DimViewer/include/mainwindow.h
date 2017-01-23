@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -39,7 +39,6 @@
 #include <QDir>
 #include <QApplication>
 #include <QSplitter>
-#include <QWebView>
 #include <QMessageBox>
 #include <QToolButton>
 #include <QSettings>
@@ -48,7 +47,8 @@
 #include <QTabBar>
 #include <QSlider>
 
-#include <data/CExamination.h>
+//#include <data/CExamination.h>
+#include <CAppExamination.h>
 #include <data/CModelManager.h>
 
 #include <osg/OSGCanvas.h>
@@ -62,7 +62,7 @@
 
 #ifdef USE_PSVR
    #include <render/CSceneVolumeRendering.h>
-   #include <cvolumerendererwindow.h>
+   #include <render/cvolumerendererwindow.h>
 #endif // USE_PSVR
 
 #include <densitywindowwidget.h>
@@ -76,12 +76,25 @@
 #include <CModelVisualizer.h>
 #include <Signals.h>
 #include <data/CModelCut.h>
+#include <CPreviewDialog.h>
+#include <CPreviewDialogData.h>
 
-#ifdef __APPLE__
+#include <actlog/ceventfilter.h>
+
+#include <data/CVolumeOfInterest.h>
+
+#include <data/CRegionsVisualizer.h>
+#include <data/CVolumeOfInterestVisualizer.h>
+
+#include <osg/CLimiterSceneOSG.h>
+
+#if defined(__APPLE__) &&  !defined(_LIBCPP_VERSION)
 #include <tr1/array>
 #else
 #include <array>
 #endif
+
+
 
 /////////////////////////////////////////////////////
 
@@ -90,7 +103,7 @@ class MainWindow;
 }
 
 //! MainWindow class declaration
-class MainWindow : public QMainWindow
+class MainWindow : public QMainWindow, public IHasEventFilter
 {
     Q_OBJECT
     
@@ -106,6 +119,9 @@ public:
 
     //! Returns pointer to model manager
     data::CModelManager* getModelManager() { return &m_ModelManager; }
+
+    //! Implementing interface for accessing event filter
+    virtual const CEventFilter &getEventFilter() const { return m_eventFilter; }
 
     //! Find plugin by name
     QObject*                findPluginByID(QString sPluginName);
@@ -140,6 +156,16 @@ public:
     {
         data::CObjectPtr<data::CDensityData> spVolume( APP_STORAGE.getEntry(data::Storage::PatientData::Id) );
         QString wsPatientName(spVolume->m_sPatientName.c_str());
+
+		QSettings settings;
+		int savedFilesNameMode = settings.value("SavedFilesNameMode").toInt();
+
+		if (savedFilesNameMode == 1)
+		{
+			QDir d(dir);
+			wsPatientName = d.dirName();
+		}
+
         if (wsPatientName.isEmpty())
         {
             MainWindow* pMainWindow = MainWindow::getInstance();
@@ -174,11 +200,16 @@ public:
         WorkspaceTabs=1,
         WorkspaceGrid=2
     };
+
 private:
     //! UI created in designer
     Ui::MainWindow *ui;
+
+    //! Event filter, which handles ui events recording
+    CEventFilter m_eventFilter;
+
     //! Current basic layout
-    int                                         m_nLayoutType;  // Workspace
+    int                                         m_nLayoutType;  // Workspace	
 
     //! OSG window with 3D scene and VR
     CVolumeRendererWindow*          m_3DView;
@@ -197,9 +228,15 @@ private:
     // helpers
     QTimer                          m_timer;
 
+	//! Signal connection for volume data change
+	vpl::mod::tSignalConnection m_Connection;
+
+	//! Called on volume data change.
+	void onNewDensityData(data::CStorageEntry *pEntry);
+
 // true data
     //! Examination managing all data.
-    data::CExamination              m_Examination;
+    data::CAppExamination           m_Examination;
 
     //! Model manager.
     data::CModelManager             m_ModelManager;
@@ -210,7 +247,7 @@ private:
 	//! Used model label
 	std::string						m_modelLabel;
     //! Model visualizers
-#ifdef __APPLE__
+#if defined(__APPLE__) &&  !defined(_LIBCPP_VERSION)
     std::tr1::array
 #else
     std::array
@@ -222,6 +259,20 @@ private:
     osg::ref_ptr<scene::CSceneXY>   m_SceneXY;
     osg::ref_ptr<scene::CSceneXZ>   m_SceneXZ;
     osg::ref_ptr<scene::CSceneYZ>   m_SceneYZ;
+
+	osg::ref_ptr<osg::CRegionsVisualizerForSliceXY> m_xyVizualizer;
+	osg::ref_ptr<osg::CRegionsVisualizerForSliceXZ> m_xzVizualizer;
+	osg::ref_ptr<osg::CRegionsVisualizerForSliceYZ> m_yzVizualizer;
+
+	osg::ref_ptr<osg::CVolumeOfInterestVisualizerForSliceXY> m_xyVOIVizualizer;
+	osg::ref_ptr<osg::CVolumeOfInterestVisualizerForSliceXZ> m_xzVOIVizualizer;
+	osg::ref_ptr<osg::CVolumeOfInterestVisualizerForSliceYZ> m_yzVOIVizualizer;
+
+	bool m_contoursVisible;
+
+	bool m_VOIVisible;
+
+	bool m_segmentationPluginsLoaded;
 
     //! 3D window drawing handler
     osg::ref_ptr<osgGA::CISWindowEH> m_drawW3DEH;
@@ -269,9 +320,6 @@ private:
     //! Event filter for tabs
     TabBarMouseFunctionalityEx  m_tabsEventFilter;
 
-    //! Help web page
-    QWebView*               m_helpView;
-
     //! Status bar density label
     QLabel*                 m_grayLevelLabel;
 
@@ -309,6 +357,10 @@ private:
 // creation
     //! Connect actions to slots
     void            connectActions();
+
+	//! Connect actions to slot in event filter
+    void connectActionsToEventFilter();
+
     //! Create toolbars
     void            createToolBars();
     //! Create OSG scenes
@@ -321,6 +373,8 @@ private:
     void            workspacesEnabler();
     //! Setup dock widgets for osg scenes
     void            setupDockWindows();
+
+	bool			getContoursVisibility();
 
 // model cut
 	//! Set Model Cut Visibility
@@ -375,12 +429,19 @@ private:
     //! Enabler for undo/redo
     void            undoRedoEnabler();
 
+	void enableMenuActions();
+
 // events
 protected:
     //! handle show event to restore layout
     void            showEvent(QShowEvent *event);
     //! handle close event to save layout
     void            closeEvent(QCloseEvent *event);
+
+	void showPreviewDialog(const QString& title, CPreviewDialogData& data, int dataType);
+
+	//! function gets the title of the window and two QStrings, each of them represents rows titles/values separated by ';' and color of the first row
+	void showInfoDialog(const QString& title, const QString& rowsTitles, const QString& rowsValues, const QColor& color);
 
 // drag and drop support
 protected:
@@ -411,11 +472,11 @@ private slots:
     //! Load DICOM dataset from ZIP
     bool            openDICOMZIP(QString fileName);
     //! Load DICOM dataset
-    bool            openDICOM(const QString& fileName, const QString& realName);
+    bool            openDICOM(const QString& fileName, const QString& realName, bool fromFolder);
     //! Load STL model (doesn't drop other data)
     bool            openSTL();
     //! Load STL model (doesn't drop other data)
-    bool            openSTL(const QString &wsFileName);
+	bool            openSTL(const QString &wsFilePath, const QString &FileName);
     //! Save DICOM series (copy files)
     bool            saveOriginalDICOM();
 	//! Save DICOM series (save loaded volume)
@@ -425,8 +486,13 @@ private slots:
     //! Save STL model
     bool            saveSTL();
 
+	bool            saveSTLById(int storage_id);
+
     //! Print method
     void            print();
+
+	//! Receive DICOM data
+	void			receiveDicomData();
 
 // Plugins
     //! Triggers action from a specified plugin, if available
@@ -451,11 +517,12 @@ private slots:
     //! Show properties of current data set
     void            showDataProperties();
 
-    //! Load Help
-    void            loadHelp();
-
     //! Show Help window
     void            showHelp();
+
+	void            showTutorials();
+
+	void            showFeedback();
 
     //! Show application's "About" window
     void            showAbout();
@@ -554,6 +621,26 @@ private slots:
 	//! Helper volume mixing method
 	void			mixVolumes(vpl::img::CDensityVolume* main, vpl::img::CDensityVolume* temp, int mixing) const; // 0-100
 
+// segmentation
+	//! Volume limiter
+	void limitVolume();
+
+	void resetLimit();
+
+	void setContoursVisibility(bool visible);
+
+	void onMenuContoursVisibleToggled(bool visible);
+
+	void onMenuRegionsVisibleToggled(bool visible);
+
+	void setRegionsVisibility(bool visible);
+
+	void onMenuVOIVisibleToggled(bool visible);
+
+	void setVOIVisibility(bool visible);
+
+	bool getVOIVisibility();
+
 // undo and redo
     //! Undo last undoable action
     void            performUndo();
@@ -589,6 +676,9 @@ private slots:
 	void			showPanelsMenu();
 	void			fullscreen(bool);	
 
+    //! Autotab all panels in all widget areas
+    void            autoTabPanels();
+
 // texture filters
 	void			setTextureFilterEqualize(bool);
 	void			setTextureFilterSharpen(bool);
@@ -611,9 +701,14 @@ private slots:
 	//! activate next panel
 	void			nextPanel();
 
+	void showFeedbackRequestDialog();
+
+	void resetAppMode();
+
 public slots:
 	//! Create surface model
     void            createSurfaceModel();
+
 };
 
 

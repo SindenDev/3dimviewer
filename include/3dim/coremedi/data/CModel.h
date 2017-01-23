@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -83,11 +83,13 @@ namespace data
         //! Helper flags you can pass to the invalidate() method.
         enum
         {
-            MESH_NOT_CHANGED = 1 << 3,
-            POSITION_NOT_CHANGED = 1 << 4,
-            SELECTION_NOT_CHANGED = 1 << 5,
-
-            NOTHING_CHANGED = MESH_NOT_CHANGED | POSITION_NOT_CHANGED | SELECTION_NOT_CHANGED,
+            MESH_CHANGED = 1 << 3,
+            POSITION_CHANGED = 1 << 4,
+            SELECTION_CHANGED = 1 << 5,
+            COLORING_CHANGED = 1 << 6,
+			VISIBILITY_CHANGED = 1 << 7,
+			LABEL_CHANGED = 1 << 8,
+			PROPERTY_CHANGED = 1 << 9
         };
 
     public:
@@ -96,6 +98,9 @@ namespace data
             : m_bVisibility(false)
             , m_Color(1.0f, 1.0f, 1.0f, 1.0f)
             , m_bSelected(false)
+            , m_bUseVertexColors(false)
+			, m_regionId(-1)
+			, m_bLinkedWithRegion(true)
         { }
 
         //! Destructor.
@@ -138,6 +143,10 @@ namespace data
         //! Turns on/off visibility of the model. 
         void setVisibility(bool visible) { m_bVisibility = visible; }
 
+        //! Turns on/off visibility of the model. 
+        void setUseVertexColors(bool value) { m_bUseVertexColors = value; }
+        bool getUseVertexColors() const { return m_bUseVertexColors; }
+
         //! (De)selects model
         void select(bool value = true)
         {
@@ -173,6 +182,30 @@ namespace data
         //! Sets the model color.
         void setColor(const CColor4f& Color) { m_Color.setColor(Color); }
 
+		//! Sets the region id.
+		void setRegionId(int id)
+		{
+			m_regionId = id;
+		}
+
+		//! Returns the region id.
+		int getRegionId()
+		{
+			return m_regionId;
+		}
+
+		//! Sets if model mirrors region data.
+		void setLinkedWithRegion(bool linked)
+		{
+			m_bLinkedWithRegion = linked;
+		}
+
+		//! Returns true if model mirrors region data.
+		bool isLinkedWithRegion()
+		{
+			return m_bLinkedWithRegion;
+		}
+
         //! Returns voluntary transformation matrix
         const osg::Matrix& getTransformationMatrix() { return m_transformationMatrix; }
 
@@ -196,11 +229,50 @@ namespace data
             return "";
         }
 
+		//! Get floating point model property
+		double getFloatProperty(const std::string &prop) const
+		{
+			std::string val = getProperty(prop);
+			return strtod(val.c_str(),NULL);
+		}
+
+		//! Get int model property
+		long getIntProperty(const std::string &prop) const
+		{
+			std::string val = getProperty(prop);
+			return strtol(val.c_str(),NULL,10);
+		}
+
         //! Set model property
         void setProperty(const std::string &prop, const std::string &value) { m_properties[prop] = value; }
 
+        //! Set int property
+        void setIntProperty(const std::string &prop, int value) 
+		{ 
+			std::stringstream ss;
+			ss << value;
+			m_properties[prop] = ss.str(); 
+		}
+
+        //! Set floating point property
+        void setFloatProperty(const std::string &prop, double value) 
+		{ 
+			std::stringstream ss;
+			ss << value;
+			m_properties[prop] = ss.str(); 
+		}
+
         //! Clear all properties
         void clearAllProperties() { m_properties.clear(); }
+
+		//! Copy all properties
+		void copyAllProperties( const data::CModel & model )
+		{
+			m_properties = model.m_properties;
+		}
+
+		//! Direct access to all properties
+		const std::map<std::string, std::string> & getAllProperties() const { return m_properties; }
 
         //! Clear the model.
         void clear() { m_spModel = new geometry::CMesh; }
@@ -229,19 +301,24 @@ namespace data
         {
             Writer.beginWrite(*this);
 
-            WRITEINT32(3); // version
+            WRITEINT32(5); // version
 
             Writer.write((vpl::sys::tInt32)m_bVisibility);
             Writer.write((vpl::sys::tInt32)m_bSelected);
+            Writer.write((vpl::sys::tInt32)m_bUseVertexColors);
             m_Color.serialize(Writer);
             Writer.write(m_label);
             CSerializableData< osg::Matrix >::serialize(&m_transformationMatrix, Writer);
             Writer.write((vpl::sys::tInt32)m_properties.size());
+
             for (auto it = m_properties.begin(); it != m_properties.end(); it++)
             {
                 Writer.write(it->first);
                 Writer.write(it->second);
             }
+
+			Writer.write((vpl::sys::tInt32)m_regionId);
+			Writer.write((vpl::sys::tInt32)m_bLinkedWithRegion);
 
             Writer.endWrite(*this);
 
@@ -263,7 +340,13 @@ namespace data
             if (version > 2)
             {
                 vpl::sys::tInt32 bSel = 0;
-                Reader.read(bSel); m_bSelected = bVis != 0;
+                Reader.read(bSel); m_bSelected = bSel != 0;
+            }
+
+            if (version > 3)
+            {
+                vpl::sys::tInt32 bColors = 0;
+                Reader.read(bColors); m_bUseVertexColors = bColors != 0;
             }
 
             m_Color.deserialize(Reader);
@@ -282,6 +365,15 @@ namespace data
                 }
             }
 
+			if (version > 4)
+			{
+				vpl::sys::tInt32 regionId = -1;
+				Reader.read(regionId); m_regionId = regionId;
+
+				vpl::sys::tInt32 bLinked = 0;
+				Reader.read(bLinked); m_bLinkedWithRegion = bLinked != 0;
+			}
+
             Reader.endRead(*this);
 
             m_spModel->deserialize(Reader);
@@ -296,6 +388,15 @@ namespace data
 
         //! Model visibility.
         bool m_bSelected;
+
+        //! Model visibility.
+        bool m_bUseVertexColors;
+
+		//! Id of region from which the model was created.
+		int m_regionId;
+
+		//! If model mirrors region data.
+		bool m_bLinkedWithRegion;
 
         //! Model color (RGBA components).
         CColor4f m_Color;

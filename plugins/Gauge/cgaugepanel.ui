@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>221</width>
-    <height>169</height>
+    <height>257</height>
    </rect>
   </property>
   <property name="minimumSize">
@@ -117,6 +117,45 @@
     </widget>
    </item>
    <item>
+    <widget class="QPushButton" name="pushButtonDensity">
+     <property name="text">
+      <string>Measure Density Value [Hu]</string>
+     </property>
+     <property name="icon">
+      <iconset resource="gauge.qrc">
+       <normaloff>:/icons/measure_density.png</normaloff>:/icons/measure_density.png</iconset>
+     </property>
+     <property name="checkable">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QPushButton" name="pushButtonDistance">
+     <property name="text">
+      <string>Measure Distance [mm]</string>
+     </property>
+     <property name="icon">
+      <iconset resource="gauge.qrc">
+       <normaloff>:/icons/measure_distance.png</normaloff>:/icons/measure_distance.png</iconset>
+     </property>
+     <property name="checkable">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QPushButton" name="pushButtonClear">
+     <property name="text">
+      <string>Clear Measurements</string>
+     </property>
+     <property name="icon">
+      <iconset resource="gauge.qrc">
+       <normaloff>:/icons/delete.png</normaloff>:/icons/delete.png</iconset>
+     </property>
+    </widget>
+   </item>
+   <item>
     <spacer name="verticalSpacer">
      <property name="orientation">
       <enum>Qt::Vertical</enum>
@@ -131,6 +170,8 @@
    </item>
   </layout>
  </widget>
- <resources/>
+ <resources>
+  <include location="gauge.qrc"/>
+ </resources>
  <connections/>
 </ui>

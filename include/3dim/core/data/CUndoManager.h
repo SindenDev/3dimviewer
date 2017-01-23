@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,7 +25,7 @@
 
 #include <VPL/Base/SharedPtr.h>
 #include <data/CStorageEntry.h>
-#include <app/Signals.h>
+//#include <coremedi/app/Signals.h>
 #include <data/CSnapshot.h>
 
 #include <deque>
@@ -83,16 +83,16 @@ public:
     void insert( CSnapshot * item );
 
     //! Undo steps available now
-    int getUndoSteps() { return m_undoQueue.size(); }
+    int getUndoSteps() const { return m_undoQueue.size(); }
 
     //! Redo steps available
-    int getRedoSteps() { return m_redoQueue.size(); }
+    int getRedoSteps() const { return m_redoQueue.size(); }
 
     //! Can be undo done?
-    bool canUndo() { return getUndoSteps() > 0; }
+    bool canUndo() const { return getUndoSteps() > 0; }
 
     //! Can be redo done?
-    bool canRedo() { return getRedoSteps() > 0; }
+    bool canRedo() const { return getRedoSteps() > 0; }
 
     //! Clear all
     void clear();
@@ -104,7 +104,7 @@ public:
     }
 
     //! Set max memory taken by undo
-    void setMaxSize(long maxSize) { m_maxSize = maxSize; }
+    void setMaxSize(long long maxSize) { m_maxSize = maxSize; }
 
 protected:
     //! Get new timestamp
@@ -122,12 +122,12 @@ protected:
     //! Process snapshot
     CSnapshot * processSnapshot( CSnapshot * snapshot );
 
-protected:
-    //! Ocuppied space
-    long m_currentSize;
+	//! Compute current ammount of allocated memory in the undo and redo queues
+	long long calcMemorySize() const;
 
-    //! Maximal ocuppied space
-    long m_maxSize;
+protected:
+    //! Maximal possible occuppied space
+    long long m_maxSize;
 
     //! Timestamp counter
     long m_timeCounter;

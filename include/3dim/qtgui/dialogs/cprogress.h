@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -38,11 +38,13 @@ class CProgress : public QProgressDialog
     Q_OBJECT
 protected:
 	ProgressModifierFn m_pModifierFn;
+	bool m_bCanceled;
 public:
     explicit CProgress(QWidget *parent=0) :
         QProgressDialog(parent,Qt::WindowTitleHint | Qt::WindowSystemMenuHint)
     {
 		m_pModifierFn = NULL;
+		m_bCanceled = false;
         setAttribute(Qt::WA_ShowWithoutActivating);
         setWindowTitle(QApplication::applicationName());
         setWindowModality(Qt::WindowModal);
@@ -59,15 +61,16 @@ public:
 			{
 				setMaximum (iMax);
 				setValue(iCount);		
-				bool bCanceled = this->wasCanceled(); // save to local variable because processEvents can lead to destruction of this object
+				bool bCanceled = m_bCanceled = this->wasCanceled(); // save to local variable because processEvents can lead to destruction of this object
 				QApplication::processEvents();
 				return !bCanceled;
 			}
-            return !(this->wasCanceled());
+			m_bCanceled = this->wasCanceled();
+            return !m_bCanceled;
         }
-        return true;
+        return !m_bCanceled;
     }
-    void restart(const QString &message) { setLabelText(message); show(); QApplication::processEvents(); }
+    void restart(const QString &message) { setLabelText(message); m_bCanceled = false; show(); QApplication::processEvents(); }
 };
 
 #endif

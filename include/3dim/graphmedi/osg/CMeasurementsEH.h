@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -215,7 +215,7 @@ protected:
 
 public:
 	//! Constructor
-    CMeasurementsEH( OSGCanvas * canvas, scene::CSceneOSG * scene, bool handleDistance = true, bool handleDensity = true, bool handleDensityUnderCursor = false );
+    CMeasurementsEH( OSGCanvas * canvas, scene::CSceneBase * scene, bool handleDistance = true, bool handleDensity = true, bool handleDensityUnderCursor = false );
 
 	//! Destructor
 	~CMeasurementsEH();
@@ -256,7 +256,7 @@ protected:
 
 protected:
 	//! Scene used
-	osg::ref_ptr< scene::CSceneOSG > m_scene;
+	osg::ref_ptr< scene::CSceneBase > m_scene;
 
 	//! Handle distance?
 	bool m_handleDistance;
@@ -297,7 +297,7 @@ class CMeasurements3DEH
 {
 public:
 	//! Constructor
-    CMeasurements3DEH(OSGCanvas * canvas, scene::CSceneOSG * scene) : CMeasurementsEH(canvas, scene)
+    CMeasurements3DEH(OSGCanvas * canvas, scene::CSceneBase * scene) : CMeasurementsEH(canvas, scene)
 	{
 		// Connect on dummy
 		APP_STORAGE.connect( data::Storage::SceneManipulatorDummy::Id, this);
@@ -332,7 +332,7 @@ class CMeasurementsXYEH
 {
 public:
 	//! Constructor
-	CMeasurementsXYEH( OSGCanvas * canvas, scene::CSceneOSG * scene ) : CMeasurementsEH( canvas, scene ) 
+	CMeasurementsXYEH( OSGCanvas * canvas, scene::CSceneBase * scene ) : CMeasurementsEH( canvas, scene ) 
 	{
 		// Connect to the slice moved signal
 		m_conSliceMoved = VPL_SIGNAL(SigSetSliceXY).connect( this, & CMeasurementsXYEH::SigSliceMoved );
@@ -356,7 +356,7 @@ class CMeasurementsXZEH
 {
 public:
 	//! Constructor
-	CMeasurementsXZEH( OSGCanvas * canvas, scene::CSceneOSG * scene ) : CMeasurementsEH( canvas, scene ) 
+	CMeasurementsXZEH( OSGCanvas * canvas, scene::CSceneBase * scene ) : CMeasurementsEH( canvas, scene ) 
 	{
 		// Connect to the slice moved signal
 		m_conSliceMoved = VPL_SIGNAL(SigSetSliceXZ).connect( this, & CMeasurementsXZEH::SigSliceMoved );
@@ -380,7 +380,7 @@ class CMeasurementsYZEH
 {
 public:
 	//! Constructor
-	CMeasurementsYZEH( OSGCanvas * canvas, scene::CSceneOSG * scene ) : CMeasurementsEH( canvas, scene ) 
+	CMeasurementsYZEH( OSGCanvas * canvas, scene::CSceneBase * scene ) : CMeasurementsEH( canvas, scene ) 
 	{
 		// Connect to the slice moved signal
 		m_conSliceMoved = VPL_SIGNAL(SigSetSliceYZ).connect( this, & CMeasurementsYZEH::SigSliceMoved );
@@ -403,7 +403,7 @@ class CMeasurementsRtgEH
 {
 public:
 	//! Constructor
-    CMeasurementsRtgEH(OSGCanvas * canvas, scene::CSceneOSG * scene) : CMeasurementsEH(canvas, scene)
+    CMeasurementsRtgEH(OSGCanvas * canvas, scene::CSceneBase * scene) : CMeasurementsEH(canvas, scene)
 	{
 		m_ip.addDesiredRule(new osg::CNodeTypeIntersectionDesired<osgUtil::LineSegmentIntersector::Intersection, osg::Geode>);
 		// Connect on dummy

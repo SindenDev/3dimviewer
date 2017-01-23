@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,7 +26,7 @@
 #include <QSettings>
 
 CVolumeLimiterDialog::CVolumeLimiterDialog(QWidget *parent) :
-    QDialog(parent,Qt::WindowTitleHint | Qt::WindowSystemMenuHint | Qt::WindowCloseButtonHint),
+	QDialog(parent, Qt::WindowTitleHint | Qt::WindowSystemMenuHint | Qt::WindowCloseButtonHint | Qt::WindowMinimizeButtonHint | Qt::WindowMaximizeButtonHint),
     ui(new Ui::CVolumeLimiterDialog)
 {
     ui->setupUi(this);
@@ -116,9 +116,16 @@ void CVolumeLimiterDialog::setVolume(data::CDensityData *pData, bool bInitLimits
     m_spVolume = pData;
     if( m_spVolume.get() )
     {
+		m_volumeSize = vpl::img::CPoint3i(pData->getXSize(), pData->getYSize(), pData->getZSize());
+		m_voxelSize = vpl::img::CPoint3d(pData->getDX(), pData->getDY(), pData->getDZ());
+
         m_SceneXY.get()->setupScene(*m_spVolume);
         m_SceneXZ.get()->setupScene(*m_spVolume);
-        m_SceneYZ.get()->setupScene(*m_spVolume);
+		m_SceneYZ.get()->setupScene(*m_spVolume);
+			
+		m_SceneXY.get()->scaleScene(m_volumeSize, m_voxelSize);
+		m_SceneXZ.get()->scaleScene(m_volumeSize, m_voxelSize);
+		m_SceneYZ.get()->scaleScene(m_volumeSize, m_voxelSize);
 
         m_SliceXY.updateRTG(*m_spVolume);
         m_SliceXZ.updateRTG(*m_spVolume);
@@ -139,6 +146,15 @@ void CVolumeLimiterDialog::setVolume(data::CDensityData *pData, bool bInitLimits
             setLimits(Limits);
         }
     }
+
+	refresh();
+}
+
+void CVolumeLimiterDialog::refresh()
+{
+	m_OrthoXYSlice->Refresh(false);
+	m_OrthoXZSlice->Refresh(false);
+	m_OrthoYZSlice->Refresh(false);
 }
 
 void CVolumeLimiterDialog::setLimits(const data::SVolumeOfInterest& Limits)

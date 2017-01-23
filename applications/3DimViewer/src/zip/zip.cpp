@@ -1349,14 +1349,14 @@ extern int ZEXPORT zipOpenNewFileInZip64 (zipFile file, const char* filename, co
 extern int ZEXPORT zipOpenNewFileInZip (zipFile file, const char* filename, const zip_fileinfo* zipfi,
                                         const void* extrafield_local, uInt size_extrafield_local,
                                         const void*extrafield_global, uInt size_extrafield_global,
-                                        const char* comment, int method, int level)
+                                        const char* comment, int method, int level, int flagBase)
 {
     return zipOpenNewFileInZip4_64 (file, filename, zipfi,
                                  extrafield_local, size_extrafield_local,
                                  extrafield_global, size_extrafield_global,
                                  comment, method, level, 0,
                                  -MAX_WBITS, DEF_MEM_LEVEL, Z_DEFAULT_STRATEGY,
-                                 NULL, 0, VERSIONMADEBY, 0, 0);
+                                 NULL, 0, VERSIONMADEBY, flagBase, 0);
 }
 
 local int zip64FlushWriteBuffer(zip64_internal* zi)

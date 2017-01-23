@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2013 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -37,11 +37,14 @@
 #include <QDialogButtonBox>
 #include <QFileOpenEvent>
 #include <QDateTime>
+#include <QFileDialog>
 //#include <CPreferencesDialog.h> // default values of some settings
 #include <cpreferencesdialog.h> // default values of some settings
 #include <VPL/Base/Logging.h>
 #include <sstream>
 #include <qtcompat.h>
+#include <zip/zip.h>
+#include <zip/unzip.h>
 
 #ifdef _WIN32
 #include <time.h>
@@ -131,7 +134,7 @@ static void getRecentEventLogAppEntries()
 	    }
         ::CloseEventLog(hLog);
     }
-    free(buffer);
+    delete[] buffer;
 }
 
 
@@ -282,9 +285,8 @@ public:
 #endif
     
 protected:
-    QString readLog()
-    {
-        QString text;
+	QStringList getLogPaths()
+	{
 		QString dir = QDir::currentPath();
 		QList<QString> paths;
 		{
@@ -314,8 +316,15 @@ protected:
 				if (fi2.exists())
 					paths.push_back(fi2.filePath());
 			}
-
 		}
+		if (!paths.empty())
+			return paths;
+		return QStringList();
+	}
+    QString readLog()
+    {        
+		QString text;
+		QStringList paths = getLogPaths();
 		if (paths.isEmpty())
 			return text;
 		// Is the current workdir writable? 
@@ -334,35 +343,118 @@ protected:
 		}
         return text;
     }
+
+	//! Get local app data path
+	QString localAppDataPath()
+	{
+#ifdef _WIN32
+		char* appData = getenv("LOCALAPPDATA");
+		if (NULL!=appData && 0!=appData[0])
+		{
+			std::wstring wName = C3DimApplication::ACP2wcs(appData);
+			return QString::fromUtf16( (const ushort*)wName.c_str() );
+		}
+#endif
+		return "";
+	}
     
 signals:
 	//! Signal emitted when style sheet is changed
 	void styleSheetChanged();
     
 public slots:
-	//! Show dialog with application log contents
-	void showLog()
+	//! Compress all crash dumps into one file
+	void saveErrorInfo2Zip()
 	{
-        QDialog dlg(NULL,Qt::WindowTitleHint | Qt::WindowSystemMenuHint | Qt::WindowCloseButtonHint);
+		QStringList lstCrashDumps;
+		QString wsCrashDumpPath = localAppDataPath() + "/CrashDumps";
+		QDir dir(wsCrashDumpPath);
+		if (!dir.exists())
+			return;
+		lstCrashDumps = dir.entryList(QStringList("3DimViewer*.*"));		
+		if (!lstCrashDumps.empty())
+		{			
+			QSettings settings;
+			QString previousDir = settings.value("DmpDir", HOMELOCATION()).toString();
+			if (!previousDir.endsWith('/') && !previousDir.endsWith('\\'))
+				previousDir+='/';
+			previousDir+="3DVCrash";
+			/*if(0)
+			{
+				char* user = getenv("USER");
+				if (NULL==user || 0==user[0])
+					user = getenv("USERNAME");
+				if (NULL!=user && 0!=user[0])
+                {
+					std::wstring wName = C3DimApplication::ACP2wcs(user);
+					previousDir += QString::fromUtf16( (const ushort*)wName.c_str() );
+				}
+			}*/
+			QString fileName = QFileDialog::getSaveFileName(NULL, tr("Please choose a destination file name."), previousDir, tr("ZIP archive (*.zip)"));
+			if (fileName.isEmpty())
+				return;
+			QFileInfo pathInfo(fileName);
+			settings.setValue("DmpDir", pathInfo.dir().absolutePath());
+
+			// save crash dumps
+			std::map<QString, int> lstCompress;
+			foreach(QString dump, lstCrashDumps)
+				lstCompress[dir.absoluteFilePath(dump)] = 1;
+			// save logs
+			QStringList logs = getLogPaths();
+			foreach(QString log, logs)
+				lstCompress[log] = 1;
+			// save app generated crash dump
+			QDir dataDir(HOMELOCATION());
+			if (dataDir.exists("3DVCrashDump.mdmp"))
+				lstCompress[dataDir.absoluteFilePath("3DVCrashDump.mdmp")] = 1;
+			// create zip archive
+			createZipFile(fileName,lstCompress,false);
+		}
+	}
+	//! Show dialog with application log contents
+	void showLog(const QString& message)
+	{
+		QStringList lstCrashDumps;
+		QString wsCrashDumpPath = localAppDataPath() + "/CrashDumps";
+		{
+			QDir dir(wsCrashDumpPath);
+			if (dir.exists())
+				lstCrashDumps = dir.entryList(QStringList("3DimViewer*.*"));
+			QDir dataDir(HOMELOCATION());
+			if (dataDir.exists("3DVCrashDump.mdmp"))
+				lstCrashDumps.push_back("3DVCrashDump.mdmp");
+		}
+        const double dpiFactor = getDpiFactor();
+		QDialog dlg(NULL,Qt::WindowTitleHint | Qt::WindowSystemMenuHint | Qt::WindowCloseButtonHint | Qt::WindowMaximizeButtonHint);
         dlg.setWindowTitle(QApplication::applicationName());
-        dlg.setMinimumSize(720,480);
+        dlg.setMinimumSize(720*dpiFactor,480*dpiFactor);
 		dlg.setSizeGripEnabled(true);
         QVBoxLayout* pLayout = new QVBoxLayout();
         dlg.setLayout(pLayout);
         QLabel* pLabelInfo = new QLabel;
-        pLabelInfo->setText(tr("Application log:"));
+        pLabelInfo->setText(message);
         pLayout->addWidget(pLabelInfo);
         QTextEdit* pTextEdit = new QTextEdit();
 		pTextEdit->setPlainText(readLog());
         pLayout->addWidget(pTextEdit);
         QDialogButtonBox* pButtonBox = new QDialogButtonBox;
         pButtonBox->setStandardButtons(QDialogButtonBox::Ok);
+		if (!lstCrashDumps.empty())
+		{
+			QPushButton* pButtonSendDump = new QPushButton(tr("Save Crash Report..."));
+			pButtonBox->addButton(pButtonSendDump,QDialogButtonBox::HelpRole);		
+			connect(pButtonSendDump,SIGNAL(clicked()),this,SLOT(saveErrorInfo2Zip()));
+		}
         pButtonBox->setCenterButtons(true);
         connect(pButtonBox, SIGNAL(accepted()), &dlg, SLOT(accept()));
         pLayout->addWidget(pButtonBox);
         dlg.exec();
 	}
-        
+	void showLog()
+	{
+		showLog(tr("Application Log:"));
+	}        
 public:
 	//! Replaces application style sheet
     void setStyleSheetEx ( const QString & sheet )
@@ -370,6 +462,26 @@ public:
         QApplication::setStyleSheet(sheet);
         emit styleSheetChanged();
     }
+
+	static double getDpiFactor() 
+	{
+		double sizeFactor = 1;
+		QDesktopWidget* pDesktop = QApplication::desktop();
+		if (NULL!=pDesktop)
+			sizeFactor = std::max(1.0,pDesktop->logicalDpiX()/96.0);
+		return sizeFactor;
+	}
+
+	static void adjustControlFontSize(QWidget *pWidget, double factor)
+	{
+		if (NULL!=pWidget)
+		{
+			pWidget->ensurePolished();		
+			QFont f(pWidget->font());
+			f.setPointSizeF(pWidget->font().pointSizeF() * factor);
+			pWidget->setFont(f);
+		}
+	}
 
     //! loads platform specific stylesheet addon
     static QString getPlatformStyleSheetAddon(QString sFileName)
@@ -386,6 +498,25 @@ public:
     #else // linux
             wsLeftName+="_linux.qss";
     #endif
+            QFile file(wsLeftName);
+            if (file.open(QIODevice::ReadOnly))
+            {
+                QTextStream in(&file);
+                result=in.readAll();
+            }
+        }
+        return result;
+    }
+
+    //! loads hi dpi stylesheet addon
+    static QString getHiDpiStyleSheetAddon(QString sFileName)
+    {
+        QString result;
+        int indexExt = sFileName.indexOf(".qss",0,Qt::CaseInsensitive);
+        if (indexExt>0)
+        {
+            QString wsLeftName = sFileName.left(indexExt);
+            wsLeftName+="_hidpi.qss";
             QFile file(wsLeftName);
             if (file.open(QIODevice::ReadOnly))
             {
@@ -425,7 +556,7 @@ public:
                     buffer[sizeC]=0;
                     convFilename=buffer;
                 }
-                delete buffer;
+                delete[] buffer;
             }
             // conversion wasn't possible, get short path
             if (bUsedDefaultChar)
@@ -450,6 +581,32 @@ public:
             }
         }
         return convFilename;
+    }
+    static std::wstring ACP2wcs(const char *filename)
+    {
+        std::wstring convFilename;
+        if (NULL == filename)
+            return convFilename;
+
+        int size = MultiByteToWideChar(CP_ACP, 0, filename, -1, 0, 0);
+        if (size>0)
+        {
+            wchar_t* buffer = new wchar_t[size + 1];
+            memset(buffer, 0, sizeof(wchar_t)*(size + 1));
+            int sizeC = MultiByteToWideChar(CP_ACP, 0, filename, -1, buffer, size);
+            if (sizeC>0)
+            {
+                assert(sizeC<size + 1);
+                buffer[sizeC] = 0;
+                convFilename = buffer;
+            }
+            delete[] buffer;
+        }
+        return convFilename;
+    }
+    static std::wstring ACP2wcs(const std::string& filename)
+    {
+        return ACP2wcs(filename.c_str());
     }
 #endif
 
@@ -692,6 +849,194 @@ static bool getThreadStackTrace(__in HANDLE hThread, PEXCEPTION_POINTERS pExcept
 #endif _DUMP_STACK
 #endif _WIN32
 
+static bool createZipFile(QString destFile, std::map<QString, int> paths, bool bDecompressZip)
+	{
+	#ifdef WIN32
+		std::wstring uniPath = (const wchar_t*)destFile.utf16();
+		std::string destinationPath = wcs2ACP(uniPath);
+	#else
+		std::string destinationPath = destFile.toStdString();
+	#endif
+		zipFile zf = zipOpen(destinationPath.c_str(), APPEND_STATUS_CREATE);
+		if (NULL == zf)
+		{
+			return false;
+		}
+
+		QApplication::setOverrideCursor(QCursor(Qt::WaitCursor));
+		bool ok = true;
+		for (auto it = paths.begin(), eit = paths.end(); it != eit && ok; ++it)
+		{
+			QFile f(it->first);
+			QFileInfo inf(it->first);
+			const int count = it->second;
+			Q_ASSERT(count>0);
+			bool bUZOk = false;
+			if (bDecompressZip && 0 == inf.suffix().compare("zip", Qt::CaseInsensitive))
+			{
+	#ifdef WIN32
+				std::wstring uniPath = (const wchar_t*)(it->first).utf16();	
+				std::string zipPath = wcs2ACP(uniPath);
+	#else
+				std::string zipPath = it->first.toStdString();
+	#endif
+				unzFile hZIP = unzOpen(zipPath.c_str());
+				if (hZIP)
+				{
+	#define CUSTOM_MAX_PATH 4096
+					char pFileName[CUSTOM_MAX_PATH] = { };
+					bool bFile = bUZOk = (UNZ_OK == unzGoToFirstFile(hZIP));
+					while (bUZOk && bFile)
+					{
+						unz_file_info fi = { };
+						memset(pFileName, 0, CUSTOM_MAX_PATH*sizeof(char));
+						if (unzGetCurrentFileInfo(hZIP, &fi, pFileName, CUSTOM_MAX_PATH, NULL, 0, NULL, 0) == UNZ_OK)
+						{
+	#undef CUSTOM_MAX_PATH
+							std::string s = pFileName;
+							QString file = QString::fromStdString(s);
+							if (file.endsWith('/') || file.endsWith('\\'))
+							{
+								// ignore directories
+							}
+							else
+							{
+								if (fi.uncompressed_size>0)
+								{
+									bUZOk = false;
+									char* pDecompressed = new char[fi.uncompressed_size];
+									if (NULL != pDecompressed)
+									{
+										int nRead = 0;
+										if (unzOpenCurrentFile(hZIP) == UNZ_OK)
+										{
+											nRead = unzReadCurrentFile(hZIP, pDecompressed, fi.uncompressed_size);
+											if (UNZ_CRCERROR == unzCloseCurrentFile(hZIP))
+											{
+												nRead = 0;
+											}
+										}
+										if (nRead>0)
+										{
+											zip_fileinfo zfi = { };
+											QDateTime t = inf.created();
+											zfi.tmz_date.tm_sec = t.time().second();
+											zfi.tmz_date.tm_min = t.time().minute();
+											zfi.tmz_date.tm_hour = t.time().hour();
+											zfi.tmz_date.tm_mday = t.date().day();
+											zfi.tmz_date.tm_mon = t.date().month() - 1;
+											zfi.tmz_date.tm_year = t.date().year();
+											for (int m = 0; m < count; m++)
+											{
+												std::string fnX = pFileName;
+												if (count>1)
+												{
+													int idxSlash = (int)std::max(fnX.find_last_of("/"), fnX.find_last_of("\\"));
+													int idxDot = fnX.find_last_of(".");
+													if (idxDot>idxSlash)
+													{
+														std::stringstream ss;
+														ss << "_" << m + 1;
+														fnX.insert(idxDot, ss.str());
+													}
+													else
+													{
+														m = count;
+													}
+												}
+												if (ZIP_OK == zipOpenNewFileInZip(zf, fnX.c_str(), &zfi, NULL, 0, NULL, 0, NULL, Z_DEFLATED, Z_DEFAULT_COMPRESSION, fi.flag))
+												{
+													bUZOk = true;
+													if (zipWriteInFileInZip(zf, fi.uncompressed_size == 0 ? "" : pDecompressed, fi.uncompressed_size))
+													{
+														bUZOk = false;
+													}
+
+													if (zipCloseFileInZip(zf))
+													{
+														bUZOk = false;
+													}
+												}
+											}
+										}
+										delete[] pDecompressed;
+									}
+								}
+							}
+						}
+						bFile = (UNZ_OK == unzGoToNextFile(hZIP));
+					}
+					unzClose(hZIP);
+				}
+			}
+			if (!bUZOk)
+			{
+				if (f.open(QIODevice::ReadOnly))
+				{
+					QByteArray arr = f.readAll();
+					long size = arr.size();
+
+					QString wsFileName = inf.fileName();
+					zip_fileinfo zfi = { };
+					QDateTime t = inf.created();
+					zfi.tmz_date.tm_sec = t.time().second();
+					zfi.tmz_date.tm_min = t.time().minute();
+					zfi.tmz_date.tm_hour = t.time().hour();
+					zfi.tmz_date.tm_mday = t.date().day();
+					zfi.tmz_date.tm_mon = t.date().month() - 1;
+					zfi.tmz_date.tm_year = t.date().year();
+					std::string utf8Name = wsFileName.toStdString();
+					for (int m = 0; m < count; m++)
+					{
+						std::string fnX = utf8Name;
+						if (count > 1)
+						{
+							int idxSlash = (int)std::max(fnX.find_last_of("/"), fnX.find_last_of("\\"));
+							int idxDot = fnX.find_last_of(".");
+							if (idxDot > idxSlash)
+							{
+								std::stringstream ss;
+								ss << "_" << m + 1;
+								fnX.insert(idxDot, ss.str());
+							}
+							else
+							{
+								m = count;
+							}
+						}
+						if (ZIP_OK == zipOpenNewFileInZip(zf, fnX.c_str(), &zfi, NULL, 0, NULL, 0, NULL, Z_DEFLATED, Z_DEFAULT_COMPRESSION, 1 << 11 /* UTF8 filename */))
+						{
+							if (zipWriteInFileInZip(zf, size == 0 ? "" : arr.data(), size))
+							{
+								ok = false;
+							}
+
+							if (zipCloseFileInZip(zf))
+							{
+								ok = false;
+							}
+						}
+						else
+						{
+							ok = false;
+						}
+					}
+				}
+				else
+				{
+					ok = false;
+				}
+			}
+		}
+
+		if (zipClose(zf, NULL))
+		{
+			ok = false;
+		}
+
+		QApplication::restoreOverrideCursor();
+		return ok;
+	}
 };
 
 #define APP3DIM  (qobject_cast<C3DimApplication*>(qApp))

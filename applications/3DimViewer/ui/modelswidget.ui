@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>280</width>
-    <height>373</height>
+    <width>318</width>
+    <height>321</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -15,7 +15,29 @@
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <item>
+    <widget class="QPushButton" name="pushButtonBuyPlugins">
+     <property name="text">
+      <string>Try Advanced Segmentation Plugins</string>
+     </property>
+     <property name="icon">
+      <iconset resource="../resources.qrc">
+       <normaloff>:/icons/resources/autosegicon.png</normaloff>:/icons/resources/autosegicon.png</iconset>
+     </property>
+    </widget>
+   </item>
+   <item>
     <widget class="QTableWidget" name="tableModels">
+     <property name="minimumSize">
+      <size>
+       <width>300</width>
+       <height>0</height>
+      </size>
+     </property>
+     <column>
+      <property name="text">
+       <string>Color</string>
+      </property>
+     </column>
      <column>
       <property name="text">
        <string>Name</string>
@@ -33,12 +55,12 @@
      </column>
      <column>
       <property name="text">
-       <string>Color</string>
+       <string>Remove</string>
       </property>
      </column>
      <column>
       <property name="text">
-       <string>Remove</string>
+       <string/>
       </property>
      </column>
     </widget>
@@ -46,10 +68,10 @@
    <item>
     <widget class="QGroupBox" name="groupBox">
      <property name="title">
-      <string>Load/Save</string>
+      <string>Save</string>
      </property>
-     <layout class="QVBoxLayout" name="verticalLayout_2">
-      <item>
+     <layout class="QFormLayout" name="formLayout">
+      <item row="1" column="0">
        <widget class="QCheckBox" name="checkBoxIOApplyDICOM">
         <property name="toolTip">
          <string>Transform according to original DICOM coordinates for later use in other software.</string>
@@ -58,7 +80,14 @@
          <string>Transform according to original DICOM coordinates for later use in other software.</string>
         </property>
         <property name="text">
-         <string>Use DICOM coordinates</string>
+         <string>Use DICOM Coordinates</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="QPushButton" name="pushButtonSaveModel">
+        <property name="text">
+         <string>Save Selected Model</string>
         </property>
        </widget>
       </item>
@@ -67,6 +96,8 @@
    </item>
   </layout>
  </widget>
- <resources/>
+ <resources>
+  <include location="../resources.qrc"/>
+ </resources>
  <connections/>
 </ui>

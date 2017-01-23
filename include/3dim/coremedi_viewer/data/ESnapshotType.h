@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,12 +29,13 @@ namespace data
     //! Types of the undo objects
     enum EType
     {
-        UNDO_ALL = 0,
-        UNDO_SEGMENTATION = 1,
-        //UNDO_IMPLANTS = 2,
-        UNDO_MODELS = 4,
-        //UNDO_NERVES = 8,
-        //UNDO_TEETH = 16
+		UNDO_ALL = 0,
+		UNDO_SEGMENTATION = 1,
+		//UNDO_IMPLANTS = 2,
+		UNDO_MODELS = 4,
+		//UNDO_NERVES = 8,
+		//UNDO_TEETH = 16
+        UNDO_NOTES = 64
     };
 
 } // namespace data

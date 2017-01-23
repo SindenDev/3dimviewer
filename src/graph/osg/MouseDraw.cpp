@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,7 +22,7 @@
 
 #include <osg/MouseDraw.h>
 #include <osgViewer/View>
-#include <app/Signals.h>
+#include <coremedi/app/Signals.h>
 #include <osg/Version>
 
 using namespace osg;
@@ -98,6 +98,12 @@ CLineGeode::CLineGeode( int flags ) :
 		m_stateSet->setRenderingHint( osg::StateSet::TRANSPARENT_BIN );
 	}
 
+	if (flags & ENABLE_TRANSPARENCY) {
+
+		//To allow for invisible drawing.. e.g. no drawing but still getting points
+		m_stateSet->setMode(GL_BLEND, osg::StateAttribute::ON);
+	}
+
 	// Need to make sure this geometry is drawn last. RenderBins are handled
 	// in numerical order so we set bin number to 111
 	if( flags & USE_RENDER_BIN )
@@ -119,8 +125,7 @@ void CLineGeode::AddPoint(const osg::Vec3 &point)
 	arr->push_back(point);
 
 	// Set new count of vertices to draw array
-	m_drawArrays->setCount( m_drawArrays->getCount() + 1 );
-  
+    m_drawArrays->setCount(arr->size());
 	// Set draw arrays dirty
 	m_drawArrays->dirty();
 	// Dirty display list

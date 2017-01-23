@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -288,6 +288,9 @@ protected:
     //! Mask value to get actual voxel's bit value
     MT m_mask_value;
 
+    //! Mask bit value to compare (for inversion support)
+    MT m_mask_bit;
+
     //! Mask volume
     MV *m_mask_volume;
 
@@ -301,12 +304,13 @@ protected:
 
 public:
     //! Default constructor.
-    CMaskedThresholdFunctor(const T& low_threshold, const T& high_threshold, V *volume, const MT &mask_value, MV *mask_volume, vpl::img::CSize3d voxelSize, double limit /* = 0.5 */, int samples /* = 1 */)
+    CMaskedThresholdFunctor(const T& low_threshold, const T& high_threshold, V *volume, const MT &mask_value, const MT& mask_bit, MV *mask_volume, vpl::img::CSize3d voxelSize, double limit /* = 0.5 */, int samples /* = 1 */)
         : m_low_threshold(low_threshold)
         , m_high_threshold(high_threshold)
         , m_volume(volume)
         , m_mask_value(mask_value)
         , m_mask_volume(mask_volume)
+        , m_mask_bit(mask_bit)
         , m_samples(std::abs(samples))
         , m_limit(limit)
         , m_voxelSize(voxelSize)
@@ -315,20 +319,23 @@ public:
     //! Limits value of a given parameter.
     virtual unsigned char operator()(int x, int y, int z)
     {
-        if (!m_volume->checkPosition(x, y, z) || !m_mask_volume->checkPosition(x, y, z))
+        if (!m_volume->checkPosition(x, y, z) || (NULL!=m_mask_volume && !m_mask_volume->checkPosition(x, y, z)))
         {
             return 0;
         }
 
         // take mask voxel value for given coordinates
-        MT mask_voxel_value = m_mask_volume->at(x, y, z);
-        mask_voxel_value &= m_mask_value;
+		if (NULL!=m_mask_volume)
+		{
+			MT mask_voxel_value = m_mask_volume->at(x, y, z);
+			mask_voxel_value &= m_mask_value;
 
-        // voxel is disabled by mask
-        if (mask_voxel_value != 0)
-        {
-            return 0;
-        }
+			// voxel is disabled by mask
+			if (mask_voxel_value != m_mask_bit)
+			{
+				return 0;
+			}
+		}
 
         // analyze voxel and its neighbourhood
         double step = m_samples == 0 ? 0.0 : 0.5 / m_samples;

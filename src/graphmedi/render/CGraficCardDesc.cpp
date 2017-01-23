@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -69,14 +69,14 @@ void unicode2Ascii(const std::wstring& In, std::string& Out)
 
 #ifdef _WIN32
 
-CGraficCardDesc::CGraficCardDesc() : m_State(1), m_bNeedUnitialize(false)
+CGraficCardDesc::CGraficCardDesc() : m_State(1), m_bNeedUnitialize(false), m_adapterRam(0xcdcdcdcd) // need some magic :)
 {
     // Initialize COM
     HRESULT hres = CoInitializeEx(0, COINIT_MULTITHREADED);
     if( FAILED(hres) && hres != RPC_E_CHANGED_MODE )
     {
         // Cannot initialize the COM library
-        throw CInitFailed();
+        throw CInitFailed(); // vyhazovat vyjimku v konstruktoru, to je teda pekna prasarna 
     }
     m_bNeedUnitialize=SUCCEEDED(hres);
     
@@ -120,6 +120,9 @@ CGraficCardDesc::~CGraficCardDesc()
 
 unsigned int CGraficCardDesc::getAdapterRAM()
 {
+    if (m_adapterRam!=0xcdcdcdcd) // needed some magic :)
+        return m_adapterRam;
+
     // Obtain the initial locator to WMI
     IWbemLocator *pLoc = NULL;
     
@@ -244,7 +247,8 @@ unsigned int CGraficCardDesc::getAdapterRAM()
     {
         throw CSearchFailed();
     }
-    return (uiRAM / 1024 / 1024);
+    m_adapterRam = uiRAM / 1024 / 1024;
+    return m_adapterRam;
 //    return (uiRAM >> 20);
 }
 

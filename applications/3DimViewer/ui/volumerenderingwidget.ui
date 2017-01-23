@@ -20,7 +20,16 @@
    <string>Volume Rendering</string>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout_6">
-   <property name="margin">
+   <property name="leftMargin">
+    <number>0</number>
+   </property>
+   <property name="topMargin">
+    <number>0</number>
+   </property>
+   <property name="rightMargin">
+    <number>0</number>
+   </property>
+   <property name="bottomMargin">
     <number>0</number>
    </property>
    <item>
@@ -39,8 +48,8 @@
        <rect>
         <x>0</x>
         <y>0</y>
-        <width>251</width>
-        <height>487</height>
+        <width>234</width>
+        <height>511</height>
        </rect>
       </property>
       <layout class="QVBoxLayout" name="verticalLayout_7">
@@ -138,12 +147,12 @@
             </property>
             <item>
              <property name="text">
-              <string>Bone surface</string>
+              <string>Bone Surface</string>
              </property>
             </item>
             <item>
              <property name="text">
-              <string>Skin surface</string>
+              <string>Skin Surface</string>
              </property>
             </item>
            </widget>

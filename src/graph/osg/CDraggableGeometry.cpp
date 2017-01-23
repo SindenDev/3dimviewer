@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@
 #include <osg/Matrix>
 #include <osg/Quat>
 #include <osg/CBoundingBoxVisitor.h>
+#include <sstream>
 
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -37,6 +38,9 @@ osg::CDraggableGeometry::CDraggableGeometry(const osg::Matrix & placement, const
 	, m_deleteUserData(false)
     , m_draggersVisible( true )
 {
+    std::stringstream ss;
+    ss << "CDraggableGeometry " << id;
+    setName(ss.str());
 	buildTree( placement );
 }
 
@@ -231,14 +235,14 @@ void osg::CDraggableGeometry::computeBoundingBoxes()
 
 	// Compute geometry bounding box
 	m_geometrySwitch->accept(visitor);
-	m_geometryBoundingBox = visitor.getBoundBox();
+	m_geometryBoundingBox = visitor.getBoundingBox();
 
 	// reset visitor
 	visitor.reset();
 
 	// Compute overall bounding box
 	this->accept(visitor);
-	m_overallBoundingBox = visitor.getBoundBox();
+    m_overallBoundingBox = visitor.getBoundingBox();
 
 }
 
@@ -246,11 +250,11 @@ void osg::CDraggableGeometry::computeBoundingBoxes()
 osg::BoundingBox osg::CDraggableGeometry::getTransformedGeometryBoundingBox(const osg::Matrix initialMatrix)
 {
 	osg::CBoundingBoxVisitor visitor;
-	visitor.setInitialMatrix(initialMatrix);
+	visitor.setInitialMatrix(osg::Matrix(initialMatrix));
 
 	m_geometryMatrixTransform->accept(visitor);
 
-	return visitor.getBoundBox();
+    return visitor.getBoundingBox();
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@
 #ifndef CObjectObserverOSG_H
 #define CObjectObserverOSG_H
 
+#include <data/CDataStorage.h>
 #include <data/CObjectObserver.h>
 #include <osg/OSGCanvas.h>
 
@@ -45,7 +46,7 @@ public:
     {
         T * pObserver = dynamic_cast<T *>(node);
 
-        if( pObserver && pObserver->hasChanged() )
+		if( pObserver && !APP_STORAGE.invalidationLocked() && pObserver->hasChanged() )
         {
             pObserver->updateFromStorage();
             pObserver->clearChanges();
@@ -68,7 +69,7 @@ public:
     {
         T * pObserver = dynamic_cast< T * >( d );
 
-        if( pObserver && pObserver->hasChanged() )
+        if( pObserver && !APP_STORAGE.invalidationLocked() && pObserver->hasChanged() )
         {
             pObserver->updateFromStorage();
             pObserver->clearChanges();
@@ -100,7 +101,7 @@ public:
 
 public:
     //! Default constructor.
-    CObjectObserverOSG(tCanvas *pCanvas = NULL) : m_pCanvas(pCanvas) {}
+    CObjectObserverOSG(tCanvas *pCanvas = NULL) : m_pCanvas(pCanvas), m_nodeCallback(NULL) {}
 
     //! Virtual destructor.
 	virtual ~CObjectObserverOSG() {}
@@ -134,7 +135,8 @@ public:
     {
         if( node )
         {
-            node->addUpdateCallback(new tNodeCallback);
+            m_nodeCallback = new tNodeCallback;
+            node->addUpdateCallback(m_nodeCallback);
         }
     }
 
@@ -143,14 +145,9 @@ public:
     {
         if( node )
         {
-#if OSG_VERSION_GREATER_OR_EQUAL(3,2,0)
-            osg::Callback* pCB = node->getUpdateCallback();
-#else
-			osg::NodeCallback* pCB = node->getUpdateCallback();
-#endif
-            if( pCB )
+			if (m_nodeCallback)
             {
-                node->removeUpdateCallback(pCB);
+				node->removeUpdateCallback(m_nodeCallback);
             }
         }
     }
@@ -167,6 +164,8 @@ public:
 protected:
     //! Pointer to the OpenGL canvas.
     tCanvas *m_pCanvas;
+
+    osg::ref_ptr<tNodeCallback> m_nodeCallback;
 };
 
 

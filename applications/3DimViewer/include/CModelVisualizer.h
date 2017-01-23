@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2014 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -51,59 +51,56 @@ namespace osg
         {
             m_modelVisualization = EMV_SMOOTH;
         }
+
         //! Sets type of visualization
         void setModelVisualization(EModelVisualization modelVisualization)
         {
             m_modelVisualization = modelVisualization;
-            osg::Geode* pMesh = m_pMesh.get();
-            if (NULL==pMesh) return;
+            osg::Geode *pMesh = m_pMesh.get();
+            if (NULL == pMesh)
+            {
+                return;
+            }
 
-            osg::StateSet * stateSet = pMesh->getOrCreateStateSet();
-            /*osg::StateAttribute *sa = stateSet->getAttribute ( osg::StateAttribute::LIGHTMODEL );
-            if (sa)
+            osg::StateSet *stateSet = pMesh->getOrCreateStateSet();
+            osg::PolygonMode *polyModeObj = dynamic_cast<osg::PolygonMode *>(stateSet->getAttribute(osg::StateAttribute::POLYGONMODE));
+            if (!polyModeObj)
             {
-                osg::ref_ptr<osg::LightModel> lm = dynamic_cast <  osg::LightModel * > ( sa );
-                {
-                    lm->setTwoSided(false);
-                    stateSet->setAttributeAndModes ( lm.get(), osg::StateAttribute::OVERRIDE | osg::StateAttribute::ON | osg::StateAttribute::PROTECTED );
-                }
-            }*/
-	        osg::PolygonMode *polyModeObj = dynamic_cast< osg::PolygonMode* >( stateSet->getAttribute( osg::StateAttribute::POLYGONMODE ));
-            if ( !polyModeObj ) 
-            {
-		        polyModeObj = new osg::PolygonMode;
-		        stateSet->setAttribute( polyModeObj );                    
-	        }
+                polyModeObj = new osg::PolygonMode;
+                stateSet->setAttribute(polyModeObj);
+            }
             stateSet->setAttributeAndModes(polyModeObj, osg::StateAttribute::ON | osg::StateAttribute::OVERRIDE | osg::StateAttribute::PROTECTED);
             switch (m_modelVisualization)
             {
             case EMV_SMOOTH:
                 {
                     m_pMesh->useNormals(osg::CTriMesh::ENU_VERTEX);
-                    //osg::ref_ptr<osg::ShadeModel> shadeModel = new osg::ShadeModel(osg::ShadeModel::SMOOTH);
-                    //stateSet->setAttributeAndModes(shadeModel, osg::StateAttribute::ON | osg::StateAttribute::OVERRIDE | osg::StateAttribute::PROTECTED);
+                    m_materialRegular->setFlatShading(false);
+                    m_materialSelected->setFlatShading(false);
                     polyModeObj->setMode(osg::PolygonMode::FRONT_AND_BACK, osg::PolygonMode::FILL);
-                    stateSet->setMode(GL_LIGHTING, osg::StateAttribute::ON | osg::StateAttribute::OVERRIDE | osg::StateAttribute::PROTECTED);
                 }
                 break;
+
             case EMV_FLAT:
                 {
-                    m_pMesh->useNormals(osg::CTriMesh::ENU_FACE);
-                    //osg::ref_ptr<osg::ShadeModel> shadeModel = new osg::ShadeModel(osg::ShadeModel::FLAT);
-                    //stateSet->setAttributeAndModes(shadeModel, osg::StateAttribute::ON | osg::StateAttribute::OVERRIDE | osg::StateAttribute::PROTECTED);
+                    m_pMesh->useNormals(osg::CTriMesh::ENU_VERTEX);
+                    m_materialRegular->setFlatShading(true);
+                    m_materialSelected->setFlatShading(true);
                     polyModeObj->setMode(osg::PolygonMode::FRONT_AND_BACK, osg::PolygonMode::FILL);
-                    stateSet->setMode(GL_LIGHTING, osg::StateAttribute::ON | osg::StateAttribute::OVERRIDE | osg::StateAttribute::PROTECTED);
                 }
                 break;
+
             case EMV_WIRE:
                 {
-                    m_pMesh->useNormals(osg::CTriMesh::ENU_NONE);
+                    m_pMesh->useNormals(osg::CTriMesh::ENU_VERTEX);
+                    m_materialRegular->setFlatShading(true);
+                    m_materialSelected->setFlatShading(true);
                     polyModeObj->setMode(osg::PolygonMode::FRONT_AND_BACK, osg::PolygonMode::LINE);
-                    stateSet->setMode(GL_LIGHTING, osg::StateAttribute::OFF | osg::StateAttribute::OVERRIDE | osg::StateAttribute::PROTECTED);
                 }
                 break;
             }
         }
+
     protected:
         //! Current visualization mode
         EModelVisualization m_modelVisualization;

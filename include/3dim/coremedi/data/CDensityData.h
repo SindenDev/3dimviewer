@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -123,7 +123,7 @@ public:
 
         Writer.beginWrite( *this );
 
-        WRITEINT32( 4 ); // version
+        WRITEINT32( 5 ); // version
 
         Writer.write( (vpl::sys::tInt32) m_iSeriesNumber );
         Writer.write( m_sPatientName );
@@ -165,6 +165,9 @@ public:
 		Writer.write( m_sStudyDescription );
 		Writer.write( m_sSeriesDescription );
 		Writer.write( m_sScanOptions );
+
+        // version 5 data
+        Writer.write(m_sMediaStorage);
 
         Writer.endWrite( *this );
     }
@@ -251,6 +254,11 @@ public:
 			Reader.read( m_sSeriesDescription );
 			Reader.read( m_sScanOptions );
 		}
+
+        if (version > 4)
+        {
+            Reader.read(m_sMediaStorage);
+        }
 
         Reader.endRead( *this );
 
@@ -353,6 +361,9 @@ public:
 
     //! Scan options (AXIAL, etc.).
     std::string m_sScanOptions;
+
+    //! Media Storage SOP Class UID.
+    std::string m_sMediaStorage;
 };
 
 

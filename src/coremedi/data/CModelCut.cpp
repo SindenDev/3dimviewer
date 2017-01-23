@@ -3,7 +3,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2015 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@
 
 #include "data/CModelCut.h"
 #include "data/COrthoSlice.h"
-#include <app/Signals.h>
+#include <coremedi/app/Signals.h>
 
 namespace data
 {
@@ -96,13 +96,22 @@ void CModelCutSliceXY::update(const CChangedEntries &changedEntries)
     m_color = spModel->getColor();
 
     geometry::CMesh *mesh = spModel->getMesh();
-    float planePosition = spSlice->getPosition() * dZ;
+    float planePosition = (spSlice->getPosition() + 0.5) * dZ;
 
-    if (changedEntries.hasChanged(m_modelId))
+    if (1 == changedEntries.getSize() && changedEntries.hasChanged(m_modelId))
+    {
+        bool changed = false;
+        changed |= changedEntries.checkFlagsAllZero();
+		changed |= changedEntries.checkFlagsAnySet(data::CModel::POSITION_CHANGED|data::CModel::MESH_CHANGED|data::StorageEntry::DESERIALIZED|data::StorageEntry::UNDOREDO);
+        if (!changed)
+            return;
+    }
+
+    if (changedEntries.hasChanged(m_modelId) && NULL!=mesh)
     {
 		data::CChangedEntries::tFilter filter;
 		filter.insert(m_modelId);
-		if (!changedEntries.checkExactFlagsAll(data::CModel::MESH_NOT_CHANGED,data::CModel::MESH_NOT_CHANGED,filter))
+		if (changedEntries.checkFlagsAllZero(filter) || changedEntries.checkFlagsAnySet(data::CModel::MESH_CHANGED|data::StorageEntry::DESERIALIZED|data::StorageEntry::UNDOREDO,filter))
 			mesh->updateOctree(APP_STORAGE.getEntry(m_modelId).get()->getLatestVersion());
     }
 
@@ -140,13 +149,22 @@ void CModelCutSliceXZ::update(const CChangedEntries &changedEntries)
     m_color = spModel->getColor();
 
     geometry::CMesh *mesh = spModel->getMesh();
-    float planePosition = spSlice->getPosition() * dY;
+    float planePosition = (spSlice->getPosition() + 0.5) * dY;
 
-    if (changedEntries.hasChanged(m_modelId))
+    if (1 == changedEntries.getSize() && changedEntries.hasChanged(m_modelId))
+    {
+        bool changed = false;
+        changed |= changedEntries.checkFlagsAllZero();
+        changed |= changedEntries.checkFlagsAnySet(data::CModel::POSITION_CHANGED|data::CModel::MESH_CHANGED|data::StorageEntry::DESERIALIZED|data::StorageEntry::UNDOREDO);
+        if (!changed)
+            return;
+    }
+
+    if (changedEntries.hasChanged(m_modelId) && NULL!=mesh)
     {
 		data::CChangedEntries::tFilter filter;
 		filter.insert(m_modelId);
-		if (!changedEntries.checkExactFlagsAll(data::CModel::MESH_NOT_CHANGED,data::CModel::MESH_NOT_CHANGED,filter))
+		if (changedEntries.checkFlagsAllZero(filter) || changedEntries.checkFlagsAnySet(data::CModel::MESH_CHANGED|data::StorageEntry::DESERIALIZED|data::StorageEntry::UNDOREDO,filter))
 			mesh->updateOctree(APP_STORAGE.getEntry(m_modelId).get()->getLatestVersion());
     }
 
@@ -184,13 +202,22 @@ void CModelCutSliceYZ::update(const CChangedEntries &changedEntries)
     m_color = spModel->getColor();
 
     geometry::CMesh *mesh = spModel->getMesh();
-    float planePosition = spSlice->getPosition() * dX;
+    float planePosition = (spSlice->getPosition() + 0.5) * dX;
 
-    if (changedEntries.hasChanged(m_modelId))
+    if (1 == changedEntries.getSize() && changedEntries.hasChanged(m_modelId))
+    {
+        bool changed = false;
+        changed |= changedEntries.checkFlagsAllZero();
+        changed |= changedEntries.checkFlagsAnySet(data::CModel::POSITION_CHANGED|data::CModel::MESH_CHANGED|data::StorageEntry::DESERIALIZED|data::StorageEntry::UNDOREDO);
+        if (!changed)
+            return;
+    }
+
+    if (changedEntries.hasChanged(m_modelId) && NULL!=mesh)
     {
 		data::CChangedEntries::tFilter filter;
 		filter.insert(m_modelId);
-		if (!changedEntries.checkExactFlagsAll(data::CModel::MESH_NOT_CHANGED,data::CModel::MESH_NOT_CHANGED,filter))
+		if (changedEntries.checkFlagsAllZero(filter) || changedEntries.checkFlagsAnySet(data::CModel::MESH_CHANGED|data::StorageEntry::DESERIALIZED|data::StorageEntry::UNDOREDO,filter))
 			mesh->updateOctree(APP_STORAGE.getEntry(m_modelId).get()->getLatestVersion());
     }
 

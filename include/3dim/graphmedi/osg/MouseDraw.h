@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -36,6 +36,7 @@
 
 #include <VPL/Module/Signal.h>
 
+#include <qdebug.h>
 
 namespace osg
 {
@@ -49,7 +50,8 @@ public:
 	enum ESSFlags
 	{
 		DISABLE_DEPTH_TEST = 1 << 0,
-		USE_RENDER_BIN	= 1 << 1
+		USE_RENDER_BIN	= 1 << 1,
+		ENABLE_TRANSPARENCY = 1 << 2
 	};
 public:
 	//! Constructor

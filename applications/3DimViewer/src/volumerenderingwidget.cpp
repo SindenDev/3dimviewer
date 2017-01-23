@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,6 +28,8 @@
 #include <data/CAppSettings.h>
 #include <controls/ccollapsiblegroupbox.h>
 
+#include <Signals.h>
+
 #include <QSettings>
 #include <QGroupBox>
 
@@ -46,6 +48,7 @@ CVolumeRenderingWidget::CVolumeRenderingWidget(QWidget *parent) :
     ui->labelSurfTolerance->associateWithSlider(ui->sliderSurfTolerance,0);
 
     VPL_SIGNAL(SigVRDataRemapChange).connect(this, &CVolumeRenderingWidget::vrDataRemapChange);
+	VPL_SIGNAL(SigManSeg3DChanged).connect(this, &CVolumeRenderingWidget::setCustomVR);
 
     // load settings
     QSettings settings;
@@ -161,8 +164,8 @@ void CVolumeRenderingWidget::on_radioButtonMIP_toggled(bool checked)
     {
         int lut = (m_pRenderer->getShader() == PSVR::PSVolumeRendering::MIP ? m_pRenderer->getLut() : PSVR::PSVolumeRendering::MIP_HARD);
         ui->comboBoxColoring->clear();
-        ui->comboBoxColoring->addItem(tr("Soft tissues"),SoftTissues);
-        ui->comboBoxColoring->addItem(tr("Bone tissues"),BoneTissues);
+        ui->comboBoxColoring->addItem(tr("Soft Tissues"),SoftTissues);
+        ui->comboBoxColoring->addItem(tr("Bone Tissues"),BoneTissues);
         ui->comboBoxColoring->setCurrentIndex(vrLutToLutCode(lut) - SoftTissues);
         m_pRenderer->setShader(PSVR::PSVolumeRendering::MIP);
         m_pRenderer->setLut(lut);
@@ -174,6 +177,8 @@ void CVolumeRenderingWidget::on_radioButtonMIP_toggled(bool checked)
         ui->sliderSurfSharpness->setEnabled(false);
         ui->sliderSurfTolerance->setEnabled(false);
         ui->sliderCuttingPlane->setEnabled(false);
+
+		VPL_SIGNAL(SigVRChanged).invoke();
     }
 }
 
@@ -185,7 +190,7 @@ void CVolumeRenderingWidget::on_radioButtonShaded_toggled(bool checked)
         int lut = (m_pRenderer->getShader() == PSVR::PSVolumeRendering::SHADING ? m_pRenderer->getLut() : PSVR::PSVolumeRendering::SHA_TRAN);
         ui->comboBoxColoring->clear();
         ui->comboBoxColoring->addItem(tr("Transparent"),Transparent);
-        ui->comboBoxColoring->addItem(tr("Air pockets"),AirPockets);
+        ui->comboBoxColoring->addItem(tr("Air Pockets"),AirPockets);
         ui->comboBoxColoring->addItem(tr("Bones (skull)"),Skull);
         ui->comboBoxColoring->addItem(tr("Bones (spine)"),Spine);
         ui->comboBoxColoring->addItem(tr("Bones (pelvis)"),Pelvis);
@@ -199,6 +204,8 @@ void CVolumeRenderingWidget::on_radioButtonShaded_toggled(bool checked)
         ui->sliderSurfSharpness->setEnabled(false);
         ui->sliderSurfTolerance->setEnabled(false);
         ui->sliderCuttingPlane->setEnabled(true);
+
+		VPL_SIGNAL(SigVRChanged).invoke();
     }
 }
 
@@ -209,8 +216,8 @@ void CVolumeRenderingWidget::on_radioButtonXRay_toggled(bool checked)
     {
         int lut = (m_pRenderer->getShader() == PSVR::PSVolumeRendering::XRAY ? m_pRenderer->getLut() : PSVR::PSVolumeRendering::XRAY_HARD);
         ui->comboBoxColoring->clear();
-        ui->comboBoxColoring->addItem(tr("Enhance soft"),EnhanceSoft);
-        ui->comboBoxColoring->addItem(tr("Enhance hard"),EnhanceHard);
+        ui->comboBoxColoring->addItem(tr("Enhance Soft"),EnhanceSoft);
+        ui->comboBoxColoring->addItem(tr("Enhance Hard"),EnhanceHard);
         ui->comboBoxColoring->setCurrentIndex(vrLutToLutCode(lut) - EnhanceSoft);
         m_pRenderer->setShader(PSVR::PSVolumeRendering::XRAY);
         m_pRenderer->setLut(lut);
@@ -222,6 +229,8 @@ void CVolumeRenderingWidget::on_radioButtonXRay_toggled(bool checked)
         ui->sliderSurfSharpness->setEnabled(false);
         ui->sliderSurfTolerance->setEnabled(false);
         ui->sliderCuttingPlane->setEnabled(false);
+
+		VPL_SIGNAL(SigVRChanged).invoke();
     }
 }
 
@@ -231,8 +240,8 @@ void CVolumeRenderingWidget::on_radioButtonCustom_toggled(bool checked)
     if (checked)
     {
         ui->comboBoxColoring->clear();
-        ui->comboBoxColoring->addItem(tr("Enhance soft"),EnhanceSoft);
-        ui->comboBoxColoring->addItem(tr("Enhance hard"),EnhanceHard);
+        ui->comboBoxColoring->addItem(tr("Enhance Soft"),EnhanceSoft);
+        ui->comboBoxColoring->addItem(tr("Enhance Hard"),EnhanceHard);
         ui->comboBoxColoring->setCurrentIndex(1);
         m_pRenderer->setShader(PSVR::PSVolumeRendering::CUSTOM);
         m_pRenderer->setLut(PSVR::PSVolumeRendering::XRAY_HARD);
@@ -253,8 +262,8 @@ void CVolumeRenderingWidget::on_radioButtonSurface_toggled(bool checked)
     {
         int lut = (m_pRenderer->getShader() == PSVR::PSVolumeRendering::SURFACE ? m_pRenderer->getLut() : PSVR::PSVolumeRendering::SURFACE_BONE);
         ui->comboBoxColoring->clear();
-        ui->comboBoxColoring->addItem(tr("Bone surface"),BoneSurface);
-        ui->comboBoxColoring->addItem(tr("Skin surface"),SkinSurface);
+        ui->comboBoxColoring->addItem(tr("Bone Surface"),BoneSurface);
+        ui->comboBoxColoring->addItem(tr("Skin Surface"),SkinSurface);
         ui->comboBoxColoring->setCurrentIndex(vrLutToLutCode(lut) - BoneSurface);
         m_pRenderer->setShader(PSVR::PSVolumeRendering::SURFACE);
         m_pRenderer->setLut(lut);
@@ -266,6 +275,8 @@ void CVolumeRenderingWidget::on_radioButtonSurface_toggled(bool checked)
         ui->sliderSurfSharpness->setEnabled(true);
         ui->sliderSurfTolerance->setEnabled(true);
         ui->sliderCuttingPlane->setEnabled(true);
+
+		VPL_SIGNAL(SigVRChanged).invoke();
     }
 }
 
@@ -473,3 +484,27 @@ void CVolumeRenderingWidget::packGroupBox(QGroupBox* pWidget, bool checked)
         pWidget->setMaximumHeight(GROUPBOX_HEIGHT);
 }
 
+void CVolumeRenderingWidget::setCustomVR()
+{
+	ui->radioButtonCustom->setChecked(true);
+}
+
+void CVolumeRenderingWidget::setVRMode()
+{
+	Q_ASSERT(m_pRenderer);
+	const int shader = m_pRenderer->getShader();
+	QRadioButton *pRB = NULL;
+	switch (shader)
+	{
+	case PSVR::PSVolumeRendering::MIP: pRB = ui->radioButtonMIP; break;
+		break;
+	case PSVR::PSVolumeRendering::SHADING: pRB = ui->radioButtonShaded; break;
+	case PSVR::PSVolumeRendering::XRAY: pRB = ui->radioButtonXRay; break;
+	default:
+		pRB = ui->radioButtonSurface;
+	}
+	if (NULL != pRB)
+	{
+		pRB->toggle();
+	}
+}

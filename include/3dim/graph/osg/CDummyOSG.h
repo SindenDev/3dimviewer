@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -54,13 +54,13 @@ class CDummyGeometry : public osg::Geometry
 {
 public:
 	//! Creates 1x1 plane
-	static void squarePlaneXY( osg::Geometry * geometry );
+	static void squarePlaneXY( osg::Geometry * geometry, bool thin );
 
     //! Creates 1x1 plane
-	static void squarePlaneXZ( osg::Geometry * geometry );
+	static void squarePlaneXZ(osg::Geometry * geometry, bool thin);
 
     //! Creates 1x1 plane
-	static void squarePlaneYZ( osg::Geometry * geometry );
+	static void squarePlaneYZ(osg::Geometry * geometry, bool thin);
 
     //! Creates 1x1x1 cube
 	static void cube( osg::Geometry * geometry, bool generateNormals = false );
@@ -94,13 +94,13 @@ public:
 	virtual ~CDummyDraggableGeode();
 
 	//! Creates dummy square planar geometry
-    void setUpSquarePlaneXY();
+    void setUpSquarePlaneXY(bool thin);
 
 	//! Creates dummy square planar geometry
-    void setUpSquarePlaneXZ();
+	void setUpSquarePlaneXZ(bool thin);
 
     //! Creates dummy square planar geometry
-    void setUpSquarePlaneYZ();
+	void setUpSquarePlaneYZ(bool thin);
 
     //! Creates dummy cube geometry
     void setUpCube();

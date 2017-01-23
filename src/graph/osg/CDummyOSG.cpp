@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,29 +26,21 @@
 #include <osg/Version>
 
 //====================================================================================================================
-void scene::CDummyGeometry::squarePlaneXY( osg::Geometry * geometry )
+void scene::CDummyGeometry::squarePlaneXY(osg::Geometry * geometry, bool thin)
 {
 	osg::Vec3Array * plane_vertices = new osg::Vec3Array;
 
-    plane_vertices->push_back( osg::Vec3( 0.0, 0.0, 0.01 ) );
-    plane_vertices->push_back( osg::Vec3( 1.0, 0.0, 0.01 ) );
-    plane_vertices->push_back( osg::Vec3( 1.0, 1.0, 0.01 ) );
-    plane_vertices->push_back( osg::Vec3( 0.0, 1.0, 0.01 ) );
+	double thickness(thin ? 0.001 : 0.01);
 
-    plane_vertices->push_back( osg::Vec3( 0.0, 0.0, -0.01 ) );
-    plane_vertices->push_back( osg::Vec3( 1.0, 0.0, -0.01 ) );
-    plane_vertices->push_back( osg::Vec3( 1.0, 1.0, -0.01 ) );
-    plane_vertices->push_back( osg::Vec3( 0.0, 1.0, -0.01 ) );
+    plane_vertices->push_back( osg::Vec3( 0.0, 0.0, thickness ) );
+    plane_vertices->push_back( osg::Vec3( 1.0, 0.0, thickness ) );
+    plane_vertices->push_back( osg::Vec3( 1.0, 1.0, thickness ) );
+    plane_vertices->push_back( osg::Vec3( 0.0, 1.0, thickness ) );
 
-/*    plane_vertices->push_back( osg::Vec3( 0.0, 0.0, 0.005 ) );
-    plane_vertices->push_back( osg::Vec3( 1.0, 0.0, 0.005 ) );
-    plane_vertices->push_back( osg::Vec3( 1.0, 1.0, 0.005 ) );
-    plane_vertices->push_back( osg::Vec3( 0.0, 1.0, 0.005 ) );
-
-    plane_vertices->push_back( osg::Vec3( 0.0, 0.0, -0.005 ) );
-    plane_vertices->push_back( osg::Vec3( 1.0, 0.0, -0.005 ) );
-    plane_vertices->push_back( osg::Vec3( 1.0, 1.0, -0.005 ) );
-    plane_vertices->push_back( osg::Vec3( 0.0, 1.0, -0.005 ) );*/
+    plane_vertices->push_back( osg::Vec3( 0.0, 0.0, -thickness ) );
+    plane_vertices->push_back( osg::Vec3( 1.0, 0.0, -thickness ) );
+    plane_vertices->push_back( osg::Vec3( 1.0, 1.0, -thickness ) );
+    plane_vertices->push_back( osg::Vec3( 0.0, 1.0, -thickness ) );
 
 	geometry->setVertexArray( plane_vertices );
 
@@ -97,19 +89,21 @@ void scene::CDummyGeometry::squarePlaneXY( osg::Geometry * geometry )
 }
 
 //====================================================================================================================
-void scene::CDummyGeometry::squarePlaneXZ( osg::Geometry * geometry )
+void scene::CDummyGeometry::squarePlaneXZ( osg::Geometry * geometry, bool thin )
 {
     osg::Vec3Array * plane_vertices = new osg::Vec3Array;
 
-    plane_vertices->push_back( osg::Vec3( 0.0, 0.01, 0.0 ) );
-    plane_vertices->push_back( osg::Vec3( 1.0, 0.01, 0.0 ) );
-    plane_vertices->push_back( osg::Vec3( 1.0, 0.01, 1.0 ) );
-    plane_vertices->push_back( osg::Vec3( 0.0, 0.01, 1.0 ) );
+	double thickness(thin ? 0.001 : 0.01);
 
-    plane_vertices->push_back( osg::Vec3( 0.0, -0.01, 0.0 ) );
-    plane_vertices->push_back( osg::Vec3( 1.0, -0.01, 0.0 ) );
-    plane_vertices->push_back( osg::Vec3( 1.0, -0.01, 1.0 ) );
-    plane_vertices->push_back( osg::Vec3( 0.0, -0.01, 1.0 ) );
+    plane_vertices->push_back( osg::Vec3( 0.0, thickness, 0.0 ) );
+    plane_vertices->push_back( osg::Vec3( 1.0, thickness, 0.0 ) );
+    plane_vertices->push_back( osg::Vec3( 1.0, thickness, 1.0 ) );
+    plane_vertices->push_back( osg::Vec3( 0.0, thickness, 1.0 ) );
+
+    plane_vertices->push_back( osg::Vec3( 0.0, -thickness, 0.0 ) );
+    plane_vertices->push_back( osg::Vec3( 1.0, -thickness, 0.0 ) );
+    plane_vertices->push_back( osg::Vec3( 1.0, -thickness, 1.0 ) );
+    plane_vertices->push_back( osg::Vec3( 0.0, -thickness, 1.0 ) );
 
 	geometry->setVertexArray( plane_vertices );
 
@@ -159,19 +153,21 @@ void scene::CDummyGeometry::squarePlaneXZ( osg::Geometry * geometry )
 }
 
 //====================================================================================================================
-void scene::CDummyGeometry::squarePlaneYZ( osg::Geometry * geometry )
+void scene::CDummyGeometry::squarePlaneYZ( osg::Geometry * geometry, bool thin )
 {
 	osg::Vec3Array * plane_vertices = new osg::Vec3Array;
 
-    plane_vertices->push_back( osg::Vec3( 0.01, 0.0, 0.0 ) );
-    plane_vertices->push_back( osg::Vec3( 0.01, 1.0, 0.0 ) );
-    plane_vertices->push_back( osg::Vec3( 0.01, 1.0, 1.0 ) );
-    plane_vertices->push_back( osg::Vec3( 0.01, 0.0, 1.0 ) );
+	double thickness(thin ? 0.001 : 0.01);
 
-    plane_vertices->push_back( osg::Vec3( -0.01, 0.0, 0.0 ) );
-    plane_vertices->push_back( osg::Vec3( -0.01, 1.0, 0.0 ) );
-    plane_vertices->push_back( osg::Vec3( -0.01, 1.0, 1.0 ) );
-    plane_vertices->push_back( osg::Vec3( -0.01, 0.0, 1.0 ) );
+    plane_vertices->push_back( osg::Vec3( thickness, 0.0, 0.0 ) );
+    plane_vertices->push_back( osg::Vec3( thickness, 1.0, 0.0 ) );
+    plane_vertices->push_back( osg::Vec3( thickness, 1.0, 1.0 ) );
+    plane_vertices->push_back( osg::Vec3( thickness, 0.0, 1.0 ) );
+
+    plane_vertices->push_back( osg::Vec3( -thickness, 0.0, 0.0 ) );
+    plane_vertices->push_back( osg::Vec3( -thickness, 1.0, 0.0 ) );
+    plane_vertices->push_back( osg::Vec3( -thickness, 1.0, 1.0 ) );
+    plane_vertices->push_back( osg::Vec3( -thickness, 0.0, 1.0 ) );
 
 	geometry->setVertexArray( plane_vertices );
 
@@ -403,27 +399,36 @@ scene::CDummyDraggableGeode::~CDummyDraggableGeode()
 }
 
 //====================================================================================================================
-void scene::CDummyDraggableGeode::setUpSquarePlaneXY()
+void scene::CDummyDraggableGeode::setUpSquarePlaneXY(bool thin)
 {
+	if (p_Geometry.valid())
+		this->removeDrawable(p_Geometry);
+
 	p_Geometry = new CDummyGeometry;
-	scene::CDummyGeometry::squarePlaneXY( p_Geometry.get() );
+	scene::CDummyGeometry::squarePlaneXY( p_Geometry.get(), thin );
 	setGeometry( p_Geometry.get() );
 
 }
 
 //====================================================================================================================
-void scene::CDummyDraggableGeode::setUpSquarePlaneXZ()
+void scene::CDummyDraggableGeode::setUpSquarePlaneXZ(bool thin)
 {
+	if (p_Geometry.valid())
+		this->removeDrawable(p_Geometry);
+
 	p_Geometry = new CDummyGeometry;
-	scene::CDummyGeometry::squarePlaneXZ( p_Geometry.get() );
+	scene::CDummyGeometry::squarePlaneXZ( p_Geometry.get(), thin );
 	setGeometry( p_Geometry.get() );
 }
 
 //====================================================================================================================
-void scene::CDummyDraggableGeode::setUpSquarePlaneYZ()
+void scene::CDummyDraggableGeode::setUpSquarePlaneYZ(bool thin)
 {
+	if (p_Geometry.valid())
+		this->removeDrawable(p_Geometry);
+
 	p_Geometry = new CDummyGeometry;
-	scene::CDummyGeometry::squarePlaneYZ( p_Geometry.get() );
+	scene::CDummyGeometry::squarePlaneYZ( p_Geometry.get(), thin );
 	setGeometry( p_Geometry.get() );
 }
 
@@ -565,6 +570,7 @@ scene::CGizmo::CGizmo( double size, const osg::Vec3 & offset )
 	p_Geometry  = new osg::Geometry();
 	p_StateSet  = new osg::StateSet();
 	p_LineWidth = new osg::LineWidth();
+    setName("CGizmo");
 
 	//this->setAutoScaleToScreen( true );
 

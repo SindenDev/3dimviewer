@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,6 +28,8 @@
 #include <data/CRegionColoring.h>
 #include <data/CAppSettings.h>
 #include <data/CDensityData.h>
+#include <data/CColoringFunc.h>
+#include <data/CVolumeOfInterestData.h>
 
 #include <VPL/Image/ImageFunctions.h>
 #include <VPL/Image/ImageFiltering.h>
@@ -169,7 +171,7 @@ vpl::img::CDImage* CSlice::applyFilterAndGetBackup(bool bEqualizeSlice, int rmin
         vpl::img::CDImage *pDataWithMargin = new vpl::img::CDImage(m_DensityData.getSize(),5);
         *pDataWithMargin = m_DensityData;
         pDataWithMargin->mirrorMargin();
-        vpl::img::CGaussFilter<vpl::img::CDImage> Filter(5);
+        vpl::img::CGaussFilter<vpl::img::CDImage> Filter((vpl::tSize)5);
         Filter(*pDataWithMargin,m_DensityData);
         return pDataWithMargin;
     }
@@ -180,7 +182,7 @@ vpl::img::CDImage* CSlice::applyFilterAndGetBackup(bool bEqualizeSlice, int rmin
         pDataWithMargin->mirrorMargin();
         // blur
         vpl::img::CDImage tmp(m_DensityData);
-        vpl::img::CGaussFilter<vpl::img::CDImage> Filter(5);
+        vpl::img::CGaussFilter<vpl::img::CDImage> Filter((vpl::tSize)5);
         Filter(*pDataWithMargin,tmp);
         // perform unsharp mask
         m_DensityData-=tmp;
@@ -196,7 +198,7 @@ vpl::img::CDImage* CSlice::applyFilterAndGetBackup(bool bEqualizeSlice, int rmin
         // blur
         vpl::img::CDImage tmp(m_DensityData.getSize(),5);
         tmp=m_DensityData;
-        vpl::img::CGaussFilter<vpl::img::CDImage> Filter(5);
+        vpl::img::CGaussFilter<vpl::img::CDImage> Filter((vpl::tSize)5);
         Filter(*pDataWithMargin,m_DensityData);
         // perform unsharp mask
         tmp-=m_DensityData;
@@ -319,27 +321,27 @@ void CSlice::onPropertySourceChanged(data::CStorageEntry *entry)
     entry->getChanges(changes);
     update(changes);
 
-    std::set<int> invalidateIds;
+	std::map<int,int> invalidateIds;
     CSlicePropertyContainer::tPropertyList propertyList = m_properties.propertyList();
     for (CSlicePropertyContainer::tPropertyList::iterator it = propertyList.begin(); it != propertyList.end(); ++it)
     {
         (*it)->propertySourceStorageId();
         if (changes.hasChanged((*it)->propertySourceStorageId()))
-        {
-            invalidateIds.insert((*it)->sliceStorageId());
+        {            			
+			invalidateIds[(*it)->sliceStorageId()] += (*it)->sliceInvalidationFlags(); 
         }
     }
-    for (std::set<int>::iterator it = invalidateIds.begin(); it != invalidateIds.end(); ++it)
+    for (std::map<int,int>::iterator it = invalidateIds.begin(); it != invalidateIds.end(); ++it)
     {
-        data::CPtrWrapper<data::CStorageEntry> spEntry(APP_STORAGE.getEntry(*it));
-        APP_STORAGE.invalidate(spEntry.get());
+		data::CPtrWrapper<data::CStorageEntry> spEntry(APP_STORAGE.getEntry(it->first));
+		APP_STORAGE.invalidate(spEntry.get(), it->second);
     }
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 //
 
-bool CSlice::updateRGBData(bool bSizeChanged)
+bool CSlice::updateRGBData(bool bSizeChanged, int densityWindowId )
 {
     // Has the size changed?
     if( bSizeChanged || m_DensityData.getXSize() != m_RGBData.getXSize() || m_DensityData.getYSize() != m_RGBData.getYSize() )
@@ -356,7 +358,7 @@ bool CSlice::updateRGBData(bool bSizeChanged)
     }
 
     // Get the density window
-    CObjectPtr<CDensityWindow> spDensityWindow( APP_STORAGE.getEntry(Storage::DensityWindow::Id) );
+    CObjectPtr<CDensityWindow> spDensityWindow( APP_STORAGE.getEntry(densityWindowId) );
 
     vpl::img::CDImage *pBackup = applyFilterAndGetBackup(false,0,0);
 
@@ -367,13 +369,37 @@ bool CSlice::updateRGBData(bool bSizeChanged)
     }
     else
     {
-        // Get the region coloring object
-        CObjectPtr<CRegionColoring> spColoring( APP_STORAGE.getEntry(Storage::RegionColoring::Id) );
-
         spDensityWindow->colorize(m_RGBData, m_DensityData, m_properties);
-        spColoring->colorize(m_RGBData, m_RegionData);
+
+        if (!spDensityWindow->getColoring()->overrideRegionColoring())
+		{
+			// Get the region coloring object
+			CObjectPtr<CRegionColoring> spColoring(APP_STORAGE.getEntry(Storage::RegionColoring::Id));
+			spColoring->colorize(m_RGBData, m_RegionData);
+		}
     }
 
+	CObjectPtr<CVolumeOfInterestData> spVOI(APP_STORAGE.getEntry(Storage::VolumeOfInterestData::Id));
+
+	if (spVOI->isSet())
+	{
+#pragma omp parallel for
+		for (int y = 0; y < m_RGBData.getYSize(); ++y)
+		{
+			for (int x = 0; x < m_RGBData.getXSize(); ++x)
+			{
+				if (x < m_minX || x > m_maxX || y < m_minY || y > m_maxY)
+				{
+					vpl::img::CRGBPixel pixel = m_RGBData(x, y);
+					data::CColor4b prevColor = *(reinterpret_cast<data::CColor4b *>(&pixel));
+					data::CColor4b currColor(255, 255, 0, 20);
+					data::CColor4b newColor = blendColors(currColor, prevColor);
+					m_RGBData(x, y) = *(reinterpret_cast<vpl::img::tRGBPixel *>(&newColor));
+				}
+			}
+		}
+	}
+	
     restoreFromBackupAndFree(pBackup);
 
     return bSizeChanged;
@@ -557,6 +583,18 @@ void CSlice::updateTexture(bool bRecreateImage)
     m_spTexture->dirtyTextureParameters();
 }
 
+/**
+ * \brief   Returns density value if inside, or -1000 if outside
+ *
+ * \return  The density.
+ */
+double CSlice::getDensity(int x, int y) const
+{
+    if(x < 0 || y < 0 || x >= m_DensityData.width() || y >= m_DensityData.height())
+        return -1000.0;
+
+    return m_DensityData.at(x, y);
+}
 
 } // namespace data
 

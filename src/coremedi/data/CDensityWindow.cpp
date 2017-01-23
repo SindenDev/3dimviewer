@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,7 +28,6 @@
 
 #include <VPL/Math/Base.h>
 
-
 namespace data
 {
 
@@ -40,6 +39,8 @@ CDensityWindow::CDensityWindow()
     , m_Params(DEFAULT_DENSITY_WINDOW)
     , m_DefaultParams(DEFAULT_DENSITY_WINDOW)
     , m_spColoring(new CNoColoring())
+    , m_spDefaultColoring(new CNoColoring())
+    , m_bModifiedFlag(false)
 {
     makeColorVector();
 }
@@ -52,6 +53,8 @@ CDensityWindow::CDensityWindow(const SDensityWindow& Params)
     , m_Params(Params)
     , m_DefaultParams(DEFAULT_DENSITY_WINDOW)
     , m_spColoring(new CNoColoring())
+    , m_spDefaultColoring(new CNoColoring())
+    , m_bModifiedFlag(false)
 {
     checkParams(m_Params);
 
@@ -68,6 +71,8 @@ void CDensityWindow::setCenter(int Center)
     checkParams(m_Params);
 
     makeColorVector();
+
+    m_bModifiedFlag = true;
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -80,6 +85,8 @@ void CDensityWindow::setWidth(int Width)
     checkParams(m_Params);
     
     makeColorVector();
+
+    m_bModifiedFlag = true;
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -92,6 +99,8 @@ void CDensityWindow::setParams(const SDensityWindow& Params)
     checkParams(m_Params);
 
     makeColorVector();
+
+    m_bModifiedFlag = true;
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -112,6 +121,8 @@ void CDensityWindow::restoreDefault()
     m_Params = m_DefaultParams;
 
     makeColorVector();
+
+    m_bModifiedFlag = false;
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -132,6 +143,7 @@ void CDensityWindow::colorize(vpl::img::CRGBImage &rgbImage, const vpl::img::CDI
 	const int ySize = std::min(densityImage.getYSize(),rgbImage.getYSize());
 
     // basic colors (without context and properties) are cached internally, so apply them now
+#pragma omp parallel for
     for (int y = 0; y < ySize; ++y)
     {
         for (int x = 0; x < xSize; ++x)
@@ -227,6 +239,8 @@ void CDensityWindow::init()
     m_Params = DEFAULT_DENSITY_WINDOW;
     m_DefaultParams = DEFAULT_DENSITY_WINDOW;
     m_spColoring = new CNoColoring();
+    m_spDefaultColoring = new CNoColoring();
+    m_bModifiedFlag = false;
 
     checkParams(m_Params);
 
@@ -311,9 +325,170 @@ void CDensityWindow::deserialize(vpl::mod::CChannelSerializer<vpl::mod::CBinaryS
         assert( false );
     }
 
+    m_bModifiedFlag = true;
     m_spColoring->deserialize( Reader );
 
     Reader.endRead( *this );    
+}
+
+/**
+ * \fn void CDensityWindow::estimateOptimal(const vpl::img::CDImage &densityData)
+ *
+ * \brief Tries to estimate optimal density window based on image data.
+ *
+ * \param   densityData Information describing the density.
+ */
+void CDensityWindow::estimateOptimal(const vpl::img::CDImage &densityData, EOptimumEstimationMethod method /*= OEM_HISTOGRAM_MEAN_PERCENTAGE*/)
+{
+    // Linear contrast enhancement
+    vpl::img::tDensityPixel Min = 32766;
+    vpl::img::tDensityPixel Max = -32767;
+
+    bool modified(false);
+
+    switch (method)
+    {
+    case OEM_MINMAX_POSITIVE:
+        densityData.forEach(
+            [&Min, &Max](const vpl::img::tDensityPixel &p)
+            {
+                Min = std::max<vpl::img::tDensityPixel>(0, std::min(p, Min));
+                Max = std::max(p, Max);
+            }
+        );
+        modified = true;
+        break;
+
+    case OEM_MINMAX:
+        densityData.forEach(
+            [&Min, &Max](const vpl::img::tDensityPixel &p)
+            {
+                Min = std::min(p, Min);
+                Max = std::max(p, Max);
+            }
+        );
+        modified = true;
+        break;
+
+    case OEM_HISTOGRAM_MEAN_PERCENTAGE:
+        {
+            
+            // Linear contrast enhancement
+            Min = 0;
+            Max = 32767;
+
+            if (2 == sizeof(vpl::img::tDensityPixel))
+            {
+                // compute histogram of all pixels that contain some data
+                bool valid = false;
+                int iCount = 0;
+                int histogram[65536] = {};
+                vpl::img::tDensityPixel v0 = vpl::img::CPixelTraits<vpl::img::tDensityPixel>::getPixelMin();
+                for (vpl::tSize j = 0; j < densityData.getYSize(); ++j)
+                {
+                    for (vpl::tSize i = 0; i < densityData.getXSize(); ++i)
+                    {
+                        vpl::img::tDensityPixel Value = densityData(i, j);
+
+                        // ignore useless values
+                        if (Value == vpl::img::CPixelTraits<vpl::img::tDensityPixel>::getPixelMin())
+                        {
+                            continue;
+                        }
+
+                        // set reference value for validity consideration
+                        if (v0 == vpl::img::CPixelTraits<vpl::img::tDensityPixel>::getPixelMin())
+                        {
+                            v0 = Value;
+                        }
+
+                        // check for validity of histogram
+                        if (Value != v0)
+                        {
+                            valid = true;
+                        }
+
+                        histogram[(int)Value + 32768]++; // because tDensityPixel is signed int
+                        ++iCount;
+                    }
+                }
+                // if any valid, find black and white point so tjat
+                if (valid)
+                {
+                    int nMin = 32768 - 1500;
+                    int nMax = 65535;
+                    int threshold = 0.02 * iCount; // 2% are clipped
+                    int sMin = histogram[nMin];
+                    while (sMin < threshold)
+                    {
+                        nMin++;
+                        sMin += histogram[nMin];
+                    }
+
+                    int sMax = histogram[65535];
+                    while (sMax<threshold && nMax>Min)
+                    {
+                        nMax--;
+                        sMax += histogram[nMax];
+                    }
+                    Min = nMin - 32768;
+                    Max = nMax - 32768;
+
+                    modified = true;
+                }
+            }
+            else
+            {
+                // original method which computes mean and squared variance
+                int iCount = 0;
+                double dSum = 0.0, dSumSqr = 0.0;
+                for (vpl::tSize j = 0; j < densityData.getYSize(); ++j)
+                {
+                    for (vpl::tSize i = 0; i < densityData.getXSize(); ++i)
+                    {
+                        vpl::img::tDensityPixel Value = densityData(i, j);
+                        if (Value != densityData(0, 0))
+                        {
+                            dSum += Value;
+                            dSumSqr += double(Value) * Value;
+                            ++iCount;
+                        }
+                    }
+                }
+                double dMean = 0.0, dVar = 0.0;
+                if (iCount > 0)
+                {
+                    double dInvCount = 1.0 / iCount;
+                    dMean = dSum * dInvCount;
+                    dVar = dSumSqr * dInvCount - (dMean * dMean);
+                }
+                double dWidth = 1.5 * std::sqrt(dVar) + 0.001;
+
+                Min = vpl::img::tDensityPixel(dMean - dWidth);
+                Max = vpl::img::tDensityPixel(dMean + dWidth);
+
+                modified = true;
+            }
+        }
+        break;
+    default:
+        break;
+    }
+
+    if (modified && Max > Min)
+    {
+		// If all voxels have the same value, use increased maximum to obtain black color
+		if (Max == Min)
+			++Max;
+
+        m_Params = SDensityWindow((Max + Min) / 2, Max - Min);
+
+        checkParams(m_Params);
+
+        makeColorVector();
+    }
+    else
+        restoreDefault();
 }
 
 } // namespace data

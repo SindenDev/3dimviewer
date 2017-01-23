@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,11 +23,7 @@
 #ifndef CBoundingBoxVisitor_H
 #define CBoundingBoxVisitor_H
 
-#include <osg/NodeVisitor>
-#include <osg/BoundingBox>
-#include <osg/BoundingSphere>
-#include <osg/MatrixTransform>
-#include <osg/Billboard>
+#include <osg/ComputeBoundsVisitor>
 
 
 namespace osg
@@ -36,7 +32,7 @@ namespace osg
 ///////////////////////////////////////////////////////////////////////////////
 //! Visitor calculates bounding box of the node.
 //
-class  CBoundingBoxVisitor : public osg::NodeVisitor
+class  CBoundingBoxVisitor : public osg::ComputeBoundsVisitor
 {
 public:
 	//! Constructor
@@ -45,33 +41,23 @@ public:
 	//! Destructor
 	virtual ~CBoundingBoxVisitor();
 
-
-	//! Apply for geodes - compute bb.
-	virtual void apply(osg::Geode & geode);
-
-	//! Apply for matrix transform nodes - compute transform;
-	virtual void apply(osg::MatrixTransform & node);
-        
-	//! Apply for billboards.
-	virtual void apply(osg::Billboard & node); 
-
-	virtual void reset();
-
-	//! Get computed bounding box
-	osg::BoundingBox & getBoundBox();
+    //! Apply for cameras
+    virtual void apply(osg::Camera &camera);
 
 	//! Set matrix used when computing bounding box.
 	void setInitialMatrix(const osg::Matrix & m)
 	{
-		m_transformMatrix = m;
+        // From unknown reasons takes pushMatrix non const matrix only.
+        osg::Matrix _m(m);
+		pushMatrix(_m);
 	}
 
 protected:
     // The overall resultant bounding box.
 	osg::BoundingBox m_boundingBox;
 
-    // The current transform matrix.
-	osg::Matrix m_transformMatrix;
+    // Skip camera nodes? Camera node probably means subtree with totally different scene settings.
+    bool m_bSkipCameraNode;
 };
 
 

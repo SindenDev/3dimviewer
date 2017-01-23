@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,6 +34,18 @@
 #include <map>
 #include <set>
 
+#if defined( TRIDIM_USE_GDCM )
+
+#include <data/CDicomGDCM.h>
+
+#else
+
+#include <data/CDicomDCTk.h>
+
+#endif    
+
+//DCTK test
+//#include <data/CDicomDCTk.h>
 
 namespace data
 {
@@ -62,6 +74,7 @@ public:
 
     //! List of all dicom files belonging to this serie.
     //typedef std::vector< std::string > tDicomFileList;
+
     typedef std::vector< SDCMTkFilename > tDCMTkFileList;
 	typedef std::vector<vpl::sys::tString> tDicomFileList;
 
@@ -114,6 +127,12 @@ public:
     //! - Returns the number of succesfully read slices.
     int loadDicomFile(int FileNum, tDicomSlices& Slices, sExtendedTags& tags, bool bLoadImageData = true, bool bCompatibilityMode = false);
 
+	void sortFilenamesByNumber();
+
+    //! Sets/ Gets flag whether serie should be loaded using custom load funcion 
+    void setLoadBuggySerie(bool b){ m_loadBuggySerie = b; }
+    bool getLoadBuggySerie() const { return m_loadBuggySerie; };
+
 protected:
     //! Set of all dicom files belonging to this serie.
     tDicomFileList m_DicomList;
@@ -127,6 +146,11 @@ protected:
 
     //! Info whether any dicom image was 8 bit (therefore it is not in HU)
     bool m_bHas8BitData;
+
+
+    //! Flag indicating whether serie should be loaded using custom load funcion, in case
+    //! GDCM reader fails
+    bool m_loadBuggySerie;
 };
 
 typedef CSerieInfo::tSmartPtr  CSerieInfoPtr;
@@ -167,7 +191,7 @@ public:
     //! - Returns pointer to an existing or newly created one serie.
     CSerieInfo * addDicomFile( const vpl::sys::tString &path );
     CSerieInfo * addDicomFile( const vpl::sys::tString &dir, const vpl::sys::tString &filename );
-
+    
 protected:
     //! Internal list of series.
     typedef std::vector< CSerieInfo::tSmartPtr > tSerieList;
@@ -180,6 +204,7 @@ protected:
 
     //! Table of series indexed by unique id
     tSerieTable m_SerieTable;
+    
 };
 
 

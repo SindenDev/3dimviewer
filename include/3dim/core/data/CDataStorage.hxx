@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -79,6 +79,25 @@ inline CPtrWrapper<CStorageEntry> CDataStorage::findEntry(const CChangedEntries&
     throw Storage::CUnknowEntry();
 }
 
+
+///////////////////////////////////////////////////////////////////////////////
+//
+
+template <class T>
+inline int CDataStorage::findEntryId(const CChangedEntries& Changes)
+{
+    typename CChangedEntries::tChanges::const_iterator itEnd = Changes.getImpl().end();
+    typename CChangedEntries::tChanges::const_iterator it = Changes.getImpl().begin();
+    for( ; it != itEnd; ++it )
+    {
+        CStorageEntry *pEntry = m_Storage[it->first].get();
+        if( pEntry->getId() != Storage::UNKNOWN && pEntry->checkType<T>() )
+        {
+			return pEntry->getId();
+        }
+    }
+    return Storage::UNKNOWN;
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 //! Serialize the data storage

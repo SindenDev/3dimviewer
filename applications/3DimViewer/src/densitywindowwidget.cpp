@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,8 +24,9 @@
 #include "ui_densitywindowwidget.h"
 
 #include <data/CActiveDataSet.h>
+#include <data/CDensityData.h>
 
-#include <app/Signals.h>
+#include <coremedi/app/Signals.h>
 
 CDensityWindowWidget::CDensityWindowWidget(QWidget *parent) :
     QWidget(parent),
@@ -84,14 +85,16 @@ void CDensityWindowWidget::onNewDensityData(data::CStorageEntry *pEntry)
 void CDensityWindowWidget::on_pushButton_clicked()
 {
     VPL_SIGNAL(SigSetDensityWindow).invoke(data::DEFAULT_DENSITY_WINDOW.m_Center,
-                                           data::DEFAULT_DENSITY_WINDOW.m_Width
+                                           data::DEFAULT_DENSITY_WINDOW.m_Width,
+										   data::Storage::DensityWindow::Id
                                            );
 }
 
 void CDensityWindowWidget::on_pushButton_3_clicked()
 {
     VPL_SIGNAL(SigSetDensityWindow).invoke(data::BONES_DENSITY_WINDOW.m_Center,
-                                           data::BONES_DENSITY_WINDOW.m_Width
+                                           data::BONES_DENSITY_WINDOW.m_Width,
+										   data::Storage::DensityWindow::Id
                                            );
 }
 
@@ -103,7 +106,7 @@ void CDensityWindowWidget::on_densityWindowCenter_valueChanged(int center)
     ui->densityWindowCenter->setValue(center);
     ui->densityWindowCenterSlider->setValue(center);
     m_bDontNotify=false;
-    VPL_SIGNAL(SigSetDensityWindow).invoke(center,width);
+	VPL_SIGNAL(SigSetDensityWindow).invoke(center, width, data::Storage::DensityWindow::Id);
 }
 
 void CDensityWindowWidget::on_densityWindowWidth_valueChanged(int width)
@@ -114,7 +117,7 @@ void CDensityWindowWidget::on_densityWindowWidth_valueChanged(int width)
     ui->densityWindowWidth->setValue(width);
     ui->densityWindowWidthSlider->setValue(width);
     m_bDontNotify=false;
-    VPL_SIGNAL(SigSetDensityWindow).invoke(center,width);
+	VPL_SIGNAL(SigSetDensityWindow).invoke(center, width, data::Storage::DensityWindow::Id);
 }
 
 void CDensityWindowWidget::on_pushButton_2_clicked()
@@ -122,5 +125,5 @@ void CDensityWindowWidget::on_pushButton_2_clicked()
     // First, call signal that calculates optimal density window
     data::SDensityWindow NewWindow = VPL_SIGNAL(SigEstimateDensityWindow).invoke2();
     // Set the density window
-    VPL_SIGNAL(SigSetDensityWindow).invoke(NewWindow.m_Center, NewWindow.m_Width);
+	VPL_SIGNAL(SigSetDensityWindow).invoke(NewWindow.m_Center, NewWindow.m_Width, data::Storage::DensityWindow::Id);
 }

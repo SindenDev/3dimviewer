@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,9 +22,10 @@
 
 #include <data/CModelManager.h>
 #include <data/CDensityData.h>
-#include <app/Signals.h>
+#include <coremedi/app/Signals.h>
 #include <data/CModelCut.h>
 #include <data/COrthoSlice.h>
+#include <osg/dbout.h>
 
 namespace data
 {
@@ -47,6 +48,7 @@ CModelManager::CModelManager()
     VPL_SIGNAL(SigGetModelColor).connect(this, &CModelManager::getModelColor2);
     VPL_SIGNAL(SigGetModelVisibility).connect(this, &CModelManager::isModelShown);
     VPL_SIGNAL(SigSelectModel).connect(this, &CModelManager::selectModel);
+	VPL_SIGNAL(GetSelectedModel).connect(this, &CModelManager::getSelectedModel);
 
     // Initialize the manager
     CModelManager::init();
@@ -100,6 +102,11 @@ void CModelManager::init()
 
     // Enforce object creation
     APP_STORAGE.getEntry(BonesModel::Id);
+	APP_STORAGE.getEntry(SoftTissuesModel::Id);
+	APP_STORAGE.getEntry(ImprintModel::Id);
+	APP_STORAGE.getEntry(TemplateModel::Id);
+	for (int id = 0; id < MAX_IMPORTED_MODELS; ++id)
+		APP_STORAGE.getEntry(ImportedModel::Id + id);
 
     for (int i = 0; i < MAX_IMPORTED_MODELS; ++i)
     {
@@ -141,7 +148,31 @@ void CModelManager::setModel(int id, geometry::CMesh * pMesh)
 }
 
 
-// Selects implant
+// Removes model
+void CModelManager::removeModel(int id)
+{
+    if (id < Storage::BonesModel::Id || id >= Storage::BonesModel::Id + MAX_MODELS)
+    {
+        return;
+    }
+
+    if (m_selectedModel == id)
+    {
+        m_selectedModel = -1;
+    }
+
+    data::CObjectPtr<data::CModel> spModel(APP_STORAGE.getEntry(id));
+
+    data::CSnapshot *snapshot = getSnapshot(NULL);
+    data::CSnapshot *snapshotModel = spModel->getSnapshot(NULL);
+    snapshot->addSnapshot(snapshotModel);
+    VPL_SIGNAL(SigUndoSnapshot).invoke(snapshot);
+
+    spModel->init();
+    APP_STORAGE.invalidate(spModel.getEntryPtr());
+}
+
+// Selects model
 void CModelManager::selectModel(int id)
 {
     if (id < Storage::BonesModel::Id || id >= Storage::BonesModel::Id + MAX_MODELS)
@@ -154,9 +185,9 @@ void CModelManager::selectModel(int id)
         // deselect current
         if (m_selectedModel != -1)
         {
-            data::CObjectPtr<data::CModel> spPrevModel(APP_STORAGE.getEntry(m_selectedModel));
+            data::CObjectPtr<data::CModel> spPrevModel(APP_STORAGE.getEntry(m_selectedModel, data::Storage::NO_UPDATE));
             spPrevModel->deselect();
-            APP_STORAGE.invalidate(spPrevModel.getEntryPtr(), CModel::NOTHING_CHANGED & ~CModel::SELECTION_NOT_CHANGED);
+            APP_STORAGE.invalidate(spPrevModel.getEntryPtr(), CModel::SELECTION_CHANGED);
         }
 
         m_selectedModel = id;
@@ -168,14 +199,21 @@ void CModelManager::selectModel(int id)
         }
 
         // select new
-        data::CObjectPtr<data::CModel> spCurrModel(APP_STORAGE.getEntry(m_selectedModel));
+        data::CObjectPtr<data::CModel> spCurrModel(APP_STORAGE.getEntry(m_selectedModel, data::Storage::NO_UPDATE));
+
+		if (!spCurrModel->isShown())
+		{
+			m_selectedModel = -1;
+			return;
+		}
+
         spCurrModel->select();
-        APP_STORAGE.invalidate(spCurrModel.getEntryPtr(), CModel::NOTHING_CHANGED & ~CModel::SELECTION_NOT_CHANGED);
+        APP_STORAGE.invalidate(spCurrModel.getEntryPtr(), CModel::SELECTION_CHANGED);
     }
 }
+
 ///////////////////////////////////////////////////////////////////////////////
 //
-
 void CModelManager::setModelVisibility(int id, bool bVisible)
 {
     if( id < Storage::BonesModel::Id || id >= Storage::BonesModel::Id + MAX_MODELS )
@@ -187,14 +225,20 @@ void CModelManager::setModelVisibility(int id, bool bVisible)
     
     if( bVisible )
     {
+		if (spModel->isShown())
+			return;
         spModel->show();
     }
     else
     {
+		if (!spModel->isShown())
+			return;
         spModel->hide();
     }
     
-    APP_STORAGE.invalidate(spModel.getEntryPtr(), data::CModel::MESH_NOT_CHANGED);
+    APP_STORAGE.invalidate(spModel.getEntryPtr(), data::CModel::VISIBILITY_CHANGED);
+
+    resolveTransparency();
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -211,7 +255,7 @@ void CModelManager::setModelColor2(int id, const CColor4f& Color)
     
     spModel->setColor(Color);
     
-    APP_STORAGE.invalidate(spModel.getEntryPtr(), data::CModel::MESH_NOT_CHANGED);
+    APP_STORAGE.invalidate(spModel.getEntryPtr(), data::CModel::COLORING_CHANGED);
 
     resolveTransparency();
 }
@@ -320,14 +364,14 @@ void CModelManager::setModelColor( int id, float r, float g, float b, float a )
     
     spModel->setColor(r, g, b, a);
     
-    APP_STORAGE.invalidate(spModel.getEntryPtr(), data::CModel::MESH_NOT_CHANGED);
+    APP_STORAGE.invalidate(spModel.getEntryPtr(), data::CModel::COLORING_CHANGED);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 // Undo support
 void CModelManager::initMeshUndoProvider(int storageId)
 {
-    data::CObjectPtr<data::CModel> spModel(APP_STORAGE.getEntry(storageId));
+    data::CObjectPtr<data::CModel> spModel(APP_STORAGE.getEntry(storageId, data::Storage::NO_UPDATE));
     spModel->setStorageId(storageId);
 }
 
@@ -369,9 +413,207 @@ CSnapshot *CModelManager::getSnapshot( CSnapshot * snapshot )
 
 ///////////////////////////////////////////////////////////////////////////////
 //
-void CModelManager::createAndStoreSnapshot()
+void CModelManager::createAndStoreSnapshot(CSnapshot *childSnapshot)
 {
-    VPL_SIGNAL(SigUndoSnapshot).invoke(this->getSnapshot(NULL));
+    if (childSnapshot == NULL)
+    {
+        VPL_SIGNAL(SigUndoSnapshot).invoke(this->getSnapshot(NULL));
+    }
+    else
+    {
+        CSnapshot *snapshot = this->getSnapshot(NULL);
+        snapshot->addSnapshot(childSnapshot);
+        VPL_SIGNAL(SigUndoSnapshot).invoke(snapshot);
+    }
+}
+
+/**
+ * \fn void CModelManager::updateModelLinks()
+ *
+ * \brief Updates the model links.
+ */
+void CModelManager::updateModelLinks()
+{
+	writeLinks();
+
+	// For all models
+	for (int id = Storage::BonesModel::Id; id < Storage::ImportedModel::Id + MAX_IMPORTED_MODELS; ++id)
+	{
+		// Get model
+		CObjectPtr<CModel> spModel(APP_STORAGE.getEntry(id));
+
+		// If model has data
+		if(!spModel->hasData())
+			continue;
+
+		// If model has no unique id generate one
+		std::string modelUid;
+		{
+			modelUid = spModel->getProperty("model_uid");
+			if (modelUid.empty())
+			{
+				modelUid = VPL_SIGNAL(SigGenerateUniqueId).invoke2();
+				spModel->setProperty("model_uid", modelUid);
+			}
+		}
+
+		// If base_model id is already set, do nothing
+		std::string base_id = spModel->getProperty("base_model_ref");
+		if (!base_id.empty())
+			continue;
+		
+		// If model_ref is set, this should be surgical guide and model_ref is base model id
+		std::string model_ref = spModel->getProperty("model_ref");
+		if (!model_ref.empty())
+		{
+			spModel->setProperty("base_model_ref", model_ref);
+
+		}
+		else
+		{
+			// Else if guide_ref is set, try to find this model and test its model ref
+			std::string guide_ref = spModel->getProperty("guide_ref");
+
+			// For all existing models
+			if (!guide_ref.empty())
+				for (int i = 0; i < MAX_MODELS; ++i)
+				{
+					CObjectPtr<data::CModel> spModelGuide(APP_STORAGE.getEntry(i + data::Storage::BonesModel::Id));
+					if (!spModelGuide->hasData())
+						continue;
+
+					// Is this model our guide model?
+					if (spModelGuide->getProperty("guide_uid").compare(guide_ref) == 0)
+					{ 
+						// Is base model already set?
+						std::string guide_base_id = spModelGuide->getProperty("base_model_ref");
+						if (!guide_base_id.empty())
+						{
+							spModel->setProperty("base_model_ref", guide_base_id);
+						}
+
+						// Is model ref already set?
+						std::string guide_model_ref = spModelGuide->getProperty("model_ref");
+						if (!guide_model_ref.empty())
+						{
+							spModel->setProperty("base_model_ref", guide_model_ref);
+						}
+
+						// Guide model found and base model (hopefully) set.
+						break;
+					}
+				}
+		}
+
+		// If base model still not set, use model uid
+		base_id = spModel->getProperty("base_model_ref");
+		if (base_id.empty())
+			spModel->setProperty("base_model_ref", modelUid);
+	}
+
+	writeLinks();
+}
+
+void CModelManager::writeLinks()
+{
+	DBOUT("--- Models:");
+	// For all models
+	for (int id = Storage::BonesModel::Id; id < Storage::ImportedModel::Id + MAX_IMPORTED_MODELS; ++id)
+	{
+		// Get model
+		CObjectPtr<CModel> spModel(APP_STORAGE.getEntry(id));
+
+		// If model has data
+		if (!spModel->hasData())
+			continue;
+
+		// get properties
+		std::string model_uid, base_ref;
+		base_ref = spModel->getProperty("base_model_ref");
+		model_uid = spModel->getProperty("model_uid");
+
+		DBOUT("ID: " << model_uid.c_str() << "\t base: " << base_ref.c_str());
+
+	}
+}
+
+/**
+ * \fn std::string CModelManager::getBaseModel(int storage_id)
+ *
+ * \brief Gets base model, if exists.
+ *
+ * \param	storage_id Identifier for the storage.
+ *
+ * \return The base model.
+ */
+std::string CModelManager::getBaseModel(int storage_id)
+{
+	if (storage_id < 0)
+		return "";
+
+	data::CObjectPtr<data::CModel> spUsedModel(APP_STORAGE.getEntry(storage_id));
+	return spUsedModel->getProperty("base_model_ref");
+}
+
+/**
+ * \fn bool CModelManager::modelExists(const std::string &uid)
+ *
+ * \brief Queries if a given model exists.
+ *
+ * \param	uid The UID.
+ *
+ * \return true if it succeeds, false if it fails.
+ */
+bool CModelManager::modelExists(const std::string &uid)
+{
+	return uidToStorageId(uid) > 0;
+}
+
+/**
+ * \fn int CModelManager::uidToStorageId(const std::string &uid)
+ *
+ * \brief Convert UID to storage identifier.
+ *
+ * \param	uid The UID.
+ *
+ * \return An int.
+ */
+int CModelManager::uidToStorageId(const std::string &uid)
+{
+	// No uid? No storage id.
+	if (uid.empty())
+		return -1;
+
+	// Try to find model with given uid
+	for (int id = Storage::BonesModel::Id; id < Storage::ImportedModel::Id + MAX_IMPORTED_MODELS; ++id)
+	{
+		// Get model
+		CObjectPtr<CModel> spModel(APP_STORAGE.getEntry(id));
+
+		if (spModel->getProperty("model_uid").compare(uid) == 0)
+			return id;
+	}
+
+	// Uid not found
+	return -1;
+}
+
+/**
+ * \fn std::string CModelManager::storageIdToUId(int storage_id)
+ *
+ * \brief Convert storage identifier to unique identifier.
+ *
+ * \param	storage_id Identifier for the storage.
+ *
+ * \return A std::string.
+ */
+std::string CModelManager::storageIdToUId(int storage_id)
+{
+	if (storage_id < 0)
+		return std::string("");
+
+	CObjectPtr<data::CModel> spModel(APP_STORAGE.getEntry(storage_id));
+	return spModel->getProperty("base_model_ref");
 }
 
 } // namespace data

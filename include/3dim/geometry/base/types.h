@@ -3,7 +3,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2015 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@
 #include <VPL/Math/TransformMatrix.h>
 #include <VPL/Math/Quaternion.h>
 #include <Eigen/src/StlSupport/StdVector.h>
+#include <data/CSerializableData.h>
 
 namespace geometry
 {
@@ -137,6 +138,101 @@ namespace geometry
 EIGEN_DEFINE_STL_VECTOR_SPECIALIZATION(geometry::Vec2)
 EIGEN_DEFINE_STL_VECTOR_SPECIALIZATION(geometry::Vec3)
 EIGEN_DEFINE_STL_VECTOR_SPECIALIZATION(geometry::Vec4)
+
+//----------------------------------------------------------------------------------
+// SERIALIZATION
+
+namespace data
+{
+    ////////////////////////////////////////////////////////////////////////////////////////////////////
+    //!\brief	VPL vector serializer. 
+
+    //! Vector serializer generator
+#define DECLARE_VPL_VECTOR_SERIALIZER( type ) \
+    template<>						\
+        class CSerializableData< type > \
+        {																					\
+        public:																			\
+        VPL_ENTITY_NAME(#type);															\
+        template < class tpSerializer >													\
+        static void serialize( const type * sd, vpl::mod::CChannelSerializer<tpSerializer> & Writer ) \
+        {																				\
+        Writer.write( (int)sd->SIZE );									\
+        for( int i = 0; i < sd->SIZE; ++i )								\
+        Writer.write( (*sd)[i] );													\
+    }																				\
+        template< class tpSerializer >													\
+        static void deserialize( type * sd, vpl::mod::CChannelSerializer<tpSerializer> & Reader )	\
+        {																				\
+        int size = 0;															    \
+        Reader.read( size );														\
+        assert( size == (int)sd->SIZE );									\
+        for( int i = 0; i < sd->SIZE; ++i )								\
+        Reader.read( (*sd)[i] );												\
+    }																				\
+    };
+
+    DECLARE_VPL_VECTOR_SERIALIZER( geometry::Vec2 )
+    DECLARE_VPL_VECTOR_SERIALIZER( geometry::Vec3 )
+    DECLARE_VPL_VECTOR_SERIALIZER( geometry::Vec4 )
+
+    /**
+     * \brief   Quaternion serialization.
+     */
+    template<>
+    class CSerializableData< geometry::Quat >
+    {
+    public:																			
+        VPL_ENTITY_NAME("geometry::Quat");															
+        template < class tpSerializer >													
+        static void serialize( const geometry::Quat * sd, vpl::mod::CChannelSerializer<tpSerializer> & Writer ) 
+        {																				
+            for( int i = 0; i < 4; ++i )								
+                Writer.write( (*sd)[i] );													
+        }																				
+        template< class tpSerializer >													
+        static void deserialize( geometry::Quat * sd, vpl::mod::CChannelSerializer<tpSerializer> & Reader )	
+        {																				
+            for( int i = 0; i < 4; ++i )								
+                Reader.read( (*sd)[i] );												
+        }	   
+    };
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////////
+    //!\brief	VPL matrix serializer. 
+
+#define DECLARE_VPL_MATRIX_SERIALIZER( tpMatrix ) \
+    template <>						\
+    class CSerializableData< tpMatrix > \
+    {								\
+    public:							\
+    VPL_ENTITY_NAME(#tpMatrix);		\
+    public:																				\
+    template< class tpSerializer>                                                   \
+    static void serialize( tpMatrix * m, vpl::mod::CChannelSerializer<tpSerializer> & s )	\
+    {																				\
+    vpl::sys::tInt32 rows(m->getNumOfRows()), columns(m->getNumOfCols());                                                               \
+    s.write( rows );                                                        	\
+    s.write( columns );                                                        	\
+    for( int r = 0; r < rows; ++r )												\
+    for( int c = 0; c < columns; ++c )											\
+    s.write( (*m)( r, c ) );											\
+    }																				\
+    template< class tpSerializer >                                                  \
+    static void deserialize( tpMatrix * m, vpl::mod::CChannelSerializer<tpSerializer> & s )	\
+    {																				\
+    int rows, columns;                                                              \
+    s.read( rows );															        \
+    s.read( columns );															    \
+    assert(rows == m->getNumOfRows() && columns == m->getNumOfCols());              \
+    for( int r = 0; r < rows; ++r )												    \
+    for( int c = 0; c < columns; ++c )											        \
+    s.read( (*m)( r, c ) );												\
+    }																				\
+    };
+
+    DECLARE_VPL_MATRIX_SERIALIZER( geometry::Matrix )
+}
 
 // types_H_included
 #endif

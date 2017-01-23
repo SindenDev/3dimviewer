@@ -1,8 +1,10 @@
 <RCC>
     <qresource prefix="/icons">
+        <file>icons/demoplugin.png</file>
         <file>icons/1.png</file>
         <file>icons/2.png</file>
         <file>icons/3.png</file>
         <file>icons/4.png</file>
+        <file>icons/demoplugin_dock.png</file>
     </qresource>
 </RCC>

@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2015 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -35,12 +35,14 @@
     #define DESKTOPLOCATION() QDesktopServices::storageLocation(QDesktopServices::DesktopLocation)
     #define DATALOCATION() QDesktopServices::storageLocation(QDesktopServices::DataLocation)
     #define DOCUMENTSLOCATION() QDesktopServices::storageLocation(QDesktopServices::DocumentsLocation)
+    #define TOASCII() toAscii()
 #else
     #define SETRESIZEMODE(x,y) setSectionResizeMode(x,y)
     #define HOMELOCATION() QStandardPaths::locate(QStandardPaths::HomeLocation, QString(), QStandardPaths::LocateDirectory)
     #define DESKTOPLOCATION() QStandardPaths::locate(QStandardPaths::DesktopLocation, QString(), QStandardPaths::LocateDirectory)
     #define DATALOCATION() QStandardPaths::locate(QStandardPaths::DataLocation, QString(), QStandardPaths::LocateDirectory)
     #define DOCUMENTSLOCATION() QStandardPaths::locate(QStandardPaths::DocumentsLocation, QString(), QStandardPaths::LocateDirectory)
+    #define TOASCII() toLatin1()
 #endif
 
 #endif

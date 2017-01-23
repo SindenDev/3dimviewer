@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,6 +21,8 @@
 ///////////////////////////////////////////////////////////////////////////////
 
 #include <osg/CShaderTester.h>
+#include "sys/stat.h"
+#include <osg/Version>
 
 osg::CShaderTester::CShaderTester(std::string programName, std::string vertSource, std::string geomSource, std::string fragSource)
     : osg::Geometry()
@@ -31,7 +33,28 @@ osg::CShaderTester::CShaderTester(std::string programName, std::string vertSourc
     , m_fragSource(fragSource)
     , m_programName(programName)
 {
+    std::stringstream ss;
+    ss << "CShaderTester " << programName;
+    setName(ss.str());
+
+#if OSG_VERSION_GREATER_OR_EQUAL(3,1,10)
+    setCullingActive(false);
+#else
     setCullCallback(new osg::CForceCullCallback(true));
+#endif
+#ifdef SHADERLOG
+	struct stat attrib;
+	stat("shaderlog.txt", &attrib);
+	tm modified = *localtime(&(attrib.st_mtime));
+	time_t t = time(0);   // get time now
+    tm now = *localtime( & t );
+	if (now.tm_year != modified.tm_year ||
+		now.tm_yday != modified.tm_yday)
+	{
+		std::ofstream out("shaderlog.txt", std::ios_base::trunc); // reset file contents
+		out.close();
+	}
+#endif
 }
 
 osg::CShaderTester::~CShaderTester()
@@ -43,6 +66,11 @@ GLuint osg::CShaderTester::createAndCompileShader(GLenum shaderType, const char 
     glShaderSource(shader, 1, &shaderSource, NULL);
     glCompileShader(shader);
 
+#ifdef SHADERLOG
+    std::ofstream out("shaderlog.txt", std::ios_base::app);
+    out << shaderSource << std::endl;
+#endif
+
     GLint result = GL_FALSE;
     glGetShaderiv(shader, GL_COMPILE_STATUS, &result);
     if (result != GL_TRUE)
@@ -51,12 +79,21 @@ GLuint osg::CShaderTester::createAndCompileShader(GLenum shaderType, const char 
         GLsizei length;
         GLsizei size = 2048;
         glGetShaderInfoLog(shader, size, &length, buffer);
+
 #ifdef SHADERLOG
-        std::ofstream out("shaderlog.txt", std::ios_base::app);
-        out << shaderSource << std::endl << std::endl << buffer;
-        out.close();
+        out << std::endl << buffer;
 #endif
     }
+    else
+    {
+#ifdef SHADERLOG
+        out << std::endl << "SHADER OK" << std::endl << "////////////////////////////////////////" << std::endl << std::endl;
+#endif
+    }
+
+#ifdef SHADERLOG
+    out.close();
+#endif
 
     return shader;
 }
@@ -100,6 +137,14 @@ void osg::CShaderTester::drawImplementation(osg::RenderInfo &renderInfo) const
 #ifdef SHADERLOG
         std::ofstream out("shaderlog.txt", std::ios_base::app);
         out << buffer;
+        out.close();
+#endif
+    }
+    else
+    {
+#ifdef SHADERLOG
+        std::ofstream out("shaderlog.txt", std::ios_base::app);
+        out << std::endl << "PROGRAM \"" << m_programName << "\" OK" << std::endl << "////////////////////////////////////////" << std::endl << std::endl;
         out.close();
 #endif
     }

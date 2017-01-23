@@ -3,7 +3,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2015 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -33,6 +33,7 @@ namespace data
     };
 }
 
+#define CORE_STORAGE_RTG_DENSITY_WINDOW_ID 9
 #define CORE_STORAGE_DENSITY_WINDOW_ID 10
 #define CORE_STORAGE_ACTIVE_DATASET_ID 11
 #define CORE_STORAGE_SLICE_XY_ID 21
@@ -40,6 +41,8 @@ namespace data
 #define CORE_STORAGE_SLICE_YZ_ID 23
 #define CORE_STORAGE_REGION_DATA_ID 501
 #define CORE_STORAGE_REGION_COLORING_ID 502
+#define CORE_STORAGE_REGION_DATA_CALCULATOR_ID 503
+#define CORE_STORAGE_VOLUME_OF_INTEREST_DATA_ID 504
 #define CORE_STORAGE_SCENE_MANIPULATOR_DUMMY_ID 550
 #define CORE_STORAGE_DRAWING_OPTIONS_ID 555
 #define CORE_STORAGE_MEASUREMENT_OPTIONS_ID 556
@@ -55,6 +58,10 @@ namespace data
 #define CORE_STORAGE_IMPORTED_MODEL_CUTSLICE_YZ_ID 1560
 
 #define CORE_STORAGE_VOLUME_TRANSFORMATION_ID 1910
+
+#define CORE_STORAGE_NOTE_PLUGIN_ID 2100
+
+//max ID is 2500
 
 // storage_ids_core_H_included
 #endif

@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -61,12 +61,21 @@ struct SDensityWindow
         : m_Center(w.m_Center)
         , m_Width(w.m_Width)
     { }
+
+    //! Compare operator
+    bool operator==(const SDensityWindow &w) const
+    {
+        return m_Center == w.m_Center && m_Width == w.m_Width;
+    }
 };
 
 
 //! Default density window.
 //const SDensityWindow DEFAULT_DENSITY_WINDOW (500, 2000);
 const SDensityWindow DEFAULT_DENSITY_WINDOW (1500, 4200);
+
+//! Default density window for X-Ray
+const SDensityWindow DEFAULT_XRAY_DENSITY_WINDOW(-10, 1900);
 
 //! Typical density window applied to highlight bones.
 //const SDensityWindow BONES_DENSITY_WINDOW   (500, 400);
@@ -93,6 +102,13 @@ public:
 
     //! Default compression method.
     VPL_ENTITY_COMPRESSION(vpl::mod::CC_RAW);
+
+    enum EOptimumEstimationMethod
+    {
+        OEM_MINMAX,
+        OEM_MINMAX_POSITIVE,
+        OEM_HISTOGRAM_MEAN_PERCENTAGE
+    };
 
 public:
     //! Default constructor.
@@ -195,7 +211,7 @@ public:
     const CColoringFunc4b * getColoring();
 
     //! Sets the default coloring.
-    void setDefaultColoring() { m_spColoring = new CNoColoring(); }
+    void setDefaultColoring() { m_spColoring = m_spDefaultColoring; }
 
     //! Returns current coloring model.
     int getColoringType() const { return m_spColoring->getType(); }
@@ -215,6 +231,12 @@ public:
     //! Deserialize
     void deserialize(vpl::mod::CChannelSerializer<vpl::mod::CBinarySerializer> & Reader);
 
+    //! Try to find optimal density window
+    void estimateOptimal(const vpl::img::CDImage &densityData, EOptimumEstimationMethod method = OEM_HISTOGRAM_MEAN_PERCENTAGE);
+
+    //! Was this density window deserialized?
+    bool wasModified() const { return m_bModifiedFlag; }
+
 protected:
     //! Density window parameters (center and width).
     SDensityWindow m_Params;
@@ -224,6 +246,10 @@ protected:
 
     //! Coloring functor.
     CColoringFunc4b::tSmartPtr m_spColoring;
+    CColoringFunc4b::tSmartPtr m_spDefaultColoring;
+
+    //! Was window deserialized?
+    bool m_bModifiedFlag;
 
 protected:
     //! Checks and normalizes density window parameters.
@@ -237,8 +263,11 @@ DECLARE_SERIALIZATION_WRAPPER( CDensityWindow )
 
 namespace Storage
 {
-    //! Identifier of a density window.
-    DECLARE_OBJECT(DensityWindow, CDensityWindow, CORE_STORAGE_DENSITY_WINDOW_ID);
+	//! Identifier of a density window - ortho and MIP slices.
+	DECLARE_OBJECT(DensityWindow, CDensityWindow, CORE_STORAGE_DENSITY_WINDOW_ID);
+
+	//! Identifier of a density window - RTG slices.
+	DECLARE_OBJECT(RTGDensityWindow, CDensityWindow, CORE_STORAGE_RTG_DENSITY_WINDOW_ID);
 }
 
 } // namespace data

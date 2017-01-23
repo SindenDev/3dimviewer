@@ -3,7 +3,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2014-2015 3Dim Laboratory s.r.o.
+// Copyright 2014-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -207,7 +207,7 @@ double CBaseMesh::meshVolume()
                     - pts[1][0]*pts[0][1]*pts[2][2] 
                     + pts[0][0]*pts[1][1]*pts[2][2] 
             );
-#pragma omp critical
+#pragma omp atomic
         volume += v;
     }    
     return volume;
@@ -374,7 +374,7 @@ int CBaseMesh::fixOpenComponents()
                     if (hBest.is_valid() && dist<0.001)
                     {
                         ptshndls[j]=hBest;
-#pragma omp critical
+#pragma omp atomic
                         nValid++;
                     }
                 }
@@ -479,7 +479,7 @@ int CBaseMesh::fixOpenComponents()
                     if (hBest.is_valid() && dist<0.001)
                     {
                         ptshndls[j]=hBest;
-#pragma omp critical
+#pragma omp atomic
                         nValid++;
                     }
                 }

@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,7 +32,7 @@ const char Add[] =
 "#endif \n"
 " \n"
 "uniform sampler3D t3D;                  // 3D texture containing data \n"
-"uniform sampler1D LookUp;               // color and transparency look-up texture \n"
+"uniform sampler2D LookUp;               // color and transparency look-up texture \n"
 "uniform sampler3D tRaysStartEnd;        // back-facing world coords \n"
 "uniform sampler2D Noise;                // Noise offset used to remove aliasing [replacable by internal GLSL noise generator] \n"
 "uniform sampler2D Depth; \n"
@@ -53,7 +53,7 @@ const char Add[] =
 "uniform vec3 skipTexSize; \n"
 "uniform vec3 tSkipResolution; \n"
 " \n"
-"uniform float skipCondition; \n"
+"uniform vec4 skipCondition; \n"
 " \n"
 "// Compute position against the cutting plane \n"
 "float cuttingPlane(vec3 pos) \n"
@@ -80,11 +80,13 @@ const char Add[] =
 "    vec4 voxel = texture3D(tSkip3D, pos * skipTexSize); \n"
 " \n"
 "    // minimum and maximum voxel value  \n"
+"    float vmin = voxel.r; \n"
 "    float vmax = voxel.g; \n"
+"    vmin = saturate((vmin * inputAdjustment.x + 0.001) + inputAdjustment.y); \n"
 "    vmax = saturate((vmax * inputAdjustment.x + 0.001) + inputAdjustment.y); \n"
 " \n"
 "    // is the position considered empty? \n"
-"    return (vmax < skipCondition) ? 0 : 1; \n"
+"    return (vmin > skipCondition.y || vmax < skipCondition.x) ? 0 : 1; \n"
 "} \n"
 " \n"
 "// Compute length of the step in the 3D texture \n"
@@ -215,7 +217,7 @@ const char Add[] =
 "                float voxel = planeCut(vtPosition, saturate((texture3D(t3D, vtPosition).r * inputAdjustment.x + 0.001) + inputAdjustment.y), 0.0); \n"
 " \n"
 "                // sample Look-Up texture \n"
-"                vec4 LUT = texture1D(LookUp, voxel); \n"
+"                vec4 LUT = texture2D(LookUp, vec2(voxel, 0.5)); \n"
 " \n"
 "                if (LUT.a < 0.99) \n"
 "                { \n"

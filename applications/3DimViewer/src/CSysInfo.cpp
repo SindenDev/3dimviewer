@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2014 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -42,6 +42,12 @@
 #   include <GL/glew.h>
 #endif
 //#include <GL/glew.h>
+
+
+#if (QT_VERSION >= QT_VERSION_CHECK(5, 4, 0))
+#include <QOpenGLWidget>
+#include <QOpenGLWindow>
+#endif
 
 #ifdef _WIN32 // Windows specific
     #include <Windows.h>
@@ -616,9 +622,14 @@ void   CSysInfo::getOperatingSystemInfo()
             operatingSystemString = "Windows 8";
             break;
 #endif
-#if (QT_VERSION >= QT_VERSION_CHECK(5, 2, 0))
+#if (QT_VERSION >= QT_VERSION_CHECK(4, 8, 6))
         case QSysInfo::WV_WINDOWS8_1 :
             operatingSystemString = "Windows 8.1";
+            break;
+#endif
+#if (QT_VERSION >= QT_VERSION_CHECK(4, 8, 7))
+        case QSysInfo::WV_WINDOWS10 :
+            operatingSystemString = "Windows 10";
             break;
 #endif
         case QSysInfo::WV_NT_based :
@@ -667,20 +678,22 @@ void   CSysInfo::getOperatingSystemInfo()
         case QSysInfo::MV_10_6 :
             operatingSystemString = "Mac OS X 10.6 Snow Leopard";
             break;
-#if (QT_VERSION >= QT_VERSION_CHECK(4, 8, 3))
+#if (QT_VERSION >= QT_VERSION_CHECK(4, 8, 1))
         case QSysInfo::MV_10_7 :
             operatingSystemString = "Mac OS X 10.7 Lion";
             break;
+#endif
+#if (QT_VERSION >= QT_VERSION_CHECK(4, 8, 3))
         case QSysInfo::MV_10_8 :
             operatingSystemString = "Mac OS X 10.8 Mountain Lion";
             break;            
 #endif
-#if (QT_VERSION >= QT_VERSION_CHECK(5, 1, 0))
+#if (QT_VERSION >= QT_VERSION_CHECK(4, 8, 6))
         case QSysInfo::MV_10_9 :
             operatingSystemString = "Mac OS X 10.9 Mavericks";
             break;
 #endif
-#if (QT_VERSION >= QT_VERSION_CHECK(5, 4, 0))
+#if (QT_VERSION >= QT_VERSION_CHECK(4, 8, 7))
         case QSysInfo::MV_10_10 : 
 			operatingSystemString = "Mac OS X 10.10 Yosemite";     
 			break;
@@ -707,6 +720,18 @@ void   CSysInfo::getOperatingSystemInfo()
 	osVerInfo.dwOSVersionInfoSize=sizeof OSVERSIONINFOA;
 	GetVersionExA(&osVerInfo);
     VPL_LOG_INFO("Version " << osVerInfo.dwMajorVersion << "." << osVerInfo.dwMinorVersion << "." << osVerInfo.dwBuildNumber << " " << osVerInfo.szCSDVersion);
+
+    LONG(WINAPI *pfnRtlGetVersion)(RTL_OSVERSIONINFOEXW*);
+    (FARPROC&)pfnRtlGetVersion = GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "RtlGetVersion");
+    if(pfnRtlGetVersion)
+    {
+        RTL_OSVERSIONINFOEXW ver = {0};
+        ver.dwOSVersionInfoSize = sizeof(ver);
+        if(pfnRtlGetVersion(&ver) == 0)
+        {
+            VPL_LOG_INFO("RtlVersion " << ver.dwMajorVersion << "." << ver.dwMinorVersion << "." << ver.dwBuildNumber << " " << wcs2ACP(ver.szCSDVersion));
+        }
+    }
 #endif
 
 #ifdef __APPLE__
@@ -1192,13 +1217,15 @@ void CSysInfo::getDrivesInfo()
     DWORD logicalDriveStrings=GetLogicalDriveStringsA(sizeof(drives),drives);	
     while(*pDrives)
     {
-        ULARGE_INTEGER  freeBytesAvailable = {},
-                        totalNumberOfBytes = {},
-                        totalNumberOfFreeBytes = {};
-	    GetDiskFreeSpaceExA(pDrives,&freeBytesAvailable,&totalNumberOfBytes,&totalNumberOfFreeBytes);				
         unsigned int driveType = GetDriveTypeA(pDrives);
         if (DRIVE_FIXED == driveType)
+		{
+			ULARGE_INTEGER  freeBytesAvailable = {},
+							totalNumberOfBytes = {},
+							totalNumberOfFreeBytes = {};
+			GetDiskFreeSpaceExA(pDrives,&freeBytesAvailable,&totalNumberOfBytes,&totalNumberOfFreeBytes);				
             VPL_LOG_INFO(pDrives << " " << "Total: " << formatBytes(totalNumberOfBytes.QuadPart) << " Free: " << formatBytes(totalNumberOfFreeBytes.QuadPart) << " Available: " << formatBytes(freeBytesAvailable.QuadPart));
+		}
 	    pDrives+=strlen(pDrives)+1;
     }
 #endif
@@ -1299,10 +1326,17 @@ void CSysInfo::init()
     getEnviromentInfo();
     getDrivesInfo();
     {     
+#if (QT_VERSION >= QT_VERSION_CHECK(5, 4, 0))
+		QOpenGLContext cx;
+		QOpenGLWindow sf;
+		sf.create();
+		cx.create();
+		cx.makeCurrent(&sf);
+#else
         // create context
         QGLWidget w;
         w.makeCurrent();
-
+#endif
         // ask opengl info
         getOpenGLInfo();
 

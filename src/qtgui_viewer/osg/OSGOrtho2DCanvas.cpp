@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@
 #include <osg/OSGOrtho2DCanvas.h>
 
 #include <data/COrthoSlice.h>
-#include <app/Signals.h>
+#include <coremedi/app/Signals.h>
 #include <base/Macros.h>
 
 // Includes for simple geometry

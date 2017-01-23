@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -106,9 +106,9 @@ private:
     //! Private default constructor.
     CCompulsoryTags() : CDicomTagSet()
     {
-        this->add( TAG_PATIENTS_NAME );
+        //this->add( TAG_PATIENTS_NAME );
         //this->add( TAG_PATIENTS_ID );
-        this->add( TAG_STUDY_UID );
+        //this->add( TAG_STUDY_UID ); // due to data from issue #1559
         //this->add( tags::STUDY_ID );
         //this->add( tags::STUDY_DATE );
         this->add( TAG_SERIES_UID );

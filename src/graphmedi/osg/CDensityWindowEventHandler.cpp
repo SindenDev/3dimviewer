@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,7 +22,7 @@
 
 #include <base/Defs.h>
 #include <osg/CDensityWindowEventHandler.h>
-#include <app/Signals.h>
+#include <coremedi/app/Signals.h>
 
 #include <osgViewer/Viewer>
 
@@ -33,6 +33,7 @@ scene::CDensityWindowEventHandler::CDensityWindowEventHandler()
     , m_OldDW(data::DEFAULT_DENSITY_WINDOW)
     , m_OldCenter(-10000)
     , m_OldWidth(-1)
+    , m_id(data::Storage::DensityWindow::Id)
 {
 }
 
@@ -67,9 +68,10 @@ bool scene::CDensityWindowEventHandler::handle(const osgGA::GUIEventAdapter& ea,
             m_fPushY = p_EventAdapter->getYmax() - p_EventAdapter->getY() + 1;
 
             // Remember the density window
-            m_OldDW = VPL_SIGNAL(SigGetDensityWindow).invoke2();
+            m_OldDW = VPL_SIGNAL(SigGetDensityWindow).invoke2(m_id);
             m_OldCenter = m_OldDW.m_Center;
             m_OldWidth = m_OldDW.m_Width;
+            VPL_SIGNAL(SigSetDensityWindow).invoke(m_OldCenter, m_OldWidth, m_id);
             break;
 
         case osgGA::GUIEventAdapter::DRAG:
@@ -87,7 +89,7 @@ bool scene::CDensityWindowEventHandler::handle(const osgGA::GUIEventAdapter& ea,
             }
 
             // Modify the density window
-            VPL_SIGNAL(SigSetDensityWindow).invoke(NewCenter, NewWidth);
+            VPL_SIGNAL(SigSetDensityWindow).invoke(NewCenter, NewWidth, m_id);
             m_OldCenter = NewCenter;
             m_OldWidth = NewWidth;
             break;

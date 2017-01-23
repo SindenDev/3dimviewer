@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -137,12 +137,35 @@ void CSerializationManager::deserialize(vpl::mod::CBinarySerializer & Reader, tI
     tIdVector::iterator i;
     for( i = ids.begin(); i != ids.end(); ++i )
     {
+        // Is id valid storage id?
+        if(!m_dataStorage->isEntryValid(*i))
+		{
+			if (*i > data::Storage::UNKNOWN && *i < data::Storage::MAX_ID)
+			{
+				VPL_LOG_INFO("Deserialize skipping entry " << *i);
+			}
+            continue;
+		}
+
         data::CStorageEntry * entry = m_dataStorage->getEntry(*i).get();
         bool readError = true;
 
         if (entry != NULL)
         {
             readError = false;
+
+#ifdef _WIN32
+             // output storage entry id
+             {
+                 std::stringstream ss;
+                 ss << "Loading storage entry " << *i << " ";
+                 if (NULL!=entry->getStorableDataPtr())
+                     ss << " " << typeid(*entry->getStorableDataPtr()).name();
+                 ss << "\n";
+                 std::string str = ss.str();
+                 OutputDebugStringA(str.c_str());
+             }
+#endif
 
             // Initialize default state
             entry->init();

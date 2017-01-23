@@ -3,9 +3,31 @@
 - 3DimViewer
 - A lightweight 3D DICOM viewer.
 -
-- Copyright (c) 2008-2015 by 3Dim Laboratory s.r.o.
+- Copyright (c) 2008-2016 by 3Dim Laboratory s.r.o.
 -
 ================================================================================
+3DimViewer Version 3.1 (2016/12/06): 
+  - Support of GDCM library (library for working with DICOM files)
+  - Better plugins icons
+  - Improved look on high dpi displays
+  - Bugfixes
+
+3DimViewer Version 3.0 (2016/06/16): 
+  - Modified models list, added models info
+  - Easier model creation in Quick Tissue Segmentation Panel
+  - Data anonymization
+  - Data compression
+  - Data preview in series selection
+  - Studies sorted by date (for each patient)
+  - More intuitive selection of volume of interest when loading data
+  - Added sharpening filter
+  - Better organization of menu actions
+  - Added preview to data filtering
+  - Plugin toolbar for easy access of plugin panels
+  - Region list and model list joined into one panel for easier control over regions and models
+  - More functions in manual and automatic segmentation
+  - New plugin for segmentation to small regions (supervoxels)
+  - Bugfixes
 
 3DimViewer Version 2.2 (2015/01/30): 
   - Migrated from MDSTK to VPL library - https://bitbucket.org/3dimlab/vpl

@@ -3,7 +3,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2015 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -128,7 +128,7 @@ private:
 // Helper classes
 ////////////////////////////////////////////////////////////
 
-
+#define MATERIAL_PROPERTY_NAME "material"
 
 ////////////////////////////////////////////////////////////
 /*!
@@ -145,39 +145,39 @@ public:
 
     //! Smart pointer type.
     //! - Declares type tSmartPtr.
-    VPL_SHAREDPTR(CMesh);
+    // VPL_SHAREDPTR(CMesh);   !!! incompatible with EIGEN_MAKE_ALIGNED_OPERATOR_NEW !!!
 
     friend class CMeshCutter;
 
-	//! Persistent property type
-	enum EPPType
-	{
-		PPT_EDGE = 0,
-		PPT_FACE,
-		PPT_HEDGE,
-		PPT_VERTEX,
-		PPT_LAST
-	};
+    //! Persistent property type
+    enum EPPType
+    {
+        PPT_EDGE = 0,
+        PPT_FACE,
+        PPT_HEDGE,
+        PPT_VERTEX,
+        PPT_LAST
+    };
 
-	//! Persistent property value type
-	enum EPPValueType
-	{
-		PPV_INT = 0,
-		PPV_FLOAT,
-		PPV_DOUBLE,
-		PPV_LAST
-	};
+    //! Persistent property value type
+    enum EPPValueType
+    {
+        PPV_INT = 0,
+        PPV_FLOAT,
+        PPV_DOUBLE,
+        PPV_LAST
+    };
 
-	//! Type of persistnig properties names set
-	typedef std::map<std::string, EPPValueType> tPPNameSet;
+    //! Type of persistnig properties names set
+    typedef std::map<std::string, EPPValueType> tPPNameSet;
 
 private:
     CMeshOctree *m_octree;
 
-	int m_octreeVersion;
+    int m_octreeVersion;
 
-	//! Persisting properties sets
-	std::vector<tPPNameSet> m_pp;
+    //! Persisting properties sets
+    std::vector<tPPNameSet> m_pp;
 
 public:
     //! Default constructor.
@@ -195,8 +195,14 @@ public:
     //! updates octree of mesh
     void updateOctree();
 
-	//! updates octree of mesh
+    //! updates octree of mesh
     void updateOctree(int version);
+
+    //! Gets octree
+    CMeshOctree *getOctree()
+    {
+        return m_octree;
+    }
 
     //! Cutting OM-mesh by planes
     static bool cutByXPlane(geometry::CMesh *source, osg::Vec3Array *vertices, osg::DrawElementsUInt *indices, float planePosition);
@@ -209,8 +215,11 @@ public:
 
     void getVerticesInRange(std::vector<geometry::CMesh::VertexHandle> &vertices, std::vector<double> &distances, geometry::CMesh::Point point, double distance);
 
-	//! Set model mesh property serializable
-	void setSerializedProperty(const std::string &property_name, EPPType type, EPPValueType value_type) { m_pp[type][property_name] = value_type; }
+    //! Set model mesh property serializable
+    void setSerializedProperty(const std::string &property_name, EPPType type, EPPValueType value_type)
+    {
+        m_pp[type][property_name] = value_type;
+    }
 
 #if _MSC_VER >= 1700
 #pragma optimize( "", off )
@@ -333,7 +342,7 @@ public:
 				vpl::sys::tUInt32 num(0);
 				Reader.read(num);
 				// For all stored properties
-				for( vpl::sys::tUInt32 i = 0; i < num; ++i )
+				for( vpl::sys::tUInt32 j = 0; j < num; ++j )
 				{
 					deserializeProperty(Reader);
  					++counter;
@@ -442,10 +451,64 @@ protected:
 	bool calc_obb_from_cm(Matrix3x3 &cm, Matrix &tm, Vec3 &extent);
 
 private:
-	//! Serialize property 
+
+#define declare_property_test(handle_type, value_type, name) \
+    { \
+        switch(value_type) \
+        { \
+            case geometry::CMesh::PPV_INT: \
+            { \
+            handle_type<int> ph; \
+            if(!this->get_property_handle(ph, name)) \
+                return; \
+        } \
+        break; \
+        case geometry::CMesh::PPV_FLOAT: \
+        { \
+            handle_type<float> ph; \
+            if(!this->get_property_handle(ph, name)) \
+                return; \
+        } \
+        break; \
+        case geometry::CMesh::PPV_DOUBLE: \
+        { \
+            handle_type<double> ph; \
+            if(!this->get_property_handle(ph, name)) \
+                return; \
+        } \
+        break; \
+        default: \
+                 return; \
+        } \
+    }
+
+
+    //! Serialize property 
 	template <class S>
 	void serializeProperty(vpl::mod::CChannelSerializer<S>& Writer, EPPType property_type, EPPValueType value_type, const std::string &name)
 	{
+        // Test if property exists
+        switch (property_type)
+        {
+        case PPT_EDGE:
+            declare_property_test(OpenMesh::EPropHandleT, value_type, name);
+            break;
+
+        case PPT_FACE:
+            declare_property_test(OpenMesh::FPropHandleT, value_type, name);
+            break;
+
+        case PPT_HEDGE:
+            declare_property_test(OpenMesh::HPropHandleT, value_type, name);
+            break;
+
+        case PPT_VERTEX:
+            declare_property_test(OpenMesh::VPropHandleT, value_type, name);
+            break;
+        default:
+            return; 
+        }
+
 		// Serialize property attributes
 		WRITEINT32(property_type);
 		WRITEINT32(value_type);
@@ -521,6 +584,8 @@ private:
 		default:
 			break;
 		}
+
+        setSerializedProperty(name, property_type, value_type);
 	}
 
 /*
@@ -680,7 +745,8 @@ private:
     public:
         EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 }; // class CMesh
-typedef CMesh::tSmartPtr CMeshPtr;
+
+// typedef CMesh::tSmartPtr CMeshPtr;  !!! incompatible with EIGEN_MAKE_ALIGNED_OPERATOR_NEW !!!
 
 ////////////////////////////////////////////////////////////
 /*!
@@ -738,11 +804,11 @@ public:
     void update(geometry::CMesh *mesh, osg::BoundingBox boundingBox);
 
     //! Gets list of intersected nodes
-//    std::vector<CMeshOctreeNode *> getIntersectedNodes(osg::Plane plane);
+    //std::vector<CMeshOctreeNode *> getIntersectedNodes(osg::Plane plane);
     const std::vector<CMeshOctreeNode *>& getIntersectedNodes(osg::Plane plane);
     const std::vector<CMeshOctreeNode *>& getIntersectedNodes(osg::BoundingBox boundingBox);
-	const std::vector<CMeshOctreeNode *>& getNearPoints(const osg::Vec3 &point, double maximal_distance);
-	size_t getNearPointsHandles(const osg::Vec3 &point, double maximal_distance, std::vector<geometry::CMesh::VertexHandle> &handles, geometry::CMesh *mesh);
+    const std::vector<CMeshOctreeNode *>& getNearPoints(const osg::Vec3 &point, double maximal_distance);
+    size_t getNearPointsHandles(const osg::Vec3 &point, double maximal_distance, std::vector<geometry::CMesh::VertexHandle> &handles, geometry::CMesh *mesh);
 
 private:
     void intersect(CMeshOctreeNode &node, osg::Plane plane);
@@ -758,6 +824,3 @@ private:
 } // namespace data
 
 #endif
-
-////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////

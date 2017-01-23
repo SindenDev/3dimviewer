@@ -4,7 +4,7 @@
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
-// Copyright 2008-2012 3Dim Laboratory s.r.o.
+// Copyright 2008-2016 3Dim Laboratory s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -38,12 +38,16 @@ void CVolumeOfInterest::update(const CChangedEntries& Changes)
 //        return;
 //    }
 
-    CObjectPtr<CDensityData> spVolume( APP_STORAGE.findObject<CDensityData>(Changes) );
-
-    m_Limits.m_MinX = m_Limits.m_MinY = m_Limits.m_MinZ = 0;
-    m_Limits.m_MaxX = spVolume->getXSize() - 1;
-    m_Limits.m_MaxY = spVolume->getYSize() - 1;
-    m_Limits.m_MaxZ = spVolume->getZSize() - 1;
+	typedef CObjectHolder<CDensityData> tObjectHolder;
+	int id = APP_STORAGE.findEntryId<tObjectHolder>(Changes);
+	if (id != Storage::UNKNOWN)
+	{
+		CObjectPtr<CDensityData> spVolume( APP_STORAGE.getEntry(id) /* APP_STORAGE.findObject<CDensityData>(Changes) */ );
+		m_Limits.m_MinX = m_Limits.m_MinY = m_Limits.m_MinZ = 0;
+		m_Limits.m_MaxX = spVolume->getXSize() - 1;
+		m_Limits.m_MaxY = spVolume->getYSize() - 1;
+		m_Limits.m_MaxZ = spVolume->getZSize() - 1;
+	}
 }
 
 
