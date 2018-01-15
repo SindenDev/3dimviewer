@@ -43,11 +43,8 @@
 #endif
 //#include <GL/glew.h>
 
-
-#if (QT_VERSION >= QT_VERSION_CHECK(5, 4, 0))
 #include <QOpenGLWidget>
 #include <QOpenGLWindow>
-#endif
 
 #ifdef _WIN32 // Windows specific
     #include <Windows.h>
@@ -76,8 +73,6 @@
 #   include <unistd.h>
 #   include <linux/sysctl.h>
 #endif
-
-#include <QGLWidget>
 
 #define wcs2ACP MainWindow::wcs2ACP
 
@@ -1287,7 +1282,7 @@ void CSysInfo::logLoadedModules()
                                     RevisionNumber = LOWORD(pFileInfo->dwFileVersionLS); 
                                 }
                             }
-                            delete lpData;
+                            delete [] lpData;
                         }
                     }
 
@@ -1326,22 +1321,17 @@ void CSysInfo::init()
     getEnviromentInfo();
     getDrivesInfo();
     {     
-#if (QT_VERSION >= QT_VERSION_CHECK(5, 4, 0))
 		QOpenGLContext cx;
 		QOpenGLWindow sf;
 		sf.create();
 		cx.create();
 		cx.makeCurrent(&sf);
-#else
-        // create context
-        QGLWidget w;
-        w.makeCurrent();
-#endif
+
         // ask opengl info
         getOpenGLInfo();
 
         // check version
-        m_bOpenGLOk = QGLFormat::openGLVersionFlags() & QGLFormat::OpenGL_Version_2_1;
+		m_bOpenGLOk = cx.format().majorVersion()>2 || (cx.format().majorVersion() == 2 && cx.format().minorVersion() >= 1);
         VPL_LOG_INFO( "OpenGL 2.1 support: " << (m_bOpenGLOk?"true":"false") );
     }
     logLoadedModules();

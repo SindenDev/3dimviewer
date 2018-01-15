@@ -28,15 +28,12 @@
 
 #include <geometry/base/CMesh.h>
 #include <OpenMesh/Tools/Decimater/ModBaseT.hh>
-#include <OpenMesh/Tools/Decimater/DecimaterT.hh>
 
 // VPL
 #include <VPL/Module/Serializable.h>
 #include <VPL/Module/Progress.h>
 
 // STL
-#include <vector>
-#include <map>
 
 // forward declaration
 class CDecimator;

@@ -24,12 +24,12 @@
 #include <data/CDicomSaverDCTk.h>
 
 #include <PluginInterface.h>
-#include <cseriesselectiondialog.h>
 #include <data/CDensityData.h>
 #include <data/CVolumeTransformation.h>
 #include <data/CRegionData.h>
 #include <data/CVolumeOfInterestData.h>
 #include <VPL/Module/Progress.h>
+#include <data/CRegionColoring.h>
 
 //STL
 #include <memory>

@@ -32,7 +32,6 @@
 
 // STL
 #include <vector>
-#include <string>
 #include <VPL/System/String.h>
 
 namespace data
@@ -58,7 +57,7 @@ public:
     };
 
     //! Vector of dicom slice numbers.
-    typedef std::vector<int> tDicomNumList;
+    typedef std::vector<long long> tDicomNumList;
 
 public:
     //! Default constructor.
@@ -102,6 +101,9 @@ public:
 
     //! Returns all the slice numbers found in the DICOM file.
     virtual void getSliceIds(tDicomNumList& Numbers) = 0;
+
+    //! Returns the pixel spacing found in the DICOM file.
+    virtual double getPixelSpacing() = 0;
 
     //! Resets the patient name.
     virtual bool setPatientName(const std::string & name) = 0;
@@ -147,7 +149,7 @@ protected:
 
 protected:
     //! Converts the slice position to a slice identifier.
-    int convPos2Id( double a, double b, double c );
+    long long convPos2Id( double a, double b, double c );
 };
 
 } // namespace data

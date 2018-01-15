@@ -12,6 +12,8 @@
 #include <drawing/CISEventHandler.h>
 #include <drawing/CLineOptimizer.h>
 
+#include <QDebug>
+
 
 CDemoPluginPanel::CDemoPluginPanel(CAppBindings *pBindings, QWidget *parent) :
     QWidget(parent),
@@ -28,7 +30,7 @@ CDemoPluginPanel::CDemoPluginPanel(CAppBindings *pBindings, QWidget *parent) :
     data::CObjectPtr<data::CRegionColoring> spColoring( PLUGIN_APP_STORAGE.getEntry( data::Storage::RegionColoring::Id ) );
     if( spColoring.get() )
     {
-        m_colorComboBox.objectChanged( spColoring.get() );
+        m_colorComboBox.updateFromColoring( spColoring.get() );
     }
     // Connect signal invoked on region change to the combo box
     PLUGIN_APP_STORAGE.connect(data::Storage::RegionColoring::Id, &m_colorComboBox);
@@ -317,4 +319,56 @@ void CDemoPluginPanel::on_checkBoxShowRegions_toggled(bool checked)
     data::CObjectPtr<data::CRegionData> spData( PLUGIN_APP_STORAGE.getEntry(data::Storage::RegionData::Id) );
     spData->enableColoring(checked);
     PLUGIN_APP_STORAGE.invalidate(spData.getEntryPtr());
+}
+
+void CDemoPluginPanel::setActiveData(int id)
+{
+    data::CObjectPtr< data::CActiveDataSet > ptrDataset(PLUGIN_APP_STORAGE.getEntry(data::Storage::ActiveDataSet::Id));
+    ptrDataset->setId(id);
+    PLUGIN_APP_STORAGE.invalidate(ptrDataset.getEntryPtr());
+}
+
+void CDemoPluginPanel::on_pushButtonAuxData_clicked()
+{
+    setActiveData(data::AUX_DATA);
+}
+
+void CDemoPluginPanel::on_pushButtonPatientData_clicked()
+{
+    setActiveData(data::PATIENT_DATA);
+}
+
+void CDemoPluginPanel::on_pushButtonUseModel_clicked()
+{
+    data::CObjectPtr< data::CDensityData > pVolumeAux(PLUGIN_APP_STORAGE.getEntry(data::AUX_DATA));
+    data::CObjectPtr< data::CDensityData > pVolumePatient(PLUGIN_APP_STORAGE.getEntry(data::PATIENT_DATA));
+
+    data::CDensityData data;
+    pVolumeAux->makeRef(data);
+    pVolumeAux->copyProps(*pVolumePatient.get());
+    pVolumeAux->resize(pVolumePatient->getSize());
+    //pVolumeAux->fillMargin(0);
+
+    //data::CDensityData data;
+    //data.copy(*pVolumePatient.get());
+    //pVolumeAux->makeRef(data);
+
+    for (int x = 0; x < (int)pVolumePatient->getXSize(); x++)
+    {
+        for (int y = 0; y < (int)pVolumePatient->getYSize(); y++)
+        {
+            for (int z = 0; z < (int)pVolumePatient->getZSize(); z++)
+            {
+                pVolumePatient->set(x, y, z, x*y*z * 500);
+                pVolumeAux->set(x, y, z, x*y*z * 500);
+            }
+        }
+    }
+
+    //qDebug() << pVolumePatient->at(50, 50, 50) << " : " << pVolumeAux->at(50, 50, 50);
+    //qDebug() << pVolumePatient->at(100, 100, 100) << " : " << pVolumeAux->at(100, 100, 100);
+
+    PLUGIN_APP_STORAGE.invalidate(pVolumePatient.getEntryPtr());
+    PLUGIN_APP_STORAGE.invalidate(pVolumeAux.getEntryPtr());
+    return;
 }

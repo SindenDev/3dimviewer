@@ -218,3 +218,13 @@ void CRotate2DDragger::setPlane( const osg::Plane & plane )
 void CRotate2DDragger::updateCommand(MotionCommand & command)
 {
 }
+
+void osgManipulator::CRotate2DDragger::onMouseEnter()
+{
+    setMaterial(osg::SECOND);
+}
+
+void osgManipulator::CRotate2DDragger::onMouseLeave()
+{
+    setMaterial(osg::FIRST);
+}

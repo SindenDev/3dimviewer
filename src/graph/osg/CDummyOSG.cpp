@@ -80,12 +80,7 @@ void scene::CDummyGeometry::squarePlaneXY(osg::Geometry * geometry, bool thin)
 
 	osg::Vec4Array * vertex_colors = new osg::Vec4Array(1);
 	(*vertex_colors)[0] = osg::Vec4( 0.0, 0.0, 1.0, 0.2 );
-#if OSG_VERSION_GREATER_OR_EQUAL(3,1,10)
 	geometry->setColorArray( vertex_colors, osg::Array::BIND_OVERALL );
-#else
-	geometry->setColorArray( vertex_colors );
-#endif
-	geometry->setColorBinding( osg::Geometry::BIND_OVERALL );
 }
 
 //====================================================================================================================
@@ -144,12 +139,7 @@ void scene::CDummyGeometry::squarePlaneXZ( osg::Geometry * geometry, bool thin )
 	osg::Vec4Array * vertex_colors = new osg::Vec4Array(1);
 	(*vertex_colors)[0] = osg::Vec4( 0.0, 1.0, 0.0, 0.2 );
 
-#if OSG_VERSION_GREATER_OR_EQUAL(3,1,10)
 	geometry->setColorArray( vertex_colors, osg::Array::BIND_OVERALL );
-#else
-	geometry->setColorArray( vertex_colors );
-#endif
-	geometry->setColorBinding( osg::Geometry::BIND_OVERALL );
 }
 
 //====================================================================================================================
@@ -208,12 +198,7 @@ void scene::CDummyGeometry::squarePlaneYZ( osg::Geometry * geometry, bool thin )
 	osg::Vec4Array * vertex_colors = new osg::Vec4Array(1);
 	(*vertex_colors)[0]	= osg::Vec4( 1.0, 0.0, 0.0, 0.2 );
 
-#if OSG_VERSION_GREATER_OR_EQUAL(3,1,10)
 	geometry->setColorArray( vertex_colors, osg::Array::BIND_OVERALL );
-#else
-	geometry->setColorArray( vertex_colors );
-#endif
-	geometry->setColorBinding( osg::Geometry::BIND_OVERALL );
 }
 
 //====================================================================================================================
@@ -263,14 +248,9 @@ void scene::CDummyGeometry::cube( osg::Geometry * geometry, bool generateNormals
 		geometry->addPrimitiveSet( cube );
 
 		osg::Vec4Array * vertex_colors = new osg::Vec4Array(1);
-		(*vertex_colors)[0] = osg::Vec4( 0.0, 1.0, 0.0, 0.2 );
+		(*vertex_colors)[0] = osg::Vec4( 1.0, 1.0, 1.0, 1.0 );
 
-#if OSG_VERSION_GREATER_OR_EQUAL(3,1,10)
 		geometry->setColorArray( vertex_colors, osg::Array::BIND_OVERALL );
-#else
-		geometry->setColorArray( vertex_colors );
-#endif
-		geometry->setColorBinding( osg::Geometry::BIND_OVERALL );
 		
 		{
 			osg::Vec3Array * normals = new osg::Vec3Array;
@@ -286,12 +266,7 @@ void scene::CDummyGeometry::cube( osg::Geometry * geometry, bool generateNormals
 				normals->push_back( osg::Vec3(  0.0,  1.0,  0.0 ) );
 			for(int i=0;i<4;i++)
 				normals->push_back( osg::Vec3( -1.0,  0.0,  0.0 ) );
-#if OSG_VERSION_GREATER_OR_EQUAL(3,1,10)
 			geometry->setNormalArray( normals, osg::Array::BIND_PER_VERTEX );
-#else
-			geometry->setNormalArray( normals );
-#endif
-			geometry->setNormalBinding(Geometry::BIND_PER_VERTEX);
 		}
 	}
 	else
@@ -346,12 +321,7 @@ void scene::CDummyGeometry::cube( osg::Geometry * geometry, bool generateNormals
 		osg::Vec4Array * vertex_colors = new osg::Vec4Array(1);
 		(*vertex_colors)[0] = osg::Vec4( 0.0, 1.0, 0.0, 0.2 );
 
-#if OSG_VERSION_GREATER_OR_EQUAL(3,1,10)
 		geometry->setColorArray( vertex_colors, osg::Array::BIND_OVERALL );
-#else
-		geometry->setColorArray( vertex_colors );
-#endif
-		geometry->setColorBinding( osg::Geometry::BIND_OVERALL );
 	}
 }
 
@@ -361,12 +331,7 @@ void scene::CDummyGeometry::setColor( const osg::Vec4 & color )
 	osg::Vec4Array * vertex_colors = new osg::Vec4Array(1);
 	(*vertex_colors)[0] = color;
 
-#if OSG_VERSION_GREATER_OR_EQUAL(3,1,10)
 	this->setColorArray( vertex_colors, osg::Array::BIND_OVERALL );
-#else
-	this->setColorArray( vertex_colors );
-#endif
-	this->setColorBinding( osg::Geometry::BIND_OVERALL );
 }
 
 //====================================================================================================================
@@ -584,12 +549,7 @@ scene::CGizmo::CGizmo( double size, const osg::Vec3 & offset )
 	// create color array for gizmo
 	osg::Vec4Array * color_array = new osg::Vec4Array( 1 );
 	(*color_array)[0] = osg::Vec4( 1.0, 1.0, 1.0, 1.0 );
-#if OSG_VERSION_GREATER_OR_EQUAL(3,1,10)
 	p_Geometry->setColorArray( color_array, osg::Array::BIND_OVERALL );
-#else
-	p_Geometry->setColorArray( color_array );
-#endif
-	p_Geometry->setColorBinding( osg::Geometry::BIND_OVERALL );
 
 	// set up line width
 	p_LineWidth->setWidth( 1.0 );
@@ -1049,13 +1009,7 @@ void	scene::COrientableLineGizmo::createDummy( const osg::Vec3 & offset, const o
 
 	osg::Vec4Array	* color = new osg::Vec4Array( 1 );
 	(*color)[0] = osg::Vec4( 1.0, 1.0, 1.0, 0.0 );
-	
-#if OSG_VERSION_GREATER_OR_EQUAL(3,1,10)
 	p_DummyGeometry->setColorArray( color, osg::Array::BIND_OVERALL );
-#else
-	p_DummyGeometry->setColorArray( color );
-#endif
-	p_DummyGeometry->setColorBinding( osg::Geometry::BIND_OVERALL );
 
 	this->addChild( p_DummyGeode.get() );
 }

@@ -11,8 +11,7 @@ Here is a list of all external 3rd party libraries used by 3DimViewer:
 - cURL library (http://curl.haxx.se/)
 - OpenSSL Toolkit (http://www.openssl.org/)
 - zlib library (http://www.zlib.net/)
-- OpenMesh library (https://www.openmesh.org/)
-- GDCM library (https://sourceforge.net/projects/gdcm/) - if using instead of dcmtk
+- openCTM library (http://openctm.sourceforge.net)
 
 Some of these libraries might be distributed under a more restrictive license
 then the 3DimViewer one. Please see licenses of individual 3rd party libraries

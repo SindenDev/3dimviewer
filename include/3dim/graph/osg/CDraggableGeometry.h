@@ -69,6 +69,12 @@ public:
 	//! Add dragger
 	void addDragger(osgManipulator::Dragger * dragger, bool bScaleDragger = true, bool bPositioned = false, bool bManaged = true );
 
+    //! Add dragger as is. This dragger is not stored in the geometry composite dragger. Use this routine for pivot draggers for example.
+    void addSpecialDragger(osgManipulator::Dragger *dragger);
+
+    //! Removes "special" dragger
+    void removeSpecialDragger(osgManipulator::Dragger *dragger);
+
 	//! Add geometry
 	void addGeometry(Node * node);
 
@@ -172,7 +178,7 @@ protected:
 	void sigDispatchMatrix(const osg::Matrix & matrix, long id);
 
 	//! Compute bonding boxes
-	void computeBoundingBoxes();
+	virtual void computeBoundingBoxes();
 
 	//! Build scene tree
 	void buildTree( const osg::Matrix & initialMatrix );

@@ -1,0 +1,11 @@
+<RCC>
+  <qresource prefix="/icons">
+    <file>icons/visibility.png</file>
+    <file>icons/tool_brush.png</file>
+    <file>icons/arrow.png</file>
+    <file>icons/tool_eraser.png</file>
+    <file>icons/notedeletesmall.png</file>
+    <file>icons/notesplugin.png</file>
+    <file>icons/notesplugin_dock.png</file>
+  </qresource>
+</RCC>

@@ -42,7 +42,7 @@ public:
 	virtual ~CBoundingBoxVisitor();
 
     //! Apply for cameras
-    virtual void apply(osg::Camera &camera);
+    virtual void apply(osg::Camera &camera) override;
 
 	//! Set matrix used when computing bounding box.
 	void setInitialMatrix(const osg::Matrix & m)

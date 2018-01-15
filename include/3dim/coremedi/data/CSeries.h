@@ -29,7 +29,6 @@
 #include <data/CDicomLoader.h>
 
 // STL
-#include <string>
 #include <vector>
 #include <map>
 #include <set>
@@ -60,8 +59,19 @@ public:
 };
 
 #ifdef WIN32 // for Windows file names that need to be in ACP
-    std::string wcs2ACP(const std::wstring &wcsStr);
+    std::string wcs2ACP(const std::wstring &wcsStr, bool bDoNotUseShortName = false);
+    std::wstring ACP2wcs(const char *filename);
+    std::wstring shortName(const std::wstring &filename);
+    std::string shortName(const std::string &filename);
 #endif
+
+//! Struct encapsulates DICOM filename and pixel spacing (need for data preview)
+struct SDCMTkFileNameAndPixelSpacing
+{
+public:
+    SDCMTkFilename fileInfo;
+    double pixelSpacing;
+};
 
 ///////////////////////////////////////////////////////////////////////////////
 //! Class encapsulates one serie of dicom files.
@@ -80,6 +90,8 @@ public:
 
     //! Set of dicom slice numbers.
     typedef std::set< int > tDicomNumSet;
+
+	typedef std::map<int, SDCMTkFileNameAndPixelSpacing> tDicomNumToFileinfo;
 
 public:
     //! Default constructor.
@@ -102,7 +114,7 @@ public:
     bool hasSlice( int number ) const;
 
     //! Adds dicom slice to the serie.
-    bool addSlice( int id );
+    bool addSlice(int id, double pixelSpacing = 0.0);
 
     //! Sets 8 bit data state
     void setHas8BitData(bool bHasThem) { m_bHas8BitData = bHasThem; }
@@ -127,11 +139,21 @@ public:
     //! - Returns the number of succesfully read slices.
     int loadDicomFile(int FileNum, tDicomSlices& Slices, sExtendedTags& tags, bool bLoadImageData = true, bool bCompatibilityMode = false);
 
+	//! Loads a single frame (i.e. slice) from a specified dicom file. 
+	//! Maps fileIndex to sliceId, so the slices in preview should be sorted.
+	bool loadDicomFileForPreview(int sliceIndex, vpl::img::CDicomSlice& Slice, sExtendedTags& tags, bool bLoadImageData = true, double pixelSpacing = 0.0);
+
 	void sortFilenamesByNumber();
 
     //! Sets/ Gets flag whether serie should be loaded using custom load funcion 
     void setLoadBuggySerie(bool b){ m_loadBuggySerie = b; }
     bool getLoadBuggySerie() const { return m_loadBuggySerie; };
+
+    //! Returns number of dicom files in the serie for preview.
+    int getNumOfDicomFilesForPreview();
+
+    //! Returns the most common pixel spacing of dicom files in the serie.
+    double getTheMostCommonPixelSpacing();
 
 protected:
     //! Set of all dicom files belonging to this serie.
@@ -151,6 +173,12 @@ protected:
     //! Flag indicating whether serie should be loaded using custom load funcion, in case
     //! GDCM reader fails
     bool m_loadBuggySerie;
+
+	//! Mapping of slice numbers to filenames.
+    tDicomNumToFileinfo m_DicomNumToFilenameMap;
+
+    //! Pixel spacing of slices.
+    std::vector<double> m_DicomPixelSpacing;
 };
 
 typedef CSerieInfo::tSmartPtr  CSerieInfoPtr;

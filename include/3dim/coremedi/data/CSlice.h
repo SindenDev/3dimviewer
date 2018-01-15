@@ -46,7 +46,7 @@ class CValidSourceFunctor
 {
 public:
     CValidSourceFunctor() { }
-    ~CValidSourceFunctor() { }
+    virtual ~CValidSourceFunctor() { }
     virtual bool operator()() { return true; }
 };
 

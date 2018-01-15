@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>221</width>
-    <height>303</height>
+    <height>474</height>
    </rect>
   </property>
   <property name="minimumSize">
@@ -143,6 +143,36 @@
         </property>
         <property name="text">
          <string>Show Regions</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="groupBox_4">
+     <property name="title">
+      <string>Aux Data</string>
+     </property>
+     <layout class="QVBoxLayout" name="verticalLayout_4">
+      <item>
+       <widget class="QPushButton" name="pushButtonUseModel">
+        <property name="text">
+         <string>Fill</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="pushButtonAuxData">
+        <property name="text">
+         <string>Aux</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="pushButtonPatientData">
+        <property name="text">
+         <string>Patient</string>
         </property>
        </widget>
       </item>

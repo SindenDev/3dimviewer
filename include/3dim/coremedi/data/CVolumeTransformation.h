@@ -35,7 +35,6 @@
 #include <VPL/Module/Serializable.h>
 #include <data/CSerializableData.h>
 #include <data/CStorageInterface.h>
-#include <sstream>
 #include <data/storage_ids_core.h>
 
 ///////////////////////////////////////////////////////////////////////////////

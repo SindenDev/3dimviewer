@@ -106,7 +106,9 @@ void osgPSVolumeRendering::drawImplementation(osg::RenderInfo& ri) const
 ///////////////////////////////////////////////////////////////////////////////
 //
 osgPSVolumeRenderingGeode::~osgPSVolumeRenderingGeode()
-{ }
+{ 
+    scene::CGeneralObjectObserverOSG<osgPSVolumeRenderingGeode>::disconnect(APP_STORAGE.getEntry(data::Storage::ActiveDataSet::Id).get());
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 //
@@ -114,7 +116,7 @@ osgPSVolumeRenderingGeode::osgPSVolumeRenderingGeode()
 //    : m_pRenderer(NULL)
 {
     // Set the update callback
-    APP_STORAGE.connect(data::Storage::ActiveDataSet::Id, this);
+    scene::CGeneralObjectObserverOSG<osgPSVolumeRenderingGeode>::connect(APP_STORAGE.getEntry(data::Storage::ActiveDataSet::Id).get());
     this->setupObserver(this);
 
     this->setCullingActive(false);

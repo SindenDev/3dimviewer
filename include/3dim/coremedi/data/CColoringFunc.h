@@ -389,15 +389,15 @@ public:
             return;
         }
 
-        for (int i = 0; i < (int)coloringEntries.size(); ++i)
+        for (int ci = 0; ci < (int)coloringEntries.size(); ++ci)
         {
-            int T1 = coloringEntries[i].T1;
-            int T2 = coloringEntries[i].T2;
+            int T1 = coloringEntries[ci].T1;
+            int T2 = coloringEntries[ci].T2;
             float Color[4];
-            Color[0] = coloringEntries[i].Color.getR() / 255.0f;
-            Color[1] = coloringEntries[i].Color.getG() / 255.0f;
-            Color[2] = coloringEntries[i].Color.getB() / 255.0f;
-            Color[3] = coloringEntries[i].Color.getA() / 255.0f;
+            Color[0] = coloringEntries[ci].Color.getR() / 255.0f;
+            Color[1] = coloringEntries[ci].Color.getG() / 255.0f;
+            Color[2] = coloringEntries[ci].Color.getB() / 255.0f;
+            Color[3] = coloringEntries[ci].Color.getA() / 255.0f;
 
             int difference = T2 - T1;
             if (difference <= 0)

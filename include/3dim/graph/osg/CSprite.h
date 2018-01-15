@@ -33,6 +33,8 @@
 #include <osg/BlendFunc>
 #include <osg/CForceCullCallback.h>
 #include <osg/Transform>
+#include <osg/CActiveObjectBase.h>
+#include <osg/MatrixTransform>
 
 namespace osg
 {
@@ -77,6 +79,9 @@ protected:
     int                             _spriteHeight;
     osg::Vec2                       _pivotPoint;
     osg::ref_ptr<osg::Geometry>     _quad;
+    double                          _centerOffsetX;
+    double                          _centerOffsetY;
+    double                          _centerOffsetZ;
 
 public:
     CAdvSprite(osg::Texture2D *texture, osg::Vec2 pivotPoint = osg::Vec2(0.0f, 0.0f));
@@ -88,6 +93,9 @@ public:
     virtual bool computeLocalToWorldMatrix(Matrix &matrix, NodeVisitor *nv) const;
     virtual bool computeWorldToLocalMatrix(Matrix &matrix, NodeVisitor *nv) const;
     virtual BoundingSphere computeBound() const;
+
+    //! Sets offset from center of screen in percentage. Allowed values are <0.0,1.0>.
+    void setOffsetFromCenter(double dx, double dy, double dz);
 
 protected:
     virtual ~CAdvSprite();
@@ -128,13 +136,14 @@ private:
     osg::ref_ptr<DrawElementsUInt> m_indices;
     osg::ref_ptr<osg::Depth> m_depth;
     osg::ref_ptr<osg::BlendFunc> m_blend;
+    osg::ref_ptr<osg::MatrixTransform> m_matrix;
 
 public:
     //! Ctor - position is given by parents
-    CSprite(osg::Texture2D *texture, osg::Vec4 color = osg::Vec4(1.0, 1.0, 1.0, 1.0), osg::Vec2 scale = osg::Vec2(1.0, 1.0), osg::BlendFunc *blendFunc = NULL, osg::Depth *depth = NULL);
+    CSprite(osg::Texture2D *texture, osg::MatrixTransform *matrix = NULL, osg::Vec4 color = osg::Vec4(1.0, 1.0, 1.0, 0.0), osg::Vec2 scale = osg::Vec2(1.0, 1.0), osg::BlendFunc *blendFunc = NULL, osg::Depth *depth = NULL);
 
     //! Ctor - position in window coordinates is given by user
-    CSprite(osg::Texture2D *texture, osg::Vec3 position, bool absolutePosition, osg::Vec4 color = osg::Vec4(1.0, 1.0, 1.0, 1.0), osg::Vec2 scale = osg::Vec2(1.0, 1.0), osg::BlendFunc *blendFunc = NULL, osg::Depth *depth = NULL);
+    CSprite(osg::Texture2D *texture, osg::Vec3 position, bool absolutePosition, osg::MatrixTransform *matrix = NULL, osg::Vec4 color = osg::Vec4(1.0, 1.0, 1.0, 1.0), osg::Vec2 scale = osg::Vec2(1.0, 1.0), osg::BlendFunc *blendFunc = NULL, osg::Depth *depth = NULL);
 
     //! Copy Ctor
     CSprite(const CSprite &sprite);
@@ -151,7 +160,6 @@ private:
     void createGeometry();
 };
 
-
 // Class for placing sprites into scene graph
 class CSpriteNode : public osg::Geode
 {
@@ -167,6 +175,59 @@ public:
 
     //! Dtor
     ~CSpriteNode();
+};
+
+
+//! Class for sprites shadow geometry, that can be positioned under sprites texture
+class CSpriteShadow : public osg::Geometry
+{
+public:
+    enum ESpriteShadowType
+    {
+        ESST_DEFAULT = 0, // simple quad geometry
+        ESST_IMPLANT_INVALID // octagon geometry
+    };
+
+private:
+    ESpriteShadowType m_type;
+    osg::ref_ptr<osg::StateSet> m_stateSet;
+    osg::ref_ptr<osg::Vec3Array> m_vertices;
+    osg::ref_ptr<DrawElementsUInt> m_indices;
+    osg::ref_ptr<osg::Depth> m_depth;
+
+public:
+    //! Ctor
+    CSpriteShadow(ESpriteShadowType type = ESST_DEFAULT, osg::Depth *depth = NULL);
+
+    //! Copy Ctor
+    CSpriteShadow(const CSpriteShadow &shadow);
+
+    //! Dtor
+    ~CSpriteShadow();
+
+private:
+    //! Helper method for creating geometry and state set
+    void createGeometry();
+};
+
+
+// Class for placing transformable sprite shadows into scene graph
+class CSpriteShadowNode : public osg::MatrixTransform
+{
+private:
+    osg::ref_ptr<osg::Geode> m_shadowGeode;
+    osg::ref_ptr<osg::CSpriteShadow> m_shadow;
+
+public:
+    //! Ctor
+    CSpriteShadowNode(osg::CSpriteShadow *shadow);
+
+    //! Copy Ctor
+    CSpriteShadowNode(const CSpriteShadowNode &shadowNode);
+
+    //! Dtor
+    ~CSpriteShadowNode();
+
 };
 
 } // namespace osg

@@ -29,12 +29,10 @@
 #include <geometry/base/CMesh.h>
 
 // VPL
-#include <VPL/Image/DensityVolume.h>
 #include <VPL/Module/Serializable.h>
 #include <VPL/Module/Progress.h>
 
 // STL
-#include <vector>
 
 ////////////////////////////////////////////////////////////
 //! CSmoothing algorithm implementation class.

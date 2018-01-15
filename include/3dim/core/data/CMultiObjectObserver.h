@@ -23,10 +23,9 @@
 #ifndef CMultiObjectObserver_H
 #define CMultiObjectObserver_H
 
-#include "CObjectObserver.h"
+#include "CGeneralObjectObserver.h"
 
 // STL
-#include <vector>
 
 
 namespace data

@@ -102,25 +102,25 @@ CModelsWidget::CModelsWidget(QWidget *parent /*= 0*/)
 
     // Connect to all models
     for(int i = 0; i < MAX_IMPORTED_MODELS; ++i)
-        APP_STORAGE.connect(data::Storage::ImportedModel::Id + i, this);
+        data::CGeneralObjectObserver<CModelsWidget>::connect(APP_STORAGE.getEntry(data::Storage::ImportedModel::Id + i ).get());
 
     updateTable();
     ui->tableModels->selectRow(0);
 
 	ui->checkBoxIOApplyDICOM->setChecked(settings.value("STLUseDICOMCoord",false).toBool());
 
-    m_Connection = APP_STORAGE.getEntrySignal(data::Storage::ActiveDataSet::Id).connect(this, &CModelsWidget::onNewDensityData);
+    CGeneralObjectObserver<CModelsWidget>::connect(APP_STORAGE.getEntry(data::Storage::ActiveDataSet::Id ).get(), CGeneralObjectObserver<CModelsWidget>::tObserverHandler(this, &CModelsWidget::onNewDensityData));
 }
 
 
 //!\brief   Destructor.
 CModelsWidget::~CModelsWidget()
 {
-    APP_STORAGE.getEntrySignal(data::Storage::ActiveDataSet::Id).disconnect(m_Connection);
+    CGeneralObjectObserver<CModelsWidget>::disconnect(APP_STORAGE.getEntry(data::Storage::ActiveDataSet::Id ).get());
 
     // Connect to all models
     for(int i = 0; i < MAX_IMPORTED_MODELS; ++i)
-        APP_STORAGE.disconnect(data::Storage::ImportedModel::Id + i, this);
+        CGeneralObjectObserver<CModelsWidget>::disconnect(APP_STORAGE.getEntry(data::Storage::ImportedModel::Id + i).get());
 }
 
 
@@ -130,7 +130,7 @@ CModelsWidget::~CModelsWidget()
 //!
 //!\param [in,out]  pEntry  If non-null, the entry.
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-void CModelsWidget::onNewDensityData(data::CStorageEntry *pEntry)
+void CModelsWidget::onNewDensityData(data::CStorageEntry *pEntry, const data::CChangedEntries &changes)
 {
 
 }
@@ -140,7 +140,7 @@ void CModelsWidget::onNewDensityData(data::CStorageEntry *pEntry)
 //!
 //!\param [in,out]  pData   If non-null, the data.
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-void CModelsWidget::objectChanged(data::CModel *pData)
+void CModelsWidget::objectChanged(data::CStorageEntry *pEntry, const data::CChangedEntries &changes)
 {
     if(!m_bMyChange)
         updateTable();
@@ -354,7 +354,7 @@ void CModelsWidget::onModelItemChanged(QTableWidgetItem *item)
             if (Qt::ItemIsEnabled == (item->flags() & Qt::ItemIsEnabled))
             {
                  data::CObjectPtr<data::CModel> spModel( APP_STORAGE.getEntry(storage_id) );
-                bool bWasVisible(spModel->isShown());
+                bool bWasVisible(spModel->isVisible());
                 bool bVisible = item->checkState() == Qt::Checked;
                 if ( (bWasVisible && !bVisible) || (!bWasVisible && bVisible) )
                 {
@@ -579,7 +579,8 @@ void CModelsWidget::tableModelsContextMenu(QPoint p)
 
 			if (QDialog::Accepted==dlg.exec())
 			{
-				MainWindow::getInstance()->getModelManager()->createAndStoreSnapshot();
+                std::vector<int> modelList;
+				MainWindow::getInstance()->getModelManager()->createAndStoreSnapshot(modelList);
 				pos[0] = spinX.value();
 				pos[1] = spinY.value();
 				pos[2] = spinZ.value();
@@ -595,7 +596,8 @@ void CModelsWidget::tableModelsContextMenu(QPoint p)
 			geometry::CMesh* pMesh=spModel->getMesh();
 			if (NULL!=pMesh && pMesh->n_vertices() > 0)
 			{
-				MainWindow::getInstance()->getModelManager()->createAndStoreSnapshot();
+                std::vector<int> modelList;
+				MainWindow::getInstance()->getModelManager()->createAndStoreSnapshot(modelList);
 				data::CObjectPtr<data::CDensityData> spVolume( APP_STORAGE.getEntry(data::Storage::PatientData::Id) );
 				const double sX = spVolume->getXSize()*spVolume->getDX();
 				const double sY = spVolume->getYSize()*spVolume->getDY();

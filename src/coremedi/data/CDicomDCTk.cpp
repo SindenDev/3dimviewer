@@ -421,6 +421,24 @@ void data::CDicomDCTk::getSliceIds(tDicomNumList& Numbers)
 }
 
 //=================================================================================================
+double data::CDicomDCTk::getPixelSpacing()
+{
+    if (m_bOk)
+    {
+        DcmDataset * dataset = m_pHandle->getDataset();
+
+        OFString buffer;
+        OFCondition status = dataset->findAndGetOFString(TAG_PIXEL_SIZE, buffer);
+        if (status.good())
+        {
+            return std::atof(buffer.c_str());
+        }
+        else return 0.0;
+    }
+    else return 0.0;
+}
+
+//=================================================================================================
 bool data::CDicomDCTk::anonymize(const std::string & name)
 {
     DcmDataset *dataset = m_pHandle->getDataset();
@@ -1643,7 +1661,7 @@ int CDicomDCTk::loadDicom(const vpl::sys::tString &dir, const std::string &filen
 
         // Load all frames
         //for( unsigned long i = 0; i < poslist.card(); ++i ) // we have a file which has multiple frames but only one position record
-        for (unsigned long i = 0; i < image->getFrameCount(); ++i)
+        for (signed long i = 0; i < image->getFrameCount(); ++i)
         {
             // Create a new slice
             vpl::img::CDicomSlicePtr pSlice = new vpl::img::CDicomSlice(slicetags);

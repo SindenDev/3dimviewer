@@ -106,6 +106,12 @@ public:
     //! Set max memory taken by undo
     void setMaxSize(long long maxSize) { m_maxSize = maxSize; }
 
+    //! Get undo queue
+    const tUndoItemsQueue &getUndoQueue() { return m_undoQueue; }
+
+    //! Get redo queue
+    const tUndoItemsQueue &getRedoQueue() { return m_redoQueue; }
+
 protected:
     //! Get new timestamp
     long getTime() { return ++m_timeCounter; }

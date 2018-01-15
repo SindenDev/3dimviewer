@@ -90,13 +90,34 @@ void CCustomData::readXML(const std::string& str)
 						sEntry entry;
 						entry.name = (e_name.toString());
 						entry.value = (e_val);
+                        entry.data = QVariant();
                         if (!data.isEmpty())
                         {                      
                             QByteArray arr(QByteArray::fromBase64(data.toLatin1()));
+                            //qDebug() << arr;
                             QBuffer readBuffer(&arr);
                             readBuffer.open(QIODevice::ReadOnly);
                             QDataStream strm(&readBuffer);
                             strm >> entry.data;
+                            bool bOk = true;
+                            if (entry.data.type() == QVariant::List)
+                            {
+                                QList<QVariant> vl = entry.data.toList();
+                                for(auto it = vl.begin(); it!=vl.end() && bOk; ++it)
+                                {
+                                    bOk = (it->type() != QVariant::Invalid);
+                                }
+                            }
+                            if (!bOk || entry.data.type() == QVariant::Invalid)
+                            {
+                                qDebug() << "Error detected for " << entry.name << ", trying to read in Qt 4.8 format";
+                                entry.data = QVariant();
+                                QBuffer rBx(&arr);
+                                rBx.open(QIODevice::ReadOnly);
+                                QDataStream s(&rBx);
+                                s.setVersion(QDataStream::Qt_4_8);
+                                s >> entry.data;
+                            }
                         }
 						
 						it->push_back(entry);

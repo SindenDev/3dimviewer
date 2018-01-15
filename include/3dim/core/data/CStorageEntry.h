@@ -369,7 +369,7 @@ public:
         tLock Lock(*this);
 
         Changes.setEntryId(m_Id);
-        return m_ChangeLog.getChanges( m_Version-1, Changes );
+        return m_ChangeLog.getChanges(m_Version, Changes);
     }
 
 protected:

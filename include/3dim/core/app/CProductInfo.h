@@ -27,7 +27,6 @@
 
 // STL
 #include <string>
-#include <sstream>
 
 
 namespace app

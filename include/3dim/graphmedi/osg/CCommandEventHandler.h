@@ -23,7 +23,7 @@
 #ifndef CCommandEventHandler_H
 #define CCommandEventHandler_H
 
-#include <osg/OSGCanvas.h> // nothin' more needed
+//#include <osg/OSGCanvas.h> // nothin' more needed
 #include <osg/CAppMode.h>
 
 #include <osgGA/GUIEventHandler>

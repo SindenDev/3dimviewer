@@ -19,25 +19,27 @@
 //
 ///////////////////////////////////////////////////////////////////////////////
 
-
 #ifndef CMESH_H
 #define CMESH_H
 
-
 ////////////////////////////////////////////////////////////
 // include
+#include <map>
 
 #include <VPL/Module/Serializer.h>
 #include <VPL/Math/Base.h>
 #include <VPL/Math/Matrix.h>
 
 #include <data/CSerializableData.h>
+#include <data/CSerializationManager.h>
 
 #include <osg/Geometry>
 #include <osg/TriangleFunctor>
 //#include <osg/dbout.h>
 
-#define _USE_MATH_DEFINES
+#ifndef _USE_MATH_DEFINES
+  #define _USE_MATH_DEFINES
+#endif
 
 #ifndef OM_STATIC_BUILD
 #define OM_STATIC_BUILD
@@ -96,21 +98,16 @@ public:
     
     void operator()(const osg::Vec3 &v1, const osg::Vec3 &v2, const osg::Vec3 &v3, float d1, float d2, float d3);
     void operator()(const osg::Vec3 &v1, const osg::Vec3 &v2, const osg::Vec3 &v3, bool treatVertexDataAsTemporary);
-    
+
     bool initialize(osg::Vec3Array *vertices, osg::DrawElementsUInt *indices, osg::Plane plane, osg::Matrix worldMatrix);
     bool initialize(osg::Vec3Array *vertices, osg::DrawElementsUInt *indices, float planePosition);
-    
+
     void cutX(geometry::CMesh *source);
     void cutY(geometry::CMesh *source);
     void cutZ(geometry::CMesh *source);
     void cut(geometry::CMesh *source);
     
 private:
-//    void calculateDistancesX(geometry::CMesh *source, std::vector<CMeshOctreeNode *> *intersectedNodes = NULL);
-//    void calculateDistancesY(geometry::CMesh *source, std::vector<CMeshOctreeNode *> *intersectedNodes = NULL);
-//    void calculateDistancesZ(geometry::CMesh *source, std::vector<CMeshOctreeNode *> *intersectedNodes = NULL);
-//    void calculateDistances(geometry::CMesh *source, std::vector<CMeshOctreeNode *> *intersectedNodes = NULL);
-//    void performCut(geometry::CMesh *source, std::vector<CMeshOctreeNode *> *intersectedNodes = NULL);
     void calculateDistancesX(geometry::CMesh *source, const std::vector<CMeshOctreeNode *> *intersectedNodes = NULL);
     void calculateDistancesY(geometry::CMesh *source, const std::vector<CMeshOctreeNode *> *intersectedNodes = NULL);
     void calculateDistancesZ(geometry::CMesh *source, const std::vector<CMeshOctreeNode *> *intersectedNodes = NULL);
@@ -119,7 +116,7 @@ private:
 
     inline int sign(float value)
     {
-//        return value < 0.0f ? -1 : (value > 0.0f ? 1 : 0);
+        //return value < 0.0f ? -1 : (value > 0.0f ? 1 : 0);
         return (0.0f < value) - (value < 0.0f);
     }
 };
@@ -129,6 +126,8 @@ private:
 ////////////////////////////////////////////////////////////
 
 #define MATERIAL_PROPERTY_NAME "material"
+#define MAX_GROUPS_PER_VERTEX 4
+#define VERTEX_GROUPS_PROPERTY_NAME "vertexGroups"
 
 ////////////////////////////////////////////////////////////
 /*!
@@ -136,6 +135,110 @@ private:
  */
 class CMesh : public vpl::base::CObject, public CBaseMesh, public vpl::mod::CSerializable
 {
+public:
+    template <int C = MAX_GROUPS_PER_VERTEX>
+    class CVertexGroupsBasic
+    {
+    public:
+        int indices[C];
+        float weights[C];
+
+        enum { GROUP_COUNT = C };
+
+    public:
+        CVertexGroupsBasic()
+        {
+            for (int i = 1; i < C; ++i)
+            {
+                indices[i] = -1;
+                weights[i] = 0.0f;
+            }
+            indices[0] = 0;
+            weights[0] = 1.0;
+        }
+
+        ~CVertexGroupsBasic()
+        { }
+
+        float sum() const
+        {
+            float s = 0.0;
+            for (int i = 0; i < C; ++i)
+            {
+                s += (indices[i] != -1 ? weights[i] : 0.0);
+            }
+            return s;
+        }
+
+        void normalize()
+        {
+            float s = sum();
+            for (int i = 0; i < C; ++i)
+            {
+                weights[i] /= (indices[i] != -1 ? s : 1.0);
+            }
+        }
+
+        static CVertexGroupsBasic<C> interpolate(const CVertexGroupsBasic<C> &group0, const CVertexGroupsBasic<C> &group1, float weight)
+        {
+            CVertexGroupsBasic<C> retVal;
+            std::map<int, std::pair<float, float> > allValues;
+            std::map<int, float> newValues;
+            for (int i = 0; i < C; ++i)
+            {
+                int g0i = group0.indices[i];
+                float g0w = group0.weights[i];
+                if (allValues.find(g0i) == allValues.end())
+                {
+                    allValues.insert(std::pair<int, std::pair<float, float> >(g0i, std::pair<float, float>(g0w, 0.0)));
+                }
+                else
+                {
+                    allValues[g0i].first = g0w;
+                }
+
+                int g1i = group1.indices[i];
+                float g1w = group1.weights[i];
+                if (allValues.find(g1i) == allValues.end())
+                {
+                    allValues.insert(std::pair<int, std::pair<float, float> >(g1i, std::pair<float, float>(0.0, g1w)));
+                }
+                else
+                {
+                    allValues[g1i].second = g1w;
+                }
+            }
+
+            for (std::map<int, std::pair<float, float> >::iterator it = allValues.begin(); it != allValues.end(); ++it)
+            {
+                newValues.insert(std::pair<int, float>(it->first, it->second.first + weight * (it->second.second - it->second.first)));
+            }
+
+            int i = 0;
+            for (std::map<int, float>::iterator it = newValues.begin(); it != newValues.end(); ++it)
+            {
+                if (it->first == -1)
+                {
+                    continue;
+                }
+
+                retVal.indices[i] = it->first;
+                retVal.weights[i] = it->second;
+                ++i;
+                if (i == C)
+                {
+                    break;
+                }
+            }
+
+            retVal.normalize();
+
+            return retVal;
+        }
+    };
+
+    typedef CVertexGroupsBasic<MAX_GROUPS_PER_VERTEX> CVertexGroups;
+
 public:
     //! Standard method getEntityName().
     VPL_ENTITY_NAME("CMesh");
@@ -165,6 +268,7 @@ public:
         PPV_INT = 0,
         PPV_FLOAT,
         PPV_DOUBLE,
+        PPV_VERTEX_GROUP,
         PPV_LAST
     };
 
@@ -221,6 +325,20 @@ public:
         m_pp[type][property_name] = value_type;
     }
 
+    void removeSerializedProperty(const std::string &property_name)
+    {
+        for (std::vector<std::map<std::string, EPPValueType> >::iterator it = m_pp.begin(); it != m_pp.end(); ++it)
+        {
+            std::map<std::string, EPPValueType>::iterator found = (*it).find(property_name);
+
+            if (found != (*it).end())
+            {
+                (*it).erase(found);
+                break;
+            }
+        }
+    }
+
 #if _MSC_VER >= 1700
 #pragma optimize( "", off )
 #endif
@@ -232,11 +350,32 @@ public:
         // Begin of data serialization block
         Writer.beginWrite(*this);
 
-        WRITEINT32( 2 ); // version
+        serializeNested(Writer);
+
+
+        // End of the block
+        Writer.endWrite(*this);
+    }
+
+    /*!
+     * \fn  void serializeNested(vpl::mod::CChannelSerializer<S> &Writer)
+     *
+     * \brief   Serialize - nested version. This method must be used where beginWrite was already called before.
+     *
+     * \param [in,out]  Writer  The writer.
+     */
+    template <class S>
+    void serializeNested(vpl::mod::CChannelSerializer<S> &Writer)
+    {
+        WRITEINT32(3); // version
 
         // add property containing vertex indices
         OpenMesh::VPropHandleT<vpl::sys::tUInt32> vProp_bufferIndex;
-        this->add_property<vpl::sys::tUInt32>(vProp_bufferIndex, "bufferIndex");
+        if (get_property_handle(vProp_bufferIndex, "bufferIndex"))
+        {
+            remove_property(vProp_bufferIndex);
+        }
+        add_property<vpl::sys::tUInt32>(vProp_bufferIndex, "bufferIndex");
 
         Writer.write((vpl::sys::tUInt32)this->n_vertices());
         Writer.write((vpl::sys::tUInt32)this->n_faces());
@@ -251,6 +390,12 @@ public:
             Writer.write(point[0]);
             Writer.write(point[1]);
             Writer.write(point[2]);
+
+            typename geometry::CMesh::Color color = this->color(vertex);
+            Writer.write(color[0]);
+            Writer.write(color[1]);
+            Writer.write(color[2]);
+
             vIndex++;
         }
 
@@ -263,34 +408,52 @@ public:
                 Writer.write(this->property<vpl::sys::tUInt32>(vProp_bufferIndex, fvit.handle()));
             }
         }
-        
-		int counter(0);
-		// Write all persistent properties
-		for(int i = PPT_EDGE; i < PPT_LAST; ++i)
-		{
-			// Store number of persistent properties of given type
-			if (i<m_pp.size())
-			{
-				Writer.write((vpl::sys::tUInt32)m_pp[i].size());
-				if(m_pp[i].size() > 0)
-				{
-					// For all persistent properties
-					tPPNameSet::const_iterator itn(m_pp[i].begin()), itnEnd(m_pp[i].end());
-					for(; itn != itnEnd; ++itn)
-					{
-						serializeProperty(Writer, static_cast<EPPType>(i), itn->second, itn->first);
- 						++counter;
-					}	
-				}
-			}
-			else
-				Writer.write((vpl::sys::tUInt32)0);
 
-			Writer.write((vpl::sys::tUInt32)i);
-		}
+        int counter(0);
+        // Write all persistent properties
+        for (int i = PPT_EDGE; i < PPT_LAST; ++i)
+        {
+            // Store number of persistent properties of given type
+            if (i < m_pp.size())
+            {
+                // Check if properties can be serialized - mesh can have declared serialized properties but they are not present
+                int propertyCount = 0;
+                tPPNameSet::const_iterator itn(m_pp[i].begin()), itnEnd(m_pp[i].end());
+                for (; itn != itnEnd; ++itn)
+                {
+                    if (checkProperty(static_cast<EPPType>(i), itn->second, itn->first))
+                    {
+                        propertyCount++;
+                    }
+                    else
+                    {
+                        VPL_LOG_WARN("Property \"" << itn->first << "\"marked for serialization is not present.");
+                    }
+                }
 
-        // End of the block
-        Writer.endWrite(*this);
+                Writer.write((vpl::sys::tUInt32)propertyCount);
+
+                if (m_pp[i].size() > 0)
+                {
+                    // For all persistent properties
+                    tPPNameSet::const_iterator itname(m_pp[i].begin()), itnameEnd(m_pp[i].end());
+                    for (; itname != itnameEnd; ++itname)
+                    {
+                        if (checkProperty(static_cast<EPPType>(i), itname->second, itname->first))
+                        {
+                            serializeProperty(Writer, static_cast<EPPType>(i), itname->second, itname->first);
+                            ++counter;
+                        }
+                    }
+                }
+            }
+            else
+            {
+                Writer.write((vpl::sys::tUInt32)0);
+            }
+
+            Writer.write((vpl::sys::tUInt32)i);
+        }
     }
 
 
@@ -302,8 +465,24 @@ public:
         // Begin of data deserialization block
         Reader.beginRead(*this);
 
+        deserializeNested(Reader);
+
+        // End of the block
+        Reader.endRead(*this);
+    }
+
+    /*!
+     * \fn  void deserializeNested(vpl::mod::CChannelSerializer<S> &Reader)
+     *
+     * \brief   Deserialize - nested version. This method must be used where beginRead was already used before.
+     *
+     * \param [in,out]  Reader  The reader.
+     */
+    template <class S>
+    void deserializeNested(vpl::mod::CChannelSerializer<S> &Reader)
+    {
         int version = 0;
-        READINT32( version );
+        READINT32(version);
 
         this->clear();
         this->garbage_collection();
@@ -319,43 +498,45 @@ public:
         {
             geometry::CMesh::Point::value_type data[3];
             Reader.read(data, 3);
-            vertexHandles.push_back(this->add_vertex(geometry::CMesh::Point(data)));            
+            vertexHandles.push_back(this->add_vertex(geometry::CMesh::Point(data)));
+
+            if (version > 2)
+            {
+                geometry::CMesh::Color::value_type colorData[3];
+                Reader.read(colorData, 3);
+                this->set_color(vertexHandles.back(), geometry::CMesh::Color(colorData));
+            }
         }
 
         // read faces
         for (unsigned int f = 0; f < faceCount; ++f)
         {
             vpl::sys::tUInt32 data[3];
-            Reader.read(data, 3);            
+            Reader.read(data, 3);
             this->add_face(vertexHandles[data[0]], vertexHandles[data[1]], vertexHandles[data[2]]);
         }
 
+        if (version > 1)
+        {
+            int counter(0);
 
-		if(version > 1)
-		{
-			int counter(0);
+            // Write all persistent properties
+            for (int i = PPT_EDGE; i < PPT_LAST; ++i)
+            {
+                // Read number of properties of given type
+                vpl::sys::tUInt32 num(0);
+                Reader.read(num);
+                // For all stored properties
+                for (vpl::sys::tUInt32 j = 0; j < num; ++j)
+                {
+                    deserializeProperty(Reader);
+                    ++counter;
+                }
 
-			// Write all persistent properties
-			for(int i = PPT_EDGE; i < PPT_LAST; ++i)
-			{
-				// Read number of properties of given type
-				vpl::sys::tUInt32 num(0);
-				Reader.read(num);
-				// For all stored properties
-				for( vpl::sys::tUInt32 j = 0; j < num; ++j )
-				{
-					deserializeProperty(Reader);
- 					++counter;
-				}
+                Reader.read(num);
+            }
 
-				Reader.read(num);
-			}
-
-		}
-
-
-        // End of the block
-        Reader.endRead(*this);
+        }
     }
 
 #if _MSC_VER >= 1700
@@ -426,7 +607,7 @@ public:
     geometry::CMesh::Normal calc_face_normal(geometry::CMesh::FaceHandle fh);
 
     //! calculates axis aligned bounding box of mesh
-    bool calc_bounding_box(geometry::CMesh::Point &min, geometry::CMesh::Point &max);
+    bool calc_bounding_box(geometry::CMesh::Point &min, geometry::CMesh::Point &max) const;
 
 	//! Calculate oriented bounding box
 	bool calc_oriented_bounding_box(Matrix &tm, Vec3 &extent);
@@ -446,304 +627,390 @@ public:
     //! Finds edge by two vertices
     geometry::CMesh::EdgeHandle find_edge(const geometry::CMesh::VertexHandle &vh0, const geometry::CMesh::VertexHandle &vh1);
 
+	//! Add given mesh to the current mesh
+	void addMesh(const CMesh &added_mesh);
+
 protected:
 	// Compute oriented bounding box from the covariance matrix
 	bool calc_obb_from_cm(Matrix3x3 &cm, Matrix &tm, Vec3 &extent);
 
 private:
 
-#define declare_property_test(handle_type, value_type, name) \
-    { \
-        switch(value_type) \
-        { \
-            case geometry::CMesh::PPV_INT: \
-            { \
-            handle_type<int> ph; \
-            if(!this->get_property_handle(ph, name)) \
-                return; \
-        } \
-        break; \
-        case geometry::CMesh::PPV_FLOAT: \
-        { \
-            handle_type<float> ph; \
-            if(!this->get_property_handle(ph, name)) \
-                return; \
-        } \
-        break; \
-        case geometry::CMesh::PPV_DOUBLE: \
-        { \
-            handle_type<double> ph; \
-            if(!this->get_property_handle(ph, name)) \
-                return; \
-        } \
-        break; \
-        default: \
-                 return; \
-        } \
-    }
+    template <typename T>
+    bool checkSingleProperty(EPPType property_type, const std::string &name)
+    {
+        bool retVal = false;
 
-
-    //! Serialize property 
-	template <class S>
-	void serializeProperty(vpl::mod::CChannelSerializer<S>& Writer, EPPType property_type, EPPValueType value_type, const std::string &name)
-	{
-        // Test if property exists
         switch (property_type)
         {
         case PPT_EDGE:
-            declare_property_test(OpenMesh::EPropHandleT, value_type, name);
+            {
+                OpenMesh::EPropHandleT<T> propertyHandle;
+                retVal = get_property_handle(propertyHandle, name);
+            }
             break;
 
         case PPT_FACE:
-            declare_property_test(OpenMesh::FPropHandleT, value_type, name);
+            {
+                OpenMesh::FPropHandleT<T> propertyHandle;
+                retVal = get_property_handle(propertyHandle, name);
+            }
             break;
 
         case PPT_HEDGE:
-            declare_property_test(OpenMesh::HPropHandleT, value_type, name);
+            {
+                OpenMesh::HPropHandleT<T> propertyHandle;
+                retVal = get_property_handle(propertyHandle, name);
+            }
             break;
 
         case PPT_VERTEX:
-            declare_property_test(OpenMesh::VPropHandleT, value_type, name);
+            {
+                OpenMesh::VPropHandleT<T> propertyHandle;
+                retVal = get_property_handle(propertyHandle, name);
+            }
             break;
-        default:
-            return; 
+        };
+
+        return retVal;
+    }
+
+    //! Serialize property 
+    bool checkProperty(EPPType property_type, EPPValueType value_type, const std::string &name)
+    {
+        bool retVal = false;
+
+        switch (value_type)
+        {
+        case geometry::CMesh::PPV_INT:
+            retVal = checkSingleProperty<int>(property_type, name);
+            break;
+
+        case geometry::CMesh::PPV_FLOAT:
+            retVal = checkSingleProperty<float>(property_type, name);
+            break;
+
+        case geometry::CMesh::PPV_DOUBLE:
+            retVal = checkSingleProperty<double>(property_type, name);
+            break;
+
+        case geometry::CMesh::PPV_VERTEX_GROUP:
+            retVal = checkSingleProperty<geometry::CMesh::CVertexGroups>(property_type, name);
+            break;
         }
 
-		// Serialize property attributes
-		WRITEINT32(property_type);
-		WRITEINT32(value_type);
-		Writer.write(name);
+        return retVal;
+    }
 
-//		DBOUT("Serialized property: " << name.c_str() << ", type: " << (int)property_type << ", value type: " << (int)value_type);
+    template <class S, typename T>
+    void serializePropertyValue(vpl::mod::CChannelSerializer<S> &writer, const T &value)
+    {
+        VPL_LOG_INFO("serializePropertyValue(...) not implemented for some type");
+        throw CSerializationFailure("serializePropertyValue(...) not implemented for some type");
+    }
 
-		// Store property values
-		switch (property_type)
-		{
-		case PPT_EDGE:
-			valuesSerializationEdge(Writer, value_type, name);
-			break;
+    template <class S>
+    void serializePropertyValue(vpl::mod::CChannelSerializer<S> &writer, const int &value)
+    {
+        writer.write((vpl::sys::tInt32)value);
+    }
 
-		case PPT_FACE:
-			valuesSerializationFace(Writer, value_type, name);
-			break;
+    template <class S>
+    void serializePropertyValue(vpl::mod::CChannelSerializer<S> &writer, const float &value)
+    {
+        writer.template write<float>(value);
+    }
 
-		case PPT_HEDGE:
-			valuesSerializationHEdge(Writer, value_type, name);
-			break;
+    template <class S>
+    void serializePropertyValue(vpl::mod::CChannelSerializer<S> &writer, const double &value)
+    {
+        writer.template write<double>(value);
+    }
 
-		case PPT_VERTEX:
-			valuesSerializationVertex(Writer, value_type, name);
-			break;
-		default:
-			break;
-		}
-	}
+    template <class S>
+    void serializePropertyValue(vpl::mod::CChannelSerializer<S> &writer, const geometry::CMesh::CVertexGroups &value)
+    {
+        for (int i = 0; i < MAX_GROUPS_PER_VERTEX; ++i)
+        {
+            writer.write((vpl::sys::tInt32)value.indices[i]);
+            writer.template write<float>(value.weights[i]);
+        }
+    }
 
-	//! Deserialize property
-	template <class S>
-	void deserializeProperty(vpl::mod::CChannelSerializer<S>& Reader)
-	{
-		 EPPType property_type;
-		 EPPValueType value_type;
-		 std::string name;
+    template <class S, typename T>
+    void deserializePropertyValue(vpl::mod::CChannelSerializer<S> &reader, T &value)
+    {
+        VPL_LOG_INFO("deserializePropertyValue(...) not implemented for some type");
+        throw CSerializationFailure("deserializePropertyValue(...) not implemented for some type");
+    }
 
-		 // Read property type
-		 int pt; READINT32(pt);
-		 assert(pt >= PPT_EDGE && pt < PPT_LAST);
-		 property_type = static_cast<EPPType>(pt);
+    template <class S>
+    void deserializePropertyValue(vpl::mod::CChannelSerializer<S> &reader, int &value)
+    {
+        vpl::sys::tInt32 v;
+        reader.read(v);
+        value = v;
+    }
 
-		 // Read property value type
-		 int pvt;
-		 READINT32(pvt);
-		 assert(pvt >= PPV_INT && pvt < PPV_LAST);
-		 value_type = static_cast<EPPValueType>(pvt);
+    template <class S>
+    void deserializePropertyValue(vpl::mod::CChannelSerializer<S> &reader, float &value)
+    {
+        reader.template read<float>(value);
+    }
 
-		 // Read property name
-		 Reader.read(name);
-		 assert(name.length() > 0);
+    template <class S>
+    void deserializePropertyValue(vpl::mod::CChannelSerializer<S> &reader, double &value)
+    {
+        reader.template read<double>(value);
+    }
 
-//		 DBOUT("Deserialized property: " << name.c_str() << ", type: " << (int)property_type << ", value type: " << (int)value_type);
-		// Store property values
-		switch (property_type)
-		{
-		case PPT_EDGE:
-			valuesDeserializationEdge(Reader, value_type, name);
-			break;
+    template <class S>
+    void deserializePropertyValue(vpl::mod::CChannelSerializer<S> &reader, geometry::CMesh::CVertexGroups &value)
+    {
+        for (int i = 0; i < MAX_GROUPS_PER_VERTEX; ++i)
+        {
+            vpl::sys::tInt32 v;
+            reader.read(v);
+            value.indices[i] = v;
 
-		case PPT_FACE:
-			valuesDeserializationFace(Reader, value_type, name);
-			break;
+            reader.template read<float>(value.weights[i]);
+        }
+    }
 
-		case PPT_HEDGE:
-			valuesDeserializationHEdge(Reader, value_type, name);
-			break;
+    template <class S, typename T>
+    void serializeTypedEdgeProperty(vpl::mod::CChannelSerializer<S> &writer, const std::string &name)
+    {
+        OpenMesh::EPropHandleT<T> propertyHandle;
+        get_property_handle(propertyHandle, name);
 
-		case PPT_VERTEX:
-			valuesDeserializationVertex(Reader, value_type, name);
-			break;
-		default:
-			break;
-		}
+        for (geometry::CMesh::EdgeIter it = edges_begin(); it != edges_end(); ++it)
+        {
+            T &value = property(propertyHandle, *it);
+            serializePropertyValue(writer, value);
+        }
+    }
 
-        setSerializedProperty(name, property_type, value_type);
-	}
+    template <class S, typename T>
+    void serializeTypedFaceProperty(vpl::mod::CChannelSerializer<S> &writer, const std::string &name)
+    {
+        OpenMesh::FPropHandleT<T> propertyHandle;
+        get_property_handle(propertyHandle, name);
 
-/*
- *	Helper macro automatically declares property serialization wrapper
- */ 
-#define declare_property_serialization( call_name, handle_type, it_begin, it_end ) \
-	template <class S> \
-	void call_name(vpl::mod::CChannelSerializer<S>& Writer,  EPPValueType value_type, const std::string &name) \
-	{ \
-		switch (value_type) \
-		{ \
-			case geometry::CMesh::PPV_INT: \
-				{ \
-					handle_type<int> ph; \
-					bool rv(this->get_property_handle(ph, name)); \
-					assert(rv); \
-					serializePropertyValuesInt(Writer, ph, this->it_begin(), this->it_end()); \
-				} \
-				break; \
-			case geometry::CMesh::PPV_FLOAT: \
-				{ \
-					handle_type<float> ph; \
-					bool rv(this->get_property_handle(ph, name)); \
-					assert(rv); \
-					serializePropertyValuesFloat(Writer, ph, this->it_begin(), this->it_end()); \
-				} \
-				break; \
-			case geometry::CMesh::PPV_DOUBLE: \
-				{ \
-					handle_type<double> ph; \
-					bool rv(this->get_property_handle(ph, name)); \
-					assert(rv); \
-					serializePropertyValuesDouble(Writer, ph, this->it_begin(), this->it_end()); \
-				} \
-				break; \
-			default: \
-				break; \
-		} \
-	}; 
+        for (geometry::CMesh::FaceIter it = faces_begin(); it != faces_end(); ++it)
+        {
+            T &value = property(propertyHandle, *it);
+            serializePropertyValue(writer, value);
+        }
+    }
 
-	// Declare serializers 
-	declare_property_serialization( valuesSerializationEdge, OpenMesh::EPropHandleT, edges_begin, edges_end );	
-	declare_property_serialization( valuesSerializationFace, OpenMesh::FPropHandleT, faces_begin, faces_end );	
-	declare_property_serialization( valuesSerializationHEdge, OpenMesh::HPropHandleT, halfedges_begin, halfedges_end );	
-	declare_property_serialization( valuesSerializationVertex, OpenMesh::VPropHandleT, vertices_begin, vertices_end );	
+    template <class S, typename T>
+    void serializeTypedHalfedgeProperty(vpl::mod::CChannelSerializer<S> &writer, const std::string &name)
+    {
+        OpenMesh::HPropHandleT<T> propertyHandle;
+        get_property_handle(propertyHandle, name);
 
-/*
- *	Helper macro automatically declares property deserialization wrapper
- */ 
-#define declare_property_deserialization( call_name, handle_type, it_begin, it_end ) \
-	template <class S> \
-	void call_name(vpl::mod::CChannelSerializer<S>& Reader,  EPPValueType value_type, const std::string &name) \
-	{ \
-		switch (value_type) \
-		{ \
-			case geometry::CMesh::PPV_INT: \
-				{ \
-					handle_type<int> ph; \
-					this->add_property(ph, name); \
-					deserializePropertyValuesInt(Reader, ph, this->it_begin(), this->it_end()); \
-				} \
-				break; \
-			case geometry::CMesh::PPV_FLOAT: \
-				{ \
-					handle_type<float> ph; \
-					this->add_property(ph, name); \
-					deserializePropertyValuesFloat(Reader, ph, this->it_begin(), this->it_end()); \
-				} \
-				break; \
-			case geometry::CMesh::PPV_DOUBLE: \
-				{ \
-					handle_type<double> ph; \
-					this->add_property(ph, name); \
-					deserializePropertyValuesDouble(Reader, ph, this->it_begin(), this->it_end()); \
-				} \
-				break; \
-			default: \
-				break; \
-		} \
-	}; 
+        for (geometry::CMesh::HalfedgeIter it = halfedges_begin(); it != halfedges_end(); ++it)
+        {
+            T &value = property(propertyHandle, *it);
+            serializePropertyValue(writer, value);
+        }
+    }
 
-	// Declare deserializers
-	declare_property_deserialization( valuesDeserializationEdge, OpenMesh::EPropHandleT, edges_begin, edges_end );	
-	declare_property_deserialization( valuesDeserializationFace, OpenMesh::FPropHandleT, faces_begin, faces_end );	
-	declare_property_deserialization( valuesDeserializationHEdge, OpenMesh::HPropHandleT, halfedges_begin, halfedges_end );	
-	declare_property_deserialization( valuesDeserializationVertex, OpenMesh::VPropHandleT, vertices_begin, vertices_end );	
+    template <class S, typename T>
+    void serializeTypedVertexProperty(vpl::mod::CChannelSerializer<S> &writer, const std::string &name)
+    {
+        OpenMesh::VPropHandleT<T> propertyHandle;
+        get_property_handle(propertyHandle, name);
 
-	//! Serialize signed int property values
-	template <class S, typename tPH, typename tIt>
-	void serializePropertyValuesInt(vpl::mod::CChannelSerializer<S>& Writer, tPH &ph, tIt itBegin, tIt itEnd)
-	{
-		int counter(0);
-		for(tIt it = itBegin; it != itEnd; ++it)
-		{
-			WRITEINT32( this->property<int>(ph, it) );
-			++counter;
-		}
+        for (geometry::CMesh::VertexIter it = vertices_begin(); it != vertices_end(); ++it)
+        {
+            T &value = property(propertyHandle, *it);
+            serializePropertyValue(writer, value);
+        }
+    }
 
-//		DBOUT("Ints serialized: " << counter);
-	}
+    template <class S, typename T>
+    void deserializeTypedEdgeProperty(vpl::mod::CChannelSerializer<S> &reader, const std::string &name)
+    {
+        OpenMesh::EPropHandleT<T> propertyHandle;
+        add_property(propertyHandle, name);
 
-	//! Serialize float property values
-	template <class S, typename tPH, typename tIt>
-	void serializePropertyValuesFloat(vpl::mod::CChannelSerializer<S>& Writer, tPH &ph, tIt itBegin, tIt itEnd)
-	{
-		for(tIt it = itBegin; it != itEnd; ++it)
-		{
-			Writer.template write<float>(this->property<float>(ph, it));
-		}
-	}
+        for (geometry::CMesh::EdgeIter it = edges_begin(); it != edges_end(); ++it)
+        {
+            T &value = property(propertyHandle, *it);
+            deserializePropertyValue(reader, value);
+        }
+    }
 
-	//! Serialize double property values
-	template <class S, typename tPH, typename tIt>
-	void serializePropertyValuesDouble(vpl::mod::CChannelSerializer<S>& Writer, tPH &ph, tIt itBegin, tIt itEnd)
-	{
-		for(tIt it = itBegin; it != itEnd; ++it)
-		{
-			Writer.template write<double>(this->property<double>(ph, it));
-		}
-	}
+    template <class S, typename T>
+    void deserializeTypedFaceProperty(vpl::mod::CChannelSerializer<S> &reader, const std::string &name)
+    {
+        OpenMesh::FPropHandleT<T> propertyHandle;
+        add_property(propertyHandle, name);
 
-	//! Deserialize signed int property values
-	template <class S, typename tPH, typename tIt>
-	void deserializePropertyValuesInt(vpl::mod::CChannelSerializer<S>& Reader, tPH &ph, tIt itBegin, tIt itEnd)
-	{
-		int counter(0);
+        for (geometry::CMesh::FaceIter it = faces_begin(); it != faces_end(); ++it)
+        {
+            T &value = property(propertyHandle, *it);
+            deserializePropertyValue(reader, value);
+        }
+    }
 
-		for(tIt it = itBegin; it != itEnd; ++it)
-		{
-			READINT32( this->property<int>(ph, it) );
-			++counter;
-		}
+    template <class S, typename T>
+    void deserializeTypedHalfedgeProperty(vpl::mod::CChannelSerializer<S> &reader, const std::string &name)
+    {
+        OpenMesh::HPropHandleT<T> propertyHandle;
+        add_property(propertyHandle, name);
 
-//		DBOUT("Ints deserialized: " << counter);
-	}
+        for (geometry::CMesh::HalfedgeIter it = halfedges_begin(); it != halfedges_end(); ++it)
+        {
+            T &value = property(propertyHandle, *it);
+            deserializePropertyValue(reader, value);
+        }
+    }
 
-	//! Serialize float property values
-	template <class S, typename tPH, typename tIt>
-	void deserializePropertyValuesFloat(vpl::mod::CChannelSerializer<S>& Reader, tPH &ph, tIt itBegin, tIt itEnd)
-	{
-		for(tIt it = itBegin; it != itEnd; ++it)
-		{
-			Reader.template read<float>(this->property<float>(ph, it));
-		}
-	}
+    template <class S, typename T>
+    void deserializeTypedVertexProperty(vpl::mod::CChannelSerializer<S> &reader, const std::string &name)
+    {
+        OpenMesh::VPropHandleT<T> propertyHandle;
+        add_property(propertyHandle, name);
 
-	//! Serialize double property values
-	template <class S, typename tPH, typename tIt>
-	void deserializePropertyValuesDouble(vpl::mod::CChannelSerializer<S>& Reader, tPH &ph, tIt itBegin, tIt itEnd)
-	{
-		for(tIt it = itBegin; it != itEnd; ++it)
-		{
-			Reader.template read<double>(this->property<double>(ph, it));
-		}
-	}
+        for (geometry::CMesh::VertexIter it = vertices_begin(); it != vertices_end(); ++it)
+        {
+            T &value = property(propertyHandle, *it);
+            deserializePropertyValue(reader, value);
+        }
+    }
 
-    public:
-        EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+    template <class S, typename T>
+    void serializeTypedProperty(vpl::mod::CChannelSerializer<S> &writer, EPPType propertyType, const std::string &name)
+    {
+        // Store property values
+        switch (propertyType)
+        {
+        case PPT_EDGE:
+            serializeTypedEdgeProperty<S, T>(writer, name);
+            break;
+
+        case PPT_FACE:
+            serializeTypedFaceProperty<S, T>(writer, name);
+            break;
+
+        case PPT_HEDGE:
+            serializeTypedHalfedgeProperty<S, T>(writer, name);
+            break;
+
+        case PPT_VERTEX:
+            serializeTypedVertexProperty<S, T>(writer, name);
+            break;
+        }
+    }
+
+    template <class S, typename T>
+    void deserializeTypedProperty(vpl::mod::CChannelSerializer<S> &reader, EPPType propertyType, const std::string &name)
+    {
+        // Store property values
+        switch (propertyType)
+        {
+        case PPT_EDGE:
+            deserializeTypedEdgeProperty<S, T>(reader, name);
+            break;
+
+        case PPT_FACE:
+            deserializeTypedFaceProperty<S, T>(reader, name);
+            break;
+
+        case PPT_HEDGE:
+            deserializeTypedHalfedgeProperty<S, T>(reader, name);
+            break;
+
+        case PPT_VERTEX:
+            deserializeTypedVertexProperty<S, T>(reader, name);
+            break;
+        }
+    }
+
+    //! Serialize property - without macros
+    template <class S>
+    void serializeProperty(vpl::mod::CChannelSerializer<S> &writer, EPPType propertyType, EPPValueType valueType, const std::string &name)
+    {
+        if (!checkProperty(propertyType, valueType, name))
+        {
+            return;
+        }
+
+        // Serialize property attributes
+        writer.write((vpl::sys::tInt32)propertyType);
+        writer.write((vpl::sys::tInt32)valueType);
+        writer.write(name);
+
+        switch (valueType)
+        {
+        case geometry::CMesh::PPV_INT:
+            serializeTypedProperty<S, int>(writer, propertyType, name);
+            break;
+
+        case geometry::CMesh::PPV_FLOAT:
+            serializeTypedProperty<S, float>(writer, propertyType, name);
+            break;
+
+        case geometry::CMesh::PPV_DOUBLE:
+            serializeTypedProperty<S, double>(writer, propertyType, name);
+            break;
+
+        case geometry::CMesh::PPV_VERTEX_GROUP:
+            serializeTypedProperty<S, geometry::CMesh::CVertexGroups>(writer, propertyType, name);
+            break;
+        }
+    }
+
+    //! Serialize property - without macros
+    template <class S>
+    void deserializeProperty(vpl::mod::CChannelSerializer<S> &reader)
+    {
+        EPPType propertyType;
+        EPPValueType valueType;
+        std::string name;
+
+        // Read property type
+        vpl::sys::tInt32 iPropertyType;
+        reader.read(iPropertyType);
+        assert(iPropertyType >= PPT_EDGE && iPropertyType < PPT_LAST);
+        propertyType = static_cast<EPPType>(iPropertyType);
+
+        // Read property value type
+        vpl::sys::tInt32 iValueType;
+        reader.read(iValueType);
+        assert(iValueType >= PPV_INT && iValueType < PPV_LAST);
+        valueType = static_cast<EPPValueType>(iValueType);
+
+        // Read property name
+        reader.read(name);
+        assert(name.length() > 0);
+
+        switch (valueType)
+        {
+        case geometry::CMesh::PPV_INT:
+            deserializeTypedProperty<S, int>(reader, propertyType, name);
+            break;
+
+        case geometry::CMesh::PPV_FLOAT:
+            deserializeTypedProperty<S, float>(reader, propertyType, name);
+            break;
+
+        case geometry::CMesh::PPV_DOUBLE:
+            deserializeTypedProperty<S, double>(reader, propertyType, name);
+            break;
+
+        case geometry::CMesh::PPV_VERTEX_GROUP:
+            deserializeTypedProperty<S, geometry::CMesh::CVertexGroups>(reader, propertyType, name);
+            break;
+        }
+
+        setSerializedProperty(name, propertyType, valueType);
+    }
+
+public:
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 }; // class CMesh
 
 // typedef CMesh::tSmartPtr CMeshPtr;  !!! incompatible with EIGEN_MAKE_ALIGNED_OPERATOR_NEW !!!

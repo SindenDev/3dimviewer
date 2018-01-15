@@ -24,7 +24,7 @@
 // include files
 
 //should have define either TRIDIM_VIEWER or TRAUMATECH or something else
-#include <mainwindow.h>
+//#include <mainwindow.h>
 
 #include <data/CExamination.h>
 #include <coremedi/app/Signals.h>
@@ -51,8 +51,6 @@
 #include <data/CSceneWidgetParameters.h>
 #include "data/CPreviewModel.h"
 #include "data/CAppSettings.h"
-#include <data/CRegionData.h>
-#include <data/CRegionColoring.h>
 #include <data/CVolumeTransformation.h>
 #include "data/CVolumeOfInterestData.h"
 
@@ -71,8 +69,6 @@
 
 #undef min
 #undef max
-#include <limits>
-
 
 
 namespace data

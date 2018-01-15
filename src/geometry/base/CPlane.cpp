@@ -33,6 +33,7 @@ void geometry::CPlane::set(const Vec3 &normal, const Vec3 &point)
     // Compute last parameter
     double d(-normal[0]*point[0] - normal[1]*point[1] - normal[2]*point[2]);
     set(normal[0], normal[1], normal[2],d);
+	m_center = point;
 }
 
 /**

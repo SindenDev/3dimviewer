@@ -59,7 +59,9 @@ public:
 
 public:
     //! Default constructor creates an empty list.
-    CChangedEntries() : m_EntryId(Storage::UNKNOWN) {}
+    CChangedEntries()
+        : m_EntryId(Storage::UNKNOWN)
+    { }
 
     //! Copy constructor.
     CChangedEntries(const CChangedEntries& Changes);
@@ -76,43 +78,48 @@ public:
     template <class T1, class T2>
     inline CChangedEntries(int ObjectNum, CMultiObjectObserver<T1, T2> *pObserver);
 
-
     //! Destructor.
-    ~CChangedEntries() {}
+    ~CChangedEntries()
+    { }
 
     //! Assignment operator.
-    CChangedEntries& operator =(const CChangedEntries& Changes);
+    CChangedEntries &operator=(const CChangedEntries& Changes);
 
     //! Returns Id of the entry whose changed parent entries are listed.
-    int getEntryId() const { return m_EntryId; }
+    int getEntryId() const
+    {
+        return m_EntryId;
+    }
 
     //! Checks if the list of changes corresponds to a specified entry.
-    bool checkIdentity(int Id) const { return (m_EntryId == Id); }
+    bool checkIdentity(int Id) const
+    {
+        return (m_EntryId == Id);
+    }
 
     //! Changes id of the entry whose changed parent entries are listed.
-    CChangedEntries& setEntryId(int Id)
+    CChangedEntries &setEntryId(int Id)
     {
         m_EntryId = Id;
         return *this;
     }
 
-
     //! Adds an identifier to the list.
-    CChangedEntries& insert(int ParentId, int Flags)
+    CChangedEntries &insert(int ParentId, int Flags)
     {
-        m_Changes.insert( tChanges::value_type(ParentId, Flags) );
+        m_Changes.insert(tChanges::value_type(ParentId, Flags));
         return *this;
     }
 
     //! Adds a given list.
-    CChangedEntries& insert(const CChangedEntries& Changes)
+    CChangedEntries &insert(const CChangedEntries &Changes)
     {
-        m_Changes.insert( Changes.m_Changes.begin(), Changes.m_Changes.end() );
+        m_Changes.insert(Changes.m_Changes.begin(), Changes.m_Changes.end());
         return *this;
     }
 
     //! Removes an identifier from the list.
-    CChangedEntries& erase(int Id)
+    CChangedEntries &erase(int Id)
     {
         m_Changes.erase(Id);
         return *this;
@@ -124,14 +131,23 @@ public:
         return (m_Changes.find(Id) != m_Changes.end());
     }
 
+    //! Check if any of given identifiers has changed
+    bool hasChanged(const CChangedEntries::tFilter &Filter) const;
+
     //! Returns number of identifiers in the list.
-    int getSize() const { return int(m_Changes.size()); }
+    int getSize() const
+    {
+        return int(m_Changes.size());
+    }
 
     //! Returns true if the list is empty.
-    bool isEmpty() const { return m_Changes.empty(); }
+    bool isEmpty() const
+    {
+        return m_Changes.empty();
+    }
 
     //! Clears the list.
-    CChangedEntries& clear()
+    CChangedEntries &clear()
     {
         m_Changes.clear();
         return *this;
@@ -152,48 +168,53 @@ public:
     bool checkFlagAny(int Value) const;
     bool checkFlagAny(int Value, tFilter Filter) const;
 
-	//! checks for entry with (Value!=(Mask&Flags))
-	bool checkFlagsAnyNonEq(int Value, int Mask, const CChangedEntries::tFilter &Filter = tFilter()) const;
+    //! checks for entry with (Value!=(Mask&Flags))
+    bool checkFlagsAnyNonEq(int Value, int Mask, const CChangedEntries::tFilter &Filter = tFilter()) const;
 
-	//! checks for entry with (Value==(Mask&Flags))
-	bool checkFlagsAnyEq(int Value, int Mask, const CChangedEntries::tFilter &Filter = tFilter()) const;
+    //! checks for entry with (Value==(Mask&Flags))
+    bool checkFlagsAnyEq(int Value, int Mask, const CChangedEntries::tFilter &Filter = tFilter()) const;
 
-	//! Checks for presence of a change that has one or more flags from the Mask set
-	bool checkFlagsAnySet(int Mask, const CChangedEntries::tFilter &Filter = tFilter()) const;
+    //! Checks for presence of a change that has one or more flags from the Mask set
+    bool checkFlagsAnySet(int Mask, const CChangedEntries::tFilter &Filter = tFilter()) const;
 
-	//! Checks for presence of a change that has one or more flags from the Mask zero
-	bool checkFlagsAnyNotSet(int Mask, const CChangedEntries::tFilter &Filter = tFilter()) const;
+    //! Checks for presence of a change that has one or more flags from the Mask zero
+    bool checkFlagsAnyNotSet(int Mask, const CChangedEntries::tFilter &Filter = tFilter()) const;
 
-	//! Checks for presence of a change that has flags that mach the mask
-	bool checkFlagsAllSet(int Mask, const CChangedEntries::tFilter &Filter = tFilter()) const;
+    //! Checks for presence of a change that has flags that mach the mask
+    bool checkFlagsAllSet(int Mask, const CChangedEntries::tFilter &Filter = tFilter()) const;
 
-	//! Checks for presence of a change that has zero flags
-	bool checkFlagsAllZero(const CChangedEntries::tFilter &Filter = tFilter()) const;
+    //! Checks for presence of a change that has zero flags
+    bool checkFlagsAllZero(const CChangedEntries::tFilter &Filter = tFilter()) const;
 
-	//! Checks for presence of a change that has zero class specific flags
-	bool checkFlagsAllClassSpecificZero(const CChangedEntries::tFilter &Filter = tFilter()) const;
+    //! Checks for presence of a change that has zero class specific flags
+    bool checkFlagsAllClassSpecificZero(const CChangedEntries::tFilter &Filter = tFilter()) const;
 
     //! Checks if there is some valid parent entry in the list different
     //! from the entry whose changed parent entries are listed.
     bool isParentValid() const;
 
     //! Returns identifier of the first entry in the list.
-    int getFirstParentId(int i) const 
+    int getFirstParentId(int i) const
     {
 #pragma unused(i)
         return (m_Changes.size() > 0) ? m_Changes.begin()->first : Storage::UNKNOWN;
     }
 
     //! Returns flags of the first entry in the list.
-    int getFirstFlags() const 
-    { 
+    int getFirstFlags() const
+    {
         return (m_Changes.size() > 0) ? m_Changes.begin()->second : 0;
     }
 
-
     //! Returns reference to the internal storage.
-    tChanges& getImpl() { return m_Changes; }
-    const tChanges& getImpl() const { return m_Changes; }
+    tChanges &getImpl()
+    {
+        return m_Changes;
+    }
+    const tChanges &getImpl() const
+    {
+        return m_Changes;
+    }
 
 protected:
     //! Map of all changed parent storage entries and their flags.

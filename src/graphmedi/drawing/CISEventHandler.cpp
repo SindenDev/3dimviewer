@@ -38,15 +38,15 @@ CISEventHandler::CISEventHandler( OSGCanvas * canvas, scene::CSceneBase * scene 
 {
     m_conAppModeChanged = APP_MODE.getModeChangedSignal().connect( this, &CISEventHandler::OnModeChanged );
 
-    // Enable coloring
-    APP_STORAGE.connect( data::Storage::DrawingOptions::Id, this );
-
     // Load current settings
     data::CObjectPtr< data::CDrawingOptions > ptrOptions( APP_STORAGE.getEntry(data::Storage::DrawingOptions::Id) );
 
     m_lineWidth = ptrOptions->getWidth();
     m_lineColor = ptrOptions->getColor();
     m_handlingMode = ptrOptions->getDrawingMode();
+
+    // Enable coloring
+    data::CGeneralObjectObserver<CISEventHandler>::connect(ptrOptions.getEntryPtr(), data::CGeneralObjectObserver<CISEventHandler>::tObserverHandler(this, &CISEventHandler::sigDrawingOptionsChanged));
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -236,6 +236,7 @@ void CISEventHandler::OnMouseDrag(const osgGA::CMousePoint &point)
     {
     case data::CDrawingOptions::DRAW_POINT:
     case data::CDrawingOptions::DRAW_LINE:
+	case data::CDrawingOptions::DRAW_LINE2:
         // Move second point to the new position
         arr->asVector()[ 0 ] = point.m_point;
         break;
@@ -308,10 +309,15 @@ void CISEventHandler::OnModeChanged(scene::CAppMode::tMode mode)
     }
 }
 
+//! General objectChanged method
+void CISEventHandler::objectChanged(data::CStorageEntry *pEntry, const data::CChangedEntries &changes)
+{ }
+
 ///////////////////////////////////////////////////////////////////////////////
 // Update from storage - set drawing options
-void CISEventHandler::objectChanged( data::CDrawingOptions * options )
+void CISEventHandler::sigDrawingOptionsChanged(data::CStorageEntry *pEntry, const data::CChangedEntries &changes)
 {
+    data::CDrawingOptions *options = pEntry->getDataPtr<data::CObjectHolder<data::CDrawingOptions> >()->getObjectPtr();
     m_lineWidth = options->getWidth();
     m_lineColor = options->getColor();
     m_handlingMode = options->getDrawingMode();
@@ -453,12 +459,10 @@ CISWindowEH::CISWindowEH(OSGCanvas *canvas, scene::CSceneBase *scene)
     , m_lineWidth(1.0)
     , bDrawing(false)
     , m_pointsWindow(NULL)
+	, m_pointsScene(NULL)
     , m_pointDistanceLimit(1.0)
 {
     m_conAppModeChanged = APP_MODE.getModeChangedSignal().connect(this, &CISWindowEH::OnModeChanged);
-
-    // Enable coloring
-    APP_STORAGE.connect(data::Storage::DrawingOptions::Id, this);
 
     // Load current settings
     data::CObjectPtr<data::CDrawingOptions> ptrOptions(APP_STORAGE.getEntry(data::Storage::DrawingOptions::Id));
@@ -466,6 +470,8 @@ CISWindowEH::CISWindowEH(OSGCanvas *canvas, scene::CSceneBase *scene)
     m_lineWidth = ptrOptions->getWidth();
     m_lineColor = ptrOptions->getColor();
     m_handlingMode = ptrOptions->getDrawingMode();
+
+    data::CGeneralObjectObserver<CISWindowEH>::connect(ptrOptions.getEntryPtr(), data::CGeneralObjectObserver<CISWindowEH>::tObserverHandler(this, &CISWindowEH::sigDrawingOptionsChanged));
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -596,12 +602,16 @@ void CISWindowEH::OnMouseDrag(const osgGA::CMousePoint &point)
         break;
 
     case data::CDrawingOptions::DRAW_LINE:
+	case data::CDrawingOptions::DRAW_LINE2:
         {
             osg::Vec3 originWindow = m_pointsWindow->front();
             osg::Vec3 originScene = arr->front();
             m_pointsWindow->clear();
             m_pointsWindow->push_back(originWindow);
             m_pointsWindow->push_back(pointWindow);
+			m_pointsScene->clear();
+			m_pointsScene->push_back(originScene);
+			m_pointsScene->push_back(pointScene);
             m_line->clear();
             m_line->getLineVertices()->push_back(originScene);
             m_line->getLineVertices()->push_back(pointScene);
@@ -702,6 +712,9 @@ void CISWindowEH::OnMouseRelease(const osgGA::CMousePoint &point, bool bUsePoint
     case data::CDrawingOptions::DRAW_LASO:
         m_pointsWindow->push_back(m_pointsWindow->front());
         break;
+	case data::CDrawingOptions::DRAW_LINE2:
+		VPL_SIGNAL(SigSendLineSceneCoordinates).invoke(m_pointsScene.get());
+		break;
 
     default:
         break;
@@ -735,10 +748,15 @@ void CISWindowEH::OnModeChanged(scene::CAppMode::tMode mode)
     }
 }
 
+//! General objectChanged method
+void CISWindowEH::objectChanged(data::CStorageEntry *pEntry, const data::CChangedEntries &changes)
+{ }
+
 ///////////////////////////////////////////////////////////////////////////////
 // Update from storage - set drawing options
-void CISWindowEH::objectChanged(data::CDrawingOptions *options)
+void CISWindowEH::sigDrawingOptionsChanged(data::CStorageEntry *pEntry, const data::CChangedEntries &changes)
 {
+    data::CDrawingOptions *options = pEntry->getDataPtr<data::CObjectHolder<data::CDrawingOptions> >()->getObjectPtr();
     m_lineWidth = options->getWidth();
     m_lineColor = options->getColor();
     m_handlingMode = options->getDrawingMode();
@@ -752,6 +770,7 @@ void CISWindowEH::objectChanged(data::CDrawingOptions *options)
 void CISWindowEH::initDraw(const CMousePoint &point)
 {
     m_pointsWindow = new osg::Vec3Array;
+	m_pointsScene = new osg::Vec3Array;
     bDrawing = true;
 
     // Create new line

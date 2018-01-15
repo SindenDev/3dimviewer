@@ -21,6 +21,9 @@
 ///////////////////////////////////////////////////////////////////////////////
 
 #include <data/CDicomSaverGDCM.h>
+#include "data/CRegionData.h"
+#include "data/CVolumeOfInterestData.h"
+#include <data/CRegionColoring.h>
 
 #if defined( TRIDIM_USE_GDCM )
 
@@ -28,8 +31,6 @@
 //#include <mainwindow.h>
 #include <PluginInterface.h>
 #include <data/CDensityData.h>
-#include <data/CRegionData.h>
-#include <data/CVolumeOfInterestData.h>
 
 //VPL
 #include <VPL/ImageIO/DefTagGDCM.h>

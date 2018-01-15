@@ -22,12 +22,12 @@ class CDemoPluginPanel;
 //! Demo Plugin has to inherit QObject and PluginInterface
 class CDemoPlugin : public QObject,
                     public PluginInterface,
-                    public data::CObjectObserver< data::CRegionData >
+                    public data::CGeneralObjectObserver< CDemoPlugin >
 {
     Q_OBJECT
-#if QT_VERSION >= 0x050000    
+//#if QT_VERSION >= 0x050000    
     Q_PLUGIN_METADATA(IID "com.3dim-laboratory.Qt.DemoPlugin")
-#endif
+//#endif
     Q_INTERFACES(PluginInterface)
 public:
     //! Constructor
@@ -76,7 +76,7 @@ protected:
     //! Signal handlers
     void        sigModeChanged( scene::CAppMode::tMode mode );
     //! Region data observer method
-    void        objectChanged(data::CRegionData *pData);
+    void        objectChanged(data::CStorageEntry *pEntry, const data::CChangedEntries& changes);
 };
 
 #endif

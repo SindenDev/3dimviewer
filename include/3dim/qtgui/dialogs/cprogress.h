@@ -39,28 +39,38 @@ class CProgress : public QProgressDialog
 protected:
 	ProgressModifierFn m_pModifierFn;
 	bool m_bCanceled;
+    int m_loopsCnt;
+    int m_currentLoopIndex;
 public:
     explicit CProgress(QWidget *parent=0) :
         QProgressDialog(parent,Qt::WindowTitleHint | Qt::WindowSystemMenuHint)
     {
 		m_pModifierFn = NULL;
 		m_bCanceled = false;
+        m_loopsCnt = 1;
+        m_currentLoopIndex = 1;
         setAttribute(Qt::WA_ShowWithoutActivating);
         setWindowTitle(QApplication::applicationName());
         setWindowModality(Qt::WindowModal);
     }
     void setTitle(const QString &title) { setWindowTitle(title); };
 	void setModifierFn(ProgressModifierFn mfn) { m_pModifierFn = mfn; }
+    void setLoopsCnt(int cnt) { m_loopsCnt = cnt; }
+    void setCurrentLoopIndex(int index) { m_currentLoopIndex = index; }
     bool Entry(int iCount, int iMax)
     {
         if (QThread::currentThread()==QApplication::instance()->thread())
         {
-			if (NULL!=m_pModifierFn)
-				m_pModifierFn(iCount,iMax);
+            if (NULL != m_pModifierFn)
+            {
+                int max = iMax * m_loopsCnt;
+                int count = iCount + (iMax * (m_currentLoopIndex - 1));
+                m_pModifierFn(count, max);
+            }
 			if (!isHidden())
 			{
-				setMaximum (iMax);
-				setValue(iCount);		
+				setMaximum (iMax * m_loopsCnt);
+				setValue(iCount + (iMax * (m_currentLoopIndex - 1)));
 				bool bCanceled = m_bCanceled = this->wasCanceled(); // save to local variable because processEvents can lead to destruction of this object
 				QApplication::processEvents();
 				return !bCanceled;
@@ -70,7 +80,13 @@ public:
         }
         return !m_bCanceled;
     }
-    void restart(const QString &message) { setLabelText(message); m_bCanceled = false; show(); QApplication::processEvents(); }
+    void restart(const QString &message)
+    {
+        setLabelText(message);
+        m_bCanceled = false;
+        show();
+        QApplication::processEvents();
+    }
 };
 
 #endif

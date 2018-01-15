@@ -23,6 +23,8 @@
 #include <base/Defs.h>
 #include <osg/CLimiterSceneOSG.h>
 //#include <osgManipulator/Translate2DDragger>
+#include <app/Signals.h>
+#include <osg/OSGCanvas.h>
 
 
 //====================================================================================================================
@@ -43,7 +45,7 @@ scene::CLimiterSceneOSG::CLimiterSceneOSG(OSGCanvas *canvas)
 	m_lines = new osg::MatrixTransform;
 
 	// add event handlers
-	p_DraggerEventHandler = new CDraggerEventHandler(canvas);
+    p_DraggerEventHandler = new CDraggerEventHandler(p_Canvas);
 	p_Canvas->addEventHandler(p_DraggerEventHandler.get());
 
 	// create dummy geometry (semi-transparent geometry covering area outside of volume of interest)
@@ -63,6 +65,8 @@ scene::CLimiterSceneOSG::CLimiterSceneOSG(OSGCanvas *canvas)
 //====================================================================================================================
 scene::CLimiterSceneOSG::~CLimiterSceneOSG()
 {
+    this->removeChild(m_lines);
+    this->removeChild(m_transformedSlice);
 }
 
 void scene::CLimiterSceneOSG::scaleScene(vpl::img::CPoint3i volumeSize, vpl::img::CPoint3d voxelSize)

@@ -477,7 +477,7 @@ void CSeriesSelectionDialog::showPreview()
 
 	QApplication::setOverrideCursor(QCursor(Qt::WaitCursor));
 
-	spInfo->sortFilenamesByNumber();
+	//spInfo->sortFilenamesByNumber();
 
 	m_preview->setSerie(spInfo);
 	m_preview->show();
@@ -489,6 +489,8 @@ void CSeriesSelectionDialog::showPreview()
 CSeriesSelectionDialogPreview::CSeriesSelectionDialogPreview(QWidget *parent, Qt::WindowFlags f)
 	: QDialog(parent, f)
 	, m_dirty(true)
+    , m_bitmap(NULL)
+    , m_pixelSpacing(0.0)
 {
 	m_slicePreview = new QLabel();
 	m_slider = new QSlider();
@@ -519,8 +521,12 @@ void CSeriesSelectionDialogPreview::setSerie(data::CSerieInfo::tSmartPtr serie)
 
 	m_dirty = false;
 
-	int slicesCnt = m_serie->getNumOfDicomFiles();
+    m_pixelSpacing = m_serie->getTheMostCommonPixelSpacing();
+
+    int slicesCnt = m_serie->getNumOfDicomFilesForPreview();
 	m_slider->setMaximum(slicesCnt - 1);
+
+    m_slider->setEnabled(true);
 
 	if (slicesCnt <= 1)
 	{
@@ -529,7 +535,6 @@ void CSeriesSelectionDialogPreview::setSerie(data::CSerieInfo::tSmartPtr serie)
 	}
 	else
 	{
-		m_slider->setEnabled(true);
 		m_slider->setValue(slicesCnt / 2);
 		sliceChanged(slicesCnt / 2);
 	}
@@ -544,7 +549,7 @@ void CSeriesSelectionDialogPreview::sliceChanged(int val)
 	vpl::img::CDicomSlice Slice;
 	{
 		data::sExtendedTags tags;
-		if (!m_serie->loadDicomFile(val, Slice, tags))
+        if (!m_serie->loadDicomFileForPreview(val, Slice, tags, true, m_pixelSpacing))
 		{
 			return;
 		}

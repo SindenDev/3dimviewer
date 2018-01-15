@@ -26,12 +26,11 @@
 ///////////////////////////////////////////////////////////////////////////////
 // include files
 #include "data/CStorageInterface.h"
-#include <data/CColoringFunc.h>
 #include <VPL/Image/Vector3.h>
 #include <VPL/Image/Size.h>
 #include <VPL/Image/Volume.h>
 #include <data/storage_ids_core.h>
-
+#include <data/CColorVector.h>
 #include <data/CDicomLoader.h>
 
 namespace data
@@ -41,6 +40,8 @@ namespace data
 	class CCoordinatesConv;
 	class CSerieInfo;
 	class CDensityData;
+    template <typename T> class CColoringFunc;
+    typedef CColoringFunc<unsigned char> CColoringFunc4b;
 
 ///////////////////////////////////////////////////////////////////////////////
 //! Class manages all data for actually processed volume (CT/MR data, slices,

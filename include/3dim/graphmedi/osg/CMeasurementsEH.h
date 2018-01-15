@@ -29,6 +29,8 @@
 #include <data/CSceneManipulatorDummy.h>
 #include <VPL/Image/VolumeFilters/Median.h>
 #include <VPL/Image/VolumeFilters/Averaging.h>
+#include <app/Signals.h>
+#include <osg/CEventHandlerBase.h>
 
 namespace scene
 {
@@ -293,34 +295,26 @@ protected:
 //! CLASS CMeasurements3DEH - modified class observes trackball movement
 
 class CMeasurements3DEH 
-	: public CMeasurementsEH, public data::CObjectObserver< data::CSceneManipulatorDummy >
+    : public CMeasurementsEH, public data::CGeneralObjectObserver<CMeasurements3DEH>
 {
 public:
 	//! Constructor
-    CMeasurements3DEH(OSGCanvas * canvas, scene::CSceneBase * scene) : CMeasurementsEH(canvas, scene)
-	{
-		// Connect on dummy
-		APP_STORAGE.connect( data::Storage::SceneManipulatorDummy::Id, this);
-
-		// Clear gizmos when slice moved
-		m_conSliceXYMoved = VPL_SIGNAL(SigSetSliceXY).connect( this, & CMeasurements3DEH::SigSliceMoved );
-		m_conSliceXZMoved = VPL_SIGNAL(SigSetSliceXZ).connect( this, & CMeasurements3DEH::SigSliceMoved );
-		m_conSliceYZMoved = VPL_SIGNAL(SigSetSliceYZ).connect( this, & CMeasurements3DEH::SigSliceMoved );
-	}
+    CMeasurements3DEH(OSGCanvas * canvas, scene::CSceneBase * scene);
 
 protected:
+    //!
+    virtual void objectChanged(data::CStorageEntry *pEntry, const data::CChangedEntries &changes);
+
 	//! Clear gizmos when object has changed
-	void objectChanged(data::CSceneManipulatorDummy *pData)
-	{
-		m_scene->clearGizmos();
-	}
+    void sigSceneManipulatorDummyChanged(data::CStorageEntry *pEntry, const data::CChangedEntries &changes);
 
 	//! Slice moved signal answer
-	void SigSliceMoved( int position ) { CMeasurementsEH::m_scene->clearGizmos(); }
+    void SigSliceMoved(int position);
 
 	//! Slice moved signal connection
-	vpl::mod::tSignalConnection m_conSliceXYMoved, m_conSliceXZMoved, m_conSliceYZMoved;
-
+    vpl::mod::tSignalConnection m_conSliceXYMoved;
+    vpl::mod::tSignalConnection m_conSliceXZMoved;
+    vpl::mod::tSignalConnection m_conSliceYZMoved;
 };
 
 
@@ -398,26 +392,19 @@ protected:
 ///////////////////////////////////////////////////////////////////////////////
 //! CLASS CMeasurements3DEH - modified class observes trackball movement
 
-class CMeasurementsRtgEH 
-	: public CMeasurementsEH, public data::CObjectObserver< data::CSceneManipulatorDummy >
+class CMeasurementsRtgEH : public CMeasurementsEH, public data::CGeneralObjectObserver<CMeasurementsRtgEH>
 {
 public:
 	//! Constructor
-    CMeasurementsRtgEH(OSGCanvas * canvas, scene::CSceneBase * scene) : CMeasurementsEH(canvas, scene)
-	{
-		m_ip.addDesiredRule(new osg::CNodeTypeIntersectionDesired<osgUtil::LineSegmentIntersector::Intersection, osg::Geode>);
-		// Connect on dummy
-		APP_STORAGE.connect( data::Storage::SceneManipulatorDummy::Id, this);
-	}
+    CMeasurementsRtgEH(OSGCanvas *canvas, scene::CSceneBase *scene);
+
 protected:
+    //!
+    virtual void objectChanged(data::CStorageEntry *pData, const data::CChangedEntries &changes);
+
 	//! Clear gizmos when object has changed
-	void objectChanged(data::CSceneManipulatorDummy *pData)
-	{
-		m_scene->clearGizmos();
-	}
+    void sigSceneManipulatorDummyChanged(data::CStorageEntry *pData, const data::CChangedEntries &changes);
 };
-
-
 
 } // namespace osgGA
 

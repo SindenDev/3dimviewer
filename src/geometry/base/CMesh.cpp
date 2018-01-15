@@ -25,6 +25,7 @@
 #endif
 
 #include "geometry/base/CMesh.h"
+#include <geometry/base/functions.h>
 #include <cmath>
 // Debugging 
 //#include <bluedent/osg/dbout.h> // this dependency is not allowed
@@ -1176,7 +1177,12 @@ CMesh::CMesh()
 }
 
 //! Copy constructor
-CMesh::CMesh(const CMesh &mesh) : vpl::base::CObject(), CBaseMesh(mesh), m_octree(NULL), m_octreeVersion(0), m_pp(mesh.m_pp)
+CMesh::CMesh(const CMesh &mesh)
+    : vpl::base::CObject()
+    , CBaseMesh(mesh)
+    , m_octree(NULL)
+    , m_octreeVersion(0)
+    , m_pp(mesh.m_pp)
 {
     if (mesh.m_octree != NULL)
     {
@@ -1229,7 +1235,7 @@ CMesh::~CMesh()
 }
 
 //! Updates octree of mesh
-void CMesh::updateOctree()
+void CMesh::updateOctree() 
 {
     if (m_octree == NULL)
     {
@@ -1302,7 +1308,7 @@ bool CMesh::cutByYPlane(geometry::CMesh *source, osg::Vec3Array *vertices, osg::
 }
 
 //! Cutting by plane
-bool CMesh::cutByZPlane(geometry::CMesh *source, osg::Vec3Array *vertices, osg::DrawElementsUInt *indices, float planePosition)
+bool CMesh::cutByZPlane(geometry::CMesh *source, osg::Vec3Array *vertices, osg::DrawElementsUInt *indices, float planePosition) 
 {
     if ((source == NULL) || (vertices == NULL) || (indices == NULL))
     {
@@ -1471,7 +1477,7 @@ double CMesh::perimeter(geometry::CMesh::FaceHandle fh)
 //! calculates length of longest edge
 double CMesh::min_edge_length(geometry::CMesh::FaceHandle fh)
 {
-    double lengths[3];
+    double lengths[3] = {};
     int i = 0;
     for (CMesh::FaceEdgeIter feit = this->fe_begin(fh); feit != this->fe_end(fh); ++feit)
     {
@@ -1485,7 +1491,7 @@ double CMesh::min_edge_length(geometry::CMesh::FaceHandle fh)
 //! calculates length of longest edge
 double CMesh::max_edge_length(geometry::CMesh::FaceHandle fh)
 {
-    double lengths[3];
+    double lengths[3] = {};
     int i = 0;
     for (CMesh::FaceEdgeIter feit = this->fe_begin(fh); feit != this->fe_end(fh); ++feit)
     {
@@ -1606,7 +1612,7 @@ geometry::CMesh::Normal CMesh::calc_face_normal(geometry::CMesh::FaceHandle fh)
 //! Finds edge by two vertices
 geometry::CMesh::EdgeHandle CMesh::find_edge(const geometry::CMesh::VertexHandle &vh0, const geometry::CMesh::VertexHandle &vh1)
 {
-    if (vh0 == vh1 || !vh0.is_valid() || !vh1.is_valid())
+    if (vh0 == vh1 || !vh0.is_valid() || !vh1.is_valid() || status(vh0).deleted() || status(vh1).deleted())
     {
         return geometry::CMesh::InvalidEdgeHandle;
     }
@@ -1624,6 +1630,35 @@ geometry::CMesh::EdgeHandle CMesh::find_edge(const geometry::CMesh::VertexHandle
     return edge_handle(heh);
 }
 
+void CMesh::addMesh(const CMesh &added_mesh)
+{
+	// Nothing to do?
+	if (added_mesh.n_vertices() == 0)
+		return;
+
+	// Create helper array of vertex handles and old-new mapping
+	std::vector<CMesh::VHandle> vhandles(added_mesh.n_vertices());
+	std::map<CMesh::VHandle, CMesh::VHandle> vertex_mapping;
+
+	// Store vertices
+	for (CMesh::ConstVertexIter vit = added_mesh.vertices_sbegin(); vit != added_mesh.vertices_end(); ++vit)
+	{
+		CMesh::VHandle new_handle = this->add_vertex(added_mesh.point(vit));
+		vertex_mapping[vit.handle()] = new_handle;
+	}
+
+	std::vector<CMesh::VertexHandle> face; face.reserve(4);
+
+	for (CMesh::ConstFaceIter fit = added_mesh.faces_sbegin(); fit != added_mesh.faces_end(); ++fit)
+	{
+		face.clear();
+		for (CMesh::ConstFaceVertexIter fvit = added_mesh.cfv_iter(*fit); fvit.is_valid(); ++fvit)
+			face.push_back(vertex_mapping.at(fvit.handle()));
+
+		this->add_face(face);
+	}
+}
+
 /**
  * \brief   Calculates the axis aligned bounding box.
  *
@@ -1632,16 +1667,22 @@ geometry::CMesh::EdgeHandle CMesh::find_edge(const geometry::CMesh::VertexHandle
  *
  * \return  true if it succeeds, false if it fails.
  */
-bool CMesh::calc_bounding_box(geometry::CMesh::Point &min, geometry::CMesh::Point &max)
+bool CMesh::calc_bounding_box(geometry::CMesh::Point &min, geometry::CMesh::Point &max) const
 {
     bool first = true;
 
     for (CMesh::VertexIter vit = this->vertices_begin(); vit != this->vertices_end(); ++vit)
     {
-        if(this->status(vit).deleted())
+        if (this->status(vit.handle()).deleted())
+        {
             continue;
+        }
 
         CMesh::Point point = this->point(vit.handle());
+        if (geometry::isnan(geometry::convert3<geometry::Vec3, geometry::CMesh::Point>(point)))
+        {
+            continue;
+        }
         
         if (first)
         {
@@ -1888,13 +1929,13 @@ bool CMesh::calc_obb_from_cm(Matrix3x3 &cm, Matrix &tm, Vec3 &extent)
 	}
 
 	// The center of the OBB is the average of the minimum and maximum
-	Vec3 center((maxim+minim)*0.5);
+	Vec3 center((maxim+minim)*geometry::Scalar(0.5));
 
 	// Modify transformation matrix
 	tm.setTrans(center[0], center[1], center[2]);
 
 	// the extents is half of the difference between the minimum and maximum
-	extent = (maxim-minim)*0.5;
+	extent = (maxim-minim)*geometry::Scalar(0.5);
 
 	return true;
 }

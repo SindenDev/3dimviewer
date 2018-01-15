@@ -58,8 +58,6 @@
 #include <drawing/CISEventHandler.h>
 #include <osg/CModelCutVisualizer.h>
 
-#include <osgQt/GraphicsWindowQt>
-
 #ifdef USE_PSVR
    #include <render/CSceneVolumeRendering.h>
    #include <render/cvolumerendererwindow.h>

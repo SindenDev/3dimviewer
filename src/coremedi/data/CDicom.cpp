@@ -72,21 +72,37 @@ long data::CDicom::getFileSize( const std::string & file )
 }
 
 //==============================================================================================
-int data::CDicom::convPos2Id(double a, double b, double c)
+long long data::CDicom::convPos2Id(double a, double b, double c)
 {
-    static int MaxId = 0x3FFFFFFF;
+    // NOTE JS: For some data c is a big value (almost INT_MAX), so when retyping dValue to int, it overflows.
+    // I tried to subtract INT_MAX * 0.5, when the value is big, but dValue is still too big.
+    // So INT_MAX * 0.9 is subtracted now and int was replaced by long long (int was simply not enough).
+
+    int max = int(INT_MAX * 0.9);
+
+    if (a > max)
+        a -= max;
+
+    if (b > max)
+        b -= max;
+
+    if (c > max)
+        c -= max;
+
+    //static int MaxId = 0x3FFFFFFF;
 
     double dValue = a * a + b * b + c * c;
     assert(dValue >= 0);
 
-    int sign = 1, res = 0;
+    int sign = 1;
+    long long res = 0;
     if (a<0) sign = -sign;
     if (b<0) sign = -sign;
     if (c<0) sign = -sign;
-    if (int(dValue * 1000.0)<MaxId)
-        res = int(dValue * 1000.0);
+    if ((long long)(dValue * 10.0) < LLONG_MAX)
+        res = (long long) (dValue * 10.0);
     else
-        res = int(dValue) | 0x40000000;
+        res = (long long)(dValue) | 0x40000000;
     res *= sign;
 
     //char ss[256]={};

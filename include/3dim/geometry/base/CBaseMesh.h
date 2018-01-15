@@ -23,7 +23,9 @@
 #ifndef CBASEMESH_H
 #define CBASEMESH_H
 
+#ifndef _USE_MATH_DEFINES
 #define _USE_MATH_DEFINES
+#endif
 
 #ifndef OM_STATIC_BUILD
 #define OM_STATIC_BUILD

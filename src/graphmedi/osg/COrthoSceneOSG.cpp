@@ -31,13 +31,10 @@
 #include <osg/ShapeDrawable>
 #include <widgets/Widgets.h>
 #include <osg/Version>
-
+#include <app/Signals.h>
 
 namespace scene
 {
-
-//////////////////////////////////////////////////////////////////////////
-//
 
 COrthoSceneOSG::COrthoSceneOSG(OSGOrtho2DCanvas *pCanvas)
 {
@@ -56,7 +53,7 @@ COrthoSceneOSG::COrthoSceneOSG(OSGOrtho2DCanvas *pCanvas)
 	m_pCanvas->getView()->getCamera()->setProjectionMatrixAsOrtho2D(-ZOOM, ZOOM,-ZOOM, ZOOM);
 
 	// set manipulator to camera
-	m_pCanvas->setManipulator(manipulator.get());
+	pCanvas->setManipulator(manipulator.get());
 
 	// compute home position
 	manipulator->computeHomePosition();
@@ -64,7 +61,7 @@ COrthoSceneOSG::COrthoSceneOSG(OSGOrtho2DCanvas *pCanvas)
 	// Create and attach event handler
 	signalEventHandler = new CSignalEventHandler( pCanvas );
 
-	m_pCanvas->addEventHandler(signalEventHandler.get());
+	pCanvas->addEventHandler(signalEventHandler.get());
 
 	// Add signals for push drag and release - invoke handlDraggers method
 	CSignalEventHandler::tSigHandle &handlePush = signalEventHandler->addEvent(osgGA::GUIEventAdapter::PUSH);
@@ -84,14 +81,12 @@ COrthoSceneOSG::COrthoSceneOSG(OSGOrtho2DCanvas *pCanvas)
 	handleResize.connect(this, &COrthoSceneOSG::handleWindowResize);
 
     // Set the update callback
-    APP_STORAGE.connect(data::Storage::SliceXY::Id, this);
+    CGeneralObjectObserver<COrthoSceneOSG>::connect(APP_STORAGE.getEntry(data::Storage::SliceXY::Id).get());
     this->setupObserver(this);
 }
 
-
 //////////////////////////////////////////////////////////////////////////
 //
-
 bool COrthoSceneOSG::handleDraggersPress(const osgGA::GUIEventAdapter& ea, osgGA::GUIActionAdapter& aa)
 {
 	bool bDraggerFound(false);
@@ -150,7 +145,6 @@ bool COrthoSceneOSG::handleDraggersPress(const osgGA::GUIEventAdapter& ea, osgGA
 
 //////////////////////////////////////////////////////////////////////////
 //
-
 bool COrthoSceneOSG::handleDraggersContinue(const osgGA::GUIEventAdapter& ea, osgGA::GUIActionAdapter& aa)
 {
 	// !!!!!!! What if this condition wasn't here ??????
@@ -180,12 +174,11 @@ bool COrthoSceneOSG::handleDraggersContinue(const osgGA::GUIEventAdapter& ea, os
 }
 
 //////////////////////////////////////////////////////////////////////////
-//
-
 // Handle window resize event
 bool COrthoSceneOSG::handleWindowResize(const osgGA::GUIEventAdapter& ea, osgGA::GUIActionAdapter& aa)
 {
-	double px(m_pCanvas->getPixelSize()[0]), py(m_pCanvas->getPixelSize()[1]);
+    OSGOrtho2DCanvas *pCanvas = dynamic_cast<OSGOrtho2DCanvas *>(m_pCanvas);
+    double px(pCanvas->getPixelSize()[0]), py(pCanvas->getPixelSize()[1]);
 	float r((px < py)?py:px);
 	cylinder->setRadius(r*SELECTOR_MULTIPLIER);
 	return false;
@@ -193,7 +186,6 @@ bool COrthoSceneOSG::handleWindowResize(const osgGA::GUIEventAdapter& ea, osgGA:
 
 //////////////////////////////////////////////////////////////////////////
 //
-
 bool COrthoSceneOSG::handlePlaneMove(const osgManipulator::TranslateInLineCommand & command)
 {
 	if(command.getStage() != osgManipulator::TranslateInLineCommand::START)
@@ -212,7 +204,6 @@ bool COrthoSceneOSG::handlePlaneMove(const osgManipulator::TranslateInLineComman
 
 //////////////////////////////////////////////////////////////////////////
 //
-
 void COrthoSceneOSG::updateFromStorage()
 {
     data::CObjectPtr<data::COrthoSliceXY> spSlice( APP_STORAGE.getEntry(data::Storage::SliceXY::Id) );
@@ -235,7 +226,6 @@ void COrthoSceneOSG::updateFromStorage()
 
 //////////////////////////////////////////////////////////////////////////
 //
-
 void COrthoSceneOSG::createGeometry()
 {
 	osg::Group* group = new osg::Group;
@@ -262,21 +252,11 @@ void COrthoSceneOSG::createGeometry()
 
 	osg::Vec3Array* normals = new osg::Vec3Array(1);
 	(*normals)[0].set(0.0f,0.0f,1.0f);
-#if OSG_VERSION_GREATER_OR_EQUAL(3,1,10)
 	geom->setNormalArray(normals, osg::Array::BIND_OVERALL);
-#else
-	geom->setNormalArray(normals);
-#endif
-	geom->setNormalBinding(osg::Geometry::BIND_OVERALL);
 
 	osg::Vec4Array* colors = new osg::Vec4Array(1);
 	(*colors)[0].set(1.0f,1.0f,1.0f,1.0f);
-#if OSG_VERSION_GREATER_OR_EQUAL(3,1,10)
 	geom->setColorArray(colors, osg::Array::BIND_OVERALL);
-#else
-	geom->setColorArray(colors);
-#endif
-	geom->setColorBinding(osg::Geometry::BIND_OVERALL);
 
 	geom->addPrimitiveSet(new osg::DrawArrays(GL_QUADS,0,4));
 
@@ -307,7 +287,6 @@ void COrthoSceneOSG::createGeometry()
 	// Set vertices to geometry
 	lineGeometry->setVertexArray(lineVertices);
 
-
 	// Create array
 	osg::DrawArrays * drawArrays = new osg::DrawArrays(osg::PrimitiveSet::LINES,0,lineVertices->size());
 
@@ -317,13 +296,7 @@ void COrthoSceneOSG::createGeometry()
 	// set the colors
 	osg::Vec4Array * color = new osg::Vec4Array;
 	color->push_back(osg::Vec4(1.0f,1.0f,0.0f,1.0f));
-#if OSG_VERSION_GREATER_OR_EQUAL(3,1,10)
 	lineGeometry->setColorArray(color, osg::Array::BIND_OVERALL);
-#else
-	lineGeometry->setColorArray(color);
-#endif
-	lineGeometry->setColorBinding(osg::Geometry::BIND_OVERALL);
-
 
 	// set the normal in the same way color.
 	//    osg::Vec3Array* lineNormals = new osg::Vec3Array;
@@ -364,7 +337,8 @@ void COrthoSceneOSG::createGeometry()
 
 	// Create an invisible cylinder for picking the line.
 	//    {
-	cylinder = new osg::Cylinder (osg::Vec3(0.0, 0.5, 0.0), m_pCanvas->getPixelSize()[0]*SELECTOR_MULTIPLIER, 1);
+    OSGOrtho2DCanvas *pCanvas = dynamic_cast<OSGOrtho2DCanvas *>(m_pCanvas);
+	cylinder = new osg::Cylinder (osg::Vec3(0.0, 0.5, 0.0), pCanvas->getPixelSize()[0]*SELECTOR_MULTIPLIER, 1);
 	osg::Quat rotation;
 	rotation.makeRotate(osg::Vec3(0.0f, 0.0f, 1.0f), osg::Vec3(0.0f, 1.0f, 0.0f));
 	cylinder->setRotation(rotation);
@@ -420,9 +394,4 @@ void COrthoSceneOSG::createGeometry()
 	this->addChild(group);
 }
 
-
 } // namespace scene
-
-///////////////////////////////////////////////////////////////////////////////
-///////////////////////////////////////////////////////////////////////////////
-

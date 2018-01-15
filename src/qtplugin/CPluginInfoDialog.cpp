@@ -30,7 +30,6 @@
 #include <QLabel>
 #include <QGridLayout>
 #include <QPushButton>
-#include <QTreeWidget>
 #include <QTreeWidgetItem>
 #include <QHeaderView>
 #include <QCoreApplication>

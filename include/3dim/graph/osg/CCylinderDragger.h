@@ -25,6 +25,7 @@
 
 #include <osgManipulator/RotateCylinderDragger>
 #include <osg/CTwoMaterialsNode.h>
+#include <osg/IHoverDragger.h>
 
 // CylinderPlaneProjector and Cylinder Dragger are based on original OSG code but modify some functionality
 namespace osgManipulator
@@ -71,11 +72,12 @@ namespace osgManipulator
             mutable bool       _parallelPlane;
     };
 
-	class CCylinderDragger : public osg::CTwoMaterialsNode< RotateCylinderDragger >
+	class CCylinderDragger : public osgManipulator::IHoverDragger, public osg::CTwoMaterialsNode< RotateCylinderDragger >
 	{
     protected:
         osg::ref_ptr<XCylinderPlaneProjector> _projector;
         osg::Vec3                             _realEyeDir;
+		bool                                  _recalculateStart;
 	public:
 		//! Constructor
 		CCylinderDragger();
@@ -83,6 +85,14 @@ namespace osgManipulator
 		/** Handle pick events on dragger and generate TranslateInLine commands. */
         virtual bool handle(const PointerInfo& pi, const osgGA::GUIEventAdapter& ea, osgGA::GUIActionAdapter& us);
 
+		//
+		void setRecalculateStart(bool value)
+		{
+			_recalculateStart = value;
+		}
+
+        void onMouseEnter() override;
+        void onMouseLeave() override;
 	};
 }
 

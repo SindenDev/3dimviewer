@@ -24,6 +24,7 @@
 #include "ui_cvolumelimiterdialog.h"
 #include <QGridLayout>
 #include <QSettings>
+#include <app/Signals.h>
 
 CVolumeLimiterDialog::CVolumeLimiterDialog(QWidget *parent) :
 	QDialog(parent, Qt::WindowTitleHint | Qt::WindowSystemMenuHint | Qt::WindowCloseButtonHint | Qt::WindowMinimizeButtonHint | Qt::WindowMaximizeButtonHint),

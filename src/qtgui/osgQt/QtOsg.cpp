@@ -37,8 +37,72 @@ supported by Apple.
 #include <QApplication>
 #include <QThread>
 #include <QDebug>
+#if (QT_VERSION >= QT_VERSION_CHECK(5, 6, 0))
+  #include <QDesktopWidget>
+  #include <QScreen>
+#endif
 
 #include <osgQt/QtOsg.h>
+
+///////////////////////////////////////////////////////////////////////////////
+// state which is able to save default frame buffer, because osg doesn't restore it ok
+// see http://forum.openscenegraph.org/viewtopic.php?t=15097
+
+class StateEx : public osg::State
+{
+public:
+    //! Constructor
+    StateEx() : defaultFbo(0)
+    {
+    }
+
+    void setDefaultFbo(GLuint fbo)
+    {
+        defaultFbo = fbo;
+    }
+    GLuint getDefaultFbo() const
+    {
+        return defaultFbo;
+    }
+
+protected:
+    GLuint defaultFbo;
+};
+
+void UnBindFboPostDrawCallback::operator () (osg::RenderInfo& renderInfo) const
+{
+    osg::GLExtensions* ext = renderInfo.getState()->get<osg::GLExtensions>();
+
+    if (NULL != ext)
+    {
+        ext->glBindFramebuffer(GL_FRAMEBUFFER_EXT, ((StateEx*)(renderInfo.getState()))->getDefaultFbo());
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// High DPI handling helper
+
+int getDpiFactor(QGLOSGWidget* pWidget)
+{
+#if (QT_VERSION >= QT_VERSION_CHECK(5, 6, 0)) // enable hi dpi support
+    // https://vicrucann.github.io/tutorials/osg-qt-high-dpi/
+    if (QApplication::testAttribute(Qt::AA_EnableHighDpiScaling))
+    {
+        return pWidget->devicePixelRatio();
+        int ratio = QApplication::desktop()->devicePixelRatio();
+        int sn = QApplication::desktop()->screenNumber(pWidget);
+        QWidget* pScreen = qobject_cast<QWidget*>(QApplication::desktop()->screen(sn));
+        //qDebug() << "sn " << sn << " p " << pScreen;
+        if (NULL != pScreen)
+        {
+            ratio = pScreen->devicePixelRatio();
+            //qDebug() << "r " << ratio;
+            return ratio;
+        }
+    }
+#endif
+    return 1;
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 // mapping of special keys
@@ -144,661 +208,25 @@ static QtKeyboardMap s_QtKeyboardMap;
 
 #if (QT_VERSION >= QT_VERSION_CHECK(5, 0, 0)) // needed for QOpenGLWidget
 #include <QOpenGLContext>
-#include <osgUtil/CullVisitor>
-
-using namespace osg;
 
 // Custom FrameBufferObject set via camera default stateset, restores fbo to the one used by QOpenGLWidget when necessary
 class CExtraFBO : public osg::FrameBufferObject
 {
 public:
-    virtual void apply(State &state) const
+    virtual void apply(osg::State &state) const
     {
         apply(state, READ_DRAW_FRAMEBUFFER);
     }
-    virtual void apply(State &state, BindTarget target) const
+    virtual void apply(osg::State &state, BindTarget target) const
     {
         if (getAttachmentMap().empty())
         {
-            //osg::FrameBufferObject::apply(state, target);
-#if OSG_VERSION_GREATER_OR_EQUAL(3,4,0)
             osg::GLExtensions* ext = state.get<osg::GLExtensions>();
-            bool fbo_supported = ext && ext->isFrameBufferObjectSupported;
             if (NULL != ext)
                 ext->glBindFramebuffer(GL_FRAMEBUFFER_EXT, ((StateEx*)(&state))->getDefaultFbo());
-#else
-            osg::FBOExtensions* fbo_ext = osg::FBOExtensions::instance(state.getContextID(), true);
-            bool fbo_supported = fbo_ext && fbo_ext->isSupported();
-            if (NULL != fbo_ext)
-                fbo_ext->glBindFramebuffer(/*osg::FrameBufferObject::READ_DRAW_FRAMEBUFFER*/target, ((StateEx*)(&state))->getDefaultFbo());
-#endif
         }
     }
 };
-
-
-// RenderStage override based on OSG 3.3.2 code 
-// Restores fbo in some situations to the one used by QOpenGlWidget
-// Customized RenderStage is set via customized cullvisitor prototype and to renderer sceneview
-
-namespace osgUtil
-{
-    // RenderStageCache is direct copy from osgUtil with no modifications
-    class RenderStageCache : public osg::Object
-    {
-    public:
-
-        RenderStageCache() {}
-        RenderStageCache(const RenderStageCache&, const osg::CopyOp&) {}
-
-        META_Object(osgUtil, RenderStageCache);
-
-        void setRenderStage(CullVisitor* cv, RenderStage* rs)
-        {
-            OpenThreads::ScopedLock<OpenThreads::Mutex> lock(_mutex);
-            _renderStageMap[cv] = rs;
-        }
-
-        RenderStage* getRenderStage(osgUtil::CullVisitor* cv)
-        {
-            OpenThreads::ScopedLock<OpenThreads::Mutex> lock(_mutex);
-            return _renderStageMap[cv].get();
-        }
-
-        typedef std::map<CullVisitor*, osg::ref_ptr<RenderStage> > RenderStageMap;
-
-        /** Resize any per context GLObject buffers to specified size. */
-        virtual void resizeGLObjectBuffers(unsigned int maxSize)
-        {
-            for (RenderStageMap::const_iterator itr = _renderStageMap.begin(); itr != _renderStageMap.end(); ++itr)
-            {
-                itr->second->resizeGLObjectBuffers(maxSize);
-            }
-        }
-
-        /** If State is non-zero, this function releases any associated OpenGL objects for
-        * the specified graphics context. Otherwise, releases OpenGL objexts
-        * for all graphics contexts. */
-        virtual void releaseGLObjects(osg::State* state = 0) const
-        {
-            for (RenderStageMap::const_iterator itr = _renderStageMap.begin(); itr != _renderStageMap.end(); ++itr)
-            {
-                itr->second->releaseGLObjects(state);
-            }
-        }
-
-        OpenThreads::Mutex  _mutex;
-        RenderStageMap      _renderStageMap;
-    };
-
-    // RenderStageEx overrides drawInner and changes fbo switching
-    class RenderStageEx : public RenderStage
-    {
-    public:
-        RenderStageEx() :
-            RenderStage()
-        {}
-        virtual const char* className() const
-        {
-            return "RenderStageEx";
-        }
-        virtual void drawInner(osg::RenderInfo& renderInfo, RenderLeaf*& previous, bool& doCopyTexture) override
-        {
-            struct SubFunc
-            {
-                static void applyReadFBO(bool& apply_read_fbo,
-                    const FrameBufferObject* read_fbo, osg::State& state)
-                {
-                    if (read_fbo->isMultisample())
-                    {
-                        OSG_WARN << "Attempting to read from a"
-                            " multisampled framebuffer object. Set a resolve"
-                            " framebuffer on the RenderStage to fix this." << std::endl;
-                    }
-
-                    if (apply_read_fbo)
-                    {
-                        // Bind the monosampled FBO to read from
-                        read_fbo->apply(state, FrameBufferObject::READ_FRAMEBUFFER);
-                        apply_read_fbo = false;
-                    }
-                }
-            };
-
-            osg::State& state = *renderInfo.getState();
-
-#if 1
-    #if OSG_MIN_VERSION_REQUIRED(3,3,7)
-            osg::GLExtensions* fbo_ext = state.get<osg::GLExtensions>();
-            bool fbo_supported = fbo_ext && fbo_ext->isFrameBufferObjectSupported;
-            bool using_multiple_render_targets = fbo_supported && _fbo.valid() && _fbo->hasMultipleRenderingTargets();
-    #else
-            osg::FBOExtensions* fbo_ext = osg::FBOExtensions::instance(state.getContextID(), true);
-            bool fbo_supported = fbo_ext && fbo_ext->isSupported();
-            bool using_multiple_render_targets = fbo_supported && _fbo.valid() && _fbo->hasMultipleRenderingTargets();
-    #endif
-
-            if (fbo_supported)
-            {
-                if (_fbo.valid())
-                {
-                    if (!_fbo->hasMultipleRenderingTargets())
-                    {
-    #if !defined(OSG_GLES1_AVAILABLE) && !defined(OSG_GLES2_AVAILABLE)
-
-                        if (getDrawBufferApplyMask())
-                            glDrawBuffer(_drawBuffer);
-
-                        if (getReadBufferApplyMask())
-                            glReadBuffer(_readBuffer);
-    #endif
-                    }
-
-                    _fbo->apply(state);
-                }
-                else
-                {
-                    fbo_ext->glBindFramebuffer(osg::FrameBufferObject::READ_DRAW_FRAMEBUFFER, static_cast<StateEx *>(&state)->getDefaultFbo()); // the MOST IMPORTANT line
-                }
-            }
-#else
-            osg::FBOExtensions* fbo_ext = _fbo.valid() ? osg::FBOExtensions::instance(state.getContextID(), true) : 0;
-            bool fbo_supported = fbo_ext && fbo_ext->isSupported();
-
-            bool using_multiple_render_targets = fbo_supported && _fbo->hasMultipleRenderingTargets();
-
-            if (!using_multiple_render_targets)
-            {
-#if !defined(OSG_GLES1_AVAILABLE) && !defined(OSG_GLES2_AVAILABLE)
-
-                if (getDrawBufferApplyMask())
-                    glDrawBuffer(_drawBuffer);
-
-                if (getReadBufferApplyMask())
-                    glReadBuffer(_readBuffer);
-
-#endif
-            }
-
-            if (fbo_supported)
-            {
-                _fbo->apply(state);
-            }
-#endif
-            //  GLint fboId;
-            //  glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING_EXT, &fboId);
-            //  std::cout << fboId << std::endl;
-
-            // do the drawing itself.
-            RenderBin::draw(renderInfo, previous);
-
-            if (state.getCheckForGLErrors() != osg::State::NEVER_CHECK_GL_ERRORS)
-            {
-                if (state.checkGLErrors("after RenderBin::draw(..)"))
-                {
-                    if (fbo_ext)
-                    {
-                        GLenum fbstatus = fbo_ext->glCheckFramebufferStatus(GL_FRAMEBUFFER_EXT);
-                        if (fbstatus != GL_FRAMEBUFFER_COMPLETE_EXT)
-                        {
-                            OSG_NOTICE << "RenderStage::drawInner(,) FBO status = 0x" << std::hex << fbstatus << std::dec << std::endl;
-                        }
-                    }
-                }
-            }
-
-            const FrameBufferObject* read_fbo = fbo_supported ? _fbo.get() : 0;
-            bool apply_read_fbo = false;
-
-            if (fbo_supported && _resolveFbo.valid() && fbo_ext->glBlitFramebuffer)
-            {
-                GLbitfield blitMask = 0;
-                bool needToBlitColorBuffers = false;
-
-                //find which buffer types should be copied
-                for (FrameBufferObject::AttachmentMap::const_iterator
-                    it = _resolveFbo->getAttachmentMap().begin(),
-                    end = _resolveFbo->getAttachmentMap().end(); it != end; ++it)
-                {
-                    switch (it->first)
-                    {
-                    case Camera::DEPTH_BUFFER:
-                        blitMask |= GL_DEPTH_BUFFER_BIT;
-                        break;
-                    case Camera::STENCIL_BUFFER:
-                        blitMask |= GL_STENCIL_BUFFER_BIT;
-                        break;
-                    case Camera::PACKED_DEPTH_STENCIL_BUFFER:
-                        blitMask |= GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT;
-                        break;
-                    case Camera::COLOR_BUFFER:
-                        blitMask |= GL_COLOR_BUFFER_BIT;
-                        break;
-                    default:
-                        needToBlitColorBuffers = true;
-                        break;
-                    }
-                }
-
-                // Bind the resolve framebuffer to blit into.
-                _fbo->apply(state, FrameBufferObject::READ_FRAMEBUFFER);
-                _resolveFbo->apply(state, FrameBufferObject::DRAW_FRAMEBUFFER);
-
-                if (blitMask)
-                {
-                    // Blit to the resolve framebuffer.
-                    // Note that (with nvidia 175.16 windows drivers at least) if the read
-                    // framebuffer is multisampled then the dimension arguments are ignored
-                    // and the whole framebuffer is always copied.
-                    fbo_ext->glBlitFramebuffer(
-                        0, 0, static_cast<GLint>(_viewport->width()), static_cast<GLint>(_viewport->height()),
-                        0, 0, static_cast<GLint>(_viewport->width()), static_cast<GLint>(_viewport->height()),
-                        blitMask, GL_NEAREST);
-                }
-
-#if !defined(OSG_GLES1_AVAILABLE) && !defined(OSG_GLES2_AVAILABLE)
-                if (needToBlitColorBuffers)
-                {
-                    for (FrameBufferObject::AttachmentMap::const_iterator
-                        it = _resolveFbo->getAttachmentMap().begin(),
-                        end = _resolveFbo->getAttachmentMap().end(); it != end; ++it)
-                    {
-                        osg::Camera::BufferComponent attachment = it->first;
-                        if (attachment >= osg::Camera::COLOR_BUFFER0)
-                        {
-                            glReadBuffer(GL_COLOR_ATTACHMENT0_EXT + (attachment - osg::Camera::COLOR_BUFFER0));
-                            glDrawBuffer(GL_COLOR_ATTACHMENT0_EXT + (attachment - osg::Camera::COLOR_BUFFER0));
-
-                            fbo_ext->glBlitFramebuffer(
-                                0, 0, static_cast<GLint>(_viewport->width()), static_cast<GLint>(_viewport->height()),
-                                0, 0, static_cast<GLint>(_viewport->width()), static_cast<GLint>(_viewport->height()),
-                                GL_COLOR_BUFFER_BIT, GL_NEAREST);
-                        }
-                    }
-                    // reset the read and draw buffers?  will comment out for now with the assumption that
-                    // the buffers will be set explictly when needed elsewhere.
-                    // glReadBuffer(GL_COLOR_ATTACHMENT0_EXT);
-                    // glDrawBuffer(GL_COLOR_ATTACHMENT0_EXT);
-                }
-#endif
-
-                apply_read_fbo = true;
-                read_fbo = _resolveFbo.get();
-
-                using_multiple_render_targets = read_fbo->hasMultipleRenderingTargets();
-            }
-
-            // now copy the rendered image to attached texture.
-            if (doCopyTexture)
-            {
-                if (read_fbo) SubFunc::applyReadFBO(apply_read_fbo, read_fbo, state);
-                copyTexture(renderInfo);
-            }
-
-            std::map< osg::Camera::BufferComponent, Attachment>::const_iterator itr;
-            for (itr = _bufferAttachmentMap.begin();
-                itr != _bufferAttachmentMap.end();
-                ++itr)
-            {
-                if (itr->second._image.valid())
-                {
-                    if (read_fbo) SubFunc::applyReadFBO(apply_read_fbo, read_fbo, state);
-
-#if !defined(OSG_GLES1_AVAILABLE) && !defined(OSG_GLES2_AVAILABLE)
-
-                    if (using_multiple_render_targets)
-                    {
-                        int attachment = itr->first;
-                        if (attachment == osg::Camera::DEPTH_BUFFER || attachment == osg::Camera::STENCIL_BUFFER) {
-                            // assume first buffer rendered to is the one we want
-                            glReadBuffer(read_fbo->getMultipleRenderingTargets()[0]);
-                        }
-                        else {
-                            glReadBuffer(GL_COLOR_ATTACHMENT0_EXT + (attachment - osg::Camera::COLOR_BUFFER0));
-                        }
-                    }
-                    else {
-                        if (_readBuffer != GL_NONE)
-                        {
-                            glReadBuffer(_readBuffer);
-                        }
-                    }
-
-#endif
-
-                    GLenum pixelFormat = itr->second._image->getPixelFormat();
-                    if (pixelFormat == 0) pixelFormat = _imageReadPixelFormat;
-                    if (pixelFormat == 0) pixelFormat = GL_RGB;
-
-                    GLenum dataType = itr->second._image->getDataType();
-                    if (dataType == 0) dataType = _imageReadPixelDataType;
-                    if (dataType == 0) dataType = GL_UNSIGNED_BYTE;
-
-                    itr->second._image->readPixels(static_cast<int>(_viewport->x()),
-                        static_cast<int>(_viewport->y()),
-                        static_cast<int>(_viewport->width()),
-                        static_cast<int>(_viewport->height()),
-                        pixelFormat, dataType);
-                }
-            }
-
-            if (fbo_supported)
-            {
-                if (getDisableFboAfterRender())
-                {
-                    // switch off the frame buffer object
-                    GLuint fboId = state.getGraphicsContext() ? state.getGraphicsContext()->getDefaultFboId() : 0;
-                    fbo_ext->glBindFramebuffer(GL_FRAMEBUFFER_EXT, fboId);
-                }
-
-                doCopyTexture = true;
-            }
-
-            if (fbo_supported && _camera.valid())
-            {
-                // now generate mipmaps if they are required.
-                const osg::Camera::BufferAttachmentMap& bufferAttachments = _camera->getBufferAttachmentMap();
-                for (osg::Camera::BufferAttachmentMap::const_iterator itr = bufferAttachments.begin();
-                    itr != bufferAttachments.end();
-                    ++itr)
-                {
-                    if (itr->second._texture.valid() && itr->second._mipMapGeneration)
-                    {
-                        state.setActiveTextureUnit(0);
-                        state.applyTextureAttribute(0, itr->second._texture.get());
-                        fbo_ext->glGenerateMipmap(itr->second._texture->getTextureTarget());
-                    }
-                }
-            }
-        }
-
-    };
-
-}
-
-//! custom cull visitor to be able to replace RenderStage with RenderStageEx in camera apply
-class CullVisitorEx : public osgUtil::CullVisitor
-{
-public:
-    META_NodeVisitor(Ex, CullVisitorEx);
-
-    CullVisitorEx() : osgUtil::CullVisitor()
-    {
-        setRenderStage(new osgUtil::RenderStageEx());
-    }
-    CullVisitorEx(const CullVisitorEx& cv) : osgUtil::CullVisitor(cv) 
-    { 
-        setRenderStage(new osgUtil::RenderStageEx());
-    }
-    CullVisitorEx* clone() const { return new CullVisitorEx(*this); }
-
-    virtual void apply(osg::Camera& camera);
-};
-
-
-void CullVisitorEx::apply(osg::Camera& camera)
-{
-    // push the node's state.
-    StateSet* node_state = camera.getStateSet();
-    if (node_state) pushStateSet(node_state);
-
-    //#define DEBUG_CULLSETTINGS
-
-#ifdef DEBUG_CULLSETTINGS
-    if (osg::isNotifyEnabled(osg::NOTICE))
-    {
-        OSG_NOTICE << std::endl << std::endl << "CullVisitor, before : ";
-        write(osg::notify(osg::NOTICE));
-    }
-#endif
-
-    // Save current cull settings
-    CullSettings saved_cull_settings(*this);
-
-#ifdef DEBUG_CULLSETTINGS
-    if (osg::isNotifyEnabled(osg::NOTICE))
-    {
-        OSG_NOTICE << "CullVisitor, saved_cull_settings : ";
-        saved_cull_settings.write(osg::notify(osg::NOTICE));
-    }
-#endif
-
-#if 1
-    // set cull settings from this Camera
-    setCullSettings(camera);
-
-#ifdef DEBUG_CULLSETTINGS
-    OSG_NOTICE << "CullVisitor, after setCullSettings(camera) : ";
-    write(osg::notify(osg::NOTICE));
-#endif
-    // inherit the settings from above
-    inheritCullSettings(saved_cull_settings, camera.getInheritanceMask());
-
-#ifdef DEBUG_CULLSETTINGS
-    OSG_NOTICE << "CullVisitor, after inheritCullSettings(saved_cull_settings," << camera.getInheritanceMask() << ") : ";
-    write(osg::notify(osg::NOTICE));
-#endif
-
-#else
-    // activate all active cull settings from this Camera
-    inheritCullSettings(camera);
-#endif
-
-    // set the cull mask.
-    unsigned int savedTraversalMask = getTraversalMask();
-    bool mustSetCullMask = (camera.getInheritanceMask() & osg::CullSettings::CULL_MASK) == 0;
-    if (mustSetCullMask) setTraversalMask(camera.getCullMask());
-
-    RefMatrix& originalModelView = *getModelViewMatrix();
-
-    osg::RefMatrix* projection = 0;
-    osg::RefMatrix* modelview = 0;
-
-    if (camera.getReferenceFrame() == osg::Transform::RELATIVE_RF)
-    {
-        if (camera.getTransformOrder() == osg::Camera::POST_MULTIPLY)
-        {
-            projection = createOrReuseMatrix(*getProjectionMatrix()*camera.getProjectionMatrix());
-            modelview = createOrReuseMatrix(*getModelViewMatrix()*camera.getViewMatrix());
-        }
-        else // pre multiply
-        {
-            projection = createOrReuseMatrix(camera.getProjectionMatrix()*(*getProjectionMatrix()));
-            modelview = createOrReuseMatrix(camera.getViewMatrix()*(*getModelViewMatrix()));
-        }
-    }
-    else
-    {
-        // an absolute reference frame
-        projection = createOrReuseMatrix(camera.getProjectionMatrix());
-        modelview = createOrReuseMatrix(camera.getViewMatrix());
-    }
-
-
-    if (camera.getViewport()) pushViewport(camera.getViewport());
-
-    // record previous near and far values.
-    value_type previous_znear = _computed_znear;
-    value_type previous_zfar = _computed_zfar;
-
-    // take a copy of the current near plane candidates
-    DistanceMatrixDrawableMap  previousNearPlaneCandidateMap;
-    previousNearPlaneCandidateMap.swap(_nearPlaneCandidateMap);
-
-    DistanceMatrixDrawableMap  previousFarPlaneCandidateMap;
-    previousFarPlaneCandidateMap.swap(_farPlaneCandidateMap);
-
-    _computed_znear = FLT_MAX;
-    _computed_zfar = -FLT_MAX;
-
-    pushProjectionMatrix(projection);
-    pushModelViewMatrix(modelview, camera.getReferenceFrame());
-
-
-    if (camera.getRenderOrder() == osg::Camera::NESTED_RENDER)
-    {
-        handle_cull_callbacks_and_traverse(camera);
-    }
-    else
-    {
-        // set up lighting.
-        // currently ignore lights in the scene graph itself..
-        // will do later.
-        osgUtil::RenderStage* previous_stage = getCurrentRenderBin()->getStage();
-
-        // use render to texture stage.
-        // create the render to texture stage.
-        osg::ref_ptr<osgUtil::RenderStageCache> rsCache = dynamic_cast<osgUtil::RenderStageCache*>(camera.getRenderingCache());
-        if (!rsCache)
-        {
-            rsCache = rsCache = new osgUtil::RenderStageCache;
-            camera.setRenderingCache(rsCache.get());
-        }
-
-        osg::ref_ptr<osgUtil::RenderStage> rtts = rsCache->getRenderStage(this);
-        if (!rtts)
-        {
-            OpenThreads::ScopedLock<OpenThreads::Mutex> lock(*(camera.getDataChangeMutex()));
-
-            rtts = new osgUtil::RenderStageEx;
-            rsCache->setRenderStage(this, rtts.get());
-
-            rtts->setCamera(&camera);
-
-            if (camera.getInheritanceMask() & DRAW_BUFFER)
-            {
-                // inherit draw buffer from above.
-                rtts->setDrawBuffer(previous_stage->getDrawBuffer(), previous_stage->getDrawBufferApplyMask());
-            }
-            else
-            {
-                rtts->setDrawBuffer(camera.getDrawBuffer());
-            }
-
-            if (camera.getInheritanceMask() & READ_BUFFER)
-            {
-                // inherit read buffer from above.
-                rtts->setReadBuffer(previous_stage->getReadBuffer(), previous_stage->getReadBufferApplyMask());
-            }
-            else
-            {
-                rtts->setReadBuffer(camera.getReadBuffer());
-            }
-        }
-        else
-        {
-            // reusing render to texture stage, so need to reset it to empty it from previous frames contents.
-            rtts->reset();
-        }
-
-        // set up clera masks/values
-        rtts->setClearDepth(camera.getClearDepth());
-        rtts->setClearAccum(camera.getClearAccum());
-        rtts->setClearStencil(camera.getClearStencil());
-        rtts->setClearMask(camera.getClearMask());
-
-
-        // set up the background color and clear mask.
-        if (camera.getInheritanceMask() & CLEAR_COLOR)
-        {
-            rtts->setClearColor(previous_stage->getClearColor());
-        }
-        else
-        {
-            rtts->setClearColor(camera.getClearColor());
-        }
-        if (camera.getInheritanceMask() & CLEAR_MASK)
-        {
-            rtts->setClearMask(previous_stage->getClearMask());
-        }
-        else
-        {
-            rtts->setClearMask(camera.getClearMask());
-        }
-
-
-        // set the color mask.
-        osg::ColorMask* colorMask = camera.getColorMask() != 0 ? camera.getColorMask() : previous_stage->getColorMask();
-        rtts->setColorMask(colorMask);
-
-        // set up the viewport.
-        osg::Viewport* viewport = camera.getViewport() != 0 ? camera.getViewport() : previous_stage->getViewport();
-        rtts->setViewport(viewport);
-
-        // set initial view matrix
-        rtts->setInitialViewMatrix(modelview);
-
-        // set up to charge the same PositionalStateContainer is the parent previous stage.
-        osg::Matrix inheritedMVtolocalMV;
-        inheritedMVtolocalMV.invert(originalModelView);
-        inheritedMVtolocalMV.postMult(*getModelViewMatrix());
-        rtts->setInheritedPositionalStateContainerMatrix(inheritedMVtolocalMV);
-        rtts->setInheritedPositionalStateContainer(previous_stage->getPositionalStateContainer());
-
-        // record the render bin, to be restored after creation
-        // of the render to text
-        osgUtil::RenderBin* previousRenderBin = getCurrentRenderBin();
-
-        // set the current renderbin to be the newly created stage.
-        setCurrentRenderBin(rtts.get());
-
-        // traverse the subgraph
-        {
-            handle_cull_callbacks_and_traverse(camera);
-        }
-
-        // restore the previous renderbin.
-        setCurrentRenderBin(previousRenderBin);
-
-
-        if (rtts->getStateGraphList().size() == 0 && rtts->getRenderBinList().size() == 0)
-        {
-            // getting to this point means that all the subgraph has been
-            // culled by small feature culling or is beyond LOD ranges.
-        }
-
-
-        // and the render to texture stage to the current stages
-        // dependancy list.
-        switch (camera.getRenderOrder())
-        {
-        case osg::Camera::PRE_RENDER:
-            getCurrentRenderBin()->getStage()->addPreRenderStage(rtts.get(), camera.getRenderOrderNum());
-            break;
-        default:
-            getCurrentRenderBin()->getStage()->addPostRenderStage(rtts.get(), camera.getRenderOrderNum());
-            break;
-        }
-
-    }
-
-    // restore the previous model view matrix.
-    popModelViewMatrix();
-
-    // restore the previous model view matrix.
-    popProjectionMatrix();
-
-
-    // restore the original near and far values
-    _computed_znear = previous_znear;
-    _computed_zfar = previous_zfar;
-
-    // swap back the near plane candidates
-    previousNearPlaneCandidateMap.swap(_nearPlaneCandidateMap);
-    previousFarPlaneCandidateMap.swap(_farPlaneCandidateMap);
-
-
-    if (camera.getViewport()) popViewport();
-
-    // restore the previous traversal mask settings
-    if (mustSetCullMask) setTraversalMask(savedTraversalMask);
-
-    // restore the previous cull settings
-    setCullSettings(saved_cull_settings);
-
-    // pop the node's state off the render graph stack.
-    if (node_state) popStateSet();
-}
 
 #endif // QT_VERSION
 
@@ -926,7 +354,7 @@ void QtOSGGraphicsWindow::raiseWindow()
 // Graphics window for multithreaded opengl with known issues on AMD cards
 
 QtOSGGraphicsWindowMT::QtOSGGraphicsWindowMT(Traits *traits, BASEGLWidget *widget) :
-    osgQt::GraphicsWindowQt(traits)
+	osgViewer::GraphicsWindowEmbedded(traits)
 {
     m_glCanvas = widget;
     // set osgViewer::GraphicsWindow traits
@@ -986,13 +414,13 @@ bool QtOSGGraphicsWindowMT::makeCurrentImplementation()
 void QtOSGGraphicsWindowMT::swapBuffersImplementation()
 {
 #if (QT_VERSION >= QT_VERSION_CHECK(5, 0, 0))
-    QGLWidget* pQt4GlWidget = dynamic_cast<QGLWidget*>(m_glCanvas);
+/*    QGLWidget* pQt4GlWidget = dynamic_cast<QGLWidget*>(m_glCanvas);
     if (pQt4GlWidget && pQt4GlWidget->doubleBuffer())
     {
 #ifndef __APPLE__
         pQt4GlWidget->swapBuffers();
 #endif
-    }
+    }*/
 #else
     if (m_glCanvas && m_glCanvas->doubleBuffer())
     {
@@ -1067,16 +495,9 @@ QGLOSGWidget::QGLOSGWidget(QWidget *parent) :
     BASEGLWidget(parent)
     //BASEGLWidget(QGLFormat(true ? QGL::SampleBuffers : (QGL::FormatOptions)0), parent)
 {
-#if (QT_VERSION >= QT_VERSION_CHECK(5, 0, 0))
-    // We're gonna need custom cullvisitor 
-    if (NULL == dynamic_cast<CullVisitorEx*>(osgUtil::CullVisitor::prototype().get()))
-    {
-        CullVisitorEx* cve = new CullVisitorEx();
-        osgUtil::CullVisitor::prototype() = cve;
-    }
-#endif
     m_lastRenderingTime = 0;
     m_bAntialiasing = false;
+    m_bInitialized = false;
     osg::Vec4 color( 0,0,0,0 );
     init(parent,color);
 }
@@ -1089,16 +510,9 @@ QGLOSGWidget::QGLOSGWidget(QWidget *parent, const osg::Vec4 &bgColor, bool bAnti
     BASEGLWidget(QGLFormat(bAntialiasing?QGL::SampleBuffers:(QGL::FormatOptions)0),parent)
 #endif
 {
-#if (QT_VERSION >= QT_VERSION_CHECK(5, 0, 0))
-    // We're gonna need custom cullvisitor 
-    if (NULL == dynamic_cast<CullVisitorEx*>(osgUtil::CullVisitor::prototype().get()))
-    {
-        CullVisitorEx* cve = new CullVisitorEx();
-        osgUtil::CullVisitor::prototype() = cve;
-    }
-#endif
     m_lastRenderingTime = 0;
     m_bAntialiasing = bAntialiasing;
+    m_bInitialized = false;
     init(parent,bgColor);
 }
 
@@ -1119,17 +533,6 @@ void QGLOSGWidget::init(QWidget *parent, const osg::Vec4 &bgColor)
     m_view = new QtOSGViewer;
     m_view->setRunFrameScheme(osgViewer::ViewerBase::ON_DEMAND);
 
-#if (QT_VERSION >= QT_VERSION_CHECK(5, 0, 0)) // needed for QOpenGLWidget
-    osgViewer::Renderer* renderer = dynamic_cast<osgViewer::Renderer*>(m_view->getCamera()->getRenderer());
-    if (NULL != renderer)
-    {
-        if (NULL != renderer->getSceneView(0))
-            renderer->getSceneView(0)->setRenderStage(new osgUtil::RenderStageEx());
-        if (NULL != renderer->getSceneView(1))
-            renderer->getSceneView(1)->setRenderStage(new osgUtil::RenderStageEx());
-    }
-#endif
-
     // setting necessary viewer attributes
     m_view->getCamera()->setClearColor( osg::Vec4(0.2, 0.2, 0.6, 1.0) );
     m_view->getCamera()->setViewport(0, 0, size.width(), size.height());
@@ -1143,11 +546,6 @@ void QGLOSGWidget::init(QWidget *parent, const osg::Vec4 &bgColor)
     ssc->setGlobalDefaults();
     ssc->setAttributeAndModes(new CExtraFBO);
 #endif    
-
-#if (QT_VERSION >= QT_VERSION_CHECK(5, 0, 0)) // needed for QOpenGLWidget
-    //m_view->getCamera()->setPreDrawCallback(new BindFboPreDrawCallbackX());
-    m_view->getCamera()->setFinalDrawCallback(new UnBindFboPostDrawCallback);
-#endif
 
     // monitor gpu to adjust frame rate
     osg::ref_ptr<osg::Stats> pStats = m_view->getCamera()->getStats();
@@ -1204,9 +602,10 @@ void QGLOSGWidget::initializeGL()
     m_graphic_window->clear();
     m_graphic_window->setClearMask( 0 );
     */
+    m_bInitialized = true;
     if (glewInit() != GLEW_OK)
     {
-        bool damn= true;
+        m_bInitialized = false;
     }
 #if (QT_VERSION >= QT_VERSION_CHECK(5, 0, 0))
     QOpenGLWidget* pQt5GlWidget = dynamic_cast<QOpenGLWidget*>(this);
@@ -1217,6 +616,12 @@ void QGLOSGWidget::initializeGL()
 
 void QGLOSGWidget::resizeGL(int width, int height)
 {
+    int ratio = getDpiFactor(this);
+    if (ratio > 1)
+    {
+        width *= ratio;
+        height *= ratio;
+    }
     if (m_graphic_window.valid())
     {
         getEventQueue()->windowResize(/*m_graphic_window->getTraits()*/x(),y(), width, height);
@@ -1227,12 +632,15 @@ void QGLOSGWidget::resizeGL(int width, int height)
 
 void QGLOSGWidget::frame()
 {
+    if (!m_bInitialized) 
+        return;
     if (m_view.valid())
     {
         makeCurrent();
 #if (QT_VERSION >= QT_VERSION_CHECK(5, 0, 0))
         static_cast<StateEx *>(m_graphic_window->getState())->setDefaultFbo(defaultFramebufferObject());
 #endif
+        glClear(m_view->getCamera()->getClearMask());
         m_view->frame();
         doneCurrent();
     }
@@ -1247,6 +655,7 @@ void QGLOSGWidget::paintGL()
 #if (QT_VERSION >= QT_VERSION_CHECK(5, 0, 0))
         static_cast<StateEx *>(m_graphic_window->getState())->setDefaultFbo(defaultFramebufferObject());        
 #endif
+        glClear(m_view->getCamera()->getClearMask());
         m_view->frame();
         // get statistics
         double value = 0;
@@ -1365,9 +774,15 @@ void QGLOSGWidget::Refresh(bool bEraseBackground)
 
 void QGLOSGWidget::setBackgroundColor(const osg::Vec4 &color)
 {
+    m_bgColor = color;
     m_view->getCamera()->setClearColor( color );
     //setBackgroundRole(QPalette::Mid);
     //setForegroundRole(QPalette::Mid);
+}
+
+const osg::Vec4& QGLOSGWidget::getBackgroundColor() const
+{
+    return m_bgColor;
 }
 
 
@@ -1465,8 +880,9 @@ void QGLOSGWidget::mousePressEvent ( QMouseEvent * event )
     default:      break;
     }
     setKeyboardModifiers( event );
-    getEventQueue()->mouseButtonPress( static_cast<float>( event->x() ),
-                                             static_cast<float>( event->y() ),
+    int ratio = getDpiFactor(this);
+    getEventQueue()->mouseButtonPress( static_cast<float>( event->x() * ratio),
+                                             static_cast<float>( event->y() * ratio),
                                              button );
 }
 
@@ -1486,8 +902,9 @@ void QGLOSGWidget::mouseReleaseEvent ( QMouseEvent * event )
     default:      break;
     }
     setKeyboardModifiers(event);
-    getEventQueue()->mouseButtonRelease( static_cast<float>( event->x() ),
-                                               static_cast<float>( event->y() ),
+    int ratio = getDpiFactor(this);
+    getEventQueue()->mouseButtonRelease( static_cast<float>( event->x() * ratio),
+                                               static_cast<float>( event->y() * ratio ),
                                                button );
 }
 
@@ -1503,14 +920,16 @@ void QGLOSGWidget::mouseDoubleClickEvent( QMouseEvent* event )
         default: button = 0; break;
     }
     setKeyboardModifiers( event );
-    getEventQueue()->mouseDoubleButtonPress( event->x(), event->y(), button );
+    int ratio = getDpiFactor(this);
+    getEventQueue()->mouseDoubleButtonPress( event->x() * ratio, event->y() * ratio, button );
 }
 
 void QGLOSGWidget::mouseMoveEvent ( QMouseEvent * event )
 {
     setKeyboardModifiers( event );
-    this->getEventQueue()->mouseMotion( static_cast<float>( event->x() ),
-                                        static_cast<float>( event->y() ) );
+    int ratio = getDpiFactor(this);
+    this->getEventQueue()->mouseMotion( static_cast<float>( event->x() * ratio),
+                                        static_cast<float>( event->y() * ratio ) );
     //if (Qt::NoButton!=event->buttons())
     //    Refresh(false);
 }
@@ -1639,7 +1058,6 @@ void QGLOSGWidget::screenShot( osg::Image * img, unsigned int scalePercent, bool
         p_Capture->enable(true);
 #if (QT_VERSION >= QT_VERSION_CHECK(5, 0, 0))
         p_Camera->setFinalDrawCallback(p_Capture.get());
-        p_Camera->setPostDrawCallback(new UnBindFboPostDrawCallback);
 #else
         p_Camera->setPostDrawCallback(p_Capture.get());
 #endif
@@ -1650,6 +1068,7 @@ void QGLOSGWidget::screenShot( osg::Image * img, unsigned int scalePercent, bool
 
         // redraw the scene
         makeCurrent();
+        glClear(m_view->getCamera()->getClearMask());
         m_view->frame();
         doneCurrent();
 
@@ -1686,6 +1105,7 @@ void QGLOSGWidget::screenShot( osg::Image * img, unsigned int scalePercent, bool
 
     // redraw scene
     makeCurrent();
+    glClear(m_view->getCamera()->getClearMask());
     m_view->frame();
     doneCurrent();
 
@@ -1695,6 +1115,7 @@ void QGLOSGWidget::screenShot( osg::Image * img, unsigned int scalePercent, bool
     m_view->setSceneData( scene.get() );
     m_view->getCameraManipulator()->setByMatrix( m );
     makeCurrent();
+    glClear(m_view->getCamera()->getClearMask());
     m_view->frame();
     doneCurrent();
 }

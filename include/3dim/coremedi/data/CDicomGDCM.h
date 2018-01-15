@@ -67,6 +67,7 @@ public:
     virtual int getBitsAllocated() override;
     virtual int getSliceId() override;
     virtual void getSliceIds(tDicomNumList& Numbers) override;
+    virtual double getPixelSpacing() override;
     virtual bool setPatientName(const std::string & name) override;
     virtual bool anonymize(const std::string & name) override;
     virtual long saveToBuffer(char * buffer, long length) override;

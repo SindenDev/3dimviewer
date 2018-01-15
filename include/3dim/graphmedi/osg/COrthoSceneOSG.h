@@ -52,7 +52,7 @@
 #include "osg/CSignalEventHandler.h"
 #include "osg/CTranslateOtherLineDragger.h"
 
-#include "osg/CObjectObserverOSG.h"
+#include "osg/CGeneralObjectObserverOSG.h"
 #include "osg/CForceCullCallback.h"
 #include <data/COrthoSlice.h>
 #include <graph/osg/CForceCullCallback.h>
@@ -69,7 +69,7 @@ namespace scene
 ///////////////////////////////////////////////////////////////////////////////
 //! class description
 //
-class COrthoSceneOSG : public osg::Group, public CObjectObserverOSG<data::COrthoSliceXY, OSGOrtho2DCanvas>, public osg::CInvisibleObjectInterface
+class COrthoSceneOSG : public osg::Group, public CGeneralObjectObserverOSG<COrthoSceneOSG>, public osg::CInvisibleObjectInterface
 {
 protected:
 	//--------------------
@@ -141,10 +141,6 @@ protected:
     virtual void updateFromStorage();
 };
 
-
 } // namespace scene
 
 #endif // COrthoSceneOSG_H
-
-///////////////////////////////////////////////////////////////////////////////
-///////////////////////////////////////////////////////////////////////////////

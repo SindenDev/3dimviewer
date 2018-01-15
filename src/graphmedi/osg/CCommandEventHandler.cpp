@@ -29,6 +29,7 @@
 
 #include <osgViewer/Viewer>
 #include <osgUtil/LineSegmentIntersector>
+#include <app/Signals.h>
 
 typedef osgUtil::LineSegmentIntersector osgIntersec;
 

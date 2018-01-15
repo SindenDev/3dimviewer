@@ -38,23 +38,23 @@ namespace Storage
 {
 
 //! Bone tissue model.
-DECLARE_OBJECT(BonesModel, CModel, 801);
+DECLARE_OBJECT(BonesModel, CModel, 2500);
 
 //! Soft tissues model (not used yet).
-DECLARE_OBJECT(SoftTissuesModel, CModel, 802);
+DECLARE_OBJECT(SoftTissuesModel, CModel, 2501);
 
 //! Optional mucosa/imprint model...
-DECLARE_OBJECT(ImprintModel, CModel, 803);
+DECLARE_OBJECT(ImprintModel, CModel, 2502);
 
 //! Optional model...
-DECLARE_OBJECT(TemplateModel, CModel, 804);
+DECLARE_OBJECT(TemplateModel, CModel, 2503);
 
 //! Optional model...
-DECLARE_OBJECT(ImportedModel, CModel, 805);
+DECLARE_OBJECT(ImportedModel, CModel, 2504);
 
 } // namespace Storage
 
-#define MAX_IMPORTED_MODELS 20
+#define MAX_IMPORTED_MODELS 96
 #define OTHER_MODELS 4
 #define MAX_MODELS  OTHER_MODELS + MAX_IMPORTED_MODELS
 
@@ -70,11 +70,14 @@ public:
         CModelSnapshot( CUndoProvider * provider = NULL ) : CSnapshot( data::UNDO_MODELS, provider ) {}
 
         //! Each snapshot object must return its data size in bytes
-        virtual long getDataSize() {return sizeof( CModel ) * MAX_MODELS; }
+        virtual long getDataSize() 
+        {
+            return sizeof( CModel ) * m_modelMap.size(); // up to MAX_MODELS
+        }
 
 protected:
-        //! Array of implants
-        CModel m_modelArray[ MAX_MODELS ];
+        //! map of stored models and their ids
+        std::map<int,CModel> m_modelMap;
 
         // friend class - undo provider
         friend class CModelManager;
@@ -109,6 +112,12 @@ public:
     //! Sets model geometry.
     //! - Method can be called directly, or using appropriate signal.
     void setModel(int id, geometry::CMesh * pMesh);
+
+    //! Test if given model id is valid
+    static bool validModelId(int id) 
+    {
+        return (id >= Storage::BonesModel::Id && id < Storage::BonesModel::Id + MAX_MODELS);
+    }
 
     //! Selects model
     void removeModel(int id);
@@ -151,11 +160,15 @@ public:
     //! is NULL, or old snapshot.
     virtual CSnapshot * getSnapshot( CSnapshot * snapshot );
 
+    //! Create snapshot of the current state. Parameter snapshot
+    //! is NULL, or old snapshot.
+    virtual CSnapshot * getSnapshot( CSnapshot * snapshot, std::vector<int> modelList, bool bIncludeMesh );
+
     //! Restore state from the snapshot
     virtual void restore( CSnapshot * snapshot );
 
-    //! Creates and stores snapshot. Optional "child" snapshot
-    void createAndStoreSnapshot(CSnapshot *childSnapshot = NULL);
+    //! Creates and stores snapshot. Optional "child" snapshot, takes list of ids, pass empty list as all
+    void createAndStoreSnapshot(std::vector<int> modelIDs, bool bIncludeMesh = false, CSnapshot *childSnapshot = NULL);
 
 	//! Update links between models after load
 	static void updateModelLinks();
@@ -166,6 +179,9 @@ public:
 	//! Get base model of the given model
 	static std::string getBaseModel(int storage_id);
 
+    //! Try to find base model id
+    static int getBaseModelId(int model_id);
+
 	//! Does model with this uid exist?
 	static bool modelExists(const std::string &uid);
 
@@ -174,6 +190,12 @@ public:
 
 	//! Get model uid from storage id
 	static std::string storageIdToUId(int storage_id);
+
+    //! Is current model base?
+    static bool isBaseModel(int storage_id);
+
+    //! Orpedigs stuff - enables multi selection of models - the previously selected models are just not deselected
+    void setMultiSelectionEnabled(bool enabled);
 
 protected:
     //! Dummy model.
@@ -184,6 +206,9 @@ protected:
 
     //! Selected implant
     int m_selectedModel;
+
+    //! Multi selection of models en/disabled.
+    bool m_multiSelectionEnabled;
 
 private:
     //! Private copy constructor.

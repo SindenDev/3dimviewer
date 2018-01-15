@@ -26,6 +26,7 @@
 #include <osgText/Text>
 #include <osg/Version>
 #include <sstream>
+#include <app/Signals.h>
 
 
 using namespace scene;
@@ -526,12 +527,7 @@ CRulerGizmo::CRulerGizmo()
 		// Line color
 		osg::ref_ptr<osg::Vec4Array> color = new osg::Vec4Array;
 		color->push_back( m_lineColor );
-#if OSG_VERSION_GREATER_OR_EQUAL(3,1,10)
 		m_lineGeometry->setColorArray(color.get(), osg::Array::BIND_OVERALL);
-#else
-		m_lineGeometry->setColorArray(color.get());
-#endif
-		m_lineGeometry->setColorBinding(osg::Geometry::BIND_OVERALL);
 
 		m_lineGeode->addDrawable(m_lineGeometry.get());
 	}
@@ -569,12 +565,7 @@ CRulerGizmo::CRulerGizmo()
 			// Color
 			osg::ref_ptr<osg::Vec4Array> color = new osg::Vec4Array;
 			color->push_back( m_lineColor );
-#if OSG_VERSION_GREATER_OR_EQUAL(3,1,10)
-			crossGeometry[ i ]->setColorArray(color.get(), osg::Array::BIND_OVERALL);
-#else
-			crossGeometry[ i ]->setColorArray(color.get());
-#endif
-			crossGeometry[ i ]->setColorBinding(osg::Geometry::BIND_OVERALL);
+            crossGeometry[ i ]->setColorArray(color.get(), osg::Array::BIND_OVERALL);
 
 			osg::LineWidth* crossLinewidth = new osg::LineWidth();
 
@@ -749,12 +740,7 @@ CDensityGizmo::CDensityGizmo( const double value, const double radius, const osg
 		// Line color
 		osg::ref_ptr<osg::Vec4Array> color = new osg::Vec4Array;
 		color->push_back( m_lineColor );
-#if OSG_VERSION_GREATER_OR_EQUAL(3,1,10)
 		m_geometry->setColorArray(color.get(), osg::Array::BIND_OVERALL);
-#else
-		m_geometry->setColorArray(color.get());
-#endif
-		m_geometry->setColorBinding(osg::Geometry::BIND_OVERALL);
 
 		m_geode->addDrawable(m_geometry.get());
 	}
@@ -869,5 +855,51 @@ void CMeasurementsEH::addDesiredNode(osg::Node *node)
         m_desiredList->addNode( node );
 }
 
+//! Constructor
+CMeasurements3DEH::CMeasurements3DEH(OSGCanvas *canvas, scene::CSceneBase *scene)
+    : CMeasurementsEH(canvas, scene)
+{
+    // Connect on dummy
+    data::CGeneralObjectObserver<CMeasurements3DEH>::connect(APP_STORAGE.getEntry(data::Storage::SceneManipulatorDummy::Id).get(), data::CGeneralObjectObserver<CMeasurements3DEH>::tObserverHandler(this, &CMeasurements3DEH::sigSceneManipulatorDummyChanged));
 
+    // Clear gizmos when slice moved
+    m_conSliceXYMoved = VPL_SIGNAL(SigSetSliceXY).connect(this, &CMeasurements3DEH::SigSliceMoved);
+    m_conSliceXZMoved = VPL_SIGNAL(SigSetSliceXZ).connect(this, &CMeasurements3DEH::SigSliceMoved);
+    m_conSliceYZMoved = VPL_SIGNAL(SigSetSliceYZ).connect(this, &CMeasurements3DEH::SigSliceMoved);
+}
 
+//!
+void CMeasurements3DEH::objectChanged(data::CStorageEntry *pEntry, const data::CChangedEntries &changes)
+{ }
+
+//! Clear gizmos when object has changed
+void CMeasurements3DEH::sigSceneManipulatorDummyChanged(data::CStorageEntry *pEntry, const data::CChangedEntries &changes)
+{
+    m_scene->clearGizmos();
+}
+
+//! Slice moved signal answer
+void CMeasurements3DEH::SigSliceMoved(int position)
+{
+    CMeasurementsEH::m_scene->clearGizmos();
+}
+
+//! Constructor
+CMeasurementsRtgEH::CMeasurementsRtgEH(OSGCanvas *canvas, scene::CSceneBase *scene)
+    : CMeasurementsEH(canvas, scene)
+{
+    m_ip.addDesiredRule(new osg::CNodeTypeIntersectionDesired<osgUtil::LineSegmentIntersector::Intersection, osg::Geode>);
+
+    // Connect on dummy
+    data::CGeneralObjectObserver<CMeasurementsRtgEH>::connect(APP_STORAGE.getEntry(data::Storage::SceneManipulatorDummy::Id).get(), data::CGeneralObjectObserver<CMeasurementsRtgEH>::tObserverHandler(this, &CMeasurementsRtgEH::sigSceneManipulatorDummyChanged));
+}
+
+//! Clear gizmos when object has changed
+void CMeasurementsRtgEH::objectChanged(data::CStorageEntry *pData, const data::CChangedEntries &changes)
+{ }
+
+//! Clear gizmos when object has changed
+void CMeasurementsRtgEH::sigSceneManipulatorDummyChanged(data::CStorageEntry *pData, const data::CChangedEntries &changes)
+{
+    m_scene->clearGizmos();
+}

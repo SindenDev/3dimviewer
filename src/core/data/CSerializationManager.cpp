@@ -25,12 +25,18 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //!\brief   ! Constructor. 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-CSerializationManager::CSerializationManager( data::CDataStorage * dataStorage )
+CSerializationManager::CSerializationManager( data::CDataStorage * dataStorage, data::CStorageIdRemapper* mapper)
     : m_dataStorage( dataStorage )
     , m_version( SERIALIZER_CURRENT_VERSION )
+    , m_idMapper(mapper)
 {
 }
 
+
+CSerializationManager::~CSerializationManager()
+{
+    delete m_idMapper;
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //!\brief   ! Serialize. 
@@ -134,20 +140,21 @@ void CSerializationManager::deserialize(vpl::mod::CBinarySerializer & Reader, tI
     CProgress::setProgressMax( ids.size() );
 
     // deserialize all items
-    tIdVector::iterator i;
-    for( i = ids.begin(); i != ids.end(); ++i )
+    tIdVector::iterator iter;
+    for(iter = ids.begin(); iter != ids.end(); ++iter)
     {
+        int i = m_idMapper->getId(*iter);
         // Is id valid storage id?
-        if(!m_dataStorage->isEntryValid(*i))
+        if(!m_dataStorage->isEntryValid(i))
 		{
-			if (*i > data::Storage::UNKNOWN && *i < data::Storage::MAX_ID)
+			if (i > data::Storage::UNKNOWN && i < data::Storage::MAX_ID)
 			{
-				VPL_LOG_INFO("Deserialize skipping entry " << *i);
+				VPL_LOG_INFO("Deserialize skipping entry " << i);
 			}
             continue;
 		}
 
-        data::CStorageEntry * entry = m_dataStorage->getEntry(*i).get();
+        data::CStorageEntry * entry = m_dataStorage->getEntry(i).get();
         bool readError = true;
 
         if (entry != NULL)
@@ -158,7 +165,7 @@ void CSerializationManager::deserialize(vpl::mod::CBinarySerializer & Reader, tI
              // output storage entry id
              {
                  std::stringstream ss;
-                 ss << "Loading storage entry " << *i << " ";
+                 ss << "Loading storage entry " << i << " ";
                  if (NULL!=entry->getStorableDataPtr())
                      ss << " " << typeid(*entry->getStorableDataPtr()).name();
                  ss << "\n";

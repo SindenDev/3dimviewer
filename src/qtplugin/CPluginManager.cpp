@@ -24,7 +24,6 @@
 #include <CPluginManager.h>
 #include <PluginInterface.h>
 
-#include <QMenu>
 #include <QDir>
 #include <QPluginLoader>
 #include <QMainWindow>
@@ -71,7 +70,7 @@ CPluginManager::~CPluginManager()
 {
     // make a note that we don't want any further online check today
     QSettings settings;
-    settings.setValue("LastOnlineHelpCheck",QDate::currentDate());
+    settings.setValue("LastOnlineHelpCheck",QDate::currentDate().toString(Qt::ISODate));
 	unloadPlugins(false);
 }
 
@@ -122,21 +121,18 @@ void CPluginManager::disconnectPlugins()
 	APP_MODE.disconnectAllDrawingHandlers();
 	APP_MODE.disconnectAllSceneHitHandlers();
 	// there's a problem with the deallocation of a model allocated in a dll, therefore we set it to null here
+	if (!m_plugins.isEmpty() || !QPluginLoader::staticInstances().isEmpty())
 	{
+		for (int i = 0; i<MAX_MODELS; ++i)
 		{
-			data::CObjectPtr<data::CModel> spModel( APP_STORAGE.getEntry(data::Storage::BonesModel::Id) );
+			data::CObjectPtr<data::CModel> spModel(APP_STORAGE.getEntry(data::Storage::BonesModel::Id + i));
             geometry::CMesh* pMesh=spModel->getMesh();
-            spModel->setMesh(NULL);
-			spModel->clearAllProperties();
-            APP_STORAGE.invalidate( spModel.getEntryPtr() );
-		}
-        for(int i = 0; i < MAX_IMPORTED_MODELS; ++i)
-        {
-            data::CObjectPtr<data::CModel> spModel( APP_STORAGE.getEntry(data::Storage::ImportedModel::Id + i) );
-            geometry::CMesh* pMesh=spModel->getMesh();
-            spModel->setMesh(NULL);
-			spModel->clearAllProperties();
-            APP_STORAGE.invalidate( spModel.getEntryPtr() );
+			if (NULL != pMesh)
+			{
+				spModel->setMesh(NULL);
+				spModel->clearAllProperties();
+				APP_STORAGE.invalidate(spModel.getEntryPtr());
+			}
         }
 	}
     // call disconnectPlugin for every static plugin
@@ -257,8 +253,7 @@ void CPluginManager::initSignalTable()
 	m_vplSignals[VPL_SIGNAL(SigSetDensityWindow).getId()] = &(VPL_SIGNAL(SigSetDensityWindow));
 	m_vplSignals[VPL_SIGNAL(SigSaveModel).getId()] = &(VPL_SIGNAL(SigSaveModel));
     m_vplSignals[VPL_SIGNAL(SigNewTransformMatrixFromNote).getId()] = &(VPL_SIGNAL(SigNewTransformMatrixFromNote));
-
-
+    m_vplSignals[VPL_SIGNAL(SigRemoveModel).getId()] = &(VPL_SIGNAL(SigRemoveModel));
 }
 
 void CPluginManager::initPlugin(QObject* plugin, const QString& fileName)
@@ -469,7 +464,12 @@ void CPluginManager::populateMenus(QObject *plugin)
                     if (pdfHelp.isEmpty())
                     {
                         QSettings settings;
-                        QDate dateLastCheck = settings.value("LastOnlineHelpCheck").toDate();
+                        QDate dateLastCheck;
+                        QVariant val = settings.value("LastOnlineHelpCheck");
+                        if (QVariant::Date == val.type())        
+                            dateLastCheck = val.toDate();
+                        if (QVariant::String == val.type()) 
+                            dateLastCheck = QDate::fromString(val.toString(),Qt::ISODate);
                         QString updateUrlBase = settings.value("OnlineHelpUrl",ONLINE_HELP_URL).toString();
                         if (dateLastCheck<QDate::currentDate())
                         {

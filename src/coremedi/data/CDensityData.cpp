@@ -24,19 +24,15 @@
 // include files
 
 #include <data/CDensityData.h>
-
-#include <VPL/Math/Base.h>
 #include <VPL/Math/StaticMatrix.h>
-#include <VPL/Math/StaticVector.h>
-
 
 namespace data
 {
 
 ///////////////////////////////////////////////////////////////////////////////
 //
-
-CDensityData::CDensityData() : m_iSeriesNumber(0)
+CDensityData::CDensityData()
+    : m_iSeriesNumber(0)
 {
     m_volumeUndo.setVolumePtr(this);
 }
@@ -61,13 +57,13 @@ CDensityData::CDensityData(const CDensityData& Data)
     , m_ImageOrientationY(Data.m_ImageOrientationY)
     , m_ImagePosition(Data.m_ImagePosition)
     , m_ImageSubSampling(Data.m_ImageSubSampling)
-	, m_sPatientDescription(Data.m_sPatientDescription)
-	, m_sStudyUid(Data.m_sStudyUid)
-	, m_sStudyId(Data.m_sStudyId)
-	, m_sStudyDate(Data.m_sStudyDate)
-	, m_sStudyDescription(Data.m_sStudyDescription)
-	, m_sSeriesDescription(Data.m_sSeriesDescription)
-	, m_sScanOptions(Data.m_sScanOptions)
+    , m_sPatientDescription(Data.m_sPatientDescription)
+    , m_sStudyUid(Data.m_sStudyUid)
+    , m_sStudyId(Data.m_sStudyId)
+    , m_sStudyDate(Data.m_sStudyDate)
+    , m_sStudyDescription(Data.m_sStudyDescription)
+    , m_sSeriesDescription(Data.m_sSeriesDescription)
+    , m_sScanOptions(Data.m_sScanOptions)
     , m_sMediaStorage(Data.m_sMediaStorage)
 {
     m_volumeUndo.setVolumePtr(this);
@@ -75,21 +71,19 @@ CDensityData::CDensityData(const CDensityData& Data)
 
 ///////////////////////////////////////////////////////////////////////////////
 //
-
 CDensityData::~CDensityData()
 {
 }
 
 ////////////////////////////////////////////////////////////
 //
-
 void CDensityData::update(const CChangedEntries& Changes)
 {
-	data::CChangedEntries::tFilter filter;
-	filter.insert(data::Storage::PatientData::Id);
-	filter.insert(data::Storage::AuxData::Id);
+    data::CChangedEntries::tFilter filter;
+    filter.insert(data::Storage::PatientData::Id);
+    filter.insert(data::Storage::AuxData::Id);
 
-    if( Changes.checkFlagAny(data::Storage::STORAGE_RESET) )
+    if (Changes.checkFlagAny(data::Storage::STORAGE_RESET))
     {
         init();
     }
@@ -108,10 +102,9 @@ void CDensityData::update(const CChangedEntries& Changes)
 
 ////////////////////////////////////////////////////////////
 //
-
 void CDensityData::init()
 {
-	enableDummyMode(true);
+    enableDummyMode(true);
 
     resize(INIT_SIZE, INIT_SIZE, INIT_SIZE);
 
@@ -124,16 +117,14 @@ void CDensityData::init()
 
 ////////////////////////////////////////////////////////////
 // There are various instances of CDensityData, therefore we have to set storageID this way
-
 void CDensityData::initVolumeUndo(int storageID)
-{    
+{
     m_volumeUndo.setStorageId(storageID);
     m_volumeUndo.setShouldInvalidate(true);
 }
 
 ////////////////////////////////////////////////////////////
 //
-
 void CDensityData::takeDicomData(vpl::img::CDicomSlice & DicomSlice)
 {
     // get header data from given DICOM slice
@@ -157,13 +148,13 @@ void CDensityData::takeDicomData(vpl::img::CDicomSlice & DicomSlice)
     m_ImagePosition.setXYZ(0.0, 0.0, 0.0);
     m_ImageSubSampling.setXYZ(1.0, 1.0, 1.0);
 
-	m_sPatientDescription = DicomSlice.m_sPatientDescription;
-	m_sStudyUid = DicomSlice.m_sStudyUid;
-	m_sStudyId = DicomSlice.m_sStudyId;
-	m_sStudyDate = DicomSlice.m_sStudyDate;
-	m_sStudyDescription = DicomSlice.m_sStudyDescription;
-	m_sSeriesDescription = DicomSlice.m_sSeriesDescription;
-	m_sScanOptions = DicomSlice.m_sScanOptions;
+    m_sPatientDescription = DicomSlice.m_sPatientDescription;
+    m_sStudyUid = DicomSlice.m_sStudyUid;
+    m_sStudyId = DicomSlice.m_sStudyId;
+    m_sStudyDate = DicomSlice.m_sStudyDate;
+    m_sStudyDescription = DicomSlice.m_sStudyDescription;
+    m_sSeriesDescription = DicomSlice.m_sSeriesDescription;
+    m_sScanOptions = DicomSlice.m_sScanOptions;
 
     m_sMediaStorage = DicomSlice.m_sMediaStorage;
 }
@@ -173,9 +164,73 @@ void CDensityData::setImagePosition(double x, double y, double z)
     m_ImagePosition.setXYZ(x, y, z);
 }
 
+bool CDensityData::hasData()
+{
+    if (getXSize() != INIT_SIZE || getYSize() != INIT_SIZE || getZSize() != INIT_SIZE)
+    {
+        return true;
+    }
+
+    if (getDX() != 1.0 || getDY() != 1.0 || getDZ() != 1.0)
+    {
+        return true;
+    }
+
+    for (int z = 0; z < getZSize(); ++z)
+    {
+        for (int y = 0; y < getYSize(); ++y)
+        {
+            for (int x = 0; x < getXSize(); ++x)
+            {
+                if (at(x, y, z) != vpl::img::CPixelTraits<vpl::img::tDensityPixel>::getPixelMin())
+                {
+                    return true;
+                }
+            }
+        }
+    }
+
+    return false;
+}
+
+//! Get snapshot of the whole volume
+data::CSnapshot * CDensityData::getVolumeSnapshot()
+{
+    return m_volumeUndo.getSnapshotVolume();
+}
+
+//! Get snapshot of the plane XY 
+data::CSnapshot * CDensityData::getPlaneXYSnapshot(int position)
+{
+    return m_volumeUndo.getSnapshotXY(position);
+}
+
+//! Get snapshot of the plane XZ 
+data::CSnapshot * CDensityData::getPlaneXZSnapshot(int position)
+{
+    return m_volumeUndo.getSnapshotXZ(position);
+}
+
+//! Get snapshot of the plane YZ 
+data::CSnapshot * CDensityData::getPlaneYZSnapshot(int position)
+{
+    return m_volumeUndo.getSnapshotYZ(position);
+}
+
+//! Set subsampling information
+void CDensityData::setImageSubSampling(const vpl::img::CVector3D& subSampling)
+{
+    m_ImageSubSampling = subSampling;
+}
+
+//! Get subsampling information
+vpl::img::CVector3D CDensityData::getImageSubSampling() const
+{
+    return m_ImageSubSampling;
+}
+
 ////////////////////////////////////////////////////////////
 //
-
 void CDensityData::clearDicomData()
 {
     m_iSeriesNumber = 0;
@@ -194,39 +249,34 @@ void CDensityData::clearDicomData()
     m_ImageOrientationY = vpl::img::CVector3D(0.0, 1.0, 0.0);
     m_ImagePosition.setXYZ(0.0, 0.0, 0.0);
     m_ImageSubSampling.setXYZ(1.0, 1.0, 1.0);
-	m_sPatientDescription.clear();
-	m_sStudyUid.clear();
-	m_sStudyId.clear();
-	m_sStudyDate.clear();
-	m_sStudyDescription.clear();
-	m_sSeriesDescription.clear();
-	m_sScanOptions.clear();
+    m_sPatientDescription.clear();
+    m_sStudyUid.clear();
+    m_sStudyId.clear();
+    m_sStudyDate.clear();
+    m_sStudyDescription.clear();
+    m_sSeriesDescription.clear();
+    m_sScanOptions.clear();
 }
 
 ////////////////////////////////////////////////////////////
-
 unsigned int CDensityData::getDataCheckSum() const
 {
-	const int sizeX = getXSize();
-	const int sizeY = getYSize();
-	const int sizeZ = getZSize();
-	unsigned int sum = 0;
-	for (int z = 0; z < sizeZ; ++z)
-	{
-		for (int y = 0; y < sizeY; ++y)
-		{
-			vpl::tSize idxX = getIdx(0, y, z);
-			for (int x = 0; x < sizeX; ++x, idxX += getXOffset())
-			{
-				sum += at(idxX);
-			}
-		}
-	} 
-	return sum;
+    const int sizeX = getXSize();
+    const int sizeY = getYSize();
+    const int sizeZ = getZSize();
+    unsigned int sum = 0;
+    for (int z = 0; z < sizeZ; ++z)
+    {
+        for (int y = 0; y < sizeY; ++y)
+        {
+            vpl::tSize idxX = getIdx(0, y, z);
+            for (int x = 0; x < sizeX; ++x, idxX += getXOffset())
+            {
+                sum += at(idxX);
+            }
+        }
+    }
+    return sum;
 }
 
-
 } // namespace data
-
-///////////////////////////////////////////////////////////////////////////////
-///////////////////////////////////////////////////////////////////////////////

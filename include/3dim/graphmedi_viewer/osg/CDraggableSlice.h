@@ -27,7 +27,7 @@
 #include <osg/CPlaneConstraint.h>
 #include <osg/CPlaneUpdateSelection.h>
 #include <osg/CDraggerEventHandler.h>	// nothin' more needed
-#include <osg/CObjectObserverOSG.h>
+#include <osg/CGeneralObjectObserverOSG.h>
 
 #include <data/COrthoSlice.h>
 
@@ -263,7 +263,7 @@ protected:
 //! Draggable textured slice designed for orthogonal slices stored
 //! in the storage.
 
-class CDraggableSliceXY : public CDraggableSlice, public CObjectObserverOSG<data::COrthoSliceXY>
+class CDraggableSliceXY : public CDraggableSlice, public scene::CGeneralObjectObserverOSG<CDraggableSliceXY>
 {
 public:
 	//! Constructor.
@@ -278,7 +278,7 @@ public:
     virtual void updateFromStorage();
 
     //! Virtual method called on any change of the entry
-    virtual void objectChanged(data::COrthoSliceXY *pObject);
+    virtual void objectChanged(data::CStorageEntry *pEntry, const data::CChangedEntries &changes);
 	
 	//! Makes dummy geometry thin or thick
 	virtual void dummyThin(bool thin) { p_Dummy->setUpSquarePlaneXY(thin); }
@@ -293,7 +293,7 @@ protected:
 //! Draggable textured slice designed for orthogonal slices stored
 //! in the storage.
 
-class CDraggableSliceXZ : public CDraggableSlice, public CObjectObserverOSG<data::COrthoSliceXZ>
+class CDraggableSliceXZ : public CDraggableSlice, public scene::CGeneralObjectObserverOSG<CDraggableSliceXZ>
 {
 public:
 	//! Constructor.
@@ -308,7 +308,7 @@ public:
     virtual void updateFromStorage();
 
     //! Virtual method called on any change of the entry
-    virtual void objectChanged(data::COrthoSliceXZ *pObject);
+    virtual void objectChanged(data::CStorageEntry *pEntry, const data::CChangedEntries &changes);
 
 	//! Makes dummy geometry thin or thick
 	virtual void dummyThin(bool thin) { p_Dummy->setUpSquarePlaneXZ(thin); }
@@ -323,7 +323,7 @@ protected:
 //! Draggable textured slice designed for orthogonal slices stored
 //! in the storage.
 
-class CDraggableSliceYZ : public CDraggableSlice, public CObjectObserverOSG<data::COrthoSliceYZ>
+class CDraggableSliceYZ : public CDraggableSlice, public scene::CGeneralObjectObserverOSG<CDraggableSliceYZ>
 {
 public:
 	//! Constructor.
@@ -338,7 +338,7 @@ public:
     virtual void updateFromStorage();
 
     //! Virtual method called on any change of the entry
-    virtual void objectChanged(data::COrthoSliceYZ *pObject);
+    virtual void objectChanged(data::CStorageEntry *pEntry, const data::CChangedEntries &changes);
 
 	//! Makes dummy geometry thin or thick
 	virtual void dummyThin(bool thin) { p_Dummy->setUpSquarePlaneYZ(thin); }

@@ -211,7 +211,8 @@ protected:
     virtual QString valueToText(double value) const;
     virtual void valueFormatChanged();
 
-    virtual QSize minimumSizeHint() const { return QSize(32,32); }
+    virtual QSize minimumSizeHint() const override { return QSize(32,32); }
+    virtual QSize sizeHint() const override { return QSize(100, 100); }
 
     virtual bool hasHeightForWidth() const { return true; }
     virtual int heightForWidth(int w) const { return w; }

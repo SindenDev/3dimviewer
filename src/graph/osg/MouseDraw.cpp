@@ -22,7 +22,7 @@
 
 #include <osg/MouseDraw.h>
 #include <osgViewer/View>
-#include <coremedi/app/Signals.h>
+#include <app/Signals.h>
 #include <osg/Version>
 
 using namespace osg;
@@ -46,22 +46,12 @@ CLineGeode::CLineGeode( int flags ) :
 	// Color array
 	m_colors = new Vec4Array;
 	m_colors->push_back( m_color );
-#if OSG_VERSION_GREATER_OR_EQUAL(3,1,10)
 	m_geometry->setColorArray(m_colors.get(), osg::Array::BIND_OVERALL);
-#else
-	m_geometry->setColorArray(m_colors.get());
-#endif
-	m_geometry->setColorBinding(osg::Geometry::BIND_OVERALL);
 
 	// set the normal in the same way color.
 	Vec3Array* normals = new Vec3Array;
 	normals->push_back(osg::Vec3(0.0f,-1.0f,0.0f));
-#if OSG_VERSION_GREATER_OR_EQUAL(3,1,10)
 	m_geometry->setNormalArray(normals, osg::Array::BIND_OVERALL);
-#else
-	m_geometry->setNormalArray(normals);
-#endif
-	m_geometry->setNormalBinding(osg::Geometry::BIND_OVERALL);
 
 	// Do not use display lists. Its slow for realtime graphics...
 	m_geometry->setUseDisplayList( false );

@@ -107,8 +107,8 @@ scene::CSceneInfoWidget::CSceneInfoWidget(OSGCanvas *pCanvas)
     : osgWidget::Box("InfoBox", osgWidget::Box::VERTICAL)
 {
     setCanvas(pCanvas);
-    APP_STORAGE.connect(data::Storage::SceneWidgetsParameters::Id, this);
-    APP_STORAGE.connect(data::Storage::PatientData::Id, this);
+    scene::CGeneralObjectObserverOSG<CSceneInfoWidget>::connect(APP_STORAGE.getEntry(data::Storage::SceneWidgetsParameters::Id).get());
+    scene::CGeneralObjectObserverOSG<CSceneInfoWidget>::connect(APP_STORAGE.getEntry(data::Storage::PatientData::Id).get());
     this->setupObserver(this);
 
     // Get colors from the storage
@@ -143,7 +143,7 @@ scene::CSceneInfoWidget::CSceneInfoWidget(OSGCanvas *pCanvas)
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //
 
-void scene::CSceneInfoWidget::updateFromStorage(int changes)
+void scene::CSceneInfoWidget::updateFromStorage()
 {
     // Set output text
    data::CObjectPtr< data::CDensityData > data( APP_STORAGE.getEntry(data::Storage::PatientData::Id) );
@@ -191,7 +191,7 @@ scene::CSceneOrientationWidget::CSceneOrientationWidget(OSGCanvas *pCanvas,
     , m_Flags( Flags )
 {
     setCanvas(pCanvas);
-    APP_STORAGE.connect(data::Storage::PreviewModel::Id, this);
+    scene::CGeneralObjectObserverOSG<CSceneOrientationWidget>::connect(APP_STORAGE.getEntry(data::Storage::PreviewModel::Id).get());
     this->setupObserver(this);
 
     VPL_ASSERT( pCanvas );
@@ -599,7 +599,7 @@ scene::CRulerWidget::CRulerWidget( OSGCanvas * pCanvas, int sx, int sy, const os
 	this->setUpdateCallback( new CRulerUpdateCallback );
 
 	// Connect to the invalidation signal
-	m_conDataChanged = APP_STORAGE.getEntrySignal( data::Storage::SceneManipulatorDummy::Id ).connect( this, &scene::CRulerWidget::onDataChanged );
+    scene::CGeneralObjectObserverOSG<CRulerWidget>::connect(APP_STORAGE.getEntry(data::Storage::SceneManipulatorDummy::Id).get());
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -779,7 +779,7 @@ void scene::CRulerWidget::getDistances(float & dx, float & dy)
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //
 
-void scene::CRulerWidget::onDataChanged(data::CStorageEntry *pEntry)
+void scene::CRulerWidget::updateFromStorage()
 {
 	// Recompute scaling
 	calcScaling( );

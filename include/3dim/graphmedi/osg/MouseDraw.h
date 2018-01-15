@@ -36,8 +36,6 @@
 
 #include <VPL/Module/Signal.h>
 
-#include <qdebug.h>
-
 namespace osg
 {
 

@@ -35,6 +35,7 @@
 #include <data/CVolumeTransformation.h>
 #include <data/CRegionData.h>
 #include <data/CRegionColoring.h>
+#include <coremedi/app/Signals.h>
 
 
 
@@ -209,10 +210,12 @@ CDataInfoDialog::CDataInfoDialog(QWidget *parent) :
 {
     ui->setupUi(this);
 
+    int activeDataset = VPL_SIGNAL(SigGetActiveDataSet).invoke2();
+
     ui->tableWidget->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(ui->tableWidget, SIGNAL(customContextMenuRequested(const QPoint &)), this, SLOT(tableContextMenu(const QPoint &)));
     {
-        data::CObjectPtr<data::CDensityData> spVolume( APP_STORAGE.getEntry(data::Storage::PatientData::Id) );
+        data::CObjectPtr<data::CDensityData> spVolume( APP_STORAGE.getEntry(activeDataset) );
 
         QString PatientName(spVolume->m_sPatientName.c_str());
         QString PatientID(spVolume->m_sPatientId.c_str());
@@ -256,7 +259,7 @@ CDataInfoDialog::CDataInfoDialog(QWidget *parent) :
     }
 	
     {        
-        data::CObjectPtr<data::CDensityData> spVolume( APP_STORAGE.getEntry(data::Storage::PatientData::Id) );
+        data::CObjectPtr<data::CDensityData> spVolume( APP_STORAGE.getEntry(activeDataset) );
         vpl::img::CVector3D pos = spVolume->m_ImagePosition;
         data::CObjectPtr<data::CVolumeTransformation> spVolumeTransformation(APP_STORAGE.getEntry(data::Storage::VolumeTransformation::Id));
         osg::Matrix volMx = spVolumeTransformation->getTransformation();

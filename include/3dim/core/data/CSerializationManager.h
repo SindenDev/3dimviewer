@@ -25,10 +25,10 @@
 
 #include <VPL/Module/Serializable.h>
 #include <VPL/Module/BinarySerializer.h>
-#include <VPL/Base/FullException.h>
 
 #include <data/CDataStorage.h>
 #include <data/CSavedEntries.h>
+#include "data/CStorageIdRemapper.h"
 
 #define SERIALIZER_CURRENT_VERSION 60
 
@@ -81,7 +81,8 @@ public:
 
 public:
     //! Constructor
-    CSerializationManager( data::CDataStorage * dataStorage );
+    CSerializationManager( data::CDataStorage * dataStorage, data::CStorageIdRemapper* mapper);
+    ~CSerializationManager();
 
     //! Serialize
     void serialize( vpl::mod::CBinarySerializer& Writer, const tIdVector & ids );
@@ -101,6 +102,8 @@ protected:
 
     //! Version number
     vpl::sys::tInt32 m_version;
+
+    data::CStorageIdRemapper* m_idMapper;
 };
 
 

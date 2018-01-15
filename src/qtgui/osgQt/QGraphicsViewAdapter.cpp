@@ -14,7 +14,7 @@
 #include <osgQt/QGraphicsViewAdapter.h>
 #include <osgQt/QWidgetImage.h>
 
-#include <QtOpenGL/QGLWidget>
+#include <QtOpenGL/QGLWidget> // replace by QOpenGLTexture?
 
 #include <osg/Version>
 #include <osgGA/GUIEventAdapter>
@@ -477,7 +477,7 @@ void QGraphicsViewAdapter::render()
         if (_graphicsView->size().width() != _width || _graphicsView->size().height() != _height)
         {
             _graphicsView->setGeometry(0, 0, _width, _height);
-            _graphicsView->viewport()->setGeometry(0, 0, _width, _height);
+            _graphicsView->viewport()->setGeometry(0,0, _width, _height);
 
             _widget->setGeometry(0, 0, _width, _height);
         }
@@ -501,6 +501,11 @@ void QGraphicsViewAdapter::render()
 
     QRectF destinationRect(0, 0, image.width(), image.height());
     QRect sourceRect(0, 0, image.width(), image.height());
+
+    //Center graphics view
+    _graphicsView->centerOn(0,0);
+    _graphicsView->translate(_width / 2, _height / 2);
+    
     _graphicsView->render(&painter, destinationRect, sourceRect, Qt::IgnoreAspectRatio);
     painter.end();
 

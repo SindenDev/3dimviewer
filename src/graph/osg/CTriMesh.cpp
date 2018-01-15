@@ -27,21 +27,52 @@
 #include <osg/LightModel>
 #include <osg/CullFace>
 #include <osg/Version>
+#include <osg/CForceCullCallback.h>
 
 #define BUFFER_INDEX_PROPERTY "bufferIndex"
 
-///////////////////////////////////////////////////////////////////////////////
-//
+void osg::CTriMeshDrawCallback::drawImplementation(osg::RenderInfo &ri, const osg::Drawable *d) const
+{
+    osg::Geometry *g = m_drawable->asGeometry();
+    if (g != NULL)
+    {
+        if ((g->getVertexArray()->getDataSize() != 0) && (g->getNumPrimitiveSets() != 0) && (g->getPrimitiveSet(0)->getTotalDataSize() != 0))
+        {
+            // draw original geometry
+            m_drawable->drawImplementation(ri);
+        }
+    }
+}
 
 osg::CTriMesh::CTriMesh()
     : m_bKDTreeUsed(false)
     , m_bUseVertexColors(false)
 {
     setName("CTriMesh");
+    pGeode = new osg::Geode;
     pGeometries.push_back(new osg::Geometry);
+    pGeometriesVisitors.push_back(new osg::Geometry);
     pVertices = new osg::Vec3Array;
     pVertexColors = new osg::Vec4Array;
     pPrimitiveSets.push_back(new osg::DrawElementsUInt(osg::PrimitiveSet::TRIANGLES));
+    pVertexGroupIndices = new osg::Vec4Array;
+    pVertexGroupWeights = new osg::Vec4Array;
+    pVisitorsSubTree = new osg::MatrixTransform;
+    setVisitorsSubTree(NULL);
+
+    // allways draw original geometry - disable culling and display lists
+    setUseDisplayList(false);
+#if OSG_VERSION_GREATER_OR_EQUAL(3,1,10)
+    pGeometriesVisitors.back()->setCullingActive(false);
+#else
+    pGeometriesVisitors.back()->setCullCallback(new osg::CForceCullCallback(true));
+#endif    
+
+    // set draw callback
+    pGeometriesVisitors.back()->setDrawCallback(new CTriMeshDrawCallback(pGeometries.back()));
+
+    this->addChild(pVisitorsSubTree);
+    this->addChild(pGeode);
 
     pGeometries.back()->setVertexArray(pVertices);
     pGeometries.back()->addPrimitiveSet(pPrimitiveSets.back());
@@ -54,18 +85,40 @@ osg::CTriMesh::CTriMesh()
 
     pColors = new osg::Vec4Array(1);
     (*pColors)[0] = osg::Vec4(1.0, 1.0, 1.0, 1.0);
-#if OSG_VERSION_GREATER_OR_EQUAL(3,1,10)
     pGeometries.back()->setColorArray(pColors, osg::Array::BIND_OVERALL);
-#else
-    pGeometries.back()->setColorArray(pColors);
-#endif
-    pGeometries.back()->setColorBinding(osg::Geometry::BIND_OVERALL);
-
-    this->addDrawable(pGeometries.back());
 }
 
-///////////////////////////////////////////////////////////////////////////////
-//
+void osg::CTriMesh::setUseDisplayList(bool bUse)
+{
+    for (int i = 0; i < pGeometries.size(); ++i)
+    {
+        pGeometries[i]->setUseDisplayList(bUse);
+        pGeometriesVisitors[i]->setUseDisplayList(bUse);
+    }
+}
+
+void osg::CTriMesh::setVisitorsSubTree(osg::MatrixTransform *visitorsSubTree)
+{
+    // set active node to geode - if visitorsSubTree is NULL, use original geometry, otherwise use visitors and set bones geometry to the visitors tree
+    pVisitorsSubTree->removeChildren(0, pVisitorsSubTree->getNumChildren());
+    if (visitorsSubTree != NULL)
+    {
+        pVisitorsSubTree->addChild(visitorsSubTree);
+        pGeode->removeDrawables(0, pGeode->getNumDrawables());
+        for (int i = 0; i < pGeometries.size(); ++i)
+        {
+            pGeode->addDrawable(pGeometriesVisitors[i]);
+        }
+    }
+    else
+    {
+        pGeode->removeDrawables(0, pGeode->getNumDrawables());
+        for (int i = 0; i < pGeometries.size(); ++i)
+        {
+            pGeode->addDrawable(pGeometries[i]);
+        }
+    }
+}
 
 void osg::CTriMesh::createMesh(geometry::CMesh *mesh, bool createNormals)
 {
@@ -151,7 +204,7 @@ void osg::CTriMesh::createMesh(geometry::CMesh *mesh, bool createNormals)
     // remove excess geometries and add new
     while (pGeometries.size() > usedMaterials.size())
     {
-        removeDrawable(pGeometries.back());
+        pGeode->removeDrawable(pGeometries.back());
         pGeometries.back()->removePrimitiveSet(0, pGeometries.back()->getNumPrimitiveSets());
         pGeometries.pop_back();
         pPrimitiveSets.pop_back();
@@ -162,13 +215,8 @@ void osg::CTriMesh::createMesh(geometry::CMesh *mesh, bool createNormals)
         pGeometries.push_back(new osg::Geometry);
         pGeometries.back()->addPrimitiveSet(pPrimitiveSets.back());
         pGeometries.back()->setVertexArray(pVertices.get());
-#if OSG_VERSION_GREATER_OR_EQUAL(3,1,10)
         pGeometries.back()->setColorArray(pColors, osg::Array::BIND_OVERALL);
-#else
-        pGeometries.back()->setColorArray(pColors);
-#endif
-        pGeometries.back()->setColorBinding(osg::Geometry::BIND_OVERALL);
-        addDrawable(pGeometries.back());
+        pGeode->addDrawable(pGeometries.back());
     }
 
     // Create normals
@@ -247,6 +295,44 @@ void osg::CTriMesh::createMesh(geometry::CMesh *mesh, bool createNormals)
     // If the property must be removed for some reason, discuss it with me. Wik.
     //    mesh->remove_property(vProp_bufferIndex);
 
+    OpenMesh::VPropHandleT<geometry::CMesh::CVertexGroups> vProp_vertexGroups;
+    if (mesh->get_property_handle(vProp_vertexGroups, VERTEX_GROUPS_PROPERTY_NAME))
+    {
+        pVertexGroupIndices->resize(numvert);
+        pVertexGroupWeights->resize(numvert);
+
+        index = 0;
+        for (geometry::CMesh::VertexIter vit = mesh->vertices_begin(); vit != mesh->vertices_end(); ++vit)
+        {
+            geometry::CMesh::CVertexGroups vertexGroup = mesh->property(vProp_vertexGroups, vit);
+            for (int i = 0; i < 4; ++i)
+            {
+                vertexGroup.indices[i] = std::max(vertexGroup.indices[i], 0);
+            }
+            (*pVertexGroupIndices)[index] = osg::Vec4(vertexGroup.indices[0], vertexGroup.indices[1], vertexGroup.indices[2], vertexGroup.indices[3]);
+            (*pVertexGroupWeights)[index] = osg::Vec4(vertexGroup.weights[0], vertexGroup.weights[1], vertexGroup.weights[2], vertexGroup.weights[3]);
+            ++index;
+        }
+
+        for (int i = 0; i < pGeometries.size(); ++i)
+        {
+            pGeometries[i]->setVertexAttribArray(6, pVertexGroupIndices);
+            pGeometries[i]->setVertexAttribNormalize(6, false);
+            pGeometries[i]->setVertexAttribBinding(6, osg::Geometry::BIND_PER_VERTEX);
+            pGeometries[i]->setVertexAttribArray(7, pVertexGroupWeights);
+            pGeometries[i]->setVertexAttribNormalize(7, false);
+            pGeometries[i]->setVertexAttribBinding(7, osg::Geometry::BIND_PER_VERTEX);
+        }
+    }
+    else
+    {
+        for (int i = 0; i < pGeometries.size(); ++i)
+        {
+            pGeometries[i]->setVertexAttribArray(6, NULL);
+            pGeometries[i]->setVertexAttribArray(7, NULL);
+        }
+    }
+
     for (int i = 0; i < pGeometries.size(); ++i)
     {
         pGeometries[i]->dirtyDisplayList();
@@ -262,10 +348,6 @@ void osg::CTriMesh::createMesh(geometry::CMesh *mesh, bool createNormals)
     // apply materials
     applyMaterials();
 }
-
-
-///////////////////////////////////////////////////////////////////////////////
-//
 
 void osg::CTriMesh::useVertexColors(bool value, bool force)
 {
@@ -284,6 +366,12 @@ void osg::CTriMesh::useVertexColors(bool value, bool force)
             pGeometries[i]->dirtyDisplayList();
         }
     }
+}
+
+void osg::CTriMesh::updateVertexColors(osg::Vec4Array *vertexColors)
+{
+    pVertexColors = vertexColors;
+    useVertexColors(m_bUseVertexColors, true);
 }
 
 void osg::CTriMesh::setColor(float r, float g, float b, float a)
@@ -309,28 +397,16 @@ void osg::CTriMesh::useNormals(ENormalsUsage normalsUsage)
         switch (normalsUsage)
         {
         case ENU_VERTEX:
-#if OSG_VERSION_GREATER_OR_EQUAL(3,1,10)
             pGeometries[i]->setNormalArray(pNormals.get(), osg::Array::BIND_PER_VERTEX);
-#else
-            pGeometries[i]->setNormalBinding(osg::Geometry::BIND_PER_VERTEX);
-            pGeometries[i]->setNormalArray(pNormals.get());
-#endif
             break;
 
         case ENU_NONE:
         default:
-#if OSG_VERSION_GREATER_OR_EQUAL(3,1,10)
             pGeometries[i]->setNormalArray(pNoNormals.get(), osg::Array::BIND_OVERALL);
-#else
-            pGeometries[i]->setNormalBinding(osg::Geometry::BIND_OVERALL);
-            pGeometries[i]->setNormalArray(pNoNormals.get());
-#endif
             break;
         }
 
-#if OSG_VERSION_GREATER_OR_EQUAL(3,1,10)
         pGeometries[i]->dirtyDisplayList();
-#endif
     }
 }
 
@@ -379,14 +455,6 @@ void osg::CTriMesh::updatePartOfMesh(geometry::CMesh *mesh, const tIdPosVec &ip,
     {
         pGeometries[i]->dirtyDisplayList();
         pGeometries[i]->dirtyBound();
-    }
-}
-
-void osg::CTriMesh::setUseDisplayList(bool bUse)
-{
-    for (int i = 0; i < pGeometries.size(); ++i)
-    {
-        pGeometries[i]->setUseDisplayList(bUse);
     }
 }
 
@@ -659,12 +727,12 @@ osg::Geometry *osg::convertOpenMesh2OSGGeometry(geometry::CMesh *mesh, bool vert
 
 osg::Geometry *osg::convertOpenMesh2OSGGeometry(geometry::CMesh *mesh, const osg::Vec4& color)
 {
+    if (NULL==mesh)
+        return NULL;
     osg::Geometry *geometry = new osg::Geometry();
 
-    if ((mesh == NULL) || (geometry == NULL))
-    {
+    if (NULL==geometry)
         return NULL;
-    }
 
     // pre-process loaded mesh and get counts
     mesh->garbage_collection();
@@ -703,21 +771,11 @@ osg::Geometry *osg::convertOpenMesh2OSGGeometry(geometry::CMesh *mesh, const osg
     osg::Vec4Array *pColors = new osg::Vec4Array(1);
     (*pColors)[0] = color;
 
-#if OSG_VERSION_GREATER_OR_EQUAL(3,1,10)
     geometry->setColorArray(pColors, osg::Array::BIND_OVERALL);
-#else
-    geometry->setColorArray(pColors);
-    geometry->setColorBinding(osg::Geometry::BIND_OVERALL);
-#endif
 
     // prepare osg::Geometry
-#if OSG_VERSION_GREATER_OR_EQUAL(3,1,10)
     geometry->setNormalArray(pNormals, osg::Array::BIND_PER_VERTEX);
     geometry->setNormalBinding(osg::Geometry::BIND_PER_VERTEX);
-#else
-    geometry->setNormalArray(pNormals);
-    geometry->setNormalBinding(osg::Geometry::BIND_PER_VERTEX);
-#endif    
     geometry->setVertexArray(pVertices);
     geometry->addPrimitiveSet(pPrimitives);
 

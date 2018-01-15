@@ -26,7 +26,6 @@
 #include <geometry/base/CMesh.h>
 
 // STL
-#include <deque>
 
 class CRegionCounter
 {

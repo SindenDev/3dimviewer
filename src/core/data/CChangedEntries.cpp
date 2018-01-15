@@ -57,6 +57,31 @@ CChangedEntries& CChangedEntries::operator= (const CChangedEntries& Changes)
     return *this;
 }
 
+/**
+ * \fn  bool CChangedEntries::hasChanged(const CChangedEntries::tFilter &Filter) const
+ *
+ * \brief   Check if any of given identifiers has changed
+ *
+ * \param   Filter  Specifies the set of tested ids.
+ *
+ * \return  true if changed, false if not.
+**/
+
+bool CChangedEntries::hasChanged(const CChangedEntries::tFilter &Filter) const
+{
+    // Empty filter? Do nothing
+    if (Filter.size() == 0)
+        return false;
+
+    // For all changes
+    for (CChangedEntries::tChanges::const_iterator it = m_Changes.begin(); it != m_Changes.end(); ++it)
+        //Test if filter contains this id
+        if (Filter.find(it->first) != Filter.end())
+            return true;
+
+    return false;
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 //
 
