@@ -46,6 +46,16 @@ CTranslate1DDragger::~CTranslate1DDragger()
 {
 }
 
+void osgManipulator::CTranslate1DDragger::onMouseEnter()
+{
+    setMaterial(osg::SECOND);
+}
+
+void osgManipulator::CTranslate1DDragger::onMouseLeave()
+{
+    setMaterial(osg::FIRST);
+}
+
 bool CTranslate1DDragger::handle(const PointerInfo& pointer, const osgGA::GUIEventAdapter& ea, osgGA::GUIActionAdapter& aa)
 {
     // Check if the dragger node is in the nodepath.

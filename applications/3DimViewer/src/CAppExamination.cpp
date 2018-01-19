@@ -27,6 +27,7 @@
 #include <data/CCustomData.h>
 #include <data/CSavedEntries.h>
 #include <data/CRegionDataCalculator.h>
+#include <data/Notes.h>
 
 //=============================================================================
 data::CAppExamination::CAppExamination() : CExamination()
@@ -45,12 +46,13 @@ void data::CAppExamination::init()
 {
 	using namespace data::Storage;
 
-	STORABLE_FACTORY.registerObject( SavedEntries::Id, SavedEntries::Type::create);
+	//STORABLE_FACTORY.registerObject( SavedEntries::Id, SavedEntries::Type::create);
 	STORABLE_FACTORY.registerObject( CustomData::Id, CustomData::Type::create );
 	STORABLE_FACTORY.registerObject(RegionDataCalculator::Id, RegionDataCalculator::Type::create, CEntryDeps().insert(RegionData::Id));
+    STORABLE_FACTORY.registerObject(NoteData::Id, NoteData::Type::create);
 
     // Enforce object creation
-	APP_STORAGE.getEntry(SavedEntries::Id);
+	//APP_STORAGE.getEntry(SavedEntries::Id);
 	APP_STORAGE.getEntry(CustomData::Id);
 	APP_STORAGE.getEntry(RegionDataCalculator::Id);
 

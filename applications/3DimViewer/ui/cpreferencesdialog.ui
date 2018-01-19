@@ -29,6 +29,46 @@
    <bool>true</bool>
   </property>
   <layout class="QGridLayout" name="gridLayout">
+   <item row="0" column="1">
+    <widget class="QLabel" name="labelPageName">
+     <property name="minimumSize">
+      <size>
+       <width>0</width>
+       <height>48</height>
+      </size>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>12</pointsize>
+       <weight>75</weight>
+       <bold>true</bold>
+      </font>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">background: qlineargradient(x1:1, y1:0, x2:1, y2:1,
+                 stop:0 rgb(0, 100, 176), stop:1 rgb(1, 71, 123));
+color: rgb(255, 255, 255);
+padding-left: 5;
+padding-right: 2;
+background-image: url(:icons/bsp.ico);
+background-position: center right;
+background-origin: content;
+background-repeat: none;</string>
+     </property>
+     <property name="frameShape">
+      <enum>QFrame::NoFrame</enum>
+     </property>
+     <property name="frameShadow">
+      <enum>QFrame::Plain</enum>
+     </property>
+     <property name="lineWidth">
+      <number>1</number>
+     </property>
+     <property name="text">
+      <string>General</string>
+     </property>
+    </widget>
+   </item>
    <item row="1" column="1">
     <widget class="QStackedWidget" name="stackedWidget">
      <property name="minimumSize">
@@ -38,7 +78,7 @@
       </size>
      </property>
      <property name="currentIndex">
-      <number>2</number>
+      <number>3</number>
      </property>
      <widget class="QWidget" name="pageGeneral">
       <layout class="QFormLayout" name="formLayout_3">
@@ -456,49 +496,122 @@
        </item>
       </layout>
      </widget>
-    </widget>
-   </item>
-   <item row="0" column="1">
-    <widget class="QLabel" name="labelPageName">
-     <property name="minimumSize">
-      <size>
-       <width>0</width>
-       <height>48</height>
-      </size>
-     </property>
-     <property name="font">
-      <font>
-       <pointsize>12</pointsize>
-       <weight>75</weight>
-       <bold>true</bold>
-      </font>
-     </property>
-     <property name="styleSheet">
-      <string notr="true">background: qlineargradient(x1:1, y1:0, x2:1, y2:1,
-                 stop:0 rgb(0, 100, 176), stop:1 rgb(1, 71, 123));
-color: rgb(255, 255, 255);
-padding-left: 5;
-padding-right: 2;
-background-image: url(:icons/bsp.ico);
+     <widget class="QWidget" name="python_page">
+      <layout class="QFormLayout" name="formLayout_4">
+       <item row="1" column="0">
+        <widget class="QCheckBox" name="checkBoxEnablePython">
+         <property name="text">
+          <string>Enable Python</string>
+         </property>
+        </widget>
+       </item>
+       <item row="2" column="0">
+        <widget class="QLabel" name="lblVPLSwig">
+         <property name="text">
+          <string>Path to VPL python libraries</string>
+         </property>
+        </widget>
+       </item>
+       <item row="2" column="1">
+        <layout class="QHBoxLayout" name="eFHLayout_2">
+         <property name="topMargin">
+          <number>0</number>
+         </property>
+         <item>
+          <widget class="QLineEdit" name="eFPathVPLSwig">
+           <property name="enabled">
+            <bool>false</bool>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="eFBrowseVPLSwig">
+           <property name="enabled">
+            <bool>true</bool>
+           </property>
+           <property name="text">
+            <string>Browse</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+       <item row="3" column="0">
+        <widget class="QLabel" name="lblInterpretType">
+         <property name="text">
+          <string>Type of python interpret</string>
+         </property>
+        </widget>
+       </item>
+       <item row="3" column="1">
+        <widget class="QComboBox" name="comboBoxPythonType">
+         <item>
+          <property name="text">
+           <string>Internal</string>
+          </property>
+         </item>
+         <item>
+          <property name="text">
+           <string>External</string>
+          </property>
+         </item>
+        </widget>
+       </item>
+       <item row="4" column="0">
+        <widget class="QLabel" name="lblExternalPathPython">
+         <property name="text">
+          <string>Path to external python</string>
+         </property>
+        </widget>
+       </item>
+       <item row="4" column="1">
+        <layout class="QHBoxLayout" name="eFHLayout_3">
+         <property name="topMargin">
+          <number>0</number>
+         </property>
+         <item>
+          <widget class="QLineEdit" name="eFPathPythonPath">
+           <property name="enabled">
+            <bool>false</bool>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="eFBrowsePythonPath">
+           <property name="enabled">
+            <bool>true</bool>
+           </property>
+           <property name="text">
+            <string>Browse</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+       <item row="0" column="0" colspan="2">
+        <widget class="QLabel" name="lblRestartRequired">
+         <property name="enabled">
+          <bool>true</bool>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">background: qlineargradient(x1:1, y1:0, x2:1, y2:1,
+                 stop:0 rgb(200, 0, 0), stop:1 rgb(170, 0, 0));
+padding: 10 10 10 10;
+color:rgb(255,255,255);
 background-position: center right;
 background-origin: content;
 background-repeat: none;</string>
-     </property>
-     <property name="frameShape">
-      <enum>QFrame::NoFrame</enum>
-     </property>
-     <property name="frameShadow">
-      <enum>QFrame::Plain</enum>
-     </property>
-     <property name="lineWidth">
-      <number>1</number>
-     </property>
-     <property name="text">
-      <string>General</string>
-     </property>
+         </property>
+         <property name="text">
+          <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-size:10pt; font-weight:600;&quot;&gt;For apply changes is required restart.&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </widget>
     </widget>
    </item>
-   <item row="0" column="0" rowspan="2">
+   <item row="0" column="0" rowspan="4">
     <widget class="QListWidget" name="listPages">
      <property name="minimumSize">
       <size>
@@ -536,16 +649,21 @@ background-repeat: none;</string>
        <string>Event Filter</string>
       </property>
      </item>
+     <item>
+      <property name="text">
+       <string>Python</string>
+      </property>
+     </item>
     </widget>
    </item>
-   <item row="2" column="0" colspan="2">
+   <item row="4" column="0" colspan="2">
     <widget class="Line" name="line">
      <property name="orientation">
       <enum>Qt::Horizontal</enum>
      </property>
     </widget>
    </item>
-   <item row="3" column="0" colspan="2">
+   <item row="5" column="0" colspan="2">
     <widget class="QDialogButtonBox" name="buttonBox">
      <property name="orientation">
       <enum>Qt::Horizontal</enum>

@@ -53,6 +53,7 @@ private:
 	QSlider *m_slider;
 	QImage *m_bitmap;
 	double m_rSlice;
+    double m_pixelSpacing;
 
 	bool m_dirty;
 

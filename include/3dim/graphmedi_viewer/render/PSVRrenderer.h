@@ -70,6 +70,83 @@ class OSGCanvas;
 namespace PSVR
 {
 
+    //! Class storing partial OpenGL state (stuff that is changed from somewhere within VR)
+    //! - it can work automatically (constructor grabs current state, destructor restores it)
+    //!   or manually (user calls grab() and restore() methods when needed)
+    class COpenGlState
+    {
+    protected:
+        bool m_automatic;
+        bool m_grabbed;
+        bool m_restored;
+
+        GLboolean CullFace;                         // GL_CULL_FACE
+        GLenum CullFaceMode;                        // GL_CULL_FACE_MODE
+        GLint DrawFramebufferBinding;               // GL_DRAW_FRAMEBUFFER_BINDING
+        GLint ReadFramebufferBinding;               // GL_READ_FRAMEBUFFER_BINDING
+        GLint MaxDrawBuffers;                       // GL_MAX_DRAW_BUFFERS
+        GLenum *DrawBuffers;                        // GL_DRAW_BUFFERi
+        GLint CurrentProgram;                       // GL_CURRENT_PROGRAM
+        GLdouble ClearDepth;                        // GL_DEPTH_CLEAR_VALUE
+        GLboolean DepthTest;                        // GL_DEPTH_TEST
+        GLenum DepthFunc;                           // GL_DEPTH_FUNC
+        GLint ActiveTexture;                        // GL_ACTIVE_TEXTURE
+        GLint MaxTextureUnits;                      // GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS
+        GLint *TextureBindingTexture1D;             // GL_TEXTURE_BINDING_1D
+        GLint *TextureBindingTexture2D;             // GL_TEXTURE_BINDING_2D
+        GLint *TextureBindingTexture3D;             // GL_TEXTURE_BINDING_3D
+        GLint *TextureBindingTexture1DArray;        // GL_TEXTURE_BINDING_1D_ARRAY
+        GLint *TextureBindingTexture2DArray;        // GL_TEXTURE_BINDING_2D_ARRAY
+        GLint *TextureBindingTextureRectangle;      // GL_TEXTURE_BINDING_RECTANGLE
+        GLint *TextureBindingTextureCubeMap;        // GL_TEXTURE_BINDING_CUBE_MAP
+        GLint *TextureBindingTextureCubeMapArray;   // GL_TEXTURE_BINDING_CUBE_MAP_ARRAY
+        GLint *TextureBindingTextureBuffer;         // GL_TEXTURE_BINDING_BUFFER
+        GLenum MatrixMode;                          // GL_MATRIX_MODE
+        GLint ModelviewMatrixStackDepth;            // GL_MODELVIEW_STACK_DEPTH
+        GLint ProjectionMatrixStackDepth;           // GL_PROJECTION_STACK_DEPTH
+        GLdouble *ModelviewMatrices;                // GL_MODELVIEW_MATRIX
+        GLdouble *ProjectionMatrices;               // GL_PROJECTION_MATRIX
+        GLboolean VertexArray;                      // GL_VERTEX_ARRAY
+        GLboolean TexCoordArray;                    // GL_TEXTURE_COORD_ARRAY
+        GLboolean NormalArray;                      // GL_NORMAL_ARRAY
+        GLboolean ColorArray;                       // GL_COLOR_ARRAY
+        GLboolean IndexArray;                       // GL_INDEX_ARRAY
+        GLboolean SecondaryColorArray;              // GL_SECONDARY_COLOR_ARRAY
+        GLboolean EdgeFlagArray;                    // GL_GL_EDGE_FLAG_ARRAY_ARRAY
+        GLboolean FogCoordArray;                    // GL_GL_FOG_COORD_ARRAY_ARRAY
+        GLint VertexArraySize;                      // GL_VERTEX_ARRAY_SIZE
+        GLenum VertexArrayType;                     // GL_VERTEX_ARRAY_TYPE
+        GLsizei VertexArrayStride;                  // GL_VERTEX_ARRAY_STRIDE
+        GLvoid *VertexArrayPointer;                 // GL_VERTEX_ARRAY_POINTER
+        GLint VertexArrayBinding;                   // GL_VERTEX_ARRAY_BINDING
+        GLint PixelUnpackBufferBinding;             // GL_PIXEL_UNPACK_BUFFER_BINDING
+        GLenum ReadBufferMode;                      // GL_READ_BUFFER
+        GLint UnpackAlignment;                      // GL_UNPACK_ALIGNMENT
+        GLint UnpackSwapBytes;                      // GL_UNPACK_SWAP_BYTES
+        GLint UnpackLSBFirst;                       // GL_UNPACK_LSB_FIRST
+        GLint UnpackRowLength;                      // GL_UNPACK_ROW_LENGTH
+        GLint UnpackSkipRows;                       // GL_UNPACK_SKIP_ROWS
+        GLint UnpackSkipPixels;                     // GL_UNPACK_SKIP_PIXELS
+        GLint Viewport[4];                          // GL_VIEWPORT
+        GLboolean Blend;                            // GL_BLEND
+        GLenum BlendSrcRgb;                         // GL_BLEND_SRC_RGB
+        GLenum BlendSrcAlpha;                       // GL_BLEND_SRC_ALPHA
+        GLenum BlendDstRgb;                         // GL_BLEND_DST_RGB
+        GLenum BlendDstAlpha;                       // GL_BLEND_DST_ALPHA
+
+    public:
+        COpenGlState(bool automatic = true);
+        ~COpenGlState();
+
+    public:
+        void grab();
+        void restore();
+
+    private:
+        void clean();
+    };
+
+
 ///////////////////////////////////////////////////////////////////////////////
 // forward declarations
 class osgPSVolumeRendering;
@@ -361,9 +438,9 @@ protected:
     struct PSVolumeRenderingParams;
 
 protected:
-    void storeVolumeToTexture(vpl::img::CVolume<vpl::img::tPixel8> volume);
-    void storeVolumeToTexture(vpl::img::CVolume<vpl::img::tPixel16> volume);
-    void storeVolumeToTexture(vpl::img::CVolume<vpl::img::tRGBPixel> volume);
+    bool storeVolumeToTexture(vpl::img::CVolume<vpl::img::tPixel8> volume);
+    bool storeVolumeToTexture(vpl::img::CVolume<vpl::img::tPixel16> volume);
+    bool storeVolumeToTexture(vpl::img::CVolume<vpl::img::tRGBPixel> volume);
 
     //! Checks the shader model, graphic memory, etc.
     bool internalCanStart();

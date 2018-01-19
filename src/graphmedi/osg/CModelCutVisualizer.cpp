@@ -21,6 +21,7 @@
 
 #include "osg/CModelCutVisualizer.h"
 #include <osg/Version>
+#include <osg/OSGCanvas.h>
 
 namespace osg
 {
@@ -42,12 +43,7 @@ CModelCutVisualizer::CModelCutVisualizer(OSGCanvas *canvas, bool autoPositioning
     osg::ref_ptr<osg::Vec4Array> colors = new osg::Vec4Array;
     colors->push_back(osg::Vec4(1.0f, 1.0f, 1.0f, 1.0f));
     
-#if OSG_VERSION_GREATER_OR_EQUAL(3,1,10)
 	m_geometry->setColorArray(colors, osg::Array::BIND_OVERALL);
-#else
-    m_geometry->setColorArray(colors);
-#endif
-    m_geometry->setColorBinding(osg::Geometry::BIND_OVERALL);
     m_geometry->setVertexArray(m_vertices);
     m_geometry->addPrimitiveSet(m_indices);
 	m_geometry->dirtyDisplayList();

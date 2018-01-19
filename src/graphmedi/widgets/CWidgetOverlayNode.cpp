@@ -27,6 +27,7 @@
 #include <osg/ShapeDrawable>
 #include <osg/Material>
 #include <data/CSceneWidgetParameters.h>
+#include <osg/OSGCanvas.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -47,9 +48,6 @@ scene::CWidgetOverlayNode::CWidgetOverlayNode(OSGCanvas * pCanvas)
 
     // Draw subgraph after main camera view
     this->setRenderOrder( osg::Camera::POST_RENDER );
-#if (QT_VERSION >= QT_VERSION_CHECK(5, 0, 0))
-    this->setFinalDrawCallback(new UnBindFboPostDrawCallback);
-#endif
 
     // Only clear the depth buffer
     this->setClearMask( GL_DEPTH_BUFFER_BIT );

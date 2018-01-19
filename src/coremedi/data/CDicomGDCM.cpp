@@ -148,6 +148,12 @@ int CDicomGDCM::getSliceId()
     return convPos2Id(pos[0], pos[1], pos[2]);
 }
 
+double CDicomGDCM::getPixelSpacing()
+{
+    std::string pixelSpacing = m_loader.readTag(gdcm::Tag(VPL_GDCM_PixelSpacing));
+    return std::atof(pixelSpacing.c_str());
+}
+
 long CDicomGDCM::saveToBuffer(char* buffer, long length)
 {
     //TODO not tested (used in dataExpress Plugin)

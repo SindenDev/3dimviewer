@@ -113,6 +113,33 @@ void osg::CDraggableGeometry::addDragger(osgManipulator::Dragger * dragger, bool
 	computeBoundingBoxes();
 }
 
+void osg::CDraggableGeometry::addSpecialDragger(osgManipulator::Dragger *dragger)
+{
+    m_compositeDragger->addChild(dragger);
+    // Add dragger to the composite dragger
+    m_compositeDragger->addDragger(dragger);
+}
+
+/*!
+ * \fn  void osg::CDraggableGeometry::removeSpecialDragger(osgManipulator::Dragger *dragger)
+ *
+ * \brief   Removes the "special" dragger 
+ *
+ * \param [in,out]  dragger If non-null, the dragger.
+ */
+void osg::CDraggableGeometry::removeSpecialDragger(osgManipulator::Dragger *dragger)
+{
+    if (dragger == nullptr)
+        return;
+
+    if (m_compositeDragger->containsNode(dragger))
+    {
+        m_compositeDragger->removeChild(dragger);
+        m_compositeDragger->removeDragger(dragger);
+        dragger->setParentDragger(dragger);
+    }
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 // Recalculate dragger scales
 void osg::CDraggableGeometry::rescaleDraggers(float scale)
@@ -135,7 +162,7 @@ void osg::CDraggableGeometry::rescaleDraggers(float scale)
 // Remove dragger
 void osg::CDraggableGeometry::removeDragger(osgManipulator::Dragger * dragger)
 {
-	if(dragger == NULL)
+	if(dragger == nullptr)
 		return;
 
 	// Try to remove dragger from the scene and composite dragger

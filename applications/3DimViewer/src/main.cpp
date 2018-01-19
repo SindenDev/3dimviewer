@@ -322,8 +322,19 @@ int main(int argc, char *argv[])
             settings.setValue("Language",QLocale::system().name()+".qm"); // save the choice
             settings.sync();
             app.installTranslator(&t);
-            if (qt.load("qt_" + QLocale::system().name(), QLibraryInfo::location(QLibraryInfo::TranslationsPath)))
+            if (qt.load(QLocale(), "qt", "_", localePath + "_qt", ".qm"))
+            {
+                VPL_LOG_INFO("Qt translations loaded for " + QLocale::system().name().toStdString());
                 app.installTranslator(&qt);
+            }
+            else
+            {
+                if (qt.load(QLocale(), "qtbase", "_", localePath + "_qt", ".qm"))
+                {
+                    VPL_LOG_INFO("Qt translations loaded for " + QLocale::system().name().toStdString());
+                    app.installTranslator(&qt);
+                }
+            }
         }
     }
     else
@@ -337,8 +348,19 @@ int main(int argc, char *argv[])
             if (t.load( localePath+"/"+lngFile ))
             {
                 app.installTranslator(&t);
-                if (qt.load("qt_" + QLocale::system().name(), QLibraryInfo::location(QLibraryInfo::TranslationsPath)))
+                if (qt.load(QLocale(), "qt", "_", localePath + "_qt", ".qm"))
+                {
+                    VPL_LOG_INFO("Qt translations loaded for " + QLocale::system().name().toStdString());
                     app.installTranslator(&qt);
+                }
+                else
+                {
+                    if (qt.load(QLocale(), "qtbase", "_", localePath + "_qt", ".qm"))
+                    {
+                        VPL_LOG_INFO("Qt translations loaded for " + QLocale::system().name().toStdString());
+                        app.installTranslator(&qt);
+                    }
+                }
             }
         }
     }

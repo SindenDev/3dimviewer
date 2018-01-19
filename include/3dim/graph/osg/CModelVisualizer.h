@@ -25,15 +25,17 @@
 
 #include <osg/CTriMesh.h>
 #include <osg/COnOffNode.h>
-#include <coremedi/app/Signals.h>
+//#include <coremedi/app/Signals.h>
 #include <osg/PolygonMode>
 #include <osg/CPseudoMaterial.h>
 
-#include "CObjectObserverOSG.h"
+#include "CGeneralObjectObserverOSG.h"
 
 #include <data/CDataStorage.h>
 #include <data/CModel.h>
 #include <data/CObjectPtr.h>
+
+#include <osgManipulator/Dragger>
 
 namespace osg
 {
@@ -52,18 +54,20 @@ namespace osg
     //! - The parametr prescribes type of a storage item whose Id is given
     //!   in the constructor.
     template <class T>
-    class CAnyModelVisualizer : public COnOffNode, public scene::CObjectObserverOSG<T>
+    class CAnyModelVisualizer : public COnOffNode, public scene::CGeneralObjectObserverOSG<CAnyModelVisualizer<T> >
     {
     public:
         //! Storage item type.
         typedef T tModel;
 
         //! Storage observer type.
-        typedef scene::CObjectObserverOSG<T> tObserver;
+        typedef scene::CGeneralObjectObserverOSG<CAnyModelVisualizer<T> > tObserver;
 
         //! Materials
         osg::ref_ptr<osg::CPseudoMaterial> m_materialRegular;
         osg::ref_ptr<osg::CPseudoMaterial> m_materialSelected;
+        osg::ref_ptr<osg::CPseudoMaterial> m_materialSkinnedRegular;
+        osg::ref_ptr<osg::CPseudoMaterial> m_materialSkinnedSelected;
 
     public:
         //! Constructor
@@ -116,6 +120,26 @@ namespace osg
     protected:
         //! Build KD-tree for visualizer
         void buildKDTree();
+
+    public:
+
+        /**
+         * \class   CModelEventsHelperDragger
+         *
+         * \brief   A model events helper dragger - used for CDraggerEventHandler activation.
+         */
+
+        class CModelEventsHelperDragger : public osgManipulator::Dragger
+        {
+        public:
+            CModelEventsHelperDragger(int id) : m_id(id) {}
+
+            int getModelId() const { return m_id; }
+
+        protected:
+            // Model id
+            int m_id;
+        };
 
     protected:
         //! Identifier of a concrete model.

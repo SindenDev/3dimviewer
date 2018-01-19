@@ -29,6 +29,7 @@
 #include <osgManipulator/Dragger>
 #include <osgManipulator/Projector>
 #include <osg/CTwoMaterialsNode.h>
+#include <osg/IHoverDragger.h>
 
 
 namespace osgManipulator
@@ -37,7 +38,7 @@ namespace osgManipulator
 ///////////////////////////////////////////////////////////////////////////////
 //! Dragger for performing 2D translation.
 
-class CTranslate1DDragger : public osg::CTwoMaterialsNode< Dragger >
+class CTranslate1DDragger : public osg::CTwoMaterialsNode< Dragger >, public osgManipulator::IHoverDragger
 {
 public:
     CTranslate1DDragger();
@@ -52,7 +53,9 @@ public:
 
     inline void setCheckForNodeInNodePath(bool onOff) { _checkForNodeInNodePath = onOff; }
 
-        
+    void onMouseEnter() override;
+    void onMouseLeave() override;
+
 protected:
     virtual ~CTranslate1DDragger();
 

@@ -207,12 +207,12 @@ osg::Quat XCylinderPlaneProjector::getRotation(const osg::Vec3d& p1, const osg::
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //!\brief	Default constructor. 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-osgManipulator::CCylinderDragger::CCylinderDragger(): _realEyeDir()
+osgManipulator::CCylinderDragger::CCylinderDragger()
+	: _realEyeDir()
+	, _recalculateStart(false)
 {
     _projector = new osgManipulator::XCylinderPlaneProjector();
 }
-
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //!\brief	Handles. 
@@ -309,6 +309,45 @@ bool osgManipulator::CCylinderDragger::handle( const PointerInfo& pointer, const
 				_prevRotation = rotation;
 				aa.requestRedraw();
 			}
+
+			if (_recalculateStart)
+			{
+				// Get the LocalToWorld matrix for this node and set it for the projector.
+				osg::NodePath nodePathToRoot;
+				computeNodePathToRoot(*this, nodePathToRoot);
+				osg::Matrix localToWorld = osg::computeLocalToWorld(nodePathToRoot);
+				_projector->setLocalToWorld(localToWorld);
+
+				_startLocalToWorld = _projector->getLocalToWorld();
+				_startWorldToLocal = _projector->getWorldToLocal();
+
+				if (_projector->isPointInFront(pointer, _startLocalToWorld))
+					_projector->setFront(true);
+				else
+					_projector->setFront(false);
+
+				{   // because pointer.getEyeDir() which was used in the original code
+					// will return direction which doesn't reflect perspective, we get our own
+					// and on push save it for further dragging so we have "stable conditions"
+
+					// Get the near and far points for the mouse point.
+					osg::Vec3d nearPoint, farPoint;
+					pointer.getNearFarPoints(nearPoint, farPoint);
+					// get "real" eye vector
+					_realEyeDir = nearPoint - farPoint;
+					_realEyeDir.normalize();
+				}
+
+				osg::Vec3d projectedPoint;
+				if (_projector->project(pointer, _realEyeDir, projectedPoint))
+				{
+					_prevWorldProjPt = projectedPoint * _projector->getLocalToWorld();
+					_prevRotation = osg::Quat();
+
+					aa.requestRedraw();
+				}
+			}
+
 			return true; 
 		}
 
@@ -335,3 +374,12 @@ bool osgManipulator::CCylinderDragger::handle( const PointerInfo& pointer, const
 	}
 }
 
+void osgManipulator::CCylinderDragger::onMouseEnter()
+{
+    setMaterial(osg::SECOND);
+}
+
+void osgManipulator::CCylinderDragger::onMouseLeave()
+{
+    setMaterial(osg::FIRST);
+}

@@ -50,7 +50,8 @@ public:
         DRAW_LINE    = 2,   // Get two points ( mouse down -> mouse up, draw interactive gizmo )
         DRAW_STROKE  = 3,   // Draw stroke ( mouse down -> mouse up ), return as a points array
         DRAW_LASO    = 4,   // Draw stroke and one line is moving to the end position
-        DRAW_ARROW   = 5    // Should be similar to draw line but shows as arrow
+        DRAW_ARROW   = 5,    // Should be similar to draw line but shows as arrow
+		DRAW_LINE2	 = 6   // Get two points ( mouse down -> mouse up, draw interactive gizmo )
     };
 
     //! Handler type - describes scene and handling type 

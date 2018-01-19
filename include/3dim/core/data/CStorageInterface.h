@@ -27,7 +27,6 @@
 
 #include "CDataStorage.h"
 #include "CObjectHolder.h"
-#include "CObjectObserver.h"
 #include "CObjectPtr.h"
 #include "CDummyStorable.h"
 
@@ -95,7 +94,7 @@ public:
     void init()
     {
         // Register storable objects
-        STORABLE_FACTORY.registerObject(Storage::DummyStorable::Id, CDummyStorable::create);
+        // STORABLE_FACTORY.registerObject(Storage::DummyStorable::Id, CDummyStorable::create);
     }
 
     //! Returns reference to the data storage.

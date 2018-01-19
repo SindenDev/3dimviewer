@@ -29,7 +29,7 @@
 #include <osg/Version>
 
 #include <osg/LineWidth>
-
+#include <app/Signals.h>
 #include <graph/osg/NodeMasks.h>
 
 #define SCALE_FRACTION 0.5
@@ -575,7 +575,7 @@ scene::CDraggableSliceXY::CDraggableSliceXY( OSGCanvas * pCanvas, bool isOrtho, 
     // Set the update callback
     if( m_SliceId != data::Storage::UNKNOWN )
     {
-        APP_STORAGE.connect(m_SliceId, this);
+        scene::CGeneralObjectObserverOSG<CDraggableSliceXY>::connect(APP_STORAGE.getEntry(m_SliceId).get(), tObserverHandler(this, &CDraggableSliceXY::objectChanged));
         this->setupObserver(this);
     }
 }
@@ -585,7 +585,7 @@ scene::CDraggableSliceXY::~CDraggableSliceXY()
     if( m_SliceId != data::Storage::UNKNOWN )
     {
         this->freeObserver(this);
-        APP_STORAGE.disconnect(m_SliceId,this);
+        scene::CGeneralObjectObserverOSG<CDraggableSliceXY>::disconnect(APP_STORAGE.getEntry(m_SliceId).get());
     }
 }
 
@@ -611,7 +611,7 @@ void scene::CDraggableSliceXY::updateFromStorage()
 }
 
 //====================================================================================================================
-void scene::CDraggableSliceXY::objectChanged(data::COrthoSliceXY *pObject)
+void scene::CDraggableSliceXY::objectChanged(data::CStorageEntry *pEntry, const data::CChangedEntries &changes)
 {
     // Invalidate OpenGL canvas
     if( m_pCanvas)
@@ -626,15 +626,17 @@ void scene::CDraggableSliceXY::objectChanged(data::COrthoSliceXY *pObject)
                 const osg::COnOffNode* pOnOffNode=dynamic_cast<const osg::COnOffNode*>(pSwitch);
                 if (NULL!=pOnOffNode)
                 {
-                    if (pOnOffNode->isShown())
-                        m_pCanvas->Refresh(false);
+                    if (pOnOffNode->isVisible())
+                    {
+                        CGeneralObjectObserverOSG<scene::CDraggableSliceXY>::objectChanged(pEntry, changes);
+                    }
                     return;
                 }
             }
         }
         // if it is not a switch, refresh always
-        m_pCanvas->Refresh(false);
-    }
+        CGeneralObjectObserverOSG<scene::CDraggableSliceXY>::objectChanged(pEntry, changes);
+    }                            
 }
 
 //====================================================================================================================
@@ -683,7 +685,7 @@ scene::CDraggableSliceXZ::CDraggableSliceXZ( OSGCanvas * pCanvas, bool isOrtho, 
     // Set the update callback
     if( m_SliceId != data::Storage::UNKNOWN )
     {
-        APP_STORAGE.connect(m_SliceId, this);
+        scene::CGeneralObjectObserverOSG<CDraggableSliceXZ>::connect(APP_STORAGE.getEntry(m_SliceId).get(), tObserverHandler(this, &CDraggableSliceXZ::objectChanged));
         this->setupObserver(this);
     }
 }
@@ -693,7 +695,7 @@ scene::CDraggableSliceXZ::~CDraggableSliceXZ()
     if( m_SliceId != data::Storage::UNKNOWN )
     {
         this->freeObserver(this);
-        APP_STORAGE.disconnect(m_SliceId,this);
+        scene::CGeneralObjectObserverOSG<CDraggableSliceXZ>::disconnect(APP_STORAGE.getEntry(m_SliceId).get());
     }
 }
 
@@ -718,7 +720,7 @@ void scene::CDraggableSliceXZ::updateFromStorage()
 }
 
 //====================================================================================================================
-void scene::CDraggableSliceXZ::objectChanged(data::COrthoSliceXZ *pObject)
+void scene::CDraggableSliceXZ::objectChanged(data::CStorageEntry *pEntry, const data::CChangedEntries &changes)
 {
     // Invalidate OpenGL canvas
     if( m_pCanvas)
@@ -733,14 +735,16 @@ void scene::CDraggableSliceXZ::objectChanged(data::COrthoSliceXZ *pObject)
                 const osg::COnOffNode* pOnOffNode=dynamic_cast<const osg::COnOffNode*>(pSwitch);
                 if (NULL!=pOnOffNode)
                 {
-                    if (pOnOffNode->isShown())
-                        m_pCanvas->Refresh(false);
+                    if (pOnOffNode->isVisible())
+                    {
+                        CGeneralObjectObserverOSG<scene::CDraggableSliceXZ>::objectChanged(pEntry, changes);
+                    }
                     return;
                 }
             }
         }
         // if it is not a switch, refresh always
-        m_pCanvas->Refresh(false);
+        CGeneralObjectObserverOSG<scene::CDraggableSliceXZ>::objectChanged(pEntry, changes);
     }
 }
 
@@ -790,7 +794,7 @@ scene::CDraggableSliceYZ::CDraggableSliceYZ( OSGCanvas * pCanvas, bool isOrtho, 
     // Set the update callback
     if( m_SliceId != data::Storage::UNKNOWN )
     {
-        APP_STORAGE.connect(m_SliceId, this);
+        scene::CGeneralObjectObserverOSG<CDraggableSliceYZ>::connect(APP_STORAGE.getEntry(m_SliceId).get(), tObserverHandler(this, &CDraggableSliceYZ::objectChanged));
         this->setupObserver(this);
     }
 }
@@ -800,7 +804,7 @@ scene::CDraggableSliceYZ::~CDraggableSliceYZ()
     if( m_SliceId != data::Storage::UNKNOWN )
     {
         this->freeObserver(this);
-        APP_STORAGE.disconnect(m_SliceId,this);
+        scene::CGeneralObjectObserverOSG<CDraggableSliceYZ>::disconnect(APP_STORAGE.getEntry(m_SliceId).get());
     }
 }
 
@@ -825,7 +829,7 @@ void scene::CDraggableSliceYZ::updateFromStorage()
 }
 
 //====================================================================================================================
-void scene::CDraggableSliceYZ::objectChanged(data::COrthoSliceYZ *pObject)
+void scene::CDraggableSliceYZ::objectChanged(data::CStorageEntry *pEntry, const data::CChangedEntries &changes)
 {
     // Invalidate OpenGL canvas
     if( m_pCanvas)
@@ -840,13 +844,15 @@ void scene::CDraggableSliceYZ::objectChanged(data::COrthoSliceYZ *pObject)
                 const osg::COnOffNode* pOnOffNode=dynamic_cast<const osg::COnOffNode*>(pSwitch);
                 if (NULL!=pOnOffNode)
                 {
-                    if (pOnOffNode->isShown())
-                        m_pCanvas->Refresh(false);
+                    if (pOnOffNode->isVisible())
+                    {
+                        CGeneralObjectObserverOSG<scene::CDraggableSliceYZ>::objectChanged(pEntry, changes);
+                    }
                     return;
                 }
             }
         }
         // if it is not a switch, refresh always
-        m_pCanvas->Refresh(false);
+        CGeneralObjectObserverOSG<scene::CDraggableSliceYZ>::objectChanged(pEntry, changes);
     }
 }

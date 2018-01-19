@@ -27,7 +27,6 @@
 #include <VPL/Base/Object.h>
 #include <data/CObjectHolder.h>
 #include <VPL/Base/SharedPtr.h>
-#include <string>
 
 #include <data/CStorageInterface.h>
 #include <data/storage_ids_core.h>

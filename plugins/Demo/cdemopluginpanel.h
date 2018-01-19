@@ -72,6 +72,8 @@ protected:
     //! update "show regions" checkbox
     void updateShowRegions(bool bEnable);
 
+    void setActiveData(int id);
+
     //! Have I focus?
     bool m_haveFocus;
 
@@ -88,6 +90,12 @@ private slots:
     void on_comboBoxRegion_currentIndexChanged(int index);
 
     void on_checkBoxShowRegions_toggled(bool checked);
+
+    void on_pushButtonUseModel_clicked();
+
+    void on_pushButtonAuxData_clicked();
+
+    void on_pushButtonPatientData_clicked();
 
 private:
     Ui::CDemoPluginPanel *ui;

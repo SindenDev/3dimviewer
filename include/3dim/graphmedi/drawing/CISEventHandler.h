@@ -26,7 +26,7 @@
 #include <osg/SceneDraw.h>
 #include <osg/CAppMode.h>
 #include <osg/Timer>
-#include <data/CObjectObserver.h>
+#include <data/CGeneralObjectObserver.h>
 #include <data/CDrawingOptions.h>
 
 #include <drawing/CLineOptimizer.h>
@@ -37,7 +37,7 @@ namespace osgGA
 ///////////////////////////////////////////////////////////////////////////////
 //! Interactive segmentation event handler
 
-class CISEventHandler : public CSceneGeometryDrawEH, public data::CObjectObserver< data::CDrawingOptions >
+class CISEventHandler : public CSceneGeometryDrawEH, public data::CGeneralObjectObserver<CISEventHandler>
 {
 public:
     //! Constructor
@@ -70,7 +70,10 @@ protected:
     virtual osg::Vec3 RecomputeToVolume( const osg::Vec3 & point );
 
     //! Drawing options changed...
-    void objectChanged( data::CDrawingOptions * options );
+    void sigDrawingOptionsChanged(data::CStorageEntry *pEntry, const data::CChangedEntries &changes);
+
+    //! General objectChanged method
+    virtual void objectChanged(data::CStorageEntry *pEntry, const data::CChangedEntries &changes);
 
     //! Start drawing
     virtual void initDraw( const CMousePoint & point );
@@ -165,7 +168,7 @@ public:
 
 ///////////////////////////////////////////////////////////////////////////////
 //! CLASS CISWindowEH - event handler for window
-class CISWindowEH : public CSceneWindowDrawEH, public data::CObjectObserver<data::CDrawingOptions>
+class CISWindowEH : public CSceneWindowDrawEH, public data::CGeneralObjectObserver<CISWindowEH>
 {
 public:
     //! Constructor
@@ -197,7 +200,10 @@ protected:
     void OnModeChanged(scene::CAppMode::tMode mode);
 
     //! Drawing options changed...
-    void objectChanged(data::CDrawingOptions *options);
+    void sigDrawingOptionsChanged(data::CStorageEntry *pEntry, const data::CChangedEntries &changes);
+
+    //! General objectChanged method
+    virtual void objectChanged(data::CStorageEntry *pEntry, const data::CChangedEntries &changes);
 
     //! Start drawing
     virtual void initDraw(const CMousePoint &point);
@@ -237,6 +243,9 @@ protected:
 
     //! Points in window space
     osg::ref_ptr<osg::Vec3Array> m_pointsWindow;
+
+	//! Points in scene space
+	osg::ref_ptr<osg::Vec3Array> m_pointsScene;
 
 }; // class CISWindowEH
 

@@ -120,7 +120,7 @@ osg::CCaptureCamera::CCaptureCamera()
 	attach( osg::Camera::COLOR_BUFFER, m_renderBuffer );
 
 #if (QT_VERSION >= QT_VERSION_CHECK(5, 0, 0))
-    this->setFinalDrawCallback(new UnBindFboPostDrawCallback);
+    this->setPostDrawCallback(new UnBindFboPostDrawCallback);
 #endif
 }
 

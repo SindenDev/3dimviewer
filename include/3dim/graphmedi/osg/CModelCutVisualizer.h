@@ -22,7 +22,7 @@
 #ifndef CModelCutVisualizer_H
 #define CModelCutVisualizer_H
 
-#include <osg/CObjectObserverOSG.h>
+#include <osg/CGeneralObjectObserverOSG.h>
 #include <osg/Geometry>
 #include <data/CModelCut.h>
 #include <data/CDensityData.h>
@@ -60,7 +60,6 @@ namespace osg
         void setColor(const osg::Vec4 & color);
 
     protected:
-
         //! Updates data
         virtual void updateData();
     };
@@ -68,11 +67,12 @@ namespace osg
     // Model cut visualizer class template
 
     template <class T>
-    class CModelCutVisualizerForSlice : public CModelCutVisualizer, public scene::CObjectObserverOSG<T>
+    class CModelCutVisualizerForSlice : public CModelCutVisualizer, public scene::CGeneralObjectObserverOSG<CModelCutVisualizerForSlice<T> >
     {
     private:
         //! Model Cut ID
         int m_modelCutId;
+
     public:
         //! Ctor
         CModelCutVisualizerForSlice(int modelCutId, OSGCanvas *canvas, bool autoPositioning = true)
@@ -80,13 +80,15 @@ namespace osg
             , m_modelCutId(modelCutId)
         {
             this->setCanvas(canvas);
-            APP_STORAGE.connect(modelCutId, this);
+            scene::CGeneralObjectObserverOSG<CModelCutVisualizerForSlice<T> >::connect(APP_STORAGE.getEntry(m_modelCutId).get());
             this->setupObserver(this);
         }
 
         //! Dtor
         ~CModelCutVisualizerForSlice()
-        { }
+        {
+            scene::CGeneralObjectObserverOSG<CModelCutVisualizerForSlice<T> >::disconnect(APP_STORAGE.getEntry(m_modelCutId).get());
+        }
 
         //! Updates geometry according to changes in storage
         virtual void updateFromStorage()
@@ -151,12 +153,11 @@ namespace osg
 
             m_validData = true;
         }
-
     };
 
-    typedef CModelCutVisualizerForSlice<data::CModelCutSliceXY>             CModelCutVisualizerSliceXY;
-    typedef CModelCutVisualizerForSlice<data::CModelCutSliceXZ>             CModelCutVisualizerSliceXZ;
-    typedef CModelCutVisualizerForSlice<data::CModelCutSliceYZ>             CModelCutVisualizerSliceYZ;
+    typedef CModelCutVisualizerForSlice<data::CModelCutSliceXY> CModelCutVisualizerSliceXY;
+    typedef CModelCutVisualizerForSlice<data::CModelCutSliceXZ> CModelCutVisualizerSliceXZ;
+    typedef CModelCutVisualizerForSlice<data::CModelCutSliceYZ> CModelCutVisualizerSliceYZ;
 } // namespace osg
 
 #endif // CModelCutVisualizer_H

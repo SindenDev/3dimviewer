@@ -23,6 +23,7 @@
 #include <data/CStorageEntry.h>
 #include <data/CEntryObserver.h>
 
+//#define DEBUG_OUTPUT_DESTRUCTION
 
 namespace data
 {
@@ -31,7 +32,8 @@ namespace data
 //! Virtual destructor.
 CStorageEntry::~CStorageEntry()
 {
-#ifdef _WIN32
+#ifdef DEBUG_OUTPUT_DESTRUCTION
+  #ifdef _WIN32
     if (0!=m_Id)
     {
         std::stringstream ss;
@@ -42,6 +44,7 @@ CStorageEntry::~CStorageEntry()
         std::string str = ss.str();
         OutputDebugStringA(str.c_str());
     }
+  #endif
 #endif
 }
 

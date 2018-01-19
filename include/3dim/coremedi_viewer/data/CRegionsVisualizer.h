@@ -22,13 +22,12 @@
 #ifndef CREGIONSVISUALIZER_H
 #define CREGIONSVISUALIZER_H
 
-#include <osg/CObjectObserverOSG.h>
 #include <osg/Geometry>
 #include <data/CDensityData.h>
 #include <coremedi/app/Signals.h>
 #include <alg/cmarchingsquares.h>
 
-#include <osg/CMultiObjectObserverOSG.h>
+#include <osg/CGeneralObjectObserverOSG.h>
 #include <data/CRegionData.h>
 #include <data/COrthoSlice.h>
 
@@ -73,7 +72,7 @@ namespace osg
     // Model cut visualizer class template
 
     template <class T1, class T2>
-	class CRegionsVisualizerForSlice : public CRegionsVisualizer, public scene::CMultiObjectObserverOSG<T1, T2>
+	class CRegionsVisualizerForSlice : public CRegionsVisualizer, public scene::CGeneralObjectObserverOSG<CRegionsVisualizerForSlice<T1, T2> >
     {
     private:
 		int m_sliceId;
@@ -85,8 +84,8 @@ namespace osg
 			m_sliceId(sliceId)
         {
             this->setCanvas(canvas);
-			APP_STORAGE.connect(sliceId, this);
-			APP_STORAGE.connect(data::Storage::RegionData::Id, this);
+            scene::CGeneralObjectObserverOSG<CRegionsVisualizerForSlice<T1, T2> >::connect(APP_STORAGE.getEntry(sliceId).get());
+            scene::CGeneralObjectObserverOSG<CRegionsVisualizerForSlice<T1, T2> >::connect(APP_STORAGE.getEntry(data::Storage::RegionData::Id).get());
             this->setupObserver(this);
         }
 
@@ -95,7 +94,7 @@ namespace osg
         { }
 
         //! Updates geometry according to changes in storage
-		virtual void updateFromStorage(int ChangedEntries)
+		virtual void updateFromStorage()
         {
             if (!m_visible)
             {

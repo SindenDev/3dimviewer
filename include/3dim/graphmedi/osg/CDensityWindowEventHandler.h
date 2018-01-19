@@ -23,7 +23,7 @@
 #ifndef CDensityWindowEventHandler_H
 #define CDensityWindowEventHandler_H
 
-#include <osg/OSGCanvas.h> // nothin' more needed
+//#include <osg/OSGCanvas.h> // nothin' more needed
 #include <osg/CAppMode.h>
 
 #include <osgGA/GUIEventHandler>

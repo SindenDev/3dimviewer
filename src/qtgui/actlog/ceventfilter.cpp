@@ -30,7 +30,8 @@
 ///////////////////////////////////////////////////////////////////////////////
 
 #include <actlog/ceventfilter.h>
-#include "mainwindow.h" // I really don't like this!
+
+// pass mainwindow data as a parameter instead of pulling it directly which makes 3DV plugins not to compile..
 
 #include <qtgui/app/Signals.h>
 
@@ -54,14 +55,18 @@
 #include <QDir>
 #include <QDialog>
 #include <QLabel>
+#include <QMainWindow>
 #if (QT_VERSION >= QT_VERSION_CHECK(5, 0, 0))
 #include <QStandardPaths>
 #else
 #include <QDesktopServices>
 #endif
+#include <math.h>
 
-CEventFilter::CEventFilter()
+CEventFilter::CEventFilter(QMainWindow *pMainWindow) : m_pMainWindow(pMainWindow)
 {
+    Q_ASSERT(NULL != m_pMainWindow);
+
 	// initialize variables
     m_outputFile = NULL;
     m_rollCount = 0;
@@ -87,7 +92,7 @@ void CEventFilter::loadSettings()
 {
 	QSettings settings;
 
-	m_state = settings.value("logEnabled", true).toBool();
+	m_state = settings.value("logEnabled", false).toBool();
 
 	m_mouseEnabled = settings.value("logMouseEnabled", true).toBool();
 	m_keyboardEnabled = settings.value("logKeyboardEnabled", true).toBool();
@@ -168,8 +173,8 @@ void CEventFilter::openOutputFile()
 		out.setCodec("UTF-8");
 
 		// write main xml element to it
-		out << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n";
-		out << "<eventFilter windowSize=\"" + QString::number(MainWindow::getInstance()->frameSize().width()) + ":" + QString::number(MainWindow::getInstance()->frameSize().height()) + "\">\n";
+		out << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n";        
+		out << "<eventFilter windowSize=\"" + QString::number(m_pMainWindow->frameSize().width()) + ":" + QString::number(m_pMainWindow->frameSize().height()) + "\">\n";
     }
 }
 
@@ -405,7 +410,7 @@ void CEventFilter::processMouseEvent(QEvent &ev, QObject &obj)
 	// if event is mouse press, save position
     if (ev.type() == QEvent::MouseButtonPress)
     {
-        m_prevMousePos = me->globalPos() - MainWindow::getInstance()->pos();
+        m_prevMousePos = me->globalPos() - m_pMainWindow->pos();
 		m_prevMouseButton = QString(((me->button() == Qt::LeftButton) ? "left" : ((me->button() == Qt::RightButton) ? "right" : "middle")));
 
 		// if it is special event (special key is pressed), add mousePressed to key sequence
@@ -416,7 +421,7 @@ void CEventFilter::processMouseEvent(QEvent &ev, QObject &obj)
     }
     else //mouseRelease
     {
-		QPoint pos = me->globalPos() - MainWindow::getInstance()->pos();
+        QPoint pos = me->globalPos() - m_pMainWindow->pos();
 
 		int distance = (int)sqrt(pow(pos.x() - m_prevMousePos.x(), 2.0) + pow(pos.y() - m_prevMousePos.y(), 2.0));
 

@@ -23,6 +23,7 @@
 #ifndef CSceneOSG_H
 #define CSceneOSG_H
 
+#include <osg/OSGCanvas.h>
 #include <osg/CDraggableSlice.h>
 #include <osg/CDraggerEventHandler.h>
 #include <osg/CDensityWindowEventHandler.h>
@@ -30,7 +31,7 @@
 #include <osg/COnOffNode.h>
 #include <osg/NodeMasks.h>
 
-#include <osg/CObjectObserverOSG.h>
+#include <osg/CGeneralObjectObserverOSG.h>
 #include <data/CActiveDataSet.h>
 
 #include <osgUtil/Optimizer>
@@ -65,7 +66,7 @@ namespace scene
 
 ///////////////////////////////////////////////////////////////////////////////
 //! Base OSG scene in a window.
-class CSceneBase : public osg::MatrixTransform, public CObjectObserverOSG<data::CActiveDataSet>
+class CSceneBase : public osg::MatrixTransform, public CGeneralObjectObserverOSG<CSceneBase>
 {
 public:
     //! Constructor
@@ -135,7 +136,7 @@ protected:
     osg::ref_ptr<CCommandEventHandler>       p_CommandEventHandler;
 
     //! Connection to clear all gizmos signal
-    vpl::mod::tSignalConnection		m_ClearAllGizmosConnection, m_SceneMovedConnection;
+    vpl::mod::tSignalConnection		m_ClearAllGizmosConnection;
 
     //! Drawing gizmos node
     osg::ref_ptr< osg::COnOffNode > m_gizmosGroup;
@@ -154,9 +155,6 @@ protected:
 
     //!
     osg::ref_ptr<osg::MatrixTransform> p_AnchorGroup, p_AnchorAndCenterGroup;
-
-    //! Clear gizmos when scene has moved signal handler
-    void onSceneMoved(data::CStorageEntry * VPL_UNUSED(pEntry)) { clearGizmos(); }
 };
 
 

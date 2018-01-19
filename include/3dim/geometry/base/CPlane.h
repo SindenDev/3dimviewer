@@ -24,6 +24,7 @@
 #define Plane_H_included
 
 #include "types.h"
+#include<Eigen/StdVector>
 
 namespace geometry
 {
@@ -79,7 +80,7 @@ namespace geometry
 
 		void setCenter(Vec3 &center) { m_center = center; }
 
-		inline Vec3& getCenter() { return m_center; }
+		inline const Vec3& getCenter() const { return m_center; }
 
         //! Flip plane orientation
         void flip() { m_p = -m_p; }
@@ -138,7 +139,9 @@ namespace geometry
         //! Transform the plane by providing a pre inverted matrix.
         inline void transformProvidingInverse(const Matrix &matrix)
         {
-            Vec4 vec(matrix.operator*<double,4> (m_p));
+            Matrix transposed;
+            transposed.transpose(matrix);
+            Vec4 vec(transposed * m_p);
             set(vec);
             makeUnitLength();
         }
@@ -152,18 +155,26 @@ namespace geometry
 			m_center = newCenter;
 		}
 
+        //! Get plane parameters vector
+        Vec4 getPlaneParameters() const { return m_p; }
+
     protected:
         //! Plane definition 
-        Vec4 m_p;
+        geometry::Vec4 m_p;
 
-		Vec3 m_center;
+		geometry::Vec3 m_center;
 
         //! Plane bounding box corners
+
+        EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     }; // class CPlane
 
     //! Smart pointer type
     typedef CPlane::tSmartPtr CPlanePtr;
+    
 }
+
+EIGEN_DEFINE_STL_VECTOR_SPECIALIZATION(geometry::CPlane)
 
 // Plane_H_included
 #endif

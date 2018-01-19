@@ -35,9 +35,21 @@
     os_ << s << std::endl;                   \
     OutputDebugString( os_.str().c_str() );  \
     }
+
+#define DBOUT_VEC(msg, v) DBOUT((msg) << (v)[0] << ", " << (v)[1] << ", " << (v)[2])
+#define DBOUT_MTX(msg, m) \
+        { \
+        DBOUT(msg); \
+        DBOUT(m(0, 0) << "\t" << m(0, 1) << "\t" << m(0, 2) << "\t" << m(0, 3)); \
+        DBOUT(m(1, 0) << "\t" << m(1, 1) << "\t" << m(1, 2) << "\t" << m(1, 3)); \
+        DBOUT(m(2, 0) << "\t" << m(2, 1) << "\t" << m(2, 2) << "\t" << m(2, 3)); \
+        DBOUT(m(3, 0) << "\t" << m(3, 1) << "\t" << m(3, 2) << "\t" << m(3, 3)); \
+        }
 #else
 
 #define DBOUT( s )
+#define DBOUT_VEC( msg, v )
+#define DBOUT_MTX( msg, m )
 
 #endif
 

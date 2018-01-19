@@ -27,7 +27,6 @@
 
 #include "CEntryDeps.h"
 #include "CStorableData.h"
-#include "CDummyStorable.h"
 
 
 namespace data
@@ -65,7 +64,7 @@ public:
     bool registerObject(int Id, tCreationFunction Function, const CEntryDeps& Deps = CEntryDeps())
     {
         VPL_CHECK(Function, return false);
-
+		VPL_ASSERT(m_Functions.find(Id) == m_Functions.end()); // Test if Id was not used yet
         tLock Lock(*this);
         m_Deps.insert(tDeps::value_type(Id, Deps));
         return (m_Functions.insert(tFunctions::value_type(Id, Function)).second);

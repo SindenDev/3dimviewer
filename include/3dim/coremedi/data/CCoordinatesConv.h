@@ -26,11 +26,7 @@
 ///////////////////////////////////////////////////////////////////////////////
 // include files
 
-#include <VPL/Math/Base.h>
-
 #include "data/CObjectHolder.h"
-
-#include <cmath>
 
 // Storage
 #include <data/CStorageInterface.h>

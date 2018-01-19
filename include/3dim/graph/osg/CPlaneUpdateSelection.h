@@ -27,7 +27,7 @@
 #include <osgManipulator/Command>
 
 #include <VPL/Module/Signal.h>
-#include <coremedi/app/Signals.h>
+//#include <coremedi/app/Signals.h>
 #include <iostream>
 
 #include "CPlaneConstraint.h"

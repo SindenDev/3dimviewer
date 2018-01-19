@@ -220,6 +220,66 @@ namespace ClipperLib
         return sum;
     }
 
+    //! rotates start point of a polygon (jumps over existing points)
+    static void RotatePolygonIndex(Path &polygon, unsigned int newStartPointIndex)
+    {
+        // "fix" input value
+        newStartPointIndex = newStartPointIndex % polygon.size();
+
+        // test if polygon is closed explicitly
+        bool startEndEqual = polygon.front() == polygon.back();
+
+        if (startEndEqual)
+        {
+            polygon.resize(polygon.size() - 1);
+        }
+
+        std::rotate(polygon.begin(), polygon.begin() + newStartPointIndex, polygon.end());
+
+        if (startEndEqual)
+        {
+            polygon.push_back(polygon[0]);
+        }
+    }
+
+    //! rotates start point of a polygon (jumps over exact distance and can create new point)
+    static void RotatePolygonOffset(Path &polygon, cUInt newStartPointOffset)
+    {
+        // "fix" input value
+        cUInt perimeter = Perimeter(polygon);
+        newStartPointOffset = newStartPointOffset % perimeter;
+
+        // test if polygon is closed explicitly
+        bool startEndEqual = polygon.front() == polygon.back();
+
+        // find index of vertex preceding the exact place of new start/end point
+        unsigned int newStartPointIndex = 0;
+        cUInt sum = 0;
+        for (int v = 0; v < (int)polygon.size(); ++v)
+        {
+            cUInt distance = Distance(polygon[v], polygon[(v + 1) % polygon.size()]);
+            if (sum + distance > newStartPointOffset)
+            {
+                break;
+            }
+            sum += distance;
+            newStartPointIndex++;
+        }
+        newStartPointOffset -= sum;
+
+        // rotate polygon
+        RotatePolygonIndex(polygon, newStartPointIndex);
+
+        // calculate the exact point
+        IntPoint vec = IntPoint(polygon[1].X - polygon[0].X, polygon[1].Y - polygon[0].Y);
+        long double length = Distance(polygon[0], polygon[1]);
+        long double position = newStartPointOffset / length;
+        IntPoint newPoint = IntPoint(polygon[0].X + position * vec.X, polygon[0].Y + position * vec.Y);
+
+        polygon.push_back(startEndEqual ? newPoint : polygon[0]);
+        polygon[0] = newPoint;
+    }
+
     const double half = 0.5;
 }
 

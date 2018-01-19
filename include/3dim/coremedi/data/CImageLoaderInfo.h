@@ -30,11 +30,9 @@
 #include <data/storage_ids_core.h>
 
 // STL
-#include <string>
 #include <vector>
 
 // Serialization
-#include <VPL/Module/Serializable.h>
 
 namespace data
 {

@@ -22,7 +22,7 @@
 
 #include <configure.h>
 
-#define USE_VAORECT // there's a bug in that code - find it if you want to use it
+//#define USE_VAORECT // there's a bug in that code - find it if you want to use it
 
 // Check predefined type of volume rendering algorithm
 #ifdef USE_PSVR
@@ -58,9 +58,11 @@
 
 #include <coremedi/app/Signals.h>
 
-
 //#define ROUNDING_MASK 0xFFFFFFFE
 #define ROUNDING_MASK 0xFFFFFFFC
+
+static int depthTextureParameters[] = { GL_DEPTH_COMPONENT24, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT }; // this works for both glCopyTexSubImage2D and glBlitFramebuffer
+//static int depthTextureParameters[] = { GL_DEPTH_COMPONENT32F, GL_DEPTH_COMPONENT, GL_FLOAT }; // this works only for glCopyTexSubImage2D
 
 
 #ifdef __APPLE__
@@ -74,6 +76,64 @@
     #define glDeleteVertexArraysX glDeleteVertexArrays
     #define glIsVertexArrayX      glIsVertexArray
 #endif
+
+// https://github.com/OpenGLInsights/OpenGLInsightsCode/blob/master/Chapter%2033%20ARB_debug_output%20A%20Helping%20Hand%20for%20Desperate%20Developers/OpenGLInsightsDebug/vsDebugLib.cpp
+
+//#define USE_OPENGL_CALLBACK
+
+#ifdef USE_OPENGL_CALLBACK
+void APIENTRY openglCallbackFunction(GLenum source,
+    GLenum type,
+    GLuint id,
+    GLenum severity,
+    GLsizei length,
+    const GLchar* message,
+    const void* userParam)
+{
+    std::stringstream ss;
+    ss << "message: " << message << " ";
+    ss << "type: ";
+    switch (type) {
+    case GL_DEBUG_TYPE_ERROR:
+        ss << "ERROR";
+        break;
+    case GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR:
+        ss << "DEPRECATED_BEHAVIOR";
+        break;
+    case GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR:
+        ss << "UNDEFINED_BEHAVIOR";
+        break;
+    case GL_DEBUG_TYPE_PORTABILITY:
+        ss << "PORTABILITY";
+        break;
+    case GL_DEBUG_TYPE_PERFORMANCE:
+        ss << "PERFORMANCE";
+        break;
+    case GL_DEBUG_TYPE_OTHER:
+        ss << "OTHER";
+        break;
+    }
+    ss << " " << "id: " << id << " " << "severity: ";
+    switch (severity){
+    case GL_DEBUG_SEVERITY_LOW:
+        ss << "LOW";
+        break;
+    case GL_DEBUG_SEVERITY_MEDIUM:
+        ss << "MEDIUM";
+        break;
+    case GL_DEBUG_SEVERITY_HIGH:
+        ss << "HIGH";
+        break;
+    }
+    std::string s = ss.str();
+    VPL_LOG_ERROR(s);
+#ifdef _WIN32
+    OutputDebugStringA(s.c_str());
+    OutputDebugStringA("\n");
+#endif    
+}
+#endif
+
 
 bool reportErrors(std::string functionName)
 {
@@ -103,7 +163,7 @@ public:
     }
     ~CContextGuardian()
     {
-        if (NULL!=m_pCanvas)
+        if (NULL != m_pCanvas && m_bCurrent)
             m_pCanvas->getGraphicWindow()->releaseContextImplementation();
     }
     bool isCurrent() const { return m_bCurrent; }
@@ -111,6 +171,338 @@ public:
 
 namespace PSVR
 {
+
+    COpenGlState::COpenGlState(bool automatic)
+        : m_automatic(automatic)
+        , m_grabbed(false)
+        , m_restored(false)
+    {
+        DrawBuffers = NULL;
+        TextureBindingTexture1D = NULL;
+        TextureBindingTexture2D = NULL;
+        TextureBindingTexture3D = NULL;
+        TextureBindingTexture1DArray = NULL;
+        TextureBindingTexture2DArray = NULL;
+        TextureBindingTextureRectangle = NULL;
+        TextureBindingTextureCubeMap = NULL;
+        TextureBindingTextureCubeMapArray = NULL;
+        TextureBindingTextureBuffer = NULL;
+        ModelviewMatrices = NULL;
+        ProjectionMatrices = NULL;
+        CullFace = false;
+        CullFaceMode = 0;
+        DrawFramebufferBinding = 0;
+        ReadFramebufferBinding = 0;
+        MaxDrawBuffers = 0;
+        CurrentProgram = 0;
+        ClearDepth = false;
+        DepthTest = false;
+        DepthFunc = 0;
+        ActiveTexture = 0;
+        MaxTextureUnits = 0;
+        MatrixMode = 0;
+        ModelviewMatrixStackDepth = 0;
+        ProjectionMatrixStackDepth = 0;
+        VertexArray = false;
+        TexCoordArray = false;
+        NormalArray = false;
+        ColorArray = false;
+        IndexArray = false;
+        SecondaryColorArray = false;
+        EdgeFlagArray = false;
+        FogCoordArray = false;
+        VertexArraySize = false;
+        VertexArrayType = 0;
+        VertexArrayStride = 0;
+        VertexArrayPointer = NULL;
+        VertexArrayBinding = 0;
+        PixelUnpackBufferBinding = 0;
+        ReadBufferMode = 0;
+        UnpackAlignment = 0;
+        UnpackSwapBytes = 0;
+        UnpackLSBFirst = 0;
+        UnpackRowLength = 0;
+        UnpackSkipRows = 0;
+        UnpackSkipPixels = 0;
+        Viewport[0] = Viewport[1] = Viewport[2] = Viewport[3] = 0;
+        Blend = false;
+        BlendSrcRgb = 0;
+        BlendSrcAlpha = 0;
+        BlendDstRgb = 0;
+        BlendDstAlpha = 0;
+
+
+        if (m_automatic)
+        {
+            grab();
+        }
+    }
+
+    COpenGlState::~COpenGlState()
+    {
+        if (m_automatic && m_grabbed && !m_restored)
+        {
+            restore();
+        }
+
+        clean();
+    }
+
+    void COpenGlState::grab()
+    {
+        // NOTE BY MW & VT: you really do not want to do this (it is already done in OSGCanvas init)
+        /*if (glewInit() != GLEW_OK)
+        {
+        return;
+        }*/
+
+        if (m_grabbed)
+        {
+            clean();
+        }
+
+        CullFace = glIsEnabled(GL_CULL_FACE);
+        glGetIntegerv(GL_CULL_FACE_MODE, reinterpret_cast<GLint *>(&CullFaceMode));
+        glGetIntegerv(GL_DEPTH_FUNC, reinterpret_cast<GLint *>(&DepthFunc));
+        glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &DrawFramebufferBinding);
+        glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &ReadFramebufferBinding);
+        glGetIntegerv(GL_MAX_DRAW_BUFFERS, &MaxDrawBuffers);
+        DrawBuffers = new GLenum[MaxDrawBuffers];
+        for (int i = 0; i < MaxDrawBuffers; ++i)
+        {
+            glGetIntegerv(GL_DRAW_BUFFER0 + i, reinterpret_cast<GLint *>(&(DrawBuffers[i])));
+        }
+        glGetIntegerv(GL_CURRENT_PROGRAM, &CurrentProgram);
+        glGetDoublev(GL_DEPTH_CLEAR_VALUE, &ClearDepth);
+        glGetBooleanv(GL_DEPTH_TEST, &DepthTest);
+        glGetIntegerv(GL_DEPTH_FUNC, reinterpret_cast<GLint *>(&DepthFunc));
+        glGetIntegerv(GL_ACTIVE_TEXTURE, &ActiveTexture);
+        glGetIntegerv(GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS, &MaxTextureUnits);
+        TextureBindingTexture1D = new GLint[MaxTextureUnits];
+        TextureBindingTexture2D = new GLint[MaxTextureUnits];
+        TextureBindingTexture3D = new GLint[MaxTextureUnits];
+        TextureBindingTexture1DArray = new GLint[MaxTextureUnits];
+        TextureBindingTexture2DArray = new GLint[MaxTextureUnits];
+        TextureBindingTextureRectangle = new GLint[MaxTextureUnits];
+        TextureBindingTextureCubeMap = new GLint[MaxTextureUnits];
+        TextureBindingTextureCubeMapArray = new GLint[MaxTextureUnits];
+        TextureBindingTextureBuffer = new GLint[MaxTextureUnits];
+        for (int i = 0; i < MaxTextureUnits; ++i)
+        {
+            glActiveTexture(GL_TEXTURE0 + i);
+            glGetIntegerv(GL_TEXTURE_BINDING_1D, &(TextureBindingTexture1D[i]));
+            glGetIntegerv(GL_TEXTURE_BINDING_2D, &(TextureBindingTexture2D[i]));
+            glGetIntegerv(GL_TEXTURE_BINDING_3D, &(TextureBindingTexture3D[i]));
+            glGetIntegerv(GL_TEXTURE_BINDING_1D_ARRAY, &(TextureBindingTexture1DArray[i]));
+            glGetIntegerv(GL_TEXTURE_BINDING_2D_ARRAY, &(TextureBindingTexture2DArray[i]));
+            glGetIntegerv(GL_TEXTURE_BINDING_RECTANGLE, &(TextureBindingTextureRectangle[i]));
+            glGetIntegerv(GL_TEXTURE_BINDING_CUBE_MAP, &(TextureBindingTextureCubeMap[i]));
+            // doesn't work on mac
+            //glGetIntegerv(GL_TEXTURE_BINDING_CUBE_MAP_ARRAY_ARB, &(TextureBindingTextureCubeMapArray[i]));
+            //glGetIntegerv(GL_TEXTURE_BINDING_BUFFER_ARB, &(TextureBindingTextureBuffer[i]));
+        }
+        glActiveTexture(ActiveTexture);
+        glGetIntegerv(GL_MATRIX_MODE, reinterpret_cast<GLint *>(&MatrixMode));
+        glGetIntegerv(GL_MODELVIEW_STACK_DEPTH, &ModelviewMatrixStackDepth);
+        glGetIntegerv(GL_PROJECTION_STACK_DEPTH, &ProjectionMatrixStackDepth);
+        ModelviewMatrices = new GLdouble[16 * ModelviewMatrixStackDepth];
+        glMatrixMode(GL_MODELVIEW);
+        for (int i = 0; i < ModelviewMatrixStackDepth; ++i)
+        {
+            glGetDoublev(GL_MODELVIEW_MATRIX, &(ModelviewMatrices[(ModelviewMatrixStackDepth - 1 - i) * 16]));
+            if (i != 0)
+            {
+                glPopMatrix();
+            }
+        }
+        for (int i = 0; i < ModelviewMatrixStackDepth; ++i)
+        {
+            glLoadMatrixd(&(ModelviewMatrices[i * 16]));
+            if (i != ModelviewMatrixStackDepth - 1)
+            {
+                glPushMatrix();
+            }
+        }
+        ProjectionMatrices = new GLdouble[16 * ProjectionMatrixStackDepth];
+        glMatrixMode(GL_PROJECTION);
+        for (int i = 0; i < ProjectionMatrixStackDepth; ++i)
+        {
+            glGetDoublev(GL_PROJECTION_MATRIX, &(ProjectionMatrices[(ProjectionMatrixStackDepth - 1 - i) * 16]));
+            if (i != 0)
+            {
+                glPopMatrix();
+            }
+        }
+        for (int i = 0; i < ProjectionMatrixStackDepth; ++i)
+        {
+            glLoadMatrixd(&(ProjectionMatrices[i * 16]));
+            if (i != ProjectionMatrixStackDepth - 1)
+            {
+                glPushMatrix();
+            }
+        }
+        glMatrixMode(MatrixMode);
+        VertexArray = glIsEnabled(GL_VERTEX_ARRAY);
+        TexCoordArray = glIsEnabled(GL_TEXTURE_COORD_ARRAY);
+        NormalArray = glIsEnabled(GL_NORMAL_ARRAY);
+        ColorArray = glIsEnabled(GL_COLOR_ARRAY);
+        IndexArray = glIsEnabled(GL_INDEX_ARRAY);
+        SecondaryColorArray = glIsEnabled(GL_SECONDARY_COLOR_ARRAY);
+        EdgeFlagArray = glIsEnabled(GL_EDGE_FLAG_ARRAY);
+        FogCoordArray = glIsEnabled(GL_FOG_COORD_ARRAY);
+        glGetIntegerv(GL_VERTEX_ARRAY_SIZE, &VertexArraySize);
+        glGetIntegerv(GL_VERTEX_ARRAY_TYPE, reinterpret_cast<GLint *>(&VertexArrayType));
+        glGetIntegerv(GL_VERTEX_ARRAY_STRIDE, &VertexArrayStride);
+        glGetPointerv(GL_VERTEX_ARRAY_POINTER, &VertexArrayPointer);
+        glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &VertexArrayBinding);
+        glGetIntegerv(GL_PIXEL_UNPACK_BUFFER_BINDING, &PixelUnpackBufferBinding);        
+        glGetIntegerv(GL_READ_BUFFER, reinterpret_cast<GLint *>(&ReadBufferMode));
+        glGetIntegerv(GL_UNPACK_ALIGNMENT, &UnpackAlignment);
+        glGetIntegerv(GL_UNPACK_SWAP_BYTES, &UnpackSwapBytes);
+        glGetIntegerv(GL_UNPACK_LSB_FIRST, &UnpackLSBFirst);
+        glGetIntegerv(GL_UNPACK_ROW_LENGTH, &UnpackRowLength);
+        glGetIntegerv(GL_UNPACK_SKIP_ROWS, &UnpackSkipRows);
+        glGetIntegerv(GL_UNPACK_SKIP_PIXELS, &UnpackSkipPixels);
+        glGetIntegerv(GL_VIEWPORT, Viewport);
+        Blend = glIsEnabled(GL_BLEND);
+        glGetIntegerv(GL_BLEND_SRC_RGB, reinterpret_cast<GLint *>(&BlendSrcRgb));
+        glGetIntegerv(GL_BLEND_SRC_ALPHA, reinterpret_cast<GLint *>(&BlendSrcAlpha));
+        glGetIntegerv(GL_BLEND_DST_RGB, reinterpret_cast<GLint *>(&BlendDstRgb));
+        glGetIntegerv(GL_BLEND_DST_ALPHA, reinterpret_cast<GLint *>(&BlendDstAlpha));
+
+        m_grabbed = true;
+        m_restored = false;
+    }
+
+    void COpenGlState::restore()
+    {
+        // NOTE BY MW & VT: you really do not want to do this (it is already done in OSGCanvas init)
+        /*if (glewInit() != GLEW_OK)
+        {
+        return;
+        }*/
+
+        if (!m_grabbed)
+        {
+            return;
+        }
+
+        CullFace ? glEnable(GL_CULL_FACE) : glDisable(GL_CULL_FACE);
+        glCullFace(CullFaceMode);
+        glDepthFunc(DepthFunc);
+        glBindFramebufferEXT(GL_DRAW_FRAMEBUFFER, DrawFramebufferBinding);
+        glBindFramebufferEXT(GL_READ_FRAMEBUFFER, ReadFramebufferBinding);
+        int nEmpty = 0;
+        for (int i = 0; i < MaxDrawBuffers; ++i)
+        {
+            if (DrawBuffers[i] == GL_NONE)
+            {
+                nEmpty++;
+            }
+        }
+        if ((nEmpty == MaxDrawBuffers - 1) && (DrawBuffers[0] == GL_BACK))
+        {
+            glDrawBuffer(GL_BACK);
+        }
+        else
+        {
+            glDrawBuffers(MaxDrawBuffers, DrawBuffers);
+        }
+        glUseProgram(CurrentProgram);
+        glClearDepth(ClearDepth);
+        DepthTest ? glEnable(GL_DEPTH_TEST) : glDisable(GL_DEPTH_TEST);
+        glDepthFunc(DepthFunc);
+        for (int i = 0; i < MaxTextureUnits; ++i)
+        {
+            glActiveTexture(GL_TEXTURE0 + i);
+            glBindTexture(GL_TEXTURE_1D, TextureBindingTexture1D[i]);
+            glBindTexture(GL_TEXTURE_2D, TextureBindingTexture2D[i]);
+            glBindTexture(GL_TEXTURE_3D, TextureBindingTexture3D[i]);
+            glBindTexture(GL_TEXTURE_1D_ARRAY, TextureBindingTexture1DArray[i]);
+            glBindTexture(GL_TEXTURE_2D_ARRAY, TextureBindingTexture2DArray[i]);
+            glBindTexture(GL_TEXTURE_RECTANGLE, TextureBindingTextureRectangle[i]);
+            glBindTexture(GL_TEXTURE_CUBE_MAP, TextureBindingTextureCubeMap[i]);
+            // doesnt work on mac
+            //glBindTexture(GL_TEXTURE_CUBE_MAP_ARRAY_ARB, TextureBindingTextureCubeMapArray[i]);
+            //glBindTexture(GL_TEXTURE_BUFFER_ARB, TextureBindingTextureBuffer[i]);
+        }
+        glActiveTexture(ActiveTexture);
+        GLint modelviewMatrixStackDepth;
+        GLint projectionMatrixStackDepth;
+        glGetIntegerv(GL_MODELVIEW_STACK_DEPTH, &modelviewMatrixStackDepth);
+        glGetIntegerv(GL_PROJECTION_STACK_DEPTH, &projectionMatrixStackDepth);
+        glMatrixMode(GL_MODELVIEW);
+        for (int i = 0; i < modelviewMatrixStackDepth; ++i)
+        {
+            if (i != 0)
+            {
+                glPopMatrix();
+            }
+        }
+        for (int i = 0; i < ModelviewMatrixStackDepth; ++i)
+        {
+            glLoadMatrixd(&(ModelviewMatrices[i * 16]));
+            if (i != ModelviewMatrixStackDepth - 1)
+            {
+                glPushMatrix();
+            }
+        }
+        glMatrixMode(GL_PROJECTION);
+        for (int i = 0; i < projectionMatrixStackDepth; ++i)
+        {
+            if (i != 0)
+            {
+                glPopMatrix();
+            }
+        }
+        for (int i = 0; i < ProjectionMatrixStackDepth; ++i)
+        {
+            glLoadMatrixd(&(ProjectionMatrices[i * 16]));
+            if (i != ProjectionMatrixStackDepth - 1)
+            {
+                glPushMatrix();
+            }
+        }
+        glMatrixMode(MatrixMode);
+        VertexArray ? glEnableClientState(GL_VERTEX_ARRAY) : glDisableClientState(GL_VERTEX_ARRAY);
+        TexCoordArray ? glEnableClientState(GL_TEXTURE_COORD_ARRAY) : glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+        NormalArray ? glEnableClientState(GL_NORMAL_ARRAY) : glDisableClientState(GL_NORMAL_ARRAY);
+        ColorArray ? glEnableClientState(GL_COLOR_ARRAY) : glDisableClientState(GL_COLOR_ARRAY);
+        IndexArray ? glEnableClientState(GL_INDEX_ARRAY) : glDisableClientState(GL_INDEX_ARRAY);
+        SecondaryColorArray ? glEnableClientState(GL_SECONDARY_COLOR_ARRAY) : glDisableClientState(GL_SECONDARY_COLOR_ARRAY);
+        EdgeFlagArray ? glEnableClientState(GL_EDGE_FLAG_ARRAY) : glDisableClientState(GL_EDGE_FLAG_ARRAY);
+        FogCoordArray ? glEnableClientState(GL_FOG_COORD_ARRAY) : glDisableClientState(GL_FOG_COORD_ARRAY);
+        glVertexPointer(VertexArraySize, VertexArrayType, VertexArrayStride, VertexArrayPointer);
+        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, PixelUnpackBufferBinding);
+        glReadBuffer(ReadBufferMode);
+        glPixelStorei(GL_UNPACK_ALIGNMENT, UnpackAlignment);
+        glPixelStorei(GL_UNPACK_SWAP_BYTES, UnpackSwapBytes);
+        glPixelStorei(GL_UNPACK_LSB_FIRST, UnpackLSBFirst);
+        glPixelStorei(GL_UNPACK_ROW_LENGTH, UnpackRowLength);
+        glPixelStorei(GL_UNPACK_SKIP_ROWS, UnpackSkipRows);
+        glPixelStorei(GL_UNPACK_SKIP_PIXELS, UnpackSkipPixels);
+        glViewport(Viewport[0], Viewport[1], Viewport[2], Viewport[3]);
+        glBlendFuncSeparate(BlendSrcRgb, BlendDstRgb, BlendSrcAlpha, BlendDstAlpha);
+
+        m_restored = true;
+    }
+
+    void COpenGlState::clean()
+    {
+        delete[] DrawBuffers;
+        delete[] TextureBindingTexture1D;
+        delete[] TextureBindingTexture2D;
+        delete[] TextureBindingTexture3D;
+        delete[] TextureBindingTexture1DArray;
+        delete[] TextureBindingTexture2DArray;
+        delete[] TextureBindingTextureRectangle;
+        delete[] TextureBindingTextureCubeMap;
+        delete[] TextureBindingTextureCubeMapArray;
+        delete[] TextureBindingTextureBuffer;
+        delete[] ModelviewMatrices;
+        delete[] ProjectionMatrices;
+    }
+
 
 ///////////////////////////////////////////////////////////////////////////////
 //! Creates shader program from a given string.
@@ -134,12 +526,12 @@ bool createShaderProgram(const char * frag, GLuint * shader, GLuint * program)
         {
             VPL_LOG_INFO("Error: Cannot compile fragment shader!");
 
-            GLchar buffer[2048 + 1];
+            GLchar buffer[2048 + 1] = {};
             GLsizei length;
             GLsizei size = 2048;
             glGetShaderInfoLog(*shader, size, &length, buffer);
-
-            VPL_LOG_INFO("glGetShaderInfoLog():" << std::endl << buffer);
+            if (0 != buffer[0])
+                VPL_LOG_INFO("glGetShaderInfoLog():" << std::endl << buffer);
 
             return false;
         }
@@ -157,12 +549,12 @@ bool createShaderProgram(const char * frag, GLuint * shader, GLuint * program)
         {
             VPL_LOG_INFO("Error: Cannot link shader program!");
 
-            GLchar buffer[2048 + 1];
+            GLchar buffer[2048 + 1] = {};
             GLsizei length;
             GLsizei size = 2048;
             glGetProgramInfoLog(*program, size, &length, buffer);
-
-            VPL_LOG_INFO("glGetProgramInfoLog():" << std::endl << buffer);
+            if (0 != buffer[0])
+                VPL_LOG_INFO("glGetProgramInfoLog():" << std::endl << buffer);
 
             return false;
         }
@@ -192,12 +584,12 @@ bool createShaderProgram(const char * frag, const char * vert, GLuint * FragShad
         {
             VPL_LOG_INFO("Error: Cannot compile fragment shader!");
 
-            GLchar buffer[2048 + 1];
+            GLchar buffer[2048 + 1] = {};
             GLsizei length;
             GLsizei size = 2048;
             glGetShaderInfoLog(*FragShader, size, &length, buffer);
-
-            VPL_LOG_INFO("glGetShaderInfoLog():" << std::endl << buffer);
+            if (0 != buffer[0])
+                VPL_LOG_INFO("glGetShaderInfoLog():" << std::endl << buffer);
 
             return false;
         }
@@ -215,12 +607,12 @@ bool createShaderProgram(const char * frag, const char * vert, GLuint * FragShad
         {
             VPL_LOG_INFO("Error: Cannot compile vertex shader!");
 
-            GLchar buffer[2048 + 1];
+            GLchar buffer[2048 + 1] = {};
             GLsizei length;
             GLsizei size = 2048;
             glGetShaderInfoLog(*VertShader, size, &length, buffer);
-
-            VPL_LOG_INFO("glGetShaderInfoLog():" << std::endl << buffer);
+            if (0 != buffer[0])
+                VPL_LOG_INFO("glGetShaderInfoLog():" << std::endl << buffer);
 
             return false;
         }
@@ -239,12 +631,12 @@ bool createShaderProgram(const char * frag, const char * vert, GLuint * FragShad
         {
             VPL_LOG_INFO("Error: Cannot link shader program!");
 
-            GLchar buffer[2048 + 1];
+            GLchar buffer[2048 + 1] = {};
             GLsizei length;
             GLsizei size = 2048;
             glGetProgramInfoLog(*program, size, &length, buffer);
-
-            VPL_LOG_INFO("glGetProgramInfoLog():" << std::endl << buffer);
+            if (0 != buffer[0])
+                VPL_LOG_INFO("glGetProgramInfoLog():" << std::endl << buffer);
 
             return false;
         }
@@ -300,12 +692,12 @@ bool loadShaderProgram(const char * filename, unsigned * shader, unsigned * prog
         {
             VPL_LOG_INFO("Error: Cannot compile fragment shader (" << filename << ")!");
 
-            GLchar buffer[2048 + 1];
+            GLchar buffer[2048 + 1] = {};
             GLsizei length;
             GLsizei size = 2048;
             glGetShaderInfoLog(*shader, size, &length, buffer);
-
-            VPL_LOG_INFO("glGetShaderInfoLog():" << std::endl << buffer);
+            if (0 != buffer[0])
+                VPL_LOG_INFO("glGetShaderInfoLog():" << std::endl << buffer);
 
             return false;
         }
@@ -323,12 +715,12 @@ bool loadShaderProgram(const char * filename, unsigned * shader, unsigned * prog
         {
             VPL_LOG_INFO("Error: Cannot link shader program!");
 
-            GLchar buffer[2048 + 1];
+            GLchar buffer[2048 + 1] = {};
             GLsizei length;
             GLsizei size = 2048;
             glGetProgramInfoLog(*program, size, &length, buffer);
-
-            VPL_LOG_INFO("glGetProgramInfoLog():" << std::endl << buffer);
+            if (0 != buffer[0])
+                VPL_LOG_INFO("glGetProgramInfoLog():" << std::endl << buffer);
 
             return false;
         }
@@ -369,12 +761,12 @@ bool loadShaderProgram(const char * fragfilename, const char * vertfilename, uns
         {
             VPL_LOG_INFO("Error: Cannot compile fragment shader (" << fragfilename << ")!");
 
-            GLchar buffer[2048 + 1];
+            GLchar buffer[2048 + 1] = {};
             GLsizei length;
             GLsizei size = 2048;
             glGetShaderInfoLog(*fragshader, size, &length, buffer);
-
-            VPL_LOG_INFO("glGetShaderInfoLog():" << std::endl << buffer);
+            if (0 != buffer[0])
+                VPL_LOG_INFO("glGetShaderInfoLog():" << std::endl << buffer);
 
             return false;
         }
@@ -402,12 +794,12 @@ bool loadShaderProgram(const char * fragfilename, const char * vertfilename, uns
         {
             VPL_LOG_INFO("Error: Cannot compile vertex shader (" << vertfilename << ")!");
 
-            GLchar buffer[2048 + 1];
+            GLchar buffer[2048 + 1] = {};
             GLsizei length;
             GLsizei size = 2048;
             glGetShaderInfoLog(*vertshader, size, &length, buffer);
-
-            VPL_LOG_INFO("glGetShaderInfoLog():" << std::endl << buffer);
+            if (0 != buffer[0])
+                VPL_LOG_INFO("glGetShaderInfoLog():" << std::endl << buffer);
 
             return false;
         }
@@ -429,12 +821,12 @@ bool loadShaderProgram(const char * fragfilename, const char * vertfilename, uns
         {
             VPL_LOG_INFO("Error: Cannot link shader program!");
 
-            GLchar buffer[2048 + 1];
+            GLchar buffer[2048 + 1] = {};
             GLsizei length;
             GLsizei size = 2048;
             glGetProgramInfoLog(*program, size, &length, buffer);
-
-            VPL_LOG_INFO("glGetProgramInfoLog():" << std::endl << buffer);
+            if (0 != buffer[0])
+                VPL_LOG_INFO("glGetProgramInfoLog():" << std::endl << buffer);
 
             return false;
         }
@@ -887,7 +1279,7 @@ void PSVolumeRendering::setParameter(unsigned int shaderId, std::string name, os
         temp[i * 2 + 1] = value[i][1];
     }
     tridimGlR("glUniform2fv", glUniform2fv(pos, count, temp););
-    delete temp;
+    delete [] temp;
 }
 
 void PSVolumeRendering::setParameter(unsigned int shaderId, std::string name, osg::Vec3 *value, int count)
@@ -903,7 +1295,7 @@ void PSVolumeRendering::setParameter(unsigned int shaderId, std::string name, os
         temp[i * 3 + 2] = value[i][2];
     }
     tridimGlR("glUniform3fv",glUniform3fv(pos, count, temp););
-    delete temp;
+    delete [] temp;
 }
 
 void PSVolumeRendering::setParameter(unsigned int shaderId, std::string name, osg::Vec4 *value, int count)
@@ -920,7 +1312,7 @@ void PSVolumeRendering::setParameter(unsigned int shaderId, std::string name, os
         temp[i * 4 + 3] = value[i][3];
     }
     tridimGlR("glUniform4fv", glUniform4fv(pos, count, temp););
-    delete temp;
+    delete [] temp;
 }
 
 void PSVolumeRendering::setParameter(unsigned int shaderId, std::string name, osg::Matrix *value, int count)
@@ -937,7 +1329,7 @@ void PSVolumeRendering::setParameter(unsigned int shaderId, std::string name, os
         }
     }
     tridimGlR("glUniformMatrix4fv", glUniformMatrix4fv(pos, count, false, temp););
-    delete temp;
+    delete [] temp;
 }
 
 unsigned int PSVolumeRendering::internalCreateCustomVolume()
@@ -1979,8 +2371,15 @@ bool PSVolumeRendering::internalUploadData()
 
 ///////////////////////////////////////////////////////////////////////////////
 //
-void PSVolumeRendering::storeVolumeToTexture(vpl::img::CVolume<vpl::img::tPixel8> volume)
+bool PSVolumeRendering::storeVolumeToTexture(vpl::img::CVolume<vpl::img::tPixel8> volume)
 {
+    //VPL_LOG_INFO("storeVolumeToTexture tPixel8 " << volume.getXSize() << "x" << volume.getYSize() << "x" << volume.getZSize());
+    if (0 == volume.getXSize() || 0 == volume.getYSize() || 0 == volume.getZSize()) // hotfix - should not happen, but there is some flags related bug in the code
+    {
+        VPL_LOG_INFO("storeVolumeToTexture tPixel8 empty volume!");
+        return false;
+    }
+
     // create texture
     glTexImage3D(GL_TEXTURE_3D, 0,
         GL_LUMINANCE8,
@@ -1988,6 +2387,9 @@ void PSVolumeRendering::storeVolumeToTexture(vpl::img::CVolume<vpl::img::tPixel8
         0, GL_LUMINANCE,
         GL_UNSIGNED_BYTE,
         NULL);
+
+    if (reportErrors("storeVolumeToTexture::glTexImage3D"))
+        return false;
 
     // fill it with data slice by slice
     vpl::img::CImage<vpl::img::tPixel8, vpl::base::CRefData> slice(volume.getXSize(), volume.getYSize());
@@ -2002,10 +2404,18 @@ void PSVolumeRendering::storeVolumeToTexture(vpl::img::CVolume<vpl::img::tPixel8
             GL_UNSIGNED_BYTE,
             slice.getPtr());
     }
+    return true;
 }
 
-void PSVolumeRendering::storeVolumeToTexture(vpl::img::CVolume<vpl::img::tPixel16> volume)
+bool PSVolumeRendering::storeVolumeToTexture(vpl::img::CVolume<vpl::img::tPixel16> volume)
 {
+    //VPL_LOG_INFO("storeVolumeToTexture tPixel16 " << volume.getXSize() << "x" << volume.getYSize() << "x" << volume.getZSize());
+    if (0 == volume.getXSize() || 0 == volume.getYSize() || 0 == volume.getZSize()) // hotfix - should not happen, but there is some flags related bug in the code
+    {
+        VPL_LOG_INFO("storeVolumeToTexture tPixel16 empty volume!");
+        return false;
+    }
+
     // create texture
     glTexImage3D(GL_TEXTURE_3D, 0,
         GL_LUMINANCE16,
@@ -2013,6 +2423,9 @@ void PSVolumeRendering::storeVolumeToTexture(vpl::img::CVolume<vpl::img::tPixel1
         0, GL_LUMINANCE,
         GL_UNSIGNED_SHORT,
         NULL);
+
+    if (reportErrors("storeVolumeToTexture::glTexImage3D"))
+        return false;
 
     // fill it with data slice by slice
     vpl::img::CImage<vpl::img::tPixel16, vpl::base::CRefData> slice(volume.getXSize(), volume.getYSize());
@@ -2027,10 +2440,19 @@ void PSVolumeRendering::storeVolumeToTexture(vpl::img::CVolume<vpl::img::tPixel1
             GL_UNSIGNED_SHORT,
             slice.getPtr());
     }
+
+    return true;
 }
 
-void PSVolumeRendering::storeVolumeToTexture(vpl::img::CVolume<vpl::img::tRGBPixel> volume)
+bool PSVolumeRendering::storeVolumeToTexture(vpl::img::CVolume<vpl::img::tRGBPixel> volume)
 {
+    //VPL_LOG_INFO("storeVolumeToTexture tRGBPixel " << volume.getXSize() << "x" << volume.getYSize() << "x" << volume.getZSize());
+    if (0 == volume.getXSize() || 0 == volume.getYSize() || 0 == volume.getZSize()) // hotfix - should not happen, but there is some flags related bug in the code
+    {
+        VPL_LOG_INFO("storeVolumeToTexture tRGBPixel empty volume!");
+        return false;
+    }
+
     // create texture
     glTexImage3D(GL_TEXTURE_3D, 0,
         GL_RGBA8,
@@ -2038,6 +2460,9 @@ void PSVolumeRendering::storeVolumeToTexture(vpl::img::CVolume<vpl::img::tRGBPix
         0, GL_RGBA,
         GL_UNSIGNED_BYTE,
         NULL);
+
+    if (reportErrors("storeVolumeToTexture::glTexImage3D"))
+        return false;
 
     // fill it with data slice by slice
     vpl::img::CImage<vpl::img::tRGBPixel, vpl::base::CRefData> slice(volume.getXSize(), volume.getYSize());
@@ -2052,6 +2477,8 @@ void PSVolumeRendering::storeVolumeToTexture(vpl::img::CVolume<vpl::img::tRGBPix
             GL_UNSIGNED_BYTE,
             slice.getPtr());
     }
+
+    return true;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -2209,6 +2636,16 @@ bool PSVolumeRendering::internalInitRendering()
     //glEnable(GL_DEPTH_TEST);
     //glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST);
     //glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_FASTEST);
+    {
+        GLenum error = glGetError();
+        if (GL_NO_ERROR != error)
+        {
+            m_Error |= INIT_FAILED;
+            return false;
+        }
+    }
+    glGetErrors(""); // reset gl errors
+
 
     // generate textures
     glGenTextures(1, &m_spGLData->VolumeTexture);
@@ -2241,7 +2678,12 @@ bool PSVolumeRendering::internalInitRendering()
 
     // Create the texture
     //glPixelStorei(GL_UNPACK_ALIGNMENT, 2);
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_ALIGNMENT, 4););
+    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_SWAP_BYTES, 0););
+    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_LSB_FIRST, 0););
+    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_ROW_LENGTH, 0););
+    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_ROWS, 0););
+    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0););
     storeVolumeToTexture(m_VolumeData);
 #ifndef __APPLE__
     {
@@ -2272,8 +2714,12 @@ bool PSVolumeRendering::internalInitRendering()
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
 
     // Create the texture
-    //glPixelStorei(GL_UNPACK_ALIGNMENT, 2);
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_ALIGNMENT, 4););
+    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_SWAP_BYTES, 0););
+    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_LSB_FIRST, 0););
+    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_ROW_LENGTH, 0););
+    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_ROWS, 0););
+    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0););
     storeVolumeToTexture(m_AuxVolumeData);
 #ifndef __APPLE__
     {
@@ -2304,8 +2750,12 @@ bool PSVolumeRendering::internalInitRendering()
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    //glPixelStorei(GL_UNPACK_ALIGNMENT, 2);
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_ALIGNMENT, 4););
+    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_SWAP_BYTES, 0););
+    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_LSB_FIRST, 0););
+    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_ROW_LENGTH, 0););
+    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_ROWS, 0););
+    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0););
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16, LUT_2D_W, LUT_2D_H, 0, GL_RGBA, GL_UNSIGNED_SHORT, m_internalLookupTables[0]);
 
     // load shaders from string constants
@@ -2405,8 +2855,12 @@ bool PSVolumeRendering::internalInitRendering()
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    //glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_ALIGNMENT, 4););
+    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_SWAP_BYTES, 0););
+    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_LSB_FIRST, 0););
+    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_ROW_LENGTH, 0););
+    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_ROWS, 0););
+    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0););
     glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE8, NOISE_SIZE, NOISE_SIZE, 0, GL_LUMINANCE, GL_UNSIGNED_BYTE, noise);
 
     // The current rendering size
@@ -2421,7 +2875,12 @@ bool PSVolumeRendering::internalInitRendering()
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 2);
+    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_ALIGNMENT, 2););
+    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_SWAP_BYTES, 0););
+    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_LSB_FIRST, 0););
+    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_ROW_LENGTH, 0););
+    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_ROWS, 0););
+    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0););
     glTexImage3D(GL_TEXTURE_3D, 0, GL_RGB32F_ARB, renderingSize.x(), renderingSize.y(), 2, 0, GL_RGB, GL_FLOAT, NULL);
 
     // render target texture
@@ -2430,7 +2889,12 @@ bool PSVolumeRendering::internalInitRendering()
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_ALIGNMENT, 4););
+    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_SWAP_BYTES, 0););
+    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_LSB_FIRST, 0););
+    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_ROW_LENGTH, 0););
+    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_ROWS, 0););
+    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0););
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB16F_ARB, renderingSize.x(), renderingSize.y(), 0, GL_RGB, GL_FLOAT, NULL);
 
     // depth target texture
@@ -2439,7 +2903,12 @@ bool PSVolumeRendering::internalInitRendering()
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_ALIGNMENT, 4););
+    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_SWAP_BYTES, 0););
+    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_LSB_FIRST, 0););
+    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_ROW_LENGTH, 0););
+    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_ROWS, 0););
+    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0););
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB16F_ARB, renderingSize.x(), renderingSize.y(), 0, GL_RGB, GL_FLOAT, NULL);
 
     // Setup depth texture
@@ -2448,8 +2917,13 @@ bool PSVolumeRendering::internalInitRendering()
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, renderingSize.x(), renderingSize.y(), 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
+    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_ALIGNMENT, 4););
+    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_SWAP_BYTES, 0););
+    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_LSB_FIRST, 0););
+    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_ROW_LENGTH, 0););
+    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_ROWS, 0););
+    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0););
+    tridimGlR("glTexImage2D", glTexImage2D(GL_TEXTURE_2D, 0, depthTextureParameters[0], renderingSize.x(), renderingSize.y(), 0, depthTextureParameters[1], depthTextureParameters[2], NULL););
 
     // create and upload 1D resize kernel texture (used for image interpolation)
     ///////////////////////////////////////////////////////////////////////////
@@ -2467,7 +2941,12 @@ bool PSVolumeRendering::internalInitRendering()
     glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_ALIGNMENT, 4););
+    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_SWAP_BYTES, 0););
+    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_LSB_FIRST, 0););
+    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_ROW_LENGTH, 0););
+    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_ROWS, 0););
+    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0););
     glTexImage1D(GL_TEXTURE_1D, 0, GL_LUMINANCE16F_ARB, LUTSIZE, 0, GL_LUMINANCE, GL_FLOAT, klut);
 
     // default settings
@@ -2603,6 +3082,8 @@ void PSVolumeRendering::reloadShader()
 //
 bool PSVolumeRendering::internalUploadTexture()
 {
+    VPL_LOG_TRACE("PSVolumeRendering::internalUploadTexture");
+
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_3D, m_spGLData->VolumeTexture);
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
@@ -2612,8 +3093,12 @@ bool PSVolumeRendering::internalUploadTexture()
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
 
     // Create the 3D texture
-    //glPixelStorei(GL_UNPACK_ALIGNMENT, 2);
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_ALIGNMENT, 4));
+    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_SWAP_BYTES, 0));
+    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_LSB_FIRST, 0));
+    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_ROW_LENGTH, 0));
+    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_ROWS, 0));
+    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0));
     storeVolumeToTexture(m_VolumeData);
     {
         GLenum error = glGetError();
@@ -2648,8 +3133,12 @@ bool PSVolumeRendering::internalUploadAuxTexture()
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
 
     // Create the 3D texture
-    //glPixelStorei(GL_UNPACK_ALIGNMENT, 2);
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_ALIGNMENT, 4));
+    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_SWAP_BYTES, 0));
+    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_LSB_FIRST, 0));
+    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_ROW_LENGTH, 0));
+    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_ROWS, 0));
+    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0));
     storeVolumeToTexture(m_AuxVolumeData);
     {
         GLenum error = glGetError();
@@ -2945,8 +3434,12 @@ bool PSVolumeRendering::internalUploadCustomTexture_bool()
     glGetIntegerv(GL_TEXTURE_BINDING_3D, &currBinding);
     glBindTexture(GL_TEXTURE_3D, m_currentVolume);
 
-    //glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_ALIGNMENT, 4));
+    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_SWAP_BYTES, 0));
+    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_LSB_FIRST, 0));
+    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_ROW_LENGTH, 0));
+    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_ROWS, 0));
+    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0));
     storeVolumeToTexture(m_customData_bool);
     {
         GLenum error = glGetError();
@@ -2980,8 +3473,12 @@ bool PSVolumeRendering::internalUploadCustomTexture_tPixel8()
     glGetIntegerv(GL_TEXTURE_BINDING_3D, &currBinding);
     glBindTexture(GL_TEXTURE_3D, m_currentVolume);
 
-    //glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_ALIGNMENT, 4));
+    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_SWAP_BYTES, 0));
+    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_LSB_FIRST, 0));
+    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_ROW_LENGTH, 0));
+    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_ROWS, 0));
+    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0));
     storeVolumeToTexture(m_customData_tPixel8);
     {
         GLenum error = glGetError();
@@ -3015,8 +3512,12 @@ bool PSVolumeRendering::internalUploadCustomTexture_tPixel16()
     glGetIntegerv(GL_TEXTURE_BINDING_3D, &currBinding);
     glBindTexture(GL_TEXTURE_3D, m_currentVolume);
 
-    //glPixelStorei(GL_UNPACK_ALIGNMENT, 2);
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_ALIGNMENT, 4));
+    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_SWAP_BYTES, 0));
+    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_LSB_FIRST, 0));
+    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_ROW_LENGTH, 0));
+    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_ROWS, 0));
+    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0));
     storeVolumeToTexture(m_customData_tPixel16);
     {
         GLenum error = glGetError();
@@ -3050,7 +3551,12 @@ bool PSVolumeRendering::internalUploadCustomTexture_tRGBPixel()
     glGetIntegerv(GL_TEXTURE_BINDING_3D, &currBinding);
     glBindTexture(GL_TEXTURE_3D, m_currentVolume);
 
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_ALIGNMENT, 4));
+    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_SWAP_BYTES, 0));
+    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_LSB_FIRST, 0));
+    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_ROW_LENGTH, 0));
+    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_ROWS, 0));
+    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0));
     storeVolumeToTexture(m_customData_tRGBPixel);
     {
         GLenum error = glGetError();
@@ -3087,7 +3593,12 @@ bool PSVolumeRendering::internalUploadCustomAuxTexture()
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
 
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_ALIGNMENT, 4));
+    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_SWAP_BYTES, 0));
+    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_LSB_FIRST, 0));
+    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_ROW_LENGTH, 0));
+    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_ROWS, 0));
+    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0));
     storeVolumeToTexture(m_auxCustomData);
     {
         GLenum error = glGetError();
@@ -3174,7 +3685,12 @@ bool PSVolumeRendering::internalSetRenderingSize(PSVolumeRenderingParams *pParam
     vpl::img::CPoint3D renderingSize = getRenderingSize(pParams, Flags);
 
     glActiveTexture(GL_TEXTURE4);
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_ALIGNMENT, 4));
+    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_SWAP_BYTES, 0));
+    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_LSB_FIRST, 0));
+    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_ROW_LENGTH, 0));
+    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_ROWS, 0));
+    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0));
 
     glBindTexture(GL_TEXTURE_3D, m_spGLData->RaysStartEnd);
     glTexImage3D(GL_TEXTURE_3D, 0, GL_RGB32F_ARB, renderingSize.x(), renderingSize.y(), 2, 0, GL_RGB, GL_FLOAT, NULL);
@@ -3195,8 +3711,12 @@ bool PSVolumeRendering::internalSetLUT(PSVolumeRenderingParams *pParams)
     // upload new 1D texture
     glActiveTexture(GL_TEXTURE2);
     glBindTexture(GL_TEXTURE_2D, m_spGLData->LookUpTexture);
-    //glPixelStorei(GL_UNPACK_ALIGNMENT, 2);
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_ALIGNMENT, 4));
+    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_SWAP_BYTES, 0));
+    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_LSB_FIRST, 0));
+    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_ROW_LENGTH, 0));
+    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_ROWS, 0));
+    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0));
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16, LUT_2D_W, LUT_2D_H, 0, GL_RGBA, GL_UNSIGNED_SHORT, m_internalLookupTables[pParams->selectedLut]);
 
     return true;
@@ -3421,6 +3941,8 @@ void PSVolumeRendering::prepareBox(int NumOfQuads)
 // - VAO (Vertex Array Object)
 void PSVolumeRendering::renderBox(PSVolumeRenderingParams *pParams, const tArray& Triangles)
 {
+    COpenGlState state;
+
     // height of the box (object)
     float Y = (float)pParams->YSize / (float)pParams->XSize * pParams->aspectRatio_YtoX;
 
@@ -3458,40 +3980,48 @@ void PSVolumeRendering::renderBox(PSVolumeRenderingParams *pParams, const tArray
     glColor3f(0.0f, 0.0f, 0.0f);
 
     // Save current state
-    bool bVertexArray =         glIsEnabled(GL_VERTEX_ARRAY);
-    bool bTexCoordArray =       glIsEnabled(GL_TEXTURE_COORD_ARRAY);
-    bool bNormalArray =         glIsEnabled(GL_NORMAL_ARRAY);
-    bool bColorArray =          glIsEnabled(GL_COLOR_ARRAY);
-    bool bIndexArray =          glIsEnabled(GL_INDEX_ARRAY);
-    bool bSecondaryColorArray = glIsEnabled(GL_SECONDARY_COLOR_ARRAY);
-    bool bEdgeFlagArray =       glIsEnabled(GL_EDGE_FLAG_ARRAY);
-    bool bFogCoordArray =       glIsEnabled(GL_FOG_COORD_ARRAY);
     GLint vertexArray;
     glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &vertexArray);
+
+    tridimGl("glEnableClientState", glEnableClientState(GL_VERTEX_ARRAY));
+    tridimGl("glDisableClientState", glDisableClientState(GL_TEXTURE_COORD_ARRAY));
+    tridimGl("glDisableClientState", glDisableClientState(GL_NORMAL_ARRAY));
+    tridimGl("glDisableClientState", glDisableClientState(GL_COLOR_ARRAY));
 
     // Draw all VBOs
     int BatchSize = Triangles.size() / conf::NumOfBatches;
     for (int b = 0; b < conf::NumOfBatches; ++b)
     {
+#if(0)
+        GLboolean is = glIsVertexArrayX(m_spGLData->VAOBox[b]);
+        if (!is)
+        {
+            glGenVertexArraysX(conf::NumOfBatches, m_spGLData->VAOBox); // just for testing
+        }
         // Bind the corresponding VAO
         glBindVertexArrayX(m_spGLData->VAOBox[b]);
 
+        // Enable vertex arrays
+        glEnableClientState(GL_VERTEX_ARRAY);
+        glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+        glDisableClientState(GL_NORMAL_ARRAY);
+        glDisableClientState(GL_COLOR_ARRAY);
+
+        glBindBufferARB(GL_ARRAY_BUFFER_ARB, m_spGLData->VBOBox[b]);
+        glVertexPointer(3, GL_FLOAT, 0, 0);
+
         // Draw the box
         glDrawArrays(GL_TRIANGLES, 0, GLsizei(BatchSize));
+#else
+        tridimGl("glVertexPointer", glVertexPointer(3, GL_FLOAT, 0, &(m_Triangles[b * BatchSize])));
+
+        // Draw the box
+        tridimGl("glDrawArrays", glDrawArrays(GL_TRIANGLES, 0, GLsizei(BatchSize)));
+#endif
     }
 
     // Unbind the vertex array
     glBindVertexArrayX(vertexArray);
-
-    // Restore state so that OSG can continue its work
-    bVertexArray            ? glEnableClientState(GL_VERTEX_ARRAY)          : glDisableClientState(GL_VERTEX_ARRAY);
-    bTexCoordArray          ? glEnableClientState(GL_TEXTURE_COORD_ARRAY)   : glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-    bNormalArray            ? glEnableClientState(GL_NORMAL_ARRAY)          : glDisableClientState(GL_NORMAL_ARRAY);
-    bColorArray             ? glEnableClientState(GL_COLOR_ARRAY)           : glDisableClientState(GL_COLOR_ARRAY);
-    bIndexArray             ? glEnableClientState(GL_INDEX_ARRAY)           : glDisableClientState(GL_INDEX_ARRAY);
-    bSecondaryColorArray    ? glEnableClientState(GL_SECONDARY_COLOR_ARRAY) : glDisableClientState(GL_SECONDARY_COLOR_ARRAY);
-    bEdgeFlagArray          ? glEnableClientState(GL_EDGE_FLAG_ARRAY)       : glDisableClientState(GL_EDGE_FLAG_ARRAY);
-    bFogCoordArray          ? glEnableClientState(GL_FOG_COORD_ARRAY)       : glDisableClientState(GL_FOG_COORD_ARRAY);
 
     // Restore the matrix
     glPopMatrix();
@@ -3506,6 +4036,8 @@ void PSVolumeRendering::renderVolume()
     // Local copy of rendering parameters
     PSVolumeRenderingParams Params;
     int Flags = 0;
+
+    COpenGlState state;
 
     // BEGIN: Locked part of the rendering
     {
@@ -3604,6 +4136,10 @@ void PSVolumeRendering::renderVolume()
     }
 
     glGetErrors(""); // reset gl errors
+#ifdef USE_OPENGL_CALLBACK
+    glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
+    glDebugMessageCallback(openglCallbackFunction, nullptr);
+#endif
 
     // general OpenGL settings
     //glClearColor(0.2f, 0.2f, 0.4f, 0.0f);
@@ -3634,7 +4170,12 @@ void PSVolumeRendering::renderVolume()
     tridimGl("glActiveTexture", glActiveTexture(GL_TEXTURE5););
     tridimGl("glBindTexture", glBindTexture(GL_TEXTURE_2D, m_spGLData->GeometryDepthTexture););
     tridimGl("glPixelStorei", glPixelStorei(GL_UNPACK_ALIGNMENT, 4););
-    tridimGl("glTexImage2D", glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, viewport[2], viewport[3], 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL););
+    tridimGl("glPixelStorei", glPixelStorei(GL_UNPACK_SWAP_BYTES, 0););
+    tridimGl("glPixelStorei", glPixelStorei(GL_UNPACK_LSB_FIRST, 0););
+    tridimGl("glPixelStorei", glPixelStorei(GL_UNPACK_ROW_LENGTH, 0););
+    tridimGl("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_ROWS, 0););
+    tridimGl("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0););
+    tridimGl("glTexImage2D", glTexImage2D(GL_TEXTURE_2D, 0, depthTextureParameters[0], viewport[2], viewport[3], 0, depthTextureParameters[1], depthTextureParameters[2], NULL););
     tridimGl("glCopyTexSubImage2D", glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, viewport[2], viewport[3]););
 
     // and change it to small off-screen texture

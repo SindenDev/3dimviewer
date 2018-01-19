@@ -26,7 +26,7 @@
 #include <QWidget>
 
 #include <data/CModel.h>
-#include <data/CObjectObserver.h>
+#include <data/CGeneralObjectObserver.h>
 #include <QTableWidgetItem>
 
 namespace Ui
@@ -34,7 +34,7 @@ namespace Ui
     class ModelsWidget;
 }
 
-class CModelsWidget : public QWidget, public data::CObjectObserver<data::CModel>
+class CModelsWidget : public QWidget, public data::CGeneralObjectObserver<CModelsWidget>
 {
     Q_OBJECT
 
@@ -56,14 +56,14 @@ public:
     ~CModelsWidget();
 
     //! Called on volume data change.
-    void onNewDensityData(data::CStorageEntry *pEntry);
+    void onNewDensityData(data::CStorageEntry *pEntry, const data::CChangedEntries &changes);
 
     //! Return storage id of the selected model, -1 if no model is selected
     int getSelectedModelStorageId();
 
 private:
     //! Method called on model change
-    void objectChanged(data::CModel *pData);
+    void objectChanged(data::CStorageEntry *pEntry, const data::CChangedEntries &changes);
 
     //! Update table
     void updateTable();
@@ -102,8 +102,6 @@ private slots:
 private:
     // GUI
     Ui::ModelsWidget *ui;
-    //! Signal connection for volume data change
-    vpl::mod::tSignalConnection m_Connection;
     //! Was this my change?
     bool m_bMyChange;
 	//! Are models linked to the regions?

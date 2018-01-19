@@ -36,8 +36,6 @@ CDensityWindowWidget::CDensityWindowWidget(QWidget *parent) :
 
     ui->setupUi(this);
 
-    APP_STORAGE.connect(data::Storage::DensityWindow::Id, this);
-
     ui->densityWindowCenter->setValue(data::DEFAULT_DENSITY_WINDOW.m_Center);
     ui->densityWindowCenter->setRange(data::CDensityWindow::getMinDensity(), data::CDensityWindow::getMaxDensity());
     ui->densityWindowWidth->setValue(data::DEFAULT_DENSITY_WINDOW.m_Width);
@@ -50,19 +48,24 @@ CDensityWindowWidget::CDensityWindowWidget(QWidget *parent) :
     QObject::connect(ui->densityWindowCenterSlider,SIGNAL(valueChanged(int)),this,SLOT(on_densityWindowCenter_valueChanged(int)));
     QObject::connect(ui->densityWindowWidthSlider,SIGNAL(valueChanged(int)),this,SLOT(on_densityWindowWidth_valueChanged(int)));
 
-    APP_STORAGE.connect(data::Storage::DensityWindow::Id, this);
-    m_Connection = APP_STORAGE.getEntrySignal(data::Storage::ActiveDataSet::Id).connect(this, &CDensityWindowWidget::onNewDensityData);
+    CGeneralObjectObserver<CDensityWindowWidget>::connect(APP_STORAGE.getEntry(data::Storage::DensityWindow::Id ).get(), CGeneralObjectObserver<CDensityWindowWidget>::tObserverHandler(this, &CDensityWindowWidget::onNewDensityWindow));
+    CGeneralObjectObserver<CDensityWindowWidget>::connect(APP_STORAGE.getEntry(data::Storage::ActiveDataSet::Id ).get(), CGeneralObjectObserver<CDensityWindowWidget>::tObserverHandler(this, &CDensityWindowWidget::onNewDensityData));
 }
 
 CDensityWindowWidget::~CDensityWindowWidget()
 {
-    APP_STORAGE.getEntrySignal(data::Storage::ActiveDataSet::Id).disconnect(m_Connection);
-    APP_STORAGE.disconnect(data::Storage::DensityWindow::Id, this);
+    CGeneralObjectObserver<CDensityWindowWidget>::connect(APP_STORAGE.getEntry(data::Storage::DensityWindow::Id ).get());
+    CGeneralObjectObserver<CDensityWindowWidget>::connect(APP_STORAGE.getEntry(data::Storage::ActiveDataSet::Id ).get());
     delete ui;
 }
 
-void CDensityWindowWidget::objectChanged(data::CDensityWindow *pData)
+void CDensityWindowWidget::objectChanged(data::CStorageEntry *,const data::CChangedEntries &)
 {
+}
+
+void CDensityWindowWidget::onNewDensityWindow(data::CStorageEntry * pEntry,const data::CChangedEntries &)
+{    
+    data::CDensityWindow *pData = pEntry->getDataPtr<data::CObjectHolder<data::CDensityWindow> >()->getObjectPtr();
     m_bDontNotify=true; // setValue would cause another objectChanged with outdated width value
     ui->densityWindowCenter->setValue(pData->getCenter());
     ui->densityWindowCenterSlider->setValue(pData->getCenter());
@@ -72,8 +75,8 @@ void CDensityWindowWidget::objectChanged(data::CDensityWindow *pData)
 
 }
 
-void CDensityWindowWidget::onNewDensityData(data::CStorageEntry *pEntry)
-{
+void CDensityWindowWidget::onNewDensityData(data::CStorageEntry *,const data::CChangedEntries &)
+{    
     m_bDontNotify=true;
     ui->densityWindowCenter->setRange(data::CDensityWindow::getMinDensity(), data::CDensityWindow::getMaxDensity());
     ui->densityWindowCenterSlider->setRange(data::CDensityWindow::getMinDensity(), data::CDensityWindow::getMaxDensity());

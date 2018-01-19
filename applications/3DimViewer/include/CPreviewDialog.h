@@ -78,15 +78,16 @@ public:
 	~CPreviewDialog();
 
 protected:   
-	//! Calls preview method from data and shows original and filtered slice
-	void loadCurrentSlice();
-
+    //! Update on resize
 	virtual void resizeEvent(QResizeEvent *);
 
 	//! Sets ui based on current filter parameters
 	void setParamsProperties();
 
 protected slots:
+	//! Calls preview method from data and shows original and filtered slice
+	void loadCurrentSlice();
+
 	// ! Called, when slice changed 
 	void sliceChanged(int);
 

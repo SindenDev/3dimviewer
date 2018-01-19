@@ -28,6 +28,8 @@
 
 #define STORAGE_ENTRY_CLASS_FLAGS		16
 
+//#define DEBUG_OUTPUT_INITIALIZATION
+
 namespace data
 {
 
@@ -109,7 +111,8 @@ CPtrWrapper<CStorageEntry> CDataStorage::getEntry(int Id, int Flags)
          // Check the entry again
          if( pEntry->getId() != Id )
          {
-#ifdef _WIN32
+#ifdef DEBUG_OUTPUT_INITIALIZATION
+  #ifdef _WIN32
              // output storage entry id
              {
                  std::stringstream ss;
@@ -117,6 +120,7 @@ CPtrWrapper<CStorageEntry> CDataStorage::getEntry(int Id, int Flags)
                  std::string str = ss.str();
                  OutputDebugStringA(str.c_str());
              }
+  #endif
 #endif
              // Set the entry Id
              pEntry->setId(Id);
@@ -139,7 +143,8 @@ CPtrWrapper<CStorageEntry> CDataStorage::getEntry(int Id, int Flags)
                  }
              }
 
-#ifdef _WIN32
+#ifdef DEBUG_OUTPUT_INITIALIZATION
+  #ifdef _WIN32
              // output class name
              if (NULL!=pEntry->getStorableDataPtr())
              {
@@ -159,6 +164,7 @@ CPtrWrapper<CStorageEntry> CDataStorage::getEntry(int Id, int Flags)
                  OutputDebugStringA(str.c_str());
              }
              OutputDebugStringA("\n");
+  #endif
 #endif
              
              // Update reverse dependencies
@@ -372,10 +378,17 @@ void CDataStorage::doPostponedInvalidation(bool bForceUpdate)
 {
 	CStorageEntry *pEntry;
 
+    tInvalidatedOrderVec invalidationOrder = m_invalidationOrder;
+    tInvalidatedEntriesMap invalidatedEntries = m_invalidatedEntries;
+    tInvalidatedEntriesMap invalidatedDeps = m_invalidatedDeps;
+    m_invalidationOrder.clear();
+    m_invalidatedEntries.clear();
+    m_invalidatedDeps.clear();
+
 	// Invalidate really invalidated entries 
 	{
-		tInvalidatedOrderVec::iterator it, itEnd( m_invalidationOrder.end() );
-		for( it = m_invalidationOrder.begin(); it != itEnd; ++it )
+		tInvalidatedOrderVec::iterator it, itEnd( invalidationOrder.end() );
+		for( it = invalidationOrder.begin(); it != itEnd; ++it )
 		{
 			pEntry = m_Storage[*it].get();
 
@@ -386,7 +399,7 @@ void CDataStorage::doPostponedInvalidation(bool bForceUpdate)
 			}
 
 			// Copy changes, make the entry dirty
-			pEntry->addChanges( m_invalidatedEntries[*it] );
+            pEntry->addChanges(invalidatedEntries[*it]);
 
 			// Should all dependent entries be updated now?
 			if( bForceUpdate )
@@ -402,8 +415,8 @@ void CDataStorage::doPostponedInvalidation(bool bForceUpdate)
 	//*
 	// For all "invalidated" entries
 	{
-		tInvalidatedEntriesMap::iterator it, itEnd( m_invalidatedDeps.end());
-		for( it = m_invalidatedDeps.begin(); it != itEnd; ++it )
+        tInvalidatedEntriesMap::iterator it, itEnd(invalidatedDeps.end());
+        for (it = invalidatedDeps.begin(); it != itEnd; ++it)
 		{
 			pEntry = m_Storage[it->first].get();
 

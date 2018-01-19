@@ -21,6 +21,7 @@
 ///////////////////////////////////////////////////////////////////////////////
 
 #include <alg/CReduceSmallSubmeshes.h>
+#include <deque>
 
 bool CSmallSubmeshReducer::reduce(geometry::CMesh &mesh, int triangle_threshold)
 {

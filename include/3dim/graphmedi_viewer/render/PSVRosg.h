@@ -37,7 +37,7 @@
 #include <osgDB/ReadFile>
 #include <osg/Version>
 
-#include <osg/CObjectObserverOSG.h>
+#include <osg/CGeneralObjectObserverOSG.h>
 #include <data/CActiveDataSet.h>
 
 
@@ -94,7 +94,7 @@ protected:
 
 ///////////////////////////////////////////////////////////////////////////////
 //! OSG geode implementing volume rendering
-class osgPSVolumeRenderingGeode : public osg::Geode, public scene::CObjectObserverOSG<data::CActiveDataSet>
+class osgPSVolumeRenderingGeode : public osg::Geode, public scene::CGeneralObjectObserverOSG<osgPSVolumeRenderingGeode>
 {
 public:
     //! Default constructor.

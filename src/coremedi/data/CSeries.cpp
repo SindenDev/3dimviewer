@@ -72,9 +72,20 @@ bool data::CSerieInfo::hasSlice( int number ) const
 }
 
 //==============================================================================================
-bool data::CSerieInfo::addSlice( int id )
+bool data::CSerieInfo::addSlice(int id, double pixelSpacing)
 {
-    m_DicomNumSet.insert( id );
+    SDCMTkFileNameAndPixelSpacing info;
+    info.fileInfo = m_DCMTkList.back();
+    info.pixelSpacing = pixelSpacing;
+
+    std::pair<tDicomNumSet::iterator, bool> ret = m_DicomNumSet.insert( id );
+
+    if (ret.second)
+    {
+        m_DicomNumToFilenameMap.insert(std::pair<int, SDCMTkFileNameAndPixelSpacing>(id, info));
+        m_DicomPixelSpacing.push_back(pixelSpacing);
+    }
+
     return true;
 }
 
@@ -82,6 +93,42 @@ bool data::CSerieInfo::addSlice( int id )
 int	data::CSerieInfo::getNumOfDicomFiles() const
 {
     return int(m_DicomList.size());
+}
+
+//==============================================================================================
+int data::CSerieInfo::getNumOfDicomFilesForPreview()
+{
+    int cnt = 0;
+
+    for (int i = 0; i < m_DicomPixelSpacing.size(); ++i)
+    {
+        int currentCnt = std::count(m_DicomPixelSpacing.begin(), m_DicomPixelSpacing.end(), m_DicomPixelSpacing[i]);
+
+        if (currentCnt > cnt)
+            cnt = currentCnt;
+    }
+
+    return cnt;
+}
+
+//==============================================================================================
+double data::CSerieInfo::getTheMostCommonPixelSpacing()
+{
+    int cnt = 0;
+    double val = 0.0;
+
+    for (int i = 0; i < m_DicomPixelSpacing.size(); ++i)
+    {
+        int currentCnt = std::count(m_DicomPixelSpacing.begin(), m_DicomPixelSpacing.end(), m_DicomPixelSpacing[i]);
+
+        if (currentCnt > cnt)
+        {
+            cnt = currentCnt;
+            val = m_DicomPixelSpacing[i];
+        }
+    }
+
+    return val;
 }
 
 //==============================================================================================
@@ -135,7 +182,20 @@ bool data::CSerieInfo::loadDicomFile(int FileNum, vpl::img::CDicomSlice& Slice, 
         return false;
 #else
         CDicomDCTk dicom;
-        return dicom.loadDicom( m_DCMTkList[FileNum].directory, m_DCMTkList[FileNum].filename, Slice, tags, bLoadImageData );
+        bool bOk = dicom.loadDicom( m_DCMTkList[FileNum].directory, m_DCMTkList[FileNum].filename, Slice, tags, bLoadImageData );
+/*    #ifdef _WIN32
+        if (!bOk) // workaround for issue #2496 - problems with swedish letters
+        {
+            vpl::sys::CFileBrowserU browser;
+            vpl::sys::tString oldDir = browser.getDirectory();
+            browser.setDirectory(m_DCMTkList[FileNum].directory);
+            std::string szShort = data::shortName(m_DCMTkList[FileNum].filename);
+            if (!szShort.empty())
+                bOk = dicom.loadDicom(m_DCMTkList[FileNum].directory, szShort, Slice, tags, bLoadImageData);
+            browser.setDirectory(oldDir);
+        }
+    #endif */
+        return bOk;
 #endif     
   
     }
@@ -160,7 +220,19 @@ int data::CSerieInfo::loadDicomFile(int FileNum, tDicomSlices& Slices, sExtended
         return false;
 #else
         CDicomDCTk dicom;
-        return dicom.loadDicom(m_DCMTkList[FileNum].directory, m_DCMTkList[FileNum].filename, Slices, tags, bLoadImageData, bCompatibilityMode);
+        int val = dicom.loadDicom(m_DCMTkList[FileNum].directory, m_DCMTkList[FileNum].filename, Slices, tags, bLoadImageData, bCompatibilityMode);
+/*    #ifdef _WIN32
+        if (0==val) // workaround for issue #2496 - problems with swedish letters
+        {
+            vpl::sys::CFileBrowserU browser;
+            vpl::sys::tString oldDir = browser.getDirectory();
+            browser.setDirectory(m_DCMTkList[FileNum].directory);
+            std::string szShort = data::shortName(m_DCMTkList[FileNum].filename);
+            val = dicom.loadDicom(m_DCMTkList[FileNum].directory, szShort, Slices, tags, bLoadImageData, bCompatibilityMode);
+            browser.setDirectory(oldDir);
+        }
+    #endif */
+        return val;
 #endif  
       
     }
@@ -168,6 +240,42 @@ int data::CSerieInfo::loadDicomFile(int FileNum, tDicomSlices& Slices, sExtended
     {
         return 0;
     }
+}
+
+bool data::CSerieInfo::loadDicomFileForPreview(int sliceIndex, vpl::img::CDicomSlice& Slice, sExtendedTags& tags, bool bLoadImageData, double pixelSpacing)
+{
+    int cnt = 0;
+
+    tDicomNumSet::iterator it = m_DicomNumSet.begin();
+
+    for (it; it != m_DicomNumSet.end(); ++it)
+    {
+        int sliceId = *it;
+
+        tDicomNumToFileinfo::iterator map_it = m_DicomNumToFilenameMap.find(sliceId);
+        if (map_it != m_DicomNumToFilenameMap.end())
+        {
+            if (map_it->second.pixelSpacing == pixelSpacing)
+                cnt++;
+            else
+                continue;
+
+            if (cnt == sliceIndex)
+            {
+#if defined( TRIDIM_USE_GDCM )
+
+                CDicomGDCM dicom(this, m_loadBuggySerie);
+                if (dicom.loadFile(map_it->second.fileInfo.directory, map_it->second.fileInfo.filename))
+                    return dicom.loadDicom(map_it->second.fileInfo.directory, map_it->second.fileInfo.filename, Slice, tags, bLoadImageData);
+#else
+                CDicomDCTk dicom;
+                return dicom.loadDicom(map_it->second.fileInfo.directory, map_it->second.fileInfo.filename, Slice, tags, bLoadImageData);
+#endif
+            }
+        }
+    }
+
+	return false;
 }
 
 #if defined(__APPLE__) &&  !defined(_LIBCPP_VERSION)
@@ -276,6 +384,14 @@ data::CSerieInfo * data::CSeries::addDicomFile( const vpl::sys::tString & path )
 
     CDicomDCTk dicom;
     bOk = dicom.loadFile(convPath);
+#ifdef WIN32
+    if (!bOk) // workaround for issue #2496 - problems with swedish letters
+    {
+        std::wstring unipath = shortName(path);
+        convPath = vpl::sys::tStringConv::toUtf8(unipath);
+        bOk = dicom.loadFile(convPath);
+    }
+#endif
 
 #endif
 
@@ -317,17 +433,18 @@ data::CSerieInfo * data::CSeries::addDicomFile( const vpl::sys::tString & path )
 }
 
 #ifdef WIN32 // Windows need nonunicode paths to be in ACP
-std::string data::wcs2ACP(const std::wstring &filename)
+std::string data::wcs2ACP(const std::wstring &filename, bool bDoNotUseShortName)
 {
     std::string convFilename;
     {
+        BOOL bUsedDefaultChar = false; // has to be BOOL!
         // get buffer size
-        int size=WideCharToMultiByte(CP_ACP,0,filename.c_str(),filename.size(),0,0,0,0);
+        int size=WideCharToMultiByte(CP_ACP, WC_NO_BEST_FIT_CHARS,filename.c_str(),filename.size(),0,0,0,&bUsedDefaultChar);
         if (size>0)
         {
             // convert
             char* buffer=new char[size+1];
-            int sizeC=WideCharToMultiByte(CP_ACP,0,filename.c_str(),filename.size(),buffer,size,0,0);
+            int sizeC=WideCharToMultiByte(CP_ACP, WC_NO_BEST_FIT_CHARS,filename.c_str(),filename.size(),buffer,size,0,&bUsedDefaultChar);
             if (sizeC>0)
             {
                 assert(sizeC<size+1);
@@ -336,8 +453,76 @@ std::string data::wcs2ACP(const std::wstring &filename)
             }
             delete[] buffer;
         }
+        // conversion wasn't possible, get short path
+        if (bUsedDefaultChar && !bDoNotUseShortName)
+        {
+            wchar_t wcsTmpStr[_MAX_PATH] = {};
+            unsigned int result = GetShortPathNameW(filename.c_str(), wcsTmpStr, _MAX_PATH);
+            if (result>0 && result<_MAX_PATH)
+            {
+                //_wcslwr(wcsTmpStr); // because openmesh write checks for lower case extension only
+                std::wstring tmp = wcsTmpStr;
+                return wcs2ACP(wcsTmpStr, true);
+            }
+            else
+            {
+                /*
+#ifdef _MSC_VER
+                qDebug() << "Couldn't get ansi name for " << QString::fromUtf16((const ushort *)filename.c_str());
+#else
+                qDebug() << "Couldn't get ansi name for " << QString::fromStdWString(filename);
+#endif
+                */
+                convFilename.clear();
+            }
+        }
     }
     return convFilename;
+}
+
+std::wstring data::ACP2wcs(const char *filename)
+{
+    std::wstring convFilename;
+    if (NULL == filename)
+        return convFilename;
+
+    int size = MultiByteToWideChar(CP_ACP, 0, filename, -1, 0, 0);
+    if (size>0)
+    {
+        wchar_t* buffer = new wchar_t[size + 1];
+        memset(buffer, 0, sizeof(wchar_t)*(size + 1));
+        int sizeC = MultiByteToWideChar(CP_ACP, 0, filename, -1, buffer, size);
+        if (sizeC>0)
+        {
+            assert(sizeC<size + 1);
+            buffer[sizeC] = 0;
+            convFilename = buffer;
+        }
+        delete buffer;
+    }
+    return convFilename;
+}
+
+std::wstring data::shortName(const std::wstring &filename)
+{
+    wchar_t wcsTmpStr[1024] = {};
+    unsigned int result = GetShortPathNameW(filename.c_str(), wcsTmpStr, 1023); // works for full path only or when current dir is correctly set
+    std::wstring tmp = wcsTmpStr;
+    return tmp;
+}
+
+std::string data::shortName(const std::string &filename)
+{
+    char szTmpStr[1024] = {};
+    unsigned int result = GetShortPathNameA(filename.c_str(), szTmpStr, 1023); // works for full path only or when current dir is correctly set
+    std::string tmp = szTmpStr;
+    if (tmp.empty())
+    {
+        std::wstring ws = ACP2wcs(filename.c_str());
+        ws = data::shortName(ws);
+        tmp = wcs2ACP(ws);
+    }    
+    return tmp;
 }
 #endif
 
@@ -365,7 +550,14 @@ data::CSerieInfo * data::CSeries::addDicomFile( const vpl::sys::tString &dir, co
 
     CDicomDCTk dicom;
     bOk = dicom.loadFile(convFilename);
-
+  #ifdef WIN32
+    if (!bOk) // workaround for issue #2496 - problems with swedish letters
+    {
+        std::wstring unipath = shortName(filename); 
+        convFilename = vpl::sys::tStringConv::toUtf8(unipath);
+        bOk = dicom.loadFile(convFilename);
+    }
+  #endif
 #endif  
 
     if (bOk)
@@ -390,6 +582,8 @@ data::CSerieInfo * data::CSeries::addDicomFile( const vpl::sys::tString &dir, co
 		// Add dicom file to the serie
         serie->addDicomFile( dir, filename );
 
+        double pixelSpacing = dicom.getPixelSpacing();
+
         // Retreive slice numbers of all frames stored in the dicom file
         CDicom::tDicomNumList Ids;
         dicom.getSliceIds( Ids );
@@ -399,7 +593,7 @@ data::CSerieInfo * data::CSeries::addDicomFile( const vpl::sys::tString &dir, co
         CDicom::tDicomNumList::iterator itEnd = Ids.end();
         for( ; it != itEnd; ++it )
         {
-            serie->addSlice( *it );
+            serie->addSlice(*it, pixelSpacing);
         }
 
         // get dicom info

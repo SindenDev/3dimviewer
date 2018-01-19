@@ -23,7 +23,6 @@
 #include <data/CEntryFlags.h>
 
 #include <VPL/Base/Logging.h>
-#include <VPL/Base/Warning.h>
 
 
 namespace data

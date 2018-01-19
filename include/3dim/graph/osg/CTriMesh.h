@@ -27,6 +27,7 @@
 // include files
 #include <vector>
 
+#include <osg/MatrixTransform>
 #include <osg/Geode>
 #include <osg/Geometry>
 #include <osg/PrimitiveSet>
@@ -41,9 +42,25 @@
 
 namespace osg
 {
-    ///////////////////////////////////////////////////////////////////////////////
+	class CTriMeshDrawCallback : public osg::Drawable::DrawCallback
+	{
+	protected:
+		osg::ref_ptr<osg::Drawable> m_drawable;
+
+	public:
+		CTriMeshDrawCallback(osg::Drawable *drawable)
+			: m_drawable(drawable)
+		{ }
+
+		~CTriMeshDrawCallback()
+		{ }
+		virtual void drawImplementation(osg::RenderInfo &ri, const osg::Drawable *d) const;
+	};
+	
+	///////////////////////////////////////////////////////////////////////////////
     //! OSG geode representing triangular surface mesh.
-    class CTriMesh : public osg::Geode
+
+	class CTriMesh : public osg::MatrixTransform
     {
     public:
         enum ENormalsUsage
@@ -73,6 +90,8 @@ namespace osg
 
         void useVertexColors(bool value = true, bool force = false);
 
+        void updateVertexColors(osg::Vec4Array *vertexColors);
+
         //! Switches between face/vertex normals
         void useNormals(ENormalsUsage normalsUsage);
 
@@ -100,14 +119,23 @@ namespace osg
         //! Build kd tree
         void buildKDTree();
 
+        osg::Geode *getMeshGeode()
+        {
+            return pGeode.get();
+        }
+
+		void setVisitorsSubTree(osg::MatrixTransform *visitorsSubTree = NULL);
+
     protected:
         //! Applies materials
         void applyMaterials();
 
     protected:
         // OSG things...
+        osg::ref_ptr<osg::Geode> pGeode;
         std::vector<osg::ref_ptr<osg::Geometry> > pGeometries;
         std::map<int, int> m_geometryIndexToMaterialIndex;
+        std::vector<osg::ref_ptr<osg::Geometry> > pGeometriesVisitors;
         std::vector<osg::ref_ptr<osg::DrawElementsUInt> > pPrimitiveSets;
         std::map<int, osg::ref_ptr<osg::CPseudoMaterial> > pMaterials;
         osg::ref_ptr<osg::CPseudoMaterial> pDefaultMaterial;
@@ -118,7 +146,10 @@ namespace osg
         osg::ref_ptr<osg::Vec3Array> pNormals;
         osg::ref_ptr<osg::Vec4Array> pColors;
         osg::ref_ptr<osg::Vec4Array> pVertexColors;
+        osg::ref_ptr<osg::Vec4Array> pVertexGroupIndices;
+        osg::ref_ptr<osg::Vec4Array> pVertexGroupWeights;
         osg::ref_ptr<osg::StateSet> pStateSet;
+        osg::ref_ptr<osg::MatrixTransform> pVisitorsSubTree;
 
         //! Is KD-tree build?
         bool m_bKDTreeUsed;

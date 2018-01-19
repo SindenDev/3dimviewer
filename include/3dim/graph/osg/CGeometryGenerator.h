@@ -352,6 +352,9 @@ public:
 	//! Default constructor
 	CSphereGeometry( unsigned int num_of_segments = 16 );
 
+    //! Destructor
+    virtual ~CSphereGeometry();
+
 	//! Modify geometry settings
 	void setRadius( float radius ){ m_radius = radius; }
 
@@ -418,8 +421,16 @@ public:
     //! Sets angular length of arrow part itself (in degrees)
     void setArrowLength(float arrowLength)
     {
-        m_arrowLength = arrowLength;
+        m_arrow1Length = arrowLength;
+		m_arrow2Length = arrowLength;
     }
+
+	//! Sets different angular length of each arrow part (in degrees)
+	void setDifferentArrowLengths(float arrow1Length, float arrow2Length)
+	{
+		m_arrow1Length = arrow1Length;
+		m_arrow2Length = arrow2Length;
+	}
 
     //! Setup geometry, or force updates
     void update();
@@ -434,7 +445,8 @@ protected:
     float m_angularLength;
     float m_angularOffset;
     float m_width;
-    float m_arrowLength;
+    float m_arrow1Length;
+	float m_arrow2Length;
 
     //! Geometry offset
     osg::Vec3 m_offset;
@@ -456,6 +468,35 @@ protected:
 
 }; // class CSemiCircularArrowGeometry
 
+class CCubeGeometry : public osg::Geometry
+{
+public:
+    //! Simple constructor (unit size is set)
+    CCubeGeometry();
+
+    //! Initializing constructor
+    CCubeGeometry(const osg::Vec3 &size);
+
+    //! Set size
+    void setSize(const osg::Vec3 &size);
+
+    //! Setup geometry, or force updates
+    void update();
+
+protected:
+    //! Allocate needed data
+    bool allocateArrays();
+
+protected:
+    //! Current cube size
+    osg::Vec3 m_size;
+
+    //! Ring geometry points
+    osg::ref_ptr<osg::Vec3Array> m_points;
+
+    //! Normals
+    osg::ref_ptr<osg::Vec3Array> m_normals;
+}; // class CCubeGeometry
 }
 
 // CGeometryGenerator_H_included

@@ -24,7 +24,7 @@
 
 #include <osgViewer/Viewer>
 #include <osgManipulator/Dragger>
-#include <osgQt/GraphicsWindowQt>
+#include <osgViewer/GraphicsWindow>
 #include <osg/Version>
 #include <osg/FrameBufferObject>
 
@@ -41,8 +41,6 @@
 
 #if (QT_VERSION >= QT_VERSION_CHECK(5, 0, 0))
     #include <QOpenGLWidget>    
-    #include <QGLWidget>
-    //#define BASEGLWidget     QGLWidget      
     #define BASEGLWidget     QOpenGLWidget          
 #else
     #include <QGLWidget>
@@ -50,66 +48,12 @@
 #endif
 
 
-///////////////////////////////////////////////////////////////////////////////
-// state which is able to save default frame buffer, because osg doesn't restore it ok
-// see http://forum.openscenegraph.org/viewtopic.php?t=15097
-
-class StateEx : public osg::State
-{
-public:
-    //! Constructor
-    StateEx() : defaultFbo(0)
-    {
-    }
-
-    void setDefaultFbo(GLuint fbo)
-    {
-        defaultFbo = fbo;
-    }
-    GLuint getDefaultFbo() const
-    {
-        return defaultFbo;
-    }
-
-protected:
-    GLuint defaultFbo;
-};
-
-// camera pre draw callback
-class BindFboPreDrawCallback : public osg::Camera::DrawCallback
-{
-protected:
-    osg::ref_ptr<osg::FrameBufferObject> _fbo;
-public:
-    BindFboPreDrawCallback(osg::FrameBufferObject* fbo) : _fbo(fbo) {}
-    virtual void operator () (osg::RenderInfo& renderInfo) const
-    {
-        if (NULL != _fbo)
-            _fbo->apply(*renderInfo.getState()); //bind FBO 
-    }
-};
-
 // camera post draw callback to correctly restore fbo (osg restores to zero)
 class UnBindFboPostDrawCallback : public osg::Camera::DrawCallback
 {
 public:
-    virtual void operator () (osg::RenderInfo& renderInfo) const
-    {
-        osg::State* pState = renderInfo.getState();
-#if OSG_VERSION_GREATER_OR_EQUAL(3,4,0)
-        osg::GLExtensions* ext = renderInfo.getState()->get<osg::GLExtensions>();
-        bool fbo_supported = ext && ext->isFrameBufferObjectSupported;
-        if (NULL != ext)
-            ext->glBindFramebuffer(GL_FRAMEBUFFER_EXT, ((StateEx*)(pState))->getDefaultFbo());
-#else
-        osg::FBOExtensions* fbo_ext = osg::FBOExtensions::instance(pState->getContextID(), true);
-        bool fbo_supported = fbo_ext && fbo_ext->isSupported();
-        if (NULL != fbo_ext)
-            fbo_ext->glBindFramebuffer(osg::FrameBufferObject::READ_DRAW_FRAMEBUFFER, ((StateEx*)(pState))->getDefaultFbo());
-#endif
-    }
+    virtual void operator () (osg::RenderInfo& renderInfo) const;
 };
-
 
 
 
@@ -146,14 +90,14 @@ public:
 
 // OSG Graphics Window for Qt - for multithreaded opengl, has known issues on AMD cards when screenshots are taken
 class QtOSGGraphicsWindowMT
-    : public osgQt::GraphicsWindowQt
+    : public osgViewer::GraphicsWindowEmbedded
     , public vpl::base::CLockableObject<QtOSGGraphicsWindowMT>
 {
 protected:
     BASEGLWidget *m_glCanvas;
 public:
     //! Constructor
-    QtOSGGraphicsWindowMT(GraphicsContext::Traits* traits, BASEGLWidget *widget);
+    QtOSGGraphicsWindowMT(osg::GraphicsContext::Traits* traits, BASEGLWidget *widget);
     //! Destructor
     ~QtOSGGraphicsWindowMT();
     //! initialization method
@@ -203,6 +147,10 @@ protected:
     int                 m_lastRenderingTime;
     //! Use antialiasing
     bool                m_bAntialiasing;
+    //! Initialized flag
+    bool                m_bInitialized;
+    //! Background color backup
+    osg::Vec4           m_bgColor;
 protected:
     virtual void        init(QWidget *parent, const osg::Vec4& bgColor);
     virtual void        initializeGL();
@@ -253,6 +201,9 @@ public:
 
     //! Set background color
     void                setBackgroundColor(const osg::Vec4 &color);
+
+    //! Get background color
+    const osg::Vec4&    getBackgroundColor() const;
 
     //! Render a screenshot into a file
     void screenShot( osg::Image * img, unsigned int maxSide = 0, bool bWantWidgets = true );

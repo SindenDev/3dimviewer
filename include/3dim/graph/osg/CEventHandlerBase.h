@@ -24,7 +24,7 @@
 #define EVENTHANDLERBASE_H_INCLUDED
 
 #include <osgGA/GUIEventHandler>
-#include <osg/OSGCanvas.h>
+class OSGCanvas;
 
 namespace scene
 {

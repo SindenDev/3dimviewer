@@ -136,13 +136,13 @@ void CDemoPlugin::connectPlugin()
     data::CObjectPtr<data::CRegionColoring> spColoring( PLUGIN_APP_STORAGE.getEntry( data::Storage::RegionColoring::Id ) );
     if( spColoring.get() )
     {
-        m_colorComboBox->objectChanged( spColoring.get() );
+        m_colorComboBox->updateFromColoring( spColoring.get() );
     }
     // Connect signal invoked on region change to the combo box
     PLUGIN_APP_STORAGE.connect(data::Storage::RegionColoring::Id, m_colorComboBox);
 
     // Register the plugin as region data observer to update m_actionShowRegions
-    PLUGIN_APP_STORAGE.connect(data::Storage::RegionData::Id, this);
+    CGeneralObjectObserver<CDemoPlugin>::connect(PLUGIN_APP_STORAGE.getEntry(data::Storage::RegionData::Id ).get());
 
     // Connect to mode change signal for state update of m_actionStroke and m_actionPolygon
     m_ConnectionModeChanged = getAppMode()->getModeChangedSignal().connect( this, &CDemoPlugin::sigModeChanged );
@@ -151,7 +151,7 @@ void CDemoPlugin::connectPlugin()
 void CDemoPlugin::disconnectPlugin()
 {
     getAppMode()->getModeChangedSignal().disconnect( m_ConnectionModeChanged );
-    PLUGIN_APP_STORAGE.disconnect(data::Storage::RegionData::Id, this);
+    CGeneralObjectObserver<CDemoPlugin>::disconnect(PLUGIN_APP_STORAGE.getEntry(data::Storage::RegionData::Id ).get());
     if (m_colorComboBox)
     {
         PLUGIN_APP_STORAGE.disconnect(data::Storage::RegionColoring::Id, m_colorComboBox);    
@@ -187,8 +187,10 @@ void CDemoPlugin::sigModeChanged( scene::CAppMode::tMode mode )
     }
 }
 
-void CDemoPlugin::objectChanged(data::CRegionData *pData)
+void CDemoPlugin::objectChanged(data::CStorageEntry *pEntry, const data::CChangedEntries& changes)
 {
+    data::CRegionData *pData = pEntry->getDataPtr<data::CObjectHolder<data::CRegionData> >()->getObjectPtr();
+
     m_actionShowRegions->blockSignals(true);
     m_actionShowRegions->setChecked(pData->isColoringEnabled());
     m_actionShowRegions->blockSignals(false);

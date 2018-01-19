@@ -29,6 +29,7 @@
 #include <osgManipulator/Dragger>
 #include <osgManipulator/Projector>
 #include <osgManipulator/Command>
+#include <osg/IHoverDragger.h>
 
 #include <osg/PolygonOffset>
 #include <osg/CTwoMaterialsNode.h>
@@ -40,7 +41,7 @@ namespace osgManipulator
 ///////////////////////////////////////////////////////////////////////////////
 //! Dragger for performing 2D rotation.
 
-class CRotate2DDragger : public osg::CTwoMaterialsNode< Dragger >
+class CRotate2DDragger : public osg::CTwoMaterialsNode< Dragger >, public IHoverDragger
 {
 public:
 	CRotate2DDragger();
@@ -58,6 +59,9 @@ public:
 
     //! Set dragging plane
     void setPlane( const osg::Plane & plane );
+
+    void onMouseEnter() override;
+    void onMouseLeave() override;
 
 protected:
 	//! Compute rotation from point1 to point2 around axis defined by plane (and on plane);

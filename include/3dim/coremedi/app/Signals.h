@@ -29,14 +29,24 @@
 #include <VPL/Module/GlobalSignal.h>
 
 #include "data/CDensityWindow.h"
-#include "data/CRegionColoring.h"
-#include "data/CModel.h"
 #include "data/CCoordinatesConv.h"
-#include "data/CUndoBase.h"
-#include "app/CMainThreadCallback.h"
+#include <data/CColorVector.h>
 
 #include <osg/Vec3f>
 
+namespace data
+{
+    class CSnapshot;
+    template <typename T> class CColoringFunc;
+    typedef CColoringFunc<unsigned char> CColoringFunc4b;
+}
+
+namespace geometry
+{
+    class CMesh;
+}
+
+class CMainThreadCallback;
 
 ///////////////////////////////////////////////////////////////////////////////
 // prototypes
@@ -101,11 +111,17 @@ VPL_DECLARE_SIGNAL_2(402, void, int, const data::CColor4f&, SigSetModelColor);
 VPL_DECLARE_SIGNAL_2(403, void, int, bool, SigSetModelVisibility);
 VPL_DECLARE_SIGNAL_1(404, data::CColor4f, int, SigGetModelColor);
 VPL_DECLARE_SIGNAL_1(405, bool, int, SigGetModelVisibility);
-VPL_DECLARE_SIGNAL_1(406, void, bool, SigTransparencyNeededChange);
+VPL_DECLARE_SIGNAL_2(406, void, int, int, SigTransparencyNeededChange);
 VPL_DECLARE_SIGNAL_1(407, void, int, SigSelectModel);
 VPL_DECLARE_SIGNAL_0(408, int, SigGetSelectedModelId);
 VPL_DECLARE_SIGNAL_1(409, bool, int, SigSaveModel);
 VPL_DECLARE_SIGNAL_0(410, int, GetSelectedModel);
+VPL_DECLARE_SIGNAL_1(411, void, int, SigRemoveModel);
+VPL_DECLARE_SIGNAL_1(412, void, int, SigModelRemoved);
+
+// transparency flags for SigTransparencyNeededChange
+#define TRANSPARENCY_NEEDED_MODELS         1
+#define TRANSPARENCY_NEEDED_GUIDE_WINDOWS  2
 
 // World position
 VPL_DECLARE_SIGNAL_0(501, osg::Vec3f, SigGetXYWorld);
@@ -137,8 +153,11 @@ VPL_DECLARE_SIGNAL_0(701, void, SigClearAllGizmos);
 
 // Undo signals
 VPL_DECLARE_SIGNAL_1(750, void, data::CSnapshot *, SigUndoSnapshot);
+
+//These do not cause undo/redo. They are invoked just before undo manager performs that action and restore is called.
 VPL_DECLARE_SIGNAL_1(751, void, int, SigUndo);
 VPL_DECLARE_SIGNAL_0(752, void, SigRedo);
+VPL_DECLARE_SIGNAL_0(753, void, SigClearUndoRedoQueues);
 
 // Segmented data coloring
 VPL_DECLARE_SIGNAL_1(802, void, bool, SigEnableRegionColoring);
@@ -155,11 +174,22 @@ VPL_DECLARE_SIGNAL_2(854, void, float, float, SigVRDataRemapChange);
 VPL_DECLARE_SIGNAL_1(855, void, bool, SigSurfaceMaskUsedChange);
 VPL_DECLARE_SIGNAL_1(860, void, bool, SigLowResRender);
 
+VPL_DECLARE_SIGNAL_1(880, void, osg::Vec3Array *, SigSendLineSceneCoordinates);
+
+// Notes plugin signal for PSVRenderer to set transform matrix to given value
+VPL_DECLARE_SIGNAL_2(890, void, osg::Matrix&, double, SigNewTransformMatrixFromNote);
+VPL_DECLARE_SIGNAL_0(891, void, SigRefreshNotesVisibility);
+
 // Surface definitions editing
 VPL_DECLARE_SIGNAL_1(900, void, int, SigSurfaceSelected);
 
-// Notes plugin signal for PSVRenderer to set transform matrix to given value
-VPL_DECLARE_SIGNAL_2(899, void, osg::Matrix&, double, SigNewTransformMatrixFromNote);
+// Orpedigs signal for enabling multiselection in the step for selecting examined bones
+VPL_DECLARE_SIGNAL_1(901, void, bool, SigModelsMultiSelectionEnabled);
+
+//Signal for xlab denture panel to open add tooth dialog..
+VPL_DECLARE_SIGNAL_0(902, void, SigShowXlabAddToothDialog);
+
+
 
 #endif // CoreMediSignals_H
 

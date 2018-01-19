@@ -71,15 +71,12 @@ bool CSmoothing::Smooth(geometry::CMesh &mesh, int loops)
     mesh.add_property(new_positions_prop);
 
     geometry::CMesh::VertexIter                         v_it, v_end(mesh.vertices_end());               // mesh vertex iterator and end iterator
-    geometry::CMesh::VertexVertexIter                   vv_it;                                          // vertex circulator
+    geometry::CMesh::VertexVertexIter                   vv_it;                                          // vertex circulator                       
+    geometry::CMesh::Point                              vertex_vector;                                  // vector from actual (center) point to actual adjacent vertex    
     geometry::CMesh::Point                              centr_point;                                    // position of actual (center) point
-    geometry::CMesh::Point                              vertex_vector;                                  // vector from actual (center) point to actual adjacent vertex
 
-    double                                          vertex_vector_length;                           // distance of actual vertex and adjacent actual vertex
-    double                                          distance_weight;                                // actual adjacent distance weight
-    double                                          normalisation_weight;                           // vertex normalisation weight, sum of adjacent vertices weight
-    double                                          smooth_factor;                                  // used smoothing factor
-
+    double                                              smooth_factor;                                  // used smoothing factor
+    bool                                                result = true;
 
     // smoothing iterations cycle
     for (int i = 0; i < loops; ++i)
@@ -94,7 +91,9 @@ bool CSmoothing::Smooth(geometry::CMesh &mesh, int loops)
             for (v_it = mesh.vertices_begin(); v_it != v_end; ++v_it)
             {      
                 mesh.property(new_positions_prop, v_it).vectorize(0.0f);
-                normalisation_weight = 0.0;
+                // vertex normalisation weight, sum of adjacent vertices weight
+                double normalisation_weight = 0.0;
+                // position of actual (center) point
                 centr_point = mesh.point(v_it);
       
                 // ring of vertices around actual vertex cycle
@@ -102,18 +101,30 @@ bool CSmoothing::Smooth(geometry::CMesh &mesh, int loops)
                 {
                     // adjacent vertex vector calculation
                     vertex_vector = mesh.point(vv_it) - centr_point;
-                    // adjacent vertex vector length
-                    vertex_vector_length = vertex_vector.length();
-                     // distance weight calculation
-                    distance_weight = exp((vertex_vector_length * vertex_vector_length) / (-2.0 * m_squared_smooth_factor));
-                    normalisation_weight += distance_weight;
-                    // adjacent vertex position cumulation
-                    mesh.property(new_positions_prop, v_it) += (vertex_vector * distance_weight);
+                    // squared distance of actual vertex and adjacent actual vertex
+                    double vertex_vector_length_2 = vertex_vector.sqrnorm(); 
+                    // distance weight calculation
+                    double distance_weight = exp((vertex_vector_length_2) / (-2.0 * m_squared_smooth_factor));
+                    if (distance_weight != distance_weight)
+                    {
+                        // nan
+                    }
+                    else
+                    {
+                        normalisation_weight += distance_weight;
+                        // adjacent vertex position cumulation
+                        mesh.property(new_positions_prop, v_it) += (vertex_vector * distance_weight);
+                    }
                 }
 
                 // actual vertex new position weighting
-                mesh.property(new_positions_prop, v_it) *= (smooth_factor / normalisation_weight);
-                mesh.property(new_positions_prop, v_it) += centr_point;
+                if (fabs(normalisation_weight)>0.000001) // very low numbers produce nan
+                {
+                    mesh.property(new_positions_prop, v_it) *= (smooth_factor / normalisation_weight);
+                    mesh.property(new_positions_prop, v_it) += centr_point;
+                }
+                else
+                    mesh.property(new_positions_prop, v_it) = centr_point;
             }
     
             // mesh vertices cycle to realise smoothing step
@@ -132,10 +143,8 @@ bool CSmoothing::Smooth(geometry::CMesh &mesh, int loops)
         // set progress value and test function termination
         if (!progress())
         {
-            // free mesh custom property - new vertex position
-            mesh.remove_property(new_positions_prop);
-            // function break
-            return false;
+            result = false;
+            break;
         }
     }
 
@@ -146,5 +155,5 @@ bool CSmoothing::Smooth(geometry::CMesh &mesh, int loops)
     endProgress();
 
     // OK
-    return true;
+    return result;
 }

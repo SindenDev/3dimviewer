@@ -31,7 +31,6 @@
 #include <VPL/System/String.h>
 
 // STL
-#include <string>
 #include <set>
 
 

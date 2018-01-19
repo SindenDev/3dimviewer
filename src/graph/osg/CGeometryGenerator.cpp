@@ -120,12 +120,7 @@ void osg::CDonutGeometry::update()
     this->removePrimitiveSet(0, num);
 
      //Finalize geometry settings
-#if OSG_VERSION_GREATER_OR_EQUAL(3,1,10)
     this->setNormalArray(m_normals, osg::Array::BIND_PER_VERTEX);
-#else
-    this->setNormalArray(m_normals);
-#endif
-    this->setNormalBinding(osg::Geometry::BIND_PER_VERTEX);
     this->setVertexArray(m_points);
 
     for (unsigned i = 0; i < m_num_segments2; ++i)
@@ -235,12 +230,7 @@ void osg::CRingGeometry::update()
 
 	// Set all to the geometry
 	this->setVertexArray( m_points );
-#if OSG_VERSION_GREATER_OR_EQUAL(3,1,10)
 	this->setNormalArray( m_normals, osg::Array::BIND_OVERALL );
-#else
-	this->setNormalArray( m_normals );
-#endif
-	this->setNormalBinding( osg::Geometry::BIND_OVERALL);
 	this->addPrimitiveSet( m_drawElements );
 //	this->setColorArray( m_colors );
 //	this->setColorBinding( osg::Geometry::BIND_OVERALL );
@@ -434,12 +424,7 @@ void osg::CFrustrumGeometry::update()
 	this->removePrimitiveSet(0, num );
 
 	// Finalize geometry settings
-#if OSG_VERSION_GREATER_OR_EQUAL(3,1,10)
 	this->setNormalArray( m_normals, osg::Array::BIND_PER_VERTEX );
-#else
-	this->setNormalArray( m_normals );
-#endif
-	this->setNormalBinding( osg::Geometry::BIND_PER_VERTEX );
 	this->setVertexArray( m_points );
 	
 	// Add caps only if wanted
@@ -606,12 +591,7 @@ void osg::CRing3DGeometry::update()
 	this->removePrimitiveSet(0, num );
 
 	// Finalize geometry settings
-#if OSG_VERSION_GREATER_OR_EQUAL(3,1,10)
 	this->setNormalArray( m_normals, osg::Array::BIND_PER_VERTEX );
-#else
-	this->setNormalArray( m_normals );
-#endif
-	this->setNormalBinding( osg::Geometry::BIND_PER_VERTEX );
 	this->setVertexArray( m_points );
 
 	this->addPrimitiveSet( m_de_cap1 );
@@ -756,12 +736,7 @@ void osg::CPill2DGeometry::update()
     removePrimitiveSet(0, getNumPrimitiveSets());
 
     // Finalize geometry settings
-#if OSG_VERSION_GREATER_OR_EQUAL(3,1,10)
     setNormalArray(m_normals, osg::Array::BIND_PER_VERTEX);
-#else
-    setNormalArray(m_normals);
-#endif
-    setNormalBinding(osg::Geometry::BIND_PER_VERTEX);
     setVertexArray(m_points);
 
     addPrimitiveSet(m_de_cap1);
@@ -781,6 +756,13 @@ osg::CSphereGeometry::CSphereGeometry( unsigned int num_of_segments /*= 16 */ )
 {
     setName("CSphereGeometry");
 	allocateArrays( num_of_segments );
+}
+
+osg::CSphereGeometry::~CSphereGeometry()
+{
+    if (m_de_array != 0)
+        delete[] m_de_array;
+    m_de_array = nullptr;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -819,6 +801,7 @@ bool osg::CSphereGeometry::allocateArrays( unsigned int num_segments )
 
 		// Allocate colors array
 		m_colors = new osg::Vec4Array( 1 );
+        (*m_colors)[0] = osg::Vec4(1.0, 1.0, 1.0, 1.0);
 
 	}
 	catch( std::bad_alloc &  )
@@ -884,12 +867,10 @@ void osg::CSphereGeometry::update()
 	}
 
 	this->setVertexArray( m_points );
-#if OSG_VERSION_GREATER_OR_EQUAL(3,1,10)
 	this->setNormalArray( m_normals, osg::Array::BIND_PER_VERTEX );
-#else
-	this->setNormalArray( m_normals );
-#endif
-	this->setNormalBinding( osg::Geometry::BIND_PER_VERTEX );
+
+//     this->setColorArray(m_colors);
+//     this->setColorBinding(osg::Geometry::BIND_OVERALL);
 
 	// Remove all previous primitive sets
 	unsigned int num( this->getNumPrimitiveSets() );
@@ -918,7 +899,8 @@ osg::CSemiCircularArrowGeometry::CSemiCircularArrowGeometry(unsigned int num_of_
     , m_angularLength(45.0)
     , m_angularOffset(0.0)
     , m_width(0.1)
-    , m_arrowLength(5.0)
+    , m_arrow1Length(5.0)
+	, m_arrow2Length(5.0)
     , m_num_segments(0)
     , m_offset(0.0, 0.0, 0.0)
 {
@@ -1032,10 +1014,11 @@ void osg::CSemiCircularArrowGeometry::update()
         (*m_normals)[v + 7 * (m_num_segments + 1)] = n3;
     }
 
+	if (m_arrow1Length > 0.0)
     {
         int indexOffset = 8 * (m_num_segments + 1);
         float angle0 = m_angularOffset + 90.0 - m_angularLength * 0.5;
-        float angle1 = m_angularOffset + 90.0 - m_angularLength * 0.5 - m_arrowLength;
+        float angle1 = m_angularOffset + 90.0 - m_angularLength * 0.5 - m_arrow1Length;
         osg::Vec2 vec0 = osg::Vec2(std::cos(osg::DegreesToRadians(angle0)), std::sin(osg::DegreesToRadians(angle0)));
         osg::Vec2 vec1 = osg::Vec2(std::cos(osg::DegreesToRadians(angle1)), std::sin(osg::DegreesToRadians(angle1)));
 
@@ -1113,25 +1096,26 @@ void osg::CSemiCircularArrowGeometry::update()
         (*m_normals)[indexOffset + 17] = n4;
     }
 
+	if (m_arrow2Length > 0.0)
     {
         int indexOffset = 8 * (m_num_segments + 1) + 18;
         float angle0 = m_angularOffset + 90.0 + m_angularLength * 0.5;
-        float angle1 = m_angularOffset + 90.0 + m_angularLength * 0.5 + m_arrowLength;
+        float angle1 = m_angularOffset + 90.0 + m_angularLength * 0.5 + m_arrow2Length;
         osg::Vec2 vec0 = osg::Vec2(std::cos(osg::DegreesToRadians(angle0)), std::sin(osg::DegreesToRadians(angle0)));
         osg::Vec2 vec1 = osg::Vec2(std::cos(osg::DegreesToRadians(angle1)), std::sin(osg::DegreesToRadians(angle1)));
 
-        osg::Vec3 v0 = osg::Vec3(vec0 * (m_radius - m_width * 1.5), 0.1);
-        osg::Vec3 v1 = osg::Vec3(vec0 * (m_radius + m_width * 1.5), 0.1);
-        osg::Vec3 v2 = osg::Vec3(vec1 * (m_radius + m_width * 0.0), 0.1);
-        osg::Vec3 v3 = osg::Vec3(vec0 * (m_radius - m_width * 1.5), -0.1);
-        osg::Vec3 v4 = osg::Vec3(vec0 * (m_radius + m_width * 1.5), -0.1);
-        osg::Vec3 v5 = osg::Vec3(vec1 * (m_radius + m_width * 0.0), -0.1);
+        osg::Vec3 v0 = osg::Vec3(vec0 * (m_radius - m_width * 1.5f),  0.1f);
+        osg::Vec3 v1 = osg::Vec3(vec0 * (m_radius + m_width * 1.5f),  0.1f);
+        osg::Vec3 v2 = osg::Vec3(vec1 * (m_radius + m_width * 0.0f),  0.1f);
+        osg::Vec3 v3 = osg::Vec3(vec0 * (m_radius - m_width * 1.5f), -0.1f);
+        osg::Vec3 v4 = osg::Vec3(vec0 * (m_radius + m_width * 1.5f), -0.1f);
+        osg::Vec3 v5 = osg::Vec3(vec1 * (m_radius + m_width * 0.0f), -0.1f);
 
         osg::Vec3 n0 = osg::Vec3(0.0, 0.0, 1.0);
         osg::Vec3 n1 = osg::Vec3(0.0, 0.0, -1.0);
-        osg::Vec3 n2 = v1 - v0; n2.normalize(); n2 = osg::Vec3(n2.y(), -n2.x(), 0.0);
-        osg::Vec3 n3 = v2 - v1; n3.normalize(); n3 = osg::Vec3(n3.y(), -n3.x(), 0.0);
-        osg::Vec3 n4 = v0 - v2; n4.normalize(); n4 = osg::Vec3(n4.y(), -n4.x(), 0.0);
+        osg::Vec3 n2 = v1 - v0; n2.normalize(); n2 = osg::Vec3(n2.y(), -n2.x(), 0.0f);
+        osg::Vec3 n3 = v2 - v1; n3.normalize(); n3 = osg::Vec3(n3.y(), -n3.x(), 0.0f);
+        osg::Vec3 n4 = v0 - v2; n4.normalize(); n4 = osg::Vec3(n4.y(), -n4.x(), 0.0f);
 
         v0 = geometry::swizzle(v0, "xzy");
         v1 = geometry::swizzle(v1, "xzy");
@@ -1278,14 +1262,153 @@ void osg::CSemiCircularArrowGeometry::update()
     }
 
     setVertexArray(m_points);
-#if OSG_VERSION_GREATER_OR_EQUAL(3,1,10)
     setNormalArray(m_normals, osg::Array::BIND_PER_VERTEX);
-#else
-    setNormalArray(m_normals);
-#endif
-    setNormalBinding(osg::Geometry::BIND_PER_VERTEX);
 
     // Remove all previous primitive sets
     removePrimitiveSet(0, getNumPrimitiveSets());
     addPrimitiveSet(m_drawElements);
+}
+
+/************************************************************************/
+/* CLASS    CCubeGeometry                                               */
+/************************************************************************/
+
+/**
+ * \fn  osg::CCubeGeometry::CCubeGeometry()
+ *
+ * \brief   Default constructor.
+ */
+
+osg::CCubeGeometry::CCubeGeometry()
+    : m_size(1.0, 1.0, 1.0)
+{
+    allocateArrays();
+    update();
+}
+
+/**
+ * \fn  osg::CCubeGeometry::CCubeGeometry(const osg::Vec3 &size)
+ *
+ * \brief   Initializing constructor.
+ *
+ * \param   size    The size.
+ */
+
+osg::CCubeGeometry::CCubeGeometry(const osg::Vec3 &size)
+    : m_size(size)
+{
+    allocateArrays();
+    update();
+}
+
+/**
+ * \fn  void osg::CCubeGeometry::setSize(const osg::Vec3 &size)
+ *
+ * \brief   Sets a cube size.
+ *
+ * \param   size    The size.
+ */
+
+void osg::CCubeGeometry::setSize(const osg::Vec3 &size)
+{
+    m_size = size;
+}
+
+/**
+ * \fn  void osg::CCubeGeometry::update()
+ *
+ * \brief   Updates geometry - sets cube sizes.
+ */
+
+void osg::CCubeGeometry::update()
+{
+    float hx(m_size[0] * 0.5), hy(m_size[1] * 0.5), hz(m_size[2] * 0.5);
+
+    (*m_points)[0].set(-hx,  hy, -hz);
+    (*m_points)[1].set( hx,  hy, -hz);
+    (*m_points)[2].set( hx, -hy, -hz);
+    (*m_points)[3].set(-hx, -hy, -hz);
+
+    (*m_points)[4].set(hx,  hy, -hz);
+    (*m_points)[5].set(hx,  hy,  hz);
+    (*m_points)[6].set(hx, -hy,  hz);
+    (*m_points)[7].set(hx, -hy, -hz);
+
+    (*m_points)[8].set(  hx,  hy, hz);
+    (*m_points)[9].set( -hx,  hy, hz);
+    (*m_points)[10].set(-hx, -hy, hz);
+    (*m_points)[11].set( hx, -hy, hz);
+
+    (*m_points)[12].set(-hx,  hy,  hz);
+    (*m_points)[13].set(-hx,  hy, -hz);
+    (*m_points)[14].set(-hx, -hy, -hz);
+    (*m_points)[15].set(-hx, -hy,  hz);
+
+    (*m_points)[16].set(-hx, hy,  hz);
+    (*m_points)[17].set( hx, hy,  hz);
+    (*m_points)[18].set( hx, hy, -hz);
+    (*m_points)[19].set(-hx, hy, -hz);
+
+    (*m_points)[20].set(-hx, -hy,  hz);
+    (*m_points)[21].set(-hx, -hy, -hz);
+    (*m_points)[22].set( hx, -hy, -hz);
+    (*m_points)[23].set( hx, -hy,  hz);
+}
+
+bool osg::CCubeGeometry::allocateArrays()
+{
+    // set up coords.
+    m_points = new osg::Vec3Array;
+    m_points->resize(24);
+  
+    (*m_points)[0].set( -1.0000f,   1.0000f,  -1.000f );
+    (*m_points)[1].set( 1.0000f,   1.0000f,  -1.0000f );
+    (*m_points)[2].set( 1.0000f,  -1.0000f,  -1.0000f );
+    (*m_points)[3].set( -1.0000f,  -1.0000f,  -1.000 );
+
+    (*m_points)[4].set( 1.0000f,   1.0000f,  -1.0000f );
+    (*m_points)[5].set( 1.0000f,   1.0000f,   1.0000f );
+    (*m_points)[6].set( 1.0000f,  -1.0000f,   1.0000f );
+    (*m_points)[7].set( 1.0000f,  -1.0000f,  -1.0000f );
+
+    (*m_points)[8].set( 1.0000f,   1.0000f,   1.0000f );
+    (*m_points)[9].set( -1.0000f,   1.0000f,   1.000f );
+    (*m_points)[10].set( -1.0000f,  -1.0000f,   1.000f );
+    (*m_points)[11].set( 1.0000f,  -1.0000f,   1.0000f );
+
+    (*m_points)[12].set( -1.0000f,   1.0000f,   1.000 );
+    (*m_points)[13].set( -1.0000f,   1.0000f,  -1.000 );
+    (*m_points)[14].set( -1.0000f,  -1.0000f,  -1.000 );
+    (*m_points)[15].set( -1.0000f,  -1.0000f,   1.000 );
+
+    (*m_points)[16].set( -1.0000f,   1.0000f,   1.000 );
+    (*m_points)[17].set( 1.0000f,   1.0000f,   1.0000f );
+    (*m_points)[18].set( 1.0000f,   1.0000f,  -1.0000f );
+    (*m_points)[19].set( -1.0000f,   1.0000f,  -1.000f );
+
+    (*m_points)[20].set( -1.0000f,  -1.0000f,   1.000f );
+    (*m_points)[21].set( -1.0000f,  -1.0000f,  -1.000f );
+    (*m_points)[22].set( 1.0000f,  -1.0000f,  -1.0000f );
+    (*m_points)[23].set( 1.0000f,  -1.0000f,   1.0000f );
+
+
+    this->setVertexArray( m_points );
+
+    for (int i = 0; i < 6; ++i)
+        this->addPrimitiveSet(new osg::DrawArrays(osg::PrimitiveSet::QUADS, i * 4, 4));
+  
+  
+    // set up the normals.
+    osg::Vec3Array* m_normals = new osg::Vec3Array;
+    m_normals->resize(6);
+  
+    (*m_normals)[0].set(0.0f,0.0f,-1.0f);
+    (*m_normals)[1].set(1.0f,0.0f,0.0f);
+    (*m_normals)[2].set(0.0f,0.0f,1.0f);
+    (*m_normals)[3].set(-1.0f,0.0f,0.0f);
+    (*m_normals)[4].set(0.0f,1.0f,0.0f);
+    (*m_normals)[5].set(0.0f,-1.0f,0.0f);
+  
+	setNormalArray( m_normals, osg::Array::BIND_PER_PRIMITIVE_SET );
+    return true;
 }

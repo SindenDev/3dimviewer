@@ -25,7 +25,6 @@
 #include <coremedi/app/Signals.h>
 #include <data/CModelCut.h>
 #include <data/COrthoSlice.h>
-#include <osg/dbout.h>
 
 namespace data
 {
@@ -36,6 +35,7 @@ namespace data
 CModelManager::CModelManager()
     : CStorageInterface(APP_STORAGE)
     , m_selectedModel(-1)
+    , m_multiSelectionEnabled(false)
 {
     // Initialize the dummy model
     m_DummyModel.setMesh(new geometry::CMesh);
@@ -49,6 +49,8 @@ CModelManager::CModelManager()
     VPL_SIGNAL(SigGetModelVisibility).connect(this, &CModelManager::isModelShown);
     VPL_SIGNAL(SigSelectModel).connect(this, &CModelManager::selectModel);
 	VPL_SIGNAL(GetSelectedModel).connect(this, &CModelManager::getSelectedModel);
+    VPL_SIGNAL(SigModelsMultiSelectionEnabled).connect(this, &CModelManager::setMultiSelectionEnabled);
+    VPL_SIGNAL(SigRemoveModel).connect(this, &CModelManager::removeModel);
 
     // Initialize the manager
     CModelManager::init();
@@ -170,6 +172,8 @@ void CModelManager::removeModel(int id)
 
     spModel->init();
     APP_STORAGE.invalidate(spModel.getEntryPtr());
+
+    VPL_SIGNAL(SigModelRemoved).invoke(id);
 }
 
 // Selects model
@@ -180,14 +184,32 @@ void CModelManager::selectModel(int id)
         id = -1;
     }
 
+    // if it was clicked on already selected model - deselect it
+    if (id != -1 && m_multiSelectionEnabled)
+    {
+        data::CObjectPtr<data::CModel> spCurrModel(APP_STORAGE.getEntry(id, data::Storage::NO_UPDATE));
+
+        if (spCurrModel->isSelected())
+        {
+            spCurrModel->deselect();
+            spCurrModel->setExamined(false);
+            APP_STORAGE.invalidate(spCurrModel.getEntryPtr(), CModel::SELECTION_CHANGED);
+            m_selectedModel = -1;
+            return;
+        }
+    }
+
     if (m_selectedModel != id)
     {
-        // deselect current
-        if (m_selectedModel != -1)
+        if (!m_multiSelectionEnabled)
         {
-            data::CObjectPtr<data::CModel> spPrevModel(APP_STORAGE.getEntry(m_selectedModel, data::Storage::NO_UPDATE));
-            spPrevModel->deselect();
-            APP_STORAGE.invalidate(spPrevModel.getEntryPtr(), CModel::SELECTION_CHANGED);
+            // deselect current
+            if (m_selectedModel != -1)
+            {
+                data::CObjectPtr<data::CModel> spPrevModel(APP_STORAGE.getEntry(m_selectedModel, data::Storage::NO_UPDATE));
+                spPrevModel->deselect();
+                APP_STORAGE.invalidate(spPrevModel.getEntryPtr(), CModel::SELECTION_CHANGED);
+            }
         }
 
         m_selectedModel = id;
@@ -201,13 +223,17 @@ void CModelManager::selectModel(int id)
         // select new
         data::CObjectPtr<data::CModel> spCurrModel(APP_STORAGE.getEntry(m_selectedModel, data::Storage::NO_UPDATE));
 
-		if (!spCurrModel->isShown())
+		if (!spCurrModel->isVisible())
 		{
 			m_selectedModel = -1;
 			return;
 		}
 
         spCurrModel->select();
+
+        if (m_multiSelectionEnabled)
+            spCurrModel->setExamined(true);
+
         APP_STORAGE.invalidate(spCurrModel.getEntryPtr(), CModel::SELECTION_CHANGED);
     }
 }
@@ -225,13 +251,13 @@ void CModelManager::setModelVisibility(int id, bool bVisible)
     
     if( bVisible )
     {
-		if (spModel->isShown())
+		if (spModel->isVisible())
 			return;
         spModel->show();
     }
     else
     {
-		if (!spModel->isShown())
+		if (!spModel->isVisible())
 			return;
         spModel->hide();
     }
@@ -252,12 +278,16 @@ void CModelManager::setModelColor2(int id, const CColor4f& Color)
     }
     
     CObjectPtr<CModel> spModel( APP_STORAGE.getEntry(id, Storage::NO_UPDATE) );
-    
-    spModel->setColor(Color);
-    
-    APP_STORAGE.invalidate(spModel.getEntryPtr(), data::CModel::COLORING_CHANGED);
-
-    resolveTransparency();
+    const CColor4f& prev = spModel->getColor();
+    if (prev.getR() != Color.getR() ||
+        prev.getG() != Color.getG() ||
+        prev.getB() != Color.getB() ||
+        prev.getA() != Color.getA())
+    {
+        spModel->setColor(Color);
+        APP_STORAGE.invalidate(spModel.getEntryPtr(), data::CModel::COLORING_CHANGED);
+        resolveTransparency();
+    }    
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -270,7 +300,7 @@ void CModelManager::resolveTransparency()
 
     if (prev != m_transparencyNeeded)
     {
-        VPL_SIGNAL(SigTransparencyNeededChange).invoke(m_transparencyNeeded);
+        VPL_SIGNAL(SigTransparencyNeededChange).invoke(m_transparencyNeeded?TRANSPARENCY_NEEDED_MODELS:0,TRANSPARENCY_NEEDED_MODELS);
     }
 }
 
@@ -316,7 +346,7 @@ bool CModelManager::isModelShown(int id)
     
     CObjectPtr<CModel> spModel( APP_STORAGE.getEntry(id, Storage::NO_UPDATE) );
     
-    return spModel->isShown();
+    return spModel->isVisible();
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -383,15 +413,30 @@ void CModelManager::restore( CSnapshot * snapshot )
     CModelSnapshot * s = dynamic_cast< CModelSnapshot * >( snapshot );
     assert( s != NULL );
     // copy models
-    for( int i = 0; i < MAX_MODELS; ++i )
-    {
+    for( auto it = s->m_modelMap.begin(); it != s->m_modelMap.end(); ++it )
+    {        
         // try to get model from the storage
-        data::CObjectPtr<data::CModel> ptrModel( APP_STORAGE.getEntry( data::Storage::BonesModel::Id + i ) );
+        data::CObjectPtr<data::CModel> ptrModel( APP_STORAGE.getEntry( it->first) );
+        // check current model state
+        const geometry::CMesh* pMesh = ptrModel->getMesh();
+        bool bMeshWasValid = pMesh && pMesh->n_vertices() > 0;   
         // update from snapshot
-        *ptrModel = s->m_modelArray[ i ];
-        // invalidate
-        APP_STORAGE.invalidate( ptrModel.getEntryPtr() );
+        *ptrModel = it->second;
+        //deselect models
+        ptrModel->deselect();
+        // check new model state
+        pMesh = ptrModel->getMesh();
+        bool bMeshIsValid = pMesh && pMesh->n_vertices() > 0;
+        // invalidate if mesh was valid before or is valid now 
+        // this check can provide some performance gain (ignore changes on unused models)
+        if (bMeshWasValid || bMeshIsValid)
+        {            
+            APP_STORAGE.invalidate( ptrModel.getEntryPtr() );
+        }
     }
+    resolveTransparency();
+    //all models are deselected 
+    VPL_SIGNAL(SigSelectModel).invoke(-1);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -400,28 +445,72 @@ CSnapshot *CModelManager::getSnapshot( CSnapshot * snapshot )
 {
     // new snapshot
     CModelSnapshot * s = new CModelSnapshot( this );
-
-    // copy model array
-    for( int i = 0; i < MAX_MODELS; ++i )
+    // old snapshot
+    CModelSnapshot * sOld = dynamic_cast<CModelSnapshot*>(snapshot);
+    // deduce model list from the old snapshot
+    if (NULL!=sOld && !sOld->m_modelMap.empty())
+    {        
+        // retrieve list of old snapshot models and create a new snapshot of these only
+        for(auto it = sOld->m_modelMap.begin(); it != sOld->m_modelMap.end(); ++it) 
+        {
+            int id = it->first;            
+            data::CObjectPtr<data::CModel> ptrModel( APP_STORAGE.getEntry( id ) );
+            s->m_modelMap[ id ] = *ptrModel;
+        }
+        // note: we don't have to care about chained snapshots (ones with the mesh),
+        // because these are handled by CUndoManager::processSnapshot
+    }
+    else // make snapshot of all models
     {
-        // try to get model from the storage
-        data::CObjectPtr<data::CModel> ptrModel( APP_STORAGE.getEntry( data::Storage::BonesModel::Id + i ) );
-        s->m_modelArray[ i ] = *ptrModel;
+        // copy model array
+        for( int i = 0; i < MAX_MODELS; ++i )
+        {
+            // try to get model from the storage
+            data::CObjectPtr<data::CModel> ptrModel( APP_STORAGE.getEntry( data::Storage::BonesModel::Id + i ) );
+            s->m_modelMap[ data::Storage::BonesModel::Id +i ] = *ptrModel;
+        }
     }
     return s;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+// Get new snapshot from the od one.
+
+CSnapshot * CModelManager::getSnapshot( CSnapshot * snapshot, std::vector<int> modelList, bool bIncludeMesh )
+{
+    if (modelList.empty())
+    {
+        assert(!bIncludeMesh); // this would be too slow and memory demanding
+        return getSnapshot(snapshot);
+    }
+
+    // new snapshot
+    CModelSnapshot * s = new CModelSnapshot( this );
+
+    // copy model array
+    for( int i = 0; i < modelList.size(); ++i )
+    {
+        // try to get model from the storage
+        data::CObjectPtr<data::CModel> ptrModel( APP_STORAGE.getEntry( modelList[i] ) );
+        s->m_modelMap[ modelList[i] ] = *ptrModel;
+        if (bIncludeMesh)
+            s->addSnapshot(ptrModel->getSnapshot(NULL));
+    }
+
+    return s;
+}
+
+///////////////////////////////////////////////////////////////////////////////
 //
-void CModelManager::createAndStoreSnapshot(CSnapshot *childSnapshot)
+void CModelManager::createAndStoreSnapshot(std::vector<int> modelIDs, bool bIncludeMesh, CSnapshot *childSnapshot)
 {
     if (childSnapshot == NULL)
     {
-        VPL_SIGNAL(SigUndoSnapshot).invoke(this->getSnapshot(NULL));
+        VPL_SIGNAL(SigUndoSnapshot).invoke(this->getSnapshot(NULL,modelIDs,bIncludeMesh));
     }
     else
     {
-        CSnapshot *snapshot = this->getSnapshot(NULL);
+        CSnapshot *snapshot = this->getSnapshot(NULL,modelIDs,bIncludeMesh);
         snapshot->addSnapshot(childSnapshot);
         VPL_SIGNAL(SigUndoSnapshot).invoke(snapshot);
     }
@@ -516,7 +605,7 @@ void CModelManager::updateModelLinks()
 
 void CModelManager::writeLinks()
 {
-	DBOUT("--- Models:");
+//	DBOUT("--- Models:");
 	// For all models
 	for (int id = Storage::BonesModel::Id; id < Storage::ImportedModel::Id + MAX_IMPORTED_MODELS; ++id)
 	{
@@ -532,7 +621,7 @@ void CModelManager::writeLinks()
 		base_ref = spModel->getProperty("base_model_ref");
 		model_uid = spModel->getProperty("model_uid");
 
-		DBOUT("ID: " << model_uid.c_str() << "\t base: " << base_ref.c_str());
+//		DBOUT("ID: " << model_uid.c_str() << "\t base: " << base_ref.c_str());
 
 	}
 }
@@ -553,6 +642,58 @@ std::string CModelManager::getBaseModel(int storage_id)
 
 	data::CObjectPtr<data::CModel> spUsedModel(APP_STORAGE.getEntry(storage_id));
 	return spUsedModel->getProperty("base_model_ref");
+}
+
+/**
+ * \fn  int CModelManager::getBaseModelId(int model_id)
+ *
+ * \brief   Gets base model identifier.
+ *
+ * \param   model_id    Identifier for the model.
+ *
+ * \return  The base model identifier.
+ */
+
+int CModelManager::getBaseModelId(int model_id)
+{
+    // If currently selected model is not valid
+    if (!validModelId(model_id))
+        return -1;
+
+    // Get current model
+    data::CObjectPtr<data::CModel>  spCurrent(APP_STORAGE.getEntry(model_id));
+
+    // Get references
+    const std::string base_model_ref(spCurrent->getProperty("base_model_ref"));
+    const std::string model_uid(spCurrent->getProperty("model_uid"));
+    const std::string model_type(spCurrent->getProperty("model_type"));
+
+    if (model_uid.compare(base_model_ref) == 0)
+        return model_id;
+
+    if (0 == model_type.compare("inverted")) // create guide from the inverted model, not the base one
+        return model_id;
+
+    if (!base_model_ref.empty())
+    {
+        // Try to find base model
+        for (int i = data::Storage::BonesModel::Id; i < data::Storage::BonesModel::Id + MAX_MODELS; ++i)
+        {
+            if (i == model_id)
+                continue;
+
+            // Get model
+            data::CObjectPtr<data::CModel>  spTested(APP_STORAGE.getEntry(i));
+
+            if (spTested->getProperty("model_uid").compare(base_model_ref) == 0)
+            {
+                return i;
+            }
+        }
+    }
+
+    // Something wrong has happen. Model was probably deleted
+    return -1;
 }
 
 /**
@@ -614,6 +755,26 @@ std::string CModelManager::storageIdToUId(int storage_id)
 
 	CObjectPtr<data::CModel> spModel(APP_STORAGE.getEntry(storage_id));
 	return spModel->getProperty("base_model_ref");
+}
+
+/**
+ * \fn  bool CModelManager::isBaseModel(int storage_id)
+ *
+ * \brief   Query if 'storage_id' is base model.
+ *
+ * \param   storage_id  Identifier for the storage.
+ *
+ * \return  true if base model, false if not.
+ */
+
+bool CModelManager::isBaseModel(int storage_id)
+{
+    return storage_id == getBaseModelId(storage_id);
+}
+
+void CModelManager::setMultiSelectionEnabled(bool enabled)
+{
+    m_multiSelectionEnabled = enabled;
 }
 
 } // namespace data

@@ -35,6 +35,7 @@
 #include <QTime>
 
 class CEventFilter;
+class QMainWindow;
 
 class IHasEventFilter
 {
@@ -49,7 +50,7 @@ class CEventFilter: public QObject
 
 public:
 	//! Constructor
-	CEventFilter();
+	CEventFilter(QMainWindow *pMainWindow);
 
 	//! Destructor
     ~CEventFilter();
@@ -67,6 +68,10 @@ public:
     //! Log to a new file
     void startNewLogFile()
     {
+		stop();
+		start();
+		return;
+
         if (m_state)
             start();
         else
@@ -169,6 +174,8 @@ private:
 	};
 
 // variables
+    //! Pointer to application main window
+    QMainWindow *m_pMainWindow;
 
 	//! Mouse event filtering on/off
     bool m_mouseEnabled;

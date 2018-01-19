@@ -113,12 +113,22 @@ CPreviewDialog::CPreviewDialog(QWidget *parent, const QString& title, CPreviewDi
 	connect(ui->doubleSpinBoxParam2, SIGNAL(valueChanged(double)), this, SLOT(doubleSpinBoxParam2Changed(double)));
 	connect(ui->doubleSpinBoxParam3, SIGNAL(valueChanged(double)), this, SLOT(doubleSpinBoxParam3Changed(double)));
 
-	//QTimer::singleShot(0, this, SLOT(loadCurrentSlice()));
-	//loadCurrentSlice(); // this should resize the images, but for some reason it doesn't work
+    QSettings settings;
+    settings.beginGroup("PreviewDialog");
+    resize(settings.value("size",size()).toSize());
+    settings.endGroup(); 
+
+    QTimer::singleShot(0, this, SLOT(loadCurrentSlice()));
 }
 
 CPreviewDialog::~CPreviewDialog()
 {
+    QSettings settings;
+    settings.beginGroup("PreviewDialog");
+    if ( Qt::WindowMaximized!=QWidget::windowState ())
+        settings.setValue("size",size());
+    settings.endGroup();
+
 	for (int i = 0; i < m_filterTypes.size(); ++i)
 	{
 		delete m_filterTypes[i];
@@ -186,6 +196,8 @@ void CPreviewDialog::setParamsProperties()
 void CPreviewDialog::loadCurrentSlice()
 {
 	m_loadSlice = false;
+
+    ui->groupBoxFiltered->ensurePolished();
 
 	// original preview
 	QImage original;

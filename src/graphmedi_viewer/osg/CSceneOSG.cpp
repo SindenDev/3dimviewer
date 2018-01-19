@@ -49,7 +49,8 @@ scene::CSceneBase::CSceneBase(OSGCanvas * pCanvas)
 
     // Connect to the clear all gizmos signal
     m_ClearAllGizmosConnection = VPL_SIGNAL(SigClearAllGizmos).connect(this, &scene::CSceneOSG::clearGizmos);
-    m_SceneMovedConnection = APP_STORAGE.getEntrySignal(data::Storage::SceneManipulatorDummy::Id).connect(this, &scene::CSceneOSG::onSceneMoved);
+
+    scene::CGeneralObjectObserverOSG<CSceneBase>::connect(APP_STORAGE.getEntry(data::Storage::SceneManipulatorDummy::Id).get());
 
     // position scene
     defaultPositioning();
@@ -77,7 +78,7 @@ scene::CSceneBase::CSceneBase(OSGCanvas * pCanvas)
     this->getOrCreateStateSet()->setRenderBinDetails(LAYER_SCENE, "RenderBin");
 
     // Set the update callback
-    APP_STORAGE.connect(data::Storage::ActiveDataSet::Id, this);
+    scene::CGeneralObjectObserverOSG<CSceneBase>::connect(APP_STORAGE.getEntry(data::Storage::ActiveDataSet::Id).get());
     this->setupObserver(this);
 }
 
@@ -86,9 +87,9 @@ scene::CSceneBase::~CSceneBase()
 {
     // disconnect signals
     this->freeObserver(this);
-    APP_STORAGE.disconnect(data::Storage::ActiveDataSet::Id, this);
+    scene::CGeneralObjectObserverOSG<CSceneBase>::disconnect(APP_STORAGE.getEntry(data::Storage::ActiveDataSet::Id).get());
     VPL_SIGNAL(SigClearAllGizmos).disconnect(m_ClearAllGizmosConnection);
-    APP_STORAGE.getEntrySignal(data::Storage::SceneManipulatorDummy::Id).disconnect(m_SceneMovedConnection);
+    scene::CGeneralObjectObserverOSG<CSceneBase>::disconnect(APP_STORAGE.getEntry(data::Storage::SceneManipulatorDummy::Id).get());
 }
 
 //====================================================================================================================
@@ -114,7 +115,15 @@ void scene::CSceneBase::setupScene(data::CDensityData & data)
 
 //====================================================================================================================
 void scene::CSceneBase::updateFromStorage()
-{ }
+{ 
+    std::set<int> changedEntries;
+    getChangedEntries(changedEntries);
+    if (changedEntries.empty() || changedEntries.find(data::Storage::SceneManipulatorDummy::Id) != changedEntries.end())
+    {
+        clearGizmos();
+        m_pCanvas->Refresh(false);
+    }
+}
 
 //====================================================================================================================
 scene::CSceneOSG::CSceneOSG(OSGCanvas *pCanvas, bool xyOrtho, bool xzOrtho, bool yzOrtho, bool bCreateScene /*= true*/)
@@ -256,17 +265,36 @@ void scene::CSceneOSG::anchorToSliceYZ(osg::Node * node)
 //====================================================================================================================
 void scene::CSceneOSG::updateFromStorage()
 {
+    std::set<int> changedEntries;
+    getChangedEntries(changedEntries);
+
     // Get the active dataset
     data::CObjectPtr<data::CDensityData> spData(APP_STORAGE.getEntry(VPL_SIGNAL(SigGetActiveDataSet).invoke2()));
 
-    // Update the scene
-    data::CChangedEntries Changes(this);
-    if (!Changes.checkFlagAll(data::CDensityData::DENSITY_MODIFIED))
-    //if (!getInvalidateFlags().checkFlagAll(data::CDensityData::DENSITY_MODIFIED))
-    {
-        this->setupScene(*spData);
-    }
+    // Update the scene if necessary
+    {        
+        data::CChangedEntries Changes;
+        getChanges(spData.getEntryPtr(), Changes);
 
+        data::CChangedEntries::tFilter filter;
+        filter.insert(data::Storage::PatientData::Id);
+        filter.insert(data::Storage::AuxData::Id);
+        if (
+            // initialization
+            changedEntries.empty() ||
+            // active data set change
+            changedEntries.find(data::Storage::ActiveDataSet::Id)!=changedEntries.end() ||
+            // change of patient or aux data which doesn't have DENSITY_MODIFIED flag
+            ((changedEntries.find(data::Storage::PatientData::Id)!=changedEntries.end() || changedEntries.find(data::Storage::AuxData::Id)!=changedEntries.end())
+              && !Changes.checkFlagAll(data::CDensityData::DENSITY_MODIFIED,filter))
+            )
+        {
+            this->setupScene(*spData);
+        }
+        // invalidate gizmos on manipulator change
+        if (changedEntries.find(data::Storage::SceneManipulatorDummy::Id)!=changedEntries.end())
+            clearGizmos();
+    }
     m_pCanvas->Refresh(false);
 }
 
@@ -592,11 +620,11 @@ void scene::CSceneOSG::createScene()
     if (!(m_bXYOrtho || m_bYZOrtho || m_bXZOrtho))
     {
         m_conVis[0] = VPL_SIGNAL(SigSetPlaneXYVisibility).connect(p_onOffNode[0], &osg::COnOffNode::setOnOffState);
-        m_conVis[1] = VPL_SIGNAL(SigGetPlaneXYVisibility).connect(p_onOffNode[0], &osg::COnOffNode::isShown);
+        m_conVis[1] = VPL_SIGNAL(SigGetPlaneXYVisibility).connect(p_onOffNode[0], &osg::COnOffNode::isVisible);
         m_conVis[2] = VPL_SIGNAL(SigSetPlaneXZVisibility).connect(p_onOffNode[1], &osg::COnOffNode::setOnOffState);
-        m_conVis[3] = VPL_SIGNAL(SigGetPlaneXZVisibility).connect(p_onOffNode[1], &osg::COnOffNode::isShown);
+        m_conVis[3] = VPL_SIGNAL(SigGetPlaneXZVisibility).connect(p_onOffNode[1], &osg::COnOffNode::isVisible);
         m_conVis[4] = VPL_SIGNAL(SigSetPlaneYZVisibility).connect(p_onOffNode[2], &osg::COnOffNode::setOnOffState);
-        m_conVis[5] = VPL_SIGNAL(SigGetPlaneYZVisibility).connect(p_onOffNode[2], &osg::COnOffNode::isShown);
+        m_conVis[5] = VPL_SIGNAL(SigGetPlaneYZVisibility).connect(p_onOffNode[2], &osg::COnOffNode::isVisible);
 
         // add slices to scene graph
         p_onOffNode[0]->addChild(p_DraggableSlice[0].get(), true);

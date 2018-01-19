@@ -21,9 +21,9 @@ class GaugePlugin : public QObject,
                           public PluginInterface
 {
     Q_OBJECT
-#if QT_VERSION >= 0x050000    
+//#if QT_VERSION >= 0x050000    
     Q_PLUGIN_METADATA(IID "com.3dim-laboratory.Qt.GaugePlugin")
-#endif
+//#endif
     Q_INTERFACES(PluginInterface)
 public:
     GaugePlugin();

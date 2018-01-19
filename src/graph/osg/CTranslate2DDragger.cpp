@@ -28,6 +28,7 @@
 #include <osgManipulator/CommandManager>
 #include <osg/Material>
 
+#include <osg/dbout.h>
 
 using namespace osgManipulator;
 
@@ -67,7 +68,7 @@ bool CTranslate2DDragger::handle(const PointerInfo& pointer, const osgGA::GUIEve
 	// Check if the dragger node is in the nodepath.
 	if (!pointer.contains(this)) return false;
 
-    if((ea.getButtonMask() &  osgGA::GUIEventAdapter::LEFT_MOUSE_BUTTON) == 0)
+    if(!m_bTranslating && (ea.getButtonMask() &  osgGA::GUIEventAdapter::LEFT_MOUSE_BUTTON) == 0)
         return false;
 
 	switch (ea.getEventType())
@@ -75,9 +76,6 @@ bool CTranslate2DDragger::handle(const PointerInfo& pointer, const osgGA::GUIEve
 		// Pick start.
 	case (osgGA::GUIEventAdapter::PUSH):
 		{
-//             if(m_bTranslating && ((ea.getButtonMask() & osgGA::GUIEventAdapter::LEFT_MOUSE_BUTTON) == 0))
-//                 return false;
-
             m_bTranslating = true;
 
 			// Get the LocalToWorld matrix for this node and set it for the projector.
@@ -87,6 +85,10 @@ bool CTranslate2DDragger::handle(const PointerInfo& pointer, const osgGA::GUIEve
 			revertTransformsOnPlane();
 
 			osg::Matrix localToWorld = osg::computeLocalToWorld(nodePathToRoot);
+
+            DBOUT_VEC("TD LIP: ", pointer.getLocalIntersectPoint());
+            DBOUT_MTX("TD LTW: ", localToWorld);
+
 			_projector->setLocalToWorld(localToWorld);
 
 			if (_projector->project(pointer, _startProjectedPoint))
@@ -115,6 +117,7 @@ bool CTranslate2DDragger::handle(const PointerInfo& pointer, const osgGA::GUIEve
 	case (osgGA::GUIEventAdapter::DRAG):
 		{
 			osg::Vec3d projectedPoint;
+            osg::Plane p(_projector->getPlane());
 //			osg::Vec3 projectedPoint;
 			if (_projector->project(pointer, projectedPoint))
 			{
@@ -172,14 +175,23 @@ void CTranslate2DDragger::revertTransformsOnPlane()
 {
 	osg::Matrix parentMatrix = getParentDragger()->getMatrix();
 
+    DBOUT_MTX("TD PM", parentMatrix);
+
 	parentMatrix.invert(parentMatrix);
+
+    DBOUT_MTX("TD IPM", parentMatrix);
 
 	osg::Quat rotation = parentMatrix.getRotate();
 	parentMatrix.makeIdentity();
 	parentMatrix.setRotate(rotation);
 
 	osg::Plane plane = m_initialPlane;
+
+    DBOUT("TD plane before: " << plane[0] << ", " << plane[1] << ", " << plane[2] << ", " << plane[3]);
+
 	plane.transform(parentMatrix);
+
+    DBOUT("TD plane after: " << plane[0] << ", " << plane[1] << ", " << plane[2] << ", " << plane[3]);
 
 	_projector->setPlane(plane);
 

@@ -48,7 +48,7 @@ public:
     void setOnOffState(bool newState); 
 
     //! Returns true if the node is visible.
-    bool isShown() const
+    bool isVisible() const
     {
         return m_bIsOn;
     }

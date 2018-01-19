@@ -27,15 +27,35 @@ CColorComboBox::CColorComboBox(QComboBox *pCombo)
 {
 	m_pCombo = pCombo;
 	m_bSyncActive = true;
+    // can't connect directly, because it is used from plugins too
+    //data::CGeneralObjectObserver<CColorComboBox>::connect(APP_STORAGE.getEntry(data::Storage::RegionColoring::Id).get(), data::CGeneralObjectObserver<CColorComboBox>::tObserverHandler(this, &CColorComboBox::sigRegionColoringChanged));
 }
 
 CColorComboBox::~CColorComboBox()
 {
 }
 
+void CColorComboBox::setCombo(QComboBox *pCombo)
+{
+    m_pCombo = pCombo;
+}
+
+QComboBox *CColorComboBox::getCombo() const
+{
+    return m_pCombo;
+}
+
+void CColorComboBox::setSyncActiveRegion(bool bSyncActive)
+{
+    m_bSyncActive = bSyncActive;
+}
+
 void CColorComboBox::comboAddColorItem(const QColor& color, const QString& itemName)
 {
-	if (!m_pCombo) return;
+    if (!m_pCombo)
+    {
+        return;
+    }
 
 	QPixmap pix(12, 12);
 	QPainter painter(&pix);
@@ -52,7 +72,6 @@ void CColorComboBox::comboAddColorItem(const QColor& color, const QString& itemN
 	m_pCombo->addItem(icon, itemName, color);
 }
 
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //\fn void :::objectChanged(data::CRegionColoring *pData)
 //
@@ -61,9 +80,21 @@ void CColorComboBox::comboAddColorItem(const QColor& color, const QString& itemN
 //\param [in,out] pData If non-null, the data.
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void CColorComboBox::objectChanged(data::CRegionColoring *pData)
+void CColorComboBox::sigRegionColoringChanged(data::CStorageEntry *pData, const data::CChangedEntries &changes)
 {
-	if (!m_pCombo) return;
+    if (!m_pCombo)
+    {
+        return;
+    }
+
+    data::CRegionColoring *regionColoring = pData->getDataPtr<data::CObjectHolder<data::CRegionColoring> >()->getObjectPtr();
+    updateFromColoring(regionColoring);
+}
+
+void CColorComboBox::updateFromColoring(data::CRegionColoring * regionColoring)
+{
+    if (!m_pCombo) 
+        return;
 
 	m_pCombo->blockSignals(true);
 
@@ -77,18 +108,18 @@ void CColorComboBox::objectChanged(data::CRegionColoring *pData)
 	data::CRegionColoring::tColor color;
 
 	m_mapping.clear();
-	m_mapping.resize(pData->getNumOfRegions() + 2);
+    m_mapping.resize(regionColoring->getNumOfRegions() + 2);
 
 	int regIndex = 0;
 
-	for (int i = 0; i < pData->getNumOfRegions(); ++i)
+    for (int i = 0; i < regionColoring->getNumOfRegions(); ++i)
 	{
-		while (pData->getRegionInfo(i).isAuxiliary())
+        while (regionColoring->getRegionInfo(i).isAuxiliary())
 		{
 			++i;
 		}
 
-		if (i > pData->getNumOfRegions() - 1)
+        if (i > regionColoring->getNumOfRegions() - 1)
 		{
 			break;
 		}
@@ -96,16 +127,16 @@ void CColorComboBox::objectChanged(data::CRegionColoring *pData)
 		m_mapping[i] = regIndex;
 
 		// Get color
-		color = pData->getColor(i);
+        color = regionColoring->getColor(i);
 
-		QString regName = QString::fromUtf8(pData->getRegionInfo(i).getName().c_str());
+        QString regName = QString::fromUtf8(regionColoring->getRegionInfo(i).getName().c_str());
 		QColor  qcolor(color.getR(), color.getG(), color.getB());
 		comboAddColorItem(qcolor, regName);
 
 		++regIndex;
 	}
 
-	int activeIndex = pData->getActiveRegion();
+    int activeIndex = regionColoring->getActiveRegion();
 
 	if (m_bSyncActive)
 	{

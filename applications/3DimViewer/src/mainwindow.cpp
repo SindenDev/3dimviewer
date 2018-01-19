@@ -59,7 +59,6 @@
 
 #include <render/PSVRosg.h>
 
-#include <osgQt/GraphicsWindowQt>
 #include <osgGA/TrackballManipulator>
 #include <osgViewer/ViewerEventHandlers>
 #include <osgViewer/ViewerBase>
@@ -87,6 +86,9 @@
 #include <zlib.h>
 #include <zip/unzip.h>
 
+#include <osg/OSGTreeAnalyser.h>
+
+//#define DUMP_OSG_TREE
 
 
 #ifdef _WIN32 // Windows specific
@@ -114,6 +116,20 @@
 #include <data/CDicomDCTk.h>
 #include <CDicomTransferDialog.h>
 
+#endif
+
+#include <osg/NoteSubtree.h>
+#if defined(PLUGIN_VIEWER_3DIM)
+    #include <notesplugin.h>
+    #include <notespluginpanel.h>
+#endif
+
+#include <3dim/geometry/base/CTMReader.h>
+#include <3dim/geometry/base/CTMWriter.h>
+
+#ifdef ENABLE_PYTHON
+#include <qtpython\pyconfigure.h>
+#include <qtpython\CPythonInterpretQt.h>
 #endif
 
 //#undef USE_PSVR
@@ -284,7 +300,8 @@ MainWindow::MainWindow(QWidget *parent, CPluginManager* pPlugins) :
     QMainWindow(parent),
     ui(new Ui::MainWindow),
 	m_pPlugins(pPlugins),
-	m_segmentationPluginsLoaded(false)
+	m_segmentationPluginsLoaded(false),
+    m_eventFilter(this)
 {    
 	Q_ASSERT(NULL!=m_pPlugins);
     m_pMainWindow = this;
@@ -407,7 +424,6 @@ MainWindow::MainWindow(QWidget *parent, CPluginManager* pPlugins) :
             }
         }
     }
-    
 
     // setup working space
     setUpWorkspace();
@@ -584,10 +600,28 @@ MainWindow::MainWindow(QWidget *parent, CPluginManager* pPlugins) :
 	loadAppSettings();
 
 	//m_volumeRenderingPanel->setVRMode();
+
+    // NotesPluginPanel will be able to receive events of this object.
+    // It needs them for line highlighting and knowing when camera moves
+#if defined(PLUGIN_VIEWER_3DIM)
+    CNotesPlugin *plug = (CNotesPlugin *)findPluginByID("NotesPlugin");
+
+    if (plug != nullptr) 
+    {
+        CNotesPluginPanel *panel = (CNotesPluginPanel *)plug->getOrCreatePanel();
+        m_3DView->installEventFilter(panel);
+
+    }
+#endif
 }
 
 MainWindow::~MainWindow()
 {
+
+#ifdef DUMP_OSG_TREE
+    osg::OSGTreeAnalyser an;
+    m_Scene3D->accept(an);
+#endif
     {
         QSettings settings;
         // save recent projects
@@ -607,7 +641,13 @@ MainWindow::~MainWindow()
             }
         }
         settings.endGroup();
+
+#ifdef ENABLE_PYTHON
+        //pythonQt::CPythonInterpretQt::Close();
+#endif
     }
+
+
     APP_STORAGE.getEntrySignal(data::Storage::RegionData::Id).disconnect(m_conRegionData);
     APP_MODE.getModeChangedSignal().disconnect(m_ConnectionModeChanged);
     {   // clear undo before plugin unload because it can contain data allocated by plugins
@@ -1165,25 +1205,31 @@ void MainWindow::writeLayoutSettings(int nLayoutType, bool bInnerLayoutOnly)
     if (Workspace3D==nLayoutType)
     {
         settings.beginGroup("Workspace3D");
-        settings.setValue("geometry", saveGeometry());
-        settings.setValue("windowState", saveState());
-        settings.setValue("centralSize", getRelativeSize(centralWidget()));
+        settings.setValue("geometryX", saveGeometry().toBase64());
+        settings.setValue("windowStateX", saveState().toBase64());
+        QSizeF relSize = getRelativeSize(centralWidget());
+        settings.setValue("centralWidth", relSize.width());
+        settings.setValue("centralHeight", relSize.height());        
         settings.endGroup();
     }
     if (WorkspaceTabs==nLayoutType)
     {
         settings.beginGroup("WorkspaceTabs");
-        settings.setValue("geometry", saveGeometry());
-        settings.setValue("windowState", saveState());
-        settings.setValue("centralSize", getRelativeSize(centralWidget()));
+        settings.setValue("geometryX", saveGeometry().toBase64());
+        settings.setValue("windowStateX", saveState().toBase64());
+        QSizeF relSize = getRelativeSize(centralWidget());
+        settings.setValue("centralWidth", relSize.width());
+        settings.setValue("centralHeight", relSize.height());
         settings.endGroup();
     }
     if (WorkspaceGrid==nLayoutType)
     {
         settings.beginGroup("WorkspaceGrid");
-        settings.setValue("geometry", saveGeometry());
-        settings.setValue("windowState", saveState());
-        settings.setValue("centralSize", getRelativeSize(centralWidget()));
+        settings.setValue("geometryX", saveGeometry().toBase64());
+        settings.setValue("windowStateX", saveState().toBase64());
+        QSizeF relSize = getRelativeSize(centralWidget());
+        settings.setValue("centralWidth", relSize.width());
+        settings.setValue("centralHeight", relSize.height());
         settings.endGroup();
     }
 }
@@ -1209,15 +1255,36 @@ void MainWindow::readLayoutSettings(bool bInnerLayoutOnly)
         return;
     }
     if (!bInnerLayoutOnly)
-        restoreGeometry(settings.value("geometry").toByteArray());
-    restoreState(settings.value("windowState").toByteArray());
+    {
+        QByteArray geomX = settings.value("geometryX").toByteArray();
+        if (geomX.isEmpty())
+            restoreGeometry(settings.value("geometry").toByteArray());
+        else
+            restoreGeometry(QByteArray::fromBase64(geomX));
+    }
+    QByteArray wsX = settings.value("windowStateX").toByteArray();
+    if (wsX.isEmpty())
+		restoreState(settings.value("windowState").toByteArray());
+    else
+		restoreState(QByteArray::fromBase64(wsX));
     if (bInnerLayoutOnly)
     {
-        QSizeF sizew=settings.value("centralSize").toSizeF();
-        if (!sizew.isEmpty())
+        double width = settings.value("centralWidth").toDouble();
+        double height = settings.value("centralHeight").toDouble();
+        if (0==width || 0==height)
+        {
+            QVariant val = settings.value("centralSize");
+            if (QVariant::SizeF==val.type())
+            {
+                QSizeF sizew=val.toSizeF();
+                width = sizew.width();
+                height = sizew.height();
+            }
+        }
+        if (0!=width && 0!=height)
         {
             QSize sizeM = size();
-            centralWidget()->resize(sizeM.width()*sizew.width(),sizeM.height()*sizew.height());
+            centralWidget()->resize(sizeM.width()*width,sizeM.height()*height);
         }
     }
     settings.endGroup();
@@ -1271,18 +1338,31 @@ void MainWindow::loadUserPerspective()
         setUpWorkspace();
     }
 
-//    if (!bInnerLayoutOnly)
-//        restoreGeometry(settings.value("geometry").toByteArray());
-    restoreState(settings.value("windowState").toByteArray());
-//    if (bInnerLayoutOnly)
+    QByteArray wsX = settings.value("windowStateX").toByteArray();
+    if (wsX.isEmpty())
+		restoreState(settings.value("windowState").toByteArray());
+    else
+		restoreState(QByteArray::fromBase64(wsX));
     {
-        QSizeF sizew=settings.value("centralSize").toSizeF();
-        if (!sizew.isEmpty())
+        double width = settings.value("centralWidth").toDouble();
+        double height = settings.value("centralHeight").toDouble();
+        if (0==width || 0==height)
+        {
+            QVariant val = settings.value("centralSize");
+            if (QVariant::SizeF==val.type())
+            {
+                QSizeF sizew=val.toSizeF();
+                width = sizew.width();
+                height = sizew.height();
+            }
+        }
+        if (0!=width && 0!=height)
         {
             QSize sizeM = size();
-            centralWidget()->resize(sizeM.width()*sizew.width(),sizeM.height()*sizew.height());
+            centralWidget()->resize(sizeM.width()*width,sizeM.height()*height);
         }
     }
+
     setUpdatesEnabled(true);
     settings.endGroup();
 }
@@ -1375,6 +1455,7 @@ void MainWindow::closeEvent(QCloseEvent *event)
 	if (0!=(windowState()&Qt::WindowFullScreen))
 		showNormal();
     writeLayoutSettings(m_nLayoutType,false);
+
     QMainWindow::closeEvent(event);
 }
 
@@ -2259,7 +2340,7 @@ bool MainWindow::openSTL()
 #endif
 
     previousDir = getSaveLoadPath("STLdir");
-    QString filePath = QFileDialog::getOpenFileName(this,tr("Choose an input binary STL model to load..."),previousDir,tr("Stereo litography model (*.stl);;Polygon file format (*.ply)"));
+	QString filePath = QFileDialog::getOpenFileName(this, tr("Choose an input binary STL model to load..."), previousDir, tr("Stereo litography model (*.stl);;Polygon file format (*.ply);;OpenCTM compressed  file format (*.ctm)"));
 	if (filePath.isEmpty())
         return false;
 
@@ -2343,13 +2424,22 @@ bool MainWindow::openSTL(const QString& filePath, const QString& fileName)
 	int loadedID = 0;
 
     // don't use osg for stl models as it doesn't merge vertices
-    std::string extensions = "stl stla stlb ply obj";
-    if (extensions.find(extension) == std::string::npos)
+	std::string extensions = "stl stla stlb ply obj ctm";
+	if (extensions.find(extension) == std::string::npos)
     {
         // Find unused id
         int id(findPossibleModelId());
-		if(id < 0)
+		if (id < 0)
+		{
+			QApplication::restoreOverrideCursor();
 			return false;
+		}
+
+        data::CObjectPtr<data::CModel> spModel(APP_STORAGE.getEntry(id));
+        data::CSnapshot *snapshot = m_ModelManager.getSnapshot(NULL);
+        data::CSnapshot *snapshotModel = spModel->getSnapshot(NULL);
+        snapshot->addSnapshot(snapshotModel);
+        VPL_SIGNAL(SigUndoSnapshot).invoke(snapshot);
 
         // see if we can load the file using osg
         osg::ref_ptr<osg::Node> model(osgDB::readNodeFile(ansiName));
@@ -2544,20 +2634,32 @@ bool MainWindow::openSTL(const QString& filePath, const QString& fileName)
         OpenMesh::IO::Options ropt;
         ropt += OpenMesh::IO::Options::Binary;
         result=true;
+
+		const OpenMesh::IO::_CTMReader_ &CTMReader = OpenMesh::IO::_CTMReader_();
+
         if (!OpenMesh::IO::read_mesh(*pMesh, ansiName, ropt))
         {
             delete pMesh;
             result = false;
+			QApplication::restoreOverrideCursor();
             showMessageBox(QMessageBox::Critical,tr("Failed to load binary STL model!"));
         }
         else
         {
             // Find unused id
             int id(findPossibleModelId());
-			if(id < 0)
+			if (id < 0)
+			{
+				QApplication::restoreOverrideCursor();
 				return false;
+			}
 			loadedID = id;
             data::CObjectPtr<data::CModel> spModel( APP_STORAGE.getEntry(id) );
+            data::CSnapshot *snapshot = m_ModelManager.getSnapshot(NULL);
+            data::CSnapshot *snapshotModel = spModel->getSnapshot(NULL);
+            snapshot->addSnapshot(snapshotModel);
+            VPL_SIGNAL(SigUndoSnapshot).invoke(snapshot);
+
             spModel->setMesh(pMesh);
 			spModel->setLabel(fileName.toStdString());
 			spModel->setColor(m_modelColor);
@@ -2663,7 +2765,7 @@ bool MainWindow::saveSTLById(int storage_id)
     QString previousDir = getSaveLoadPath("STLdir");
     previousDir = appendSaveNameHint(previousDir,".stl");
     QString selectedFilter;
-    QString fileName = QFileDialog::getSaveFileName(this,tr("Please, specify an output file..."),previousDir,tr("Stereo litography model (*.stl);;Binary Polygon file format (*.ply);;ASCII Polygon file format (*.ply)"),&selectedFilter);
+	QString fileName = QFileDialog::getSaveFileName(this, tr("Please, specify an output file..."), previousDir, tr("Stereo litography model (*.stl);;Binary Polygon file format (*.ply);;ASCII Polygon file format (*.ply);;OpenCTM compressed  file format (*.ctm)"), &selectedFilter);
     if (fileName.isEmpty())
         return false;
 
@@ -2725,7 +2827,13 @@ bool MainWindow::saveSTLById(int storage_id)
 			}
 		}
 	}
-	
+
+	if (selectedFilter.compare(tr("OpenCTM compressed  file format (*.ctm)"), Qt::CaseInsensitive) == 0 && !pMesh->has_vertex_normals()) {
+		pMesh->request_vertex_normals();	//writer needs per vertex normals..
+	}
+
+	const OpenMesh::IO::_CTMWriter_ &CTMWriter = OpenMesh::IO::_CTMWriter_();
+
     bool result = true;
     if (!OpenMesh::IO::write_mesh(*pMesh, ansiName, wopt))
     {
@@ -3007,11 +3115,17 @@ void MainWindow::createOSGStuff()
 
 			osg::ref_ptr<osg::MatrixTransform> pModelTransform = new osg::MatrixTransform();
 			pModelTransform->addChild(m_modelVisualizers[i]);
-    
+
 			m_Scene3D->anchorToScene(pModelTransform.get(), true);
 			m_modelVisualizers[i]->setCanvas(m_3DView);
 		}
-    
+
+        {
+            //add subtree for display of drawn notes
+            osg::ref_ptr<osg::CNoteDrawerNode> noteSubtree = new osg::CNoteDrawerNode();
+            m_Scene3D->anchorToScene(noteSubtree, false);
+        }
+
 		//m_modelVisualizer->setModelVisualization(osg::CModelVisualizerEx::EMV_FLAT);
 
 		if( m_3DView->getRenderer().isError() )
@@ -3412,7 +3526,7 @@ void MainWindow::createSurfaceModel()
 		{
 			if (data::Storage::ImportedModel::Id + i == id) continue;
 			data::CObjectPtr<data::CModel> spModel( APP_STORAGE.getEntry(data::Storage::ImportedModel::Id + i) );
-			if (spModel->isShown())
+			if (spModel->isVisible())
 			{
 				std::string created = spModel->getProperty("Created");
 				if (!created.empty())
@@ -4066,9 +4180,9 @@ void MainWindow::print()
         QOpenGLWidget* pQt5GlWidget = dynamic_cast<QOpenGLWidget*>(myWidget);
         if (NULL != pQt5GlWidget)
             fb = pQt5GlWidget->grabFramebuffer();
-        QGLWidget* pQt4GlWidget = dynamic_cast<QGLWidget*>(myWidget);
+        /*QGLWidget* pQt4GlWidget = dynamic_cast<QGLWidget*>(myWidget);
         if (NULL != pQt4GlWidget)
-            fb = pQt4GlWidget->grabFrameBuffer();
+            fb = pQt4GlWidget->grabFrameBuffer();*/
 #else
         QImage fb=myWidget->grabFrameBuffer();
 #endif
@@ -4239,6 +4353,12 @@ void MainWindow::loadAppSettings()
     VPL_SIGNAL(SigSetPlaneYZVisibility).invoke(settings.value("ShowYZSlice", false /*VPL_SIGNAL(SigGetPlaneYZVisibility).invoke2()*/).toBool());
 
     ui->actionVolume_Rendering->setChecked(renderer.isEnabled());
+
+#ifdef ENABLE_PYTHON
+    pythonQt::CPythonInterpretQt::Initialize();
+#else
+    settings.setValue("isPythonEnabled", false);
+#endif
 }
 
 void MainWindow::saveLookupTables(QSettings &settings, std::map<std::string, CLookupTable> &luts)
@@ -4264,10 +4384,10 @@ void MainWindow::saveLookupTables(QSettings &settings, std::map<std::string, CLo
                 settings.setValue("PositionX", it->second.pointPosition(c, p).x());
                 settings.setValue("PositionY", it->second.pointPosition(c, p).y());
                 osg::Vec4 color = it->second.pointColor(c, p);
-                settings.setValue("ColorR", color.r());
-                settings.setValue("ColorG", color.g());
-                settings.setValue("ColorB", color.b());
-                settings.setValue("ColorA", color.a());
+                settings.setValue("ColorR", (double)color.r());
+                settings.setValue("ColorG", (double)color.g());
+                settings.setValue("ColorB", (double)color.b());
+                settings.setValue("ColorA", (double)color.a());
                 settings.setValue("Density", it->second.pointDensity(c, p));
                 settings.setValue("Gradient", it->second.pointGradient(c, p));
                 settings.setValue("Radius", it->second.pointRadius(c, p));
@@ -4659,12 +4779,13 @@ void MainWindow::onRecentFile()
         QString path=pAction->property("Path").toString();
         if (!path.isEmpty())
         {
-            if (!preOpen())
-                return;
-
             QFileInfo fi(path);
             QString suffix = fi.isDir()?"":fi.suffix().toLower();
             QString modelFormats = "stl stla stlb obj ply 3ds dxf lwo";
+
+            if (!(!suffix.isEmpty() && modelFormats.contains(suffix, Qt::CaseInsensitive)))
+                if (!preOpen())
+                return;
             
             if (path.endsWith("vlm",Qt::CaseInsensitive))
                 openVLM(path);
@@ -5128,6 +5249,7 @@ int MainWindow::findPossibleModelId()
 		// Is it free model id?
 		if (id == MAX_IMPORTED_MODELS)
 		{
+			QApplication::restoreOverrideCursor();
 			showMessageBox(QMessageBox::Critical,tr("The maximum number of loadable models reached!"));
 			return -1;
 		}

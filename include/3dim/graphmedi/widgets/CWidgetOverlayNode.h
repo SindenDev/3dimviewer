@@ -24,7 +24,6 @@
 #define WidgetOverlayNode_H_included
 
 #include <graph/widgets/CSizeableWindowManager.h>
-#include <osg/OSGCanvas.h>
 
 #include <data/CStorageEntry.h>
 
@@ -32,6 +31,8 @@
 #include <osg/Matrix>
 #include <osg/MatrixTransform>
 #include <osgWidget/Canvas>
+
+class OSGCanvas;
 
 namespace scene
 {

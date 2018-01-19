@@ -27,7 +27,7 @@
 
 #include <VPL/Module/Signal.h>
 
-#include <data/CObjectObserver.h>
+#include <data/CGeneralObjectObserver.h>
 #include <data/CDensityWindow.h>
 
 namespace Ui {
@@ -35,7 +35,7 @@ class DensityWindowWidget;
 }
 
 //! Panel with density window settings
-class CDensityWindowWidget : public QWidget, public data::CObjectObserver<data::CDensityWindow>
+class CDensityWindowWidget : public QWidget, public data::CGeneralObjectObserver<CDensityWindowWidget>
 {
     Q_OBJECT
     
@@ -45,11 +45,13 @@ public:
     //! Destructor
     ~CDensityWindowWidget();
     
+    void objectChanged(data::CStorageEntry *,const data::CChangedEntries &);
+
     //! Method called on any density data change.
-    void objectChanged(data::CDensityWindow *pData);
+    void onNewDensityWindow(data::CStorageEntry *,const data::CChangedEntries &);
 
     //! Called on volume data change.
-    void onNewDensityData(data::CStorageEntry *pEntry);
+    void onNewDensityData(data::CStorageEntry *,const data::CChangedEntries &);
 
 private slots:
     void on_pushButton_clicked();
@@ -60,8 +62,6 @@ private slots:
 private:
     Ui::DensityWindowWidget *ui;
     bool                     m_bDontNotify;
-    //! Signal connection for volume data change
-    vpl::mod::tSignalConnection m_Connection;
 };
 
 #endif // DENSITYWINDOWWIDGET_H

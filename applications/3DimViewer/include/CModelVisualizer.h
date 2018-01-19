@@ -28,7 +28,6 @@
 #include <osg/CTriMesh.h>
 #include <osg/LightModel>
 #include <geometry/base/CMesh.h>
-#include <osg/CObjectObserverOSG.h>
 #include <data/CModel.h>
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -56,13 +55,13 @@ namespace osg
         void setModelVisualization(EModelVisualization modelVisualization)
         {
             m_modelVisualization = modelVisualization;
-            osg::Geode *pMesh = m_pMesh.get();
+            osg::Geode *pMesh = m_pMesh->getMeshGeode();
             if (NULL == pMesh)
             {
                 return;
             }
 
-            osg::StateSet *stateSet = pMesh->getOrCreateStateSet();
+            osg::StateSet * stateSet = pMesh->getOrCreateStateSet();
             osg::PolygonMode *polyModeObj = dynamic_cast<osg::PolygonMode *>(stateSet->getAttribute(osg::StateAttribute::POLYGONMODE));
             if (!polyModeObj)
             {

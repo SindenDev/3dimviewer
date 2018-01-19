@@ -31,6 +31,7 @@
 #include <OpenMesh/Tools/Decimater/ModNormalDeviationT.hh>
 #include <OpenMesh/Tools/Decimater/ModEdgeLengthT.hh>
 #include <OpenMesh/Tools/Decimater/ModIndependentSetsT.hh>
+#include <OpenMesh/Tools/Decimater/DecimaterT.hh>
 
 ////////////////////////////////////////////////////////////
 //

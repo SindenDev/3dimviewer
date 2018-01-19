@@ -24,6 +24,7 @@
 #define CSerializableData_H
 
 #include <VPL/Module/Serializer.h>
+#include <VPL/Math/Base.h>
 
 #define READINT32(x) { vpl::sys::tInt32 v; Reader.read( v ); x = v; }
 #define WRITEINT32(x) { Writer.write( (vpl::sys::tInt32) (x) ); }

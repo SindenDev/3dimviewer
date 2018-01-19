@@ -49,7 +49,7 @@ public:
 	    :  m_time( 0 ), m_type( type ), m_provider( provider ), m_chained( 0 ) {}
 
     //! Destructor
-    ~CSnapshot(){ if( m_chained != 0 ) delete m_chained; }
+    virtual ~CSnapshot(){ if( m_chained != 0 ) delete m_chained; }
 
     //! Each snapshot object must return its data size in bytes
     virtual long getDataSize() = 0;

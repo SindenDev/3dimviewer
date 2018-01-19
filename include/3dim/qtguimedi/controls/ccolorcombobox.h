@@ -28,34 +28,37 @@
 #include <QComboBox>
 #include <QColor>
 #include <QString>
+#include <data/CGeneralObjectObserver.h>
 
 //! Extension of combobox for region coloring
-class CColorComboBox : public data::CObjectObserver< data::CRegionColoring >
+class CColorComboBox : public data::CGeneralObjectObserver<CColorComboBox>
 {
 protected:
-    QComboBox*  m_pCombo;
-	bool		m_bSyncActive;
+    QComboBox *m_pCombo;
+    bool m_bSyncActive;
 
-	std::vector<int> m_mapping;
+    std::vector<int> m_mapping;
 
-    void        comboAddColorItem(const QColor& color, const QString& itemName);
+    void comboAddColorItem(const QColor &color, const QString &itemName);
+
 public:
-    CColorComboBox(QComboBox* pCombo=NULL);
+    CColorComboBox(QComboBox *pCombo = NULL);
     ~CColorComboBox();
-    void        setCombo(QComboBox* pCombo) { m_pCombo=pCombo; }
-    QComboBox*  getCombo() const { return m_pCombo; }
+    void setCombo(QComboBox* pCombo);
+    QComboBox *getCombo() const;
 
     //! implementation of usual index change handler
-    void        usualIndexChangedHandler(data::CDataStorage *pDataStorage, int index);
+    void usualIndexChangedHandler(data::CDataStorage *pDataStorage, int index);
 
-	//! sync active region index on change
-	void		setSyncActiveRegion(bool bSyncActive) { m_bSyncActive = bSyncActive; } 
+    //! sync active region index on change
+    void setSyncActiveRegion(bool bSyncActive);
 
     //! Redraw data
-    void objectChanged(data::CRegionColoring *pData);
+    void objectChanged(data::CStorageEntry *pData, const data::CChangedEntries &changes) { sigRegionColoringChanged(pData,changes); }
+    void sigRegionColoringChanged(data::CStorageEntry *pData, const data::CChangedEntries &changes);
+    void updateFromColoring(data::CRegionColoring *);
 
-	int getRegionNumber(int index);
+    int getRegionNumber(int index);
 };
-
 
 #endif

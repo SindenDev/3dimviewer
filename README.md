@@ -75,7 +75,8 @@ compile the 3DimViewer:
 All required prebuilt 3rd party libraries can be downloaded separately in a 
 single package. Alternatively, you can build them on your own. In that case, 
 we recommend you to build at least OpenSceneGraph, Qt and VPL
-libraries. For a complete list of required 3rd party libraries 
+libraries. A more comprehensive guide can be found in 
+''doc/Installation.htm''. For a complete list of required 3rd party libraries 
 take a look at ''3rdParty.txt''.
 
 * Where appropriate, download the package of prebuilt 3rd party libraries and 
@@ -91,7 +92,7 @@ makes possible to have multiple independent build targets by creating
 multiple build 
 directories.
 
-* Open the solution ''3Dim.sln'' (or ''Project.sln'') which will be placed in the build directory 
+* Open the solution ''3Dim.sln'' which will be placed in the build directory 
 and compile the project '3DimViewer'...
 
 * Final executable will be placed directly in the 

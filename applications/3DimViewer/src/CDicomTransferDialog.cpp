@@ -45,6 +45,8 @@
 #include <C3DimApplication.h>
 #include <cpreferencesdialog.h>
 
+#define AE_TITLE    "3DimViewer"
+
 ///////////////////////////////////////////////////////////////////////////////
 // Thread safe progress function for the threaded dicom receiver
 
@@ -849,7 +851,7 @@ OFCondition CThreadedDICOMReceiver::acceptAssociation(T_ASC_Network *net, DcmAss
             }
         }
         // set our app title 
-        const char *       opt_respondingAETitle = "TraumaTech";
+        const char *       opt_respondingAETitle = AE_TITLE;
         ASC_setAPTitles(assoc->params, NULL, NULL, opt_respondingAETitle);
 
         // acknowledge or reject this association 
@@ -1012,7 +1014,7 @@ void CThreadedDICOMReceiver::doWork(void* pMain)
 	}
 	else
 	{
-		emit statusMessage(tr("Network initialized, port %1, ip %2").arg(opt_port).arg(QHostAddress(CDicomTransferDialog::getIPAddress()).toString()));
+        emit statusMessage(tr("Network initialized, port %1, ip %2, host %3, AE title %4").arg(opt_port).arg(QHostAddress(CDicomTransferDialog::getIPAddress()).toString()).arg(QHostInfo::localHostName()).arg(AE_TITLE));
 
 		DcmAssociationConfiguration asccfg;
 		while (cond.good())

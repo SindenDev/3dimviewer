@@ -30,8 +30,7 @@
 #include <osgWidget/Label>
 #include <osgGA/GUIEventHandler>
 
-#include <osg/CMultiObjectObserverOSG.h>
-#include <osg/CObjectObserverOSG.h>
+#include <osg/CGeneralObjectObserverOSG.h>
 #include <osg/CModelVisualizer.h>
 
 #include <data/CActiveDataSet.h>
@@ -85,14 +84,14 @@ osgWidget::Widget* createImageWidget(const std::string & filename);
 
 class CSceneInfoWidget
     : public osgWidget::Box
-    , public scene::CMultiObjectObserverOSG<data::CSceneWidgetParameters, data::CDensityData>
+    , public scene::CGeneralObjectObserverOSG<CSceneInfoWidget>
 {
 public:
     //! Constructor
     CSceneInfoWidget(OSGCanvas * pCanvas);
 
     //! Update from storage
-    virtual void updateFromStorage(int changes);
+    virtual void updateFromStorage();
 
 protected:
 	//! Create label and set parameters
@@ -113,7 +112,7 @@ protected:
 
 class CSceneOrientationWidget
     : public osgWidget::Box
-    , public scene::CObjectObserverOSG<data::CPreviewModel>
+    , public scene::CGeneralObjectObserverOSG<CSceneOrientationWidget>
 {
 public:
     //! Additional flags modifying the widget behaviour.
@@ -223,7 +222,7 @@ protected:
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //!\brief	Ruler widget. 
 
-class CRulerWidget : public osgWidget::Box, public scene::CPositionedWindow
+class CRulerWidget : public osgWidget::Box, public scene::CPositionedWindow, public scene::CGeneralObjectObserverOSG<CRulerWidget>
 {
 public:
     //! Constructor
@@ -248,16 +247,13 @@ protected:
     //! Compute pixel distances
     void getDistances( float & dx, float & dy);
 
-    //! Signal callback
-    void onDataChanged( data::CStorageEntry *pEntry );
-
     //! Update window parameters implementation
     virtual void updateWindowSizePosition( int width, int height, int x, int y );
 
     //! Set new window origin based on label size...
     virtual void recomputeSizes();
 
-    
+    virtual void updateFromStorage();
 
 protected:
     //! Scale label

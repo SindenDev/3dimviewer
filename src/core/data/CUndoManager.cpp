@@ -22,7 +22,7 @@
 
 #include <data/CUndoManager.h>
 #include <data/CDataStorage.h>
-#include <coremedi/app/Signals.h>
+#include <app/Signals.h>
 
 //#include <osg/dbout.h>
 
@@ -38,8 +38,9 @@ data::CUndoManager::CUndoManager(  )
 {
     // Connect to the signals
 	VPL_SIGNAL( SigUndoSnapshot ).connect( this, &CUndoManager::insert );
-	VPL_SIGNAL( SigUndo ).connect( this, &CUndoManager::undo );
-	VPL_SIGNAL( SigRedo ).connect( this, &CUndoManager::redo );
+
+    VPL_SIGNAL(SigClearUndoRedoQueues).connect(this, &CUndoManager::clearAll);
+
 }
 
 ///////////////////////////////////////////////////////////////////////////////

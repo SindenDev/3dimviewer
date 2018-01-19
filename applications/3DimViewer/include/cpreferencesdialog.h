@@ -115,6 +115,13 @@ private slots:
 	void on_pushButtonClearShortcut_clicked();
 	bool eventFilter(QObject* obj, QEvent *event);
 
+#ifdef ENABLE_PYTHON
+    void pythonTypeChanged(int index);
+    void showFileDialogVPLSwig();
+    void showFileDialogPython();
+    void showHidePythonOptions(int state);
+#endif
+
     void showFileDialog();
     void showHideFilterOptions(int state);
 	void setMonitoredObjectsChecked();

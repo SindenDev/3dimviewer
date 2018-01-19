@@ -33,6 +33,13 @@
 #include <QFileDialog>
 #include <mainwindow.h>
 
+#ifdef ENABLE_PYTHON
+#include <qtpython\pyconfigure.h>
+#include <qtpython\CPythonInterpretQt.h>
+#include <qtpython\CPythonSettings.h>
+#include <qtpython\CMessageBox.h>
+#endif
+
 CPreferencesDialog::CPreferencesDialog(const QDir &localeDir, QMenuBar* pMenuBar, CEventFilter &eventFilter, QWidget *parent, Qt::WindowFlags f) :
     m_eventFilter(eventFilter),
 	QDialog(parent, f),
@@ -153,6 +160,53 @@ CPreferencesDialog::CPreferencesDialog(const QDir &localeDir, QMenuBar* pMenuBar
 #endif
 
 	ui->eFPath->setText(previousDir);
+
+#ifdef ENABLE_PYTHON
+    connect(ui->eFBrowseVPLSwig, SIGNAL(clicked()), this, SLOT(showFileDialogVPLSwig()));
+    connect(ui->eFBrowsePythonPath, SIGNAL(clicked()), this, SLOT(showFileDialogPython()));
+    connect(ui->comboBoxPythonType, SIGNAL(currentIndexChanged(int)), this, SLOT(pythonTypeChanged(int)));
+    connect(ui->checkBoxEnablePython, SIGNAL(stateChanged(int)), this, SLOT(showHidePythonOptions(int)));
+
+    pythonQt::CPythonSettings& pySettings = pythonQt::CPythonSettings::getInstance();
+
+    QString previousVPLSwig = pySettings.getVPLSwigPath();
+    QString previousPythonInterpret = pySettings.getExternalPythonPath();
+    if (!pySettings.isSelectedInternalInterpret())
+    {
+        bool oldState = ui->comboBoxPythonType->blockSignals(true);
+        ui->comboBoxPythonType->setCurrentIndex(1);
+        ui->comboBoxPythonType->blockSignals(oldState);
+    }
+
+    ui->eFPathVPLSwig->setText(previousVPLSwig);
+    ui->eFPathPythonPath->setText(previousPythonInterpret);
+    bool isPythonEnabled = pySettings.isPythonEnabled();
+    ui->checkBoxEnablePython->setChecked(isPythonEnabled);
+
+    ui->eFBrowseVPLSwig->setEnabled(isPythonEnabled);
+    ui->eFBrowsePythonPath->setEnabled(isPythonEnabled);
+    ui->comboBoxPythonType->setEnabled(isPythonEnabled);
+
+    ui->lblRestartRequired->setVisible(false);
+#else
+    ui->lblRestartRequired->setVisible(false);
+    ui->eFBrowseVPLSwig->setDisabled(true);
+    ui->eFBrowsePythonPath->setDisabled(true);
+    ui->comboBoxPythonType->setDisabled(true);
+    ui->checkBoxEnablePython->setDisabled(true);
+
+    for (int index = 0; index < ui->listPages->count(); index++)
+    {
+        if (ui->listPages->item(index)->text() == "Python")
+        {
+            if (page == index)
+            {
+                ui->listPages->setCurrentRow(0);
+            }
+            ui->listPages->item(index)->setHidden(true);
+        }
+    }
+#endif
 }
 
 CPreferencesDialog::~CPreferencesDialog()
@@ -314,6 +368,9 @@ void CPreferencesDialog::on_CPreferencesDialog_accepted()
 	settings.setValue("logTabBars", ui->eFTabBars->isChecked());
 	settings.setValue("logLists", ui->eFLists->isChecked());
 	settings.setValue("logTables", ui->eFTables->isChecked());
+
+    settings.setValue("isPythonEnabled", ui->checkBoxEnablePython->isChecked());
+
 }
 
 void CPreferencesDialog::setButtonColor(QColor& targetColor, const QColor& sourceColor, QPushButton *targetButton)
@@ -332,7 +389,6 @@ void CPreferencesDialog::on_buttonBGColor_clicked()
         setButtonColor(m_bgColor, color, ui->buttonBGColor);
     }
 }
-
 
 void CPreferencesDialog::removeCustomShortcuts( QTreeWidgetItem *item )
 {
@@ -377,8 +433,16 @@ void CPreferencesDialog::resetDefaultsPressed( )
 	ui->radioButtonPatientName->setChecked(savesFilesNameMode == 0);
 	ui->radioButtonFolderName->setChecked(savesFilesNameMode == 1);
 
-	// reset keyboard shortcuts
 	QSettings settings;
+#ifdef ENABLE_PYTHON
+    // reset python settings
+    QString VPLSwigDefault = QDir::currentPath() + "/" + DEFAULT_VPLSWIG_PATH;
+    pythonQt::CPythonSettings::getInstance().setVPLSwigPath(VPLSwigDefault);
+    ui->eFPathVPLSwig->setText(VPLSwigDefault);
+    ui->comboBoxPythonType->setCurrentIndex(0);
+#endif
+
+    // reset keyboard shortcuts
 	settings.beginGroup("Shortcuts");
 	settings.remove("");
 	m_bChangedShortcuts = false;
@@ -625,3 +689,138 @@ bool CPreferencesDialog::eventFilter(QObject* obj, QEvent *event)
     }
     return QDialog::eventFilter(obj, event);
 }
+
+#ifdef ENABLE_PYTHON
+
+void CPreferencesDialog::showFileDialogVPLSwig()
+{
+
+    pythonQt::CPythonSettings& pySettings = pythonQt::CPythonSettings::getInstance();
+    QString previousVPLSwig = pySettings.getVPLSwigPath();
+
+    //show file dialog, which allows the user to select a folder
+    QFileDialog *dialog = new QFileDialog();
+    dialog->setFileMode(QFileDialog::Directory);
+    dialog->setOption(QFileDialog::ShowDirsOnly);
+
+    //get path to selected folder
+    QString path = dialog->getExistingDirectory(this, tr("Select Directory with VPLSwig package"), previousVPLSwig);
+
+    //show that path in ui
+    if (!path.isEmpty())
+    {
+        pySettings.setVPLSwigPath(path);
+        ui->eFPathVPLSwig->setText(path);
+        ui->lblRestartRequired->setVisible(true);
+    }
+    delete dialog;
+}
+
+void CPreferencesDialog::showFileDialogPython()
+{
+
+    pythonQt::CPythonSettings& pySettings = pythonQt::CPythonSettings::getInstance();
+    QString previousDir = pySettings.getExternalPythonPath();
+
+
+    //show file dialog, which allows the user to select a folder
+    QFileDialog *dialog = new QFileDialog();
+    dialog->setFileMode(QFileDialog::Directory);
+    dialog->setOption(QFileDialog::ShowDirsOnly);
+
+    //get path to selected folder
+    QString path = dialog->getExistingDirectory(this, tr("Select Directory"), previousDir);
+
+    //show that path in ui
+    if (!path.isEmpty())
+    {
+        pySettings.setPythonExternalPath(path);
+        ui->eFPathPythonPath->setText(path);
+        ui->lblRestartRequired->setVisible(true);
+    }
+
+    delete dialog;
+}
+
+void CPreferencesDialog::pythonTypeChanged(int index)
+{
+    pythonQt::CPythonSettings::getInstance().setInternalInterpret(index == 0);
+    ui->lblRestartRequired->setVisible(true);
+}
+
+void CPreferencesDialog::showHidePythonOptions(int state)
+{
+#ifdef ENABLE_PYTHON
+    pythonQt::CPythonSettings& pySettings = pythonQt::CPythonSettings::getInstance();
+
+    if (state == Qt::Checked)
+    {
+        bool existInterpret = false;
+        bool oldState = ui->comboBoxPythonType->blockSignals(true);
+
+        // If is selected internal interpret and not exist,
+        // than check external interpret and if exist set it.
+        if (pySettings.isSelectedInternalInterpret())
+        {
+            existInterpret = pythonQt::CPythonInterpretQt::isExistInterpret(pythonQt::InterpretType::INTERNAL);
+            if (!existInterpret)
+            {
+                if (pythonQt::CPythonInterpretQt::isExistInterpret(pythonQt::InterpretType::EXTERNAL))
+                {
+                    pythonQt::CMessageBox message(QMessageBox::Warning, tr("Internal interpret was not found, changed to external."));
+                    message.show();
+
+                    existInterpret = true;
+                    pySettings.setInternalInterpret(false);
+                    ui->comboBoxPythonType->setCurrentIndex(1);
+                }
+            }
+        }
+        // If is selected external interpret and not exist,
+        // than check internal interpret and if exist set it.
+        else
+        {
+            existInterpret = pythonQt::CPythonInterpretQt::isExistInterpret(pythonQt::InterpretType::EXTERNAL);
+            if (!existInterpret)
+            {
+                if (pythonQt::CPythonInterpretQt::isExistInterpret(pythonQt::InterpretType::INTERNAL))
+                {
+                    pythonQt::CMessageBox message(QMessageBox::Warning, tr("External interpret was not found, changed to internal."));
+                    message.show();
+                    pySettings.setInternalInterpret(true);
+                    existInterpret = true;
+                    ui->comboBoxPythonType->setCurrentIndex(0);
+
+                }
+            }
+        }
+        ui->comboBoxPythonType->blockSignals(oldState);
+
+
+        if (existInterpret)
+        {
+            ui->eFBrowseVPLSwig->setEnabled(true);
+            ui->eFBrowsePythonPath->setEnabled(true);
+            ui->comboBoxPythonType->setEnabled(true);
+            pythonQt::CPythonInterpretQt::Initialize();
+        }
+        else
+        {
+            ui->checkBoxEnablePython->toggle();
+            pythonQt::CMessageBox message(tr("Internal/External interpret path not contains python.exe."));
+            ui->eFBrowseVPLSwig->setEnabled(false);
+            ui->comboBoxPythonType->setEnabled(false);
+            ui->checkBoxEnablePython->setChecked(false);
+            message.show();
+        }
+    }
+    else
+    {
+        ui->eFBrowseVPLSwig->setEnabled(false);
+        ui->comboBoxPythonType->setEnabled(false);
+        ui->checkBoxEnablePython->setChecked(false);
+    }
+#endif
+}
+
+#endif
