@@ -1,0 +1,59 @@
+<RCC>
+    <qresource prefix="/icons">
+        <file alias="folder_open_arrow.png">resources/folder_open_arrow.png</file>
+        <file alias="folder_open_arrow_menu.png">resources/folder_open_arrow_menu.png</file>
+        <file alias="folder_open_up.png">resources/folder_open_up.png</file>
+        <file alias="folder_open_up_menu.png">resources/folder_open_up_menu.png</file>
+        <file alias="disk.png">resources/disk.png</file>
+        <file alias="disk_menu.png">resources/disk_menu.png</file>
+        <file alias="printer.png">resources/printer.png</file>
+        <file alias="printer_menu.png">resources/printer_menu.png</file>
+        <file alias="yz_ortho_window2.png">resources/yz_ortho_window2.png</file>
+        <file alias="3d_window2.png">resources/3d_window2.png</file>
+        <file alias="normal_slice.png">resources/normal_slice.png</file>
+        <file alias="xy_ortho_window2.png">resources/xy_ortho_window2.png</file>
+        <file alias="xz_ortho_window2.png">resources/xz_ortho_window2.png</file>
+        <file alias="3dim.ico">icons/3dim.ico</file>
+        <file alias="density_window2.png">resources/density_window2.png</file>
+        <file alias="magnifier.png">resources/magnifier.png</file>
+        <file alias="slice_move.png">resources/slice_move.png</file>
+        <file alias="trackball.png">resources/trackball.png</file>
+        <file alias="show_bone_model.png">resources/show_bone_model.png</file>
+        <file alias="show_volume_rendering.png">resources/show_volume_rendering.png</file>
+        <file alias="show_xy_slice3.png">resources/show_xy_slice3.png</file>
+        <file alias="show_xz_slice3.png">resources/show_xz_slice3.png</file>
+        <file alias="show_yz_slice3.png">resources/show_yz_slice3.png</file>
+        <file alias="delete.png">resources/delete.png</file>
+        <file alias="information.png">resources/information.png</file>
+        <file alias="density_window.png">resources/density_window.png</file>
+        <file alias="ortho_slices_window.png">resources/ortho_slices_window.png</file>
+        <file alias="segmentation_window.png">resources/segmentation_window.png</file>
+        <file alias="volume_rendering_window2.png">resources/volume_rendering_window2.png</file>
+        <file alias="cog.png">resources/cog.png</file>
+        <file alias="arrow_redo.png">resources/arrow_redo.png</file>
+        <file alias="arrow_undo.png">resources/arrow_undo.png</file>
+        <file alias="page.png">resources/page.png</file>
+        <file alias="measure_density.png">resources/measure_density.png</file>
+        <file alias="measure_distance.png">resources/measure_distance.png</file>
+        <file alias="dock_icon_maximize.png">resources/dock_icon_maximize.png</file>
+        <file alias="dock_icon_restore.png">resources/dock_icon_restore.png</file>
+        <file alias="dock_icon_close.png">resources/dock_icon_close.png</file>
+        <file alias="dock_icon_screenshot.png">resources/dock_icon_screenshot.png</file>
+        <file alias="icon3d.png">resources/icon3d.png</file>
+        <file alias="iconxy.png">resources/iconxy.png</file>
+        <file alias="iconxz.png">resources/iconxz.png</file>
+        <file alias="iconyz.png">resources/iconyz.png</file>
+        <file>resources/dropper.png</file>
+        <file>resources/models.png</file>
+        <file>resources/fullscreen.png</file>
+        <file>resources/regions.png</file>
+        <file>resources/autoseg.png</file>
+        <file>resources/autosegicon.png</file>
+        <file>resources/magnifier_menu.png</file>
+        <file>resources/density_window_dock.png</file>
+        <file>resources/ortho_slices_window_dock.png</file>
+        <file>resources/segmentation_window_dock.png</file>
+        <file>resources/volume_rendering_window2_dock.png</file>
+        <file>resources/models_dock.png</file>
+    </qresource>
+</RCC>

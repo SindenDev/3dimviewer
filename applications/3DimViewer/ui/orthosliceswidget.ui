@@ -1,0 +1,278 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>OrthoSlicesWidget</class>
+ <widget class="QWidget" name="OrthoSlicesWidget">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>252</width>
+    <height>280</height>
+   </rect>
+  </property>
+  <property name="minimumSize">
+   <size>
+    <width>252</width>
+    <height>280</height>
+   </size>
+  </property>
+  <property name="maximumSize">
+   <size>
+    <width>16777215</width>
+    <height>16777215</height>
+   </size>
+  </property>
+  <property name="windowTitle">
+   <string>Ortho Slices</string>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout_4">
+   <property name="margin">
+    <number>0</number>
+   </property>
+   <item>
+    <widget class="QScrollArea" name="scrollArea">
+     <property name="frameShape">
+      <enum>QFrame::NoFrame</enum>
+     </property>
+     <property name="widgetResizable">
+      <bool>true</bool>
+     </property>
+     <widget class="QWidget" name="scrollAreaWidgetContents">
+      <property name="geometry">
+       <rect>
+        <x>0</x>
+        <y>0</y>
+        <width>252</width>
+        <height>280</height>
+       </rect>
+      </property>
+      <layout class="QVBoxLayout" name="verticalLayout">
+       <item>
+        <widget class="QGroupBox" name="groupBox">
+         <property name="title">
+          <string>Axial / XY Slice</string>
+         </property>
+         <layout class="QGridLayout" name="gridLayout">
+          <item row="0" column="0">
+           <widget class="QSlider" name="xySliceSlider">
+            <property name="toolTip">
+             <string>Adjusts slice position.</string>
+            </property>
+            <property name="statusTip">
+             <string>Adjusts slice position.</string>
+            </property>
+            <property name="maximum">
+             <number>64</number>
+            </property>
+            <property name="orientation">
+             <enum>Qt::Horizontal</enum>
+            </property>
+            <property name="tickPosition">
+             <enum>QSlider::NoTicks</enum>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="1">
+           <widget class="QSpinBox" name="xySpinBox">
+            <property name="minimumSize">
+             <size>
+              <width>60</width>
+              <height>0</height>
+             </size>
+            </property>
+            <property name="toolTip">
+             <string>Adjusts slice position.</string>
+            </property>
+            <property name="statusTip">
+             <string>Adjusts slice position.</string>
+            </property>
+            <property name="maximum">
+             <number>64</number>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="0" colspan="2">
+           <widget class="QComboBox" name="xySliceModeCombo">
+            <property name="toolTip">
+             <string>Selects displaying mode of slice.</string>
+            </property>
+            <property name="statusTip">
+             <string>Selects displaying mode of slice.</string>
+            </property>
+            <item>
+             <property name="text">
+              <string>Default</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>MIP</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>RTG</string>
+             </property>
+            </item>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <widget class="QGroupBox" name="groupBox_2">
+         <property name="title">
+          <string>Coronal / XZ Slice</string>
+         </property>
+         <layout class="QGridLayout" name="gridLayout_2">
+          <item row="0" column="0">
+           <widget class="QSlider" name="xzSliceSlider">
+            <property name="toolTip">
+             <string>Adjusts slice position.</string>
+            </property>
+            <property name="statusTip">
+             <string>Adjusts slice position.</string>
+            </property>
+            <property name="maximum">
+             <number>64</number>
+            </property>
+            <property name="orientation">
+             <enum>Qt::Horizontal</enum>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="1">
+           <widget class="QSpinBox" name="xzSpinBox">
+            <property name="minimumSize">
+             <size>
+              <width>60</width>
+              <height>0</height>
+             </size>
+            </property>
+            <property name="toolTip">
+             <string>Adjusts slice position.</string>
+            </property>
+            <property name="statusTip">
+             <string>Adjusts slice position.</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="0" colspan="2">
+           <widget class="QComboBox" name="xzSliceModeCombo">
+            <property name="toolTip">
+             <string>Selects displaying mode of slice.</string>
+            </property>
+            <property name="statusTip">
+             <string>Selects displaying mode of slice.</string>
+            </property>
+            <item>
+             <property name="text">
+              <string>Default</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>MIP</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>RTG</string>
+             </property>
+            </item>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <widget class="QGroupBox" name="groupBox_3">
+         <property name="title">
+          <string>Sagittal / YZ Slice</string>
+         </property>
+         <layout class="QGridLayout" name="gridLayout_3">
+          <item row="0" column="0">
+           <widget class="QSlider" name="yzSliceSlider">
+            <property name="toolTip">
+             <string>Adjusts slice position.</string>
+            </property>
+            <property name="statusTip">
+             <string>Adjusts slice position.</string>
+            </property>
+            <property name="maximum">
+             <number>64</number>
+            </property>
+            <property name="orientation">
+             <enum>Qt::Horizontal</enum>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="1">
+           <widget class="QSpinBox" name="yzSpinBox">
+            <property name="minimumSize">
+             <size>
+              <width>60</width>
+              <height>0</height>
+             </size>
+            </property>
+            <property name="toolTip">
+             <string>Adjusts slice position.</string>
+            </property>
+            <property name="statusTip">
+             <string>Adjusts slice position.</string>
+            </property>
+            <property name="maximum">
+             <number>64</number>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="0" colspan="2">
+           <widget class="QComboBox" name="yzSliceModeCombo">
+            <property name="toolTip">
+             <string>Selects displaying mode of slice.</string>
+            </property>
+            <property name="statusTip">
+             <string>Selects displaying mode of slice.</string>
+            </property>
+            <item>
+             <property name="text">
+              <string>Default</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>MIP</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>RTG</string>
+             </property>
+            </item>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <spacer name="verticalSpacer">
+         <property name="orientation">
+          <enum>Qt::Vertical</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>20</width>
+           <height>4</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+      </layout>
+     </widget>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

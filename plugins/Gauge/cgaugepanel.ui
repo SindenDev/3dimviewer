@@ -1,0 +1,177 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>CGaugePanel</class>
+ <widget class="QWidget" name="CGaugePanel">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>221</width>
+    <height>257</height>
+   </rect>
+  </property>
+  <property name="minimumSize">
+   <size>
+    <width>221</width>
+    <height>169</height>
+   </size>
+  </property>
+  <property name="windowTitle">
+   <string>Gauge Panel</string>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout">
+   <item>
+    <widget class="QGroupBox" name="groupBox">
+     <property name="title">
+      <string>Density Measure</string>
+     </property>
+     <layout class="QFormLayout" name="formLayout">
+      <item row="0" column="0">
+       <widget class="QLabel" name="label">
+        <property name="text">
+         <string>Measuring Mode</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="QComboBox" name="comboBoxMeasuringMode">
+        <property name="toolTip">
+         <string>Choose measuring mode used to evaluate density value at any point.</string>
+        </property>
+        <property name="statusTip">
+         <string>Choose measuring mode used to evaluate density value at any point.</string>
+        </property>
+        <item>
+         <property name="text">
+          <string>Pick Value</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Average</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Median</string>
+         </property>
+        </item>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="groupBox_2">
+     <property name="title">
+      <string>Latest Results</string>
+     </property>
+     <layout class="QFormLayout" name="formLayout_2">
+      <item row="0" column="0">
+       <widget class="QLabel" name="label_2">
+        <property name="text">
+         <string>Density Value [Hu]</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="QLineEdit" name="editDensity">
+        <property name="enabled">
+         <bool>false</bool>
+        </property>
+        <property name="acceptDrops">
+         <bool>false</bool>
+        </property>
+        <property name="toolTip">
+         <string>Latest measured density...</string>
+        </property>
+        <property name="statusTip">
+         <string>Latest measured density...</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="label_3">
+        <property name="text">
+         <string>Distance [mm]</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="QLineEdit" name="editDistance">
+        <property name="enabled">
+         <bool>false</bool>
+        </property>
+        <property name="acceptDrops">
+         <bool>false</bool>
+        </property>
+        <property name="toolTip">
+         <string>Latest measured distance...</string>
+        </property>
+        <property name="statusTip">
+         <string>Latest measured distance...</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QPushButton" name="pushButtonDensity">
+     <property name="text">
+      <string>Measure Density Value [Hu]</string>
+     </property>
+     <property name="icon">
+      <iconset resource="gauge.qrc">
+       <normaloff>:/icons/measure_density.png</normaloff>:/icons/measure_density.png</iconset>
+     </property>
+     <property name="checkable">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QPushButton" name="pushButtonDistance">
+     <property name="text">
+      <string>Measure Distance [mm]</string>
+     </property>
+     <property name="icon">
+      <iconset resource="gauge.qrc">
+       <normaloff>:/icons/measure_distance.png</normaloff>:/icons/measure_distance.png</iconset>
+     </property>
+     <property name="checkable">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QPushButton" name="pushButtonClear">
+     <property name="text">
+      <string>Clear Measurements</string>
+     </property>
+     <property name="icon">
+      <iconset resource="gauge.qrc">
+       <normaloff>:/icons/delete.png</normaloff>:/icons/delete.png</iconset>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <spacer name="verticalSpacer">
+     <property name="orientation">
+      <enum>Qt::Vertical</enum>
+     </property>
+     <property name="sizeHint" stdset="0">
+      <size>
+       <width>20</width>
+       <height>40</height>
+      </size>
+     </property>
+    </spacer>
+   </item>
+  </layout>
+ </widget>
+ <resources>
+  <include location="gauge.qrc"/>
+ </resources>
+ <connections/>
+</ui>

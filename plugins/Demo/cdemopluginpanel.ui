@@ -1,0 +1,169 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>CDemoPluginPanel</class>
+ <widget class="QWidget" name="CDemoPluginPanel">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>221</width>
+    <height>303</height>
+   </rect>
+  </property>
+  <property name="minimumSize">
+   <size>
+    <width>221</width>
+    <height>303</height>
+   </size>
+  </property>
+  <property name="windowTitle">
+   <string>Demo Plugin</string>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout_3">
+   <item>
+    <widget class="QGroupBox" name="groupBox">
+     <property name="title">
+      <string>Point Selection</string>
+     </property>
+     <layout class="QFormLayout" name="formLayout">
+      <item row="0" column="0" colspan="2">
+       <widget class="QPushButton" name="pushButtonPickValue">
+        <property name="toolTip">
+         <string>Press the button and select any point the volume data.</string>
+        </property>
+        <property name="statusTip">
+         <string>Press the button and select any point the volume data.</string>
+        </property>
+        <property name="text">
+         <string>Pick Value</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="label">
+        <property name="text">
+         <string>Density</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="QLineEdit" name="editDensity">
+        <property name="enabled">
+         <bool>false</bool>
+        </property>
+        <property name="acceptDrops">
+         <bool>false</bool>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="0">
+       <widget class="QLabel" name="label_2">
+        <property name="text">
+         <string>Coords</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="1">
+       <widget class="QLineEdit" name="editCoords">
+        <property name="enabled">
+         <bool>false</bool>
+        </property>
+        <property name="acceptDrops">
+         <bool>false</bool>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="groupBox_2">
+     <property name="title">
+      <string>Drawing</string>
+     </property>
+     <layout class="QVBoxLayout" name="verticalLayout">
+      <item>
+       <widget class="QPushButton" name="pushButtonPolygon">
+        <property name="toolTip">
+         <string>Switches the mouse to the polygon drawing mode. Press [SHIFT] to start the drawing.</string>
+        </property>
+        <property name="statusTip">
+         <string>Switches the mouse to the polygon drawing mode. Press [SHIFT] to start the drawing.</string>
+        </property>
+        <property name="text">
+         <string>Polygon</string>
+        </property>
+        <property name="checkable">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="pushButtonStroke">
+        <property name="toolTip">
+         <string>Switches the mouse to the stroke drawing mode. Press [SHIFT] to start the drawing.</string>
+        </property>
+        <property name="statusTip">
+         <string>Switches the mouse to the stroke drawing mode. Press [SHIFT] to start the drawing.</string>
+        </property>
+        <property name="text">
+         <string>Stroke</string>
+        </property>
+        <property name="checkable">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="groupBox_3">
+     <property name="title">
+      <string>Region</string>
+     </property>
+     <layout class="QVBoxLayout" name="verticalLayout_2">
+      <item>
+       <widget class="QComboBox" name="comboBoxRegion">
+        <property name="toolTip">
+         <string>Selects active region.</string>
+        </property>
+        <property name="statusTip">
+         <string>Selects active region.</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="checkBoxShowRegions">
+        <property name="toolTip">
+         <string>Enables/Disables coloring of segemented regions.</string>
+        </property>
+        <property name="statusTip">
+         <string>Enables/Disables coloring of segemented regions.</string>
+        </property>
+        <property name="text">
+         <string>Show Regions</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <spacer name="verticalSpacer">
+     <property name="orientation">
+      <enum>Qt::Vertical</enum>
+     </property>
+     <property name="sizeHint" stdset="0">
+      <size>
+       <width>20</width>
+       <height>40</height>
+      </size>
+     </property>
+    </spacer>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

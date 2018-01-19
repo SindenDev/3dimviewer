@@ -20,13 +20,14 @@
 
 Table of Contents
 
-1 What is 3DimViewer?
-  1.1 Basic Features
-2 Installation
-  2.1 Compilation using MS Visual Studio
-  2.2 Compilation on Linux
-3 Bug Reporting
-4 Contacts
+1. What is 3DimViewer?
+    1. Basic Features
+2. Installation
+    1. Compilation using MS Visual Studio
+    2. Compilation on Linux
+    3. Patch for OpenMesh 3.x
+3. Bug Reporting
+4. Contacts
 
 
 1 What is 3DimViewer?
@@ -41,16 +42,16 @@ systems.
 1.1 Basic Features
 ------------------
 
-* Truly 3D viewer of volumetric data. 
+* Genuine 3D viewer of volumetric data. 
 * Multiplanar view (three orthogonal slices through the data). 
 * Adjustable density window. 
 * Strong DICOM dataset import. 
 * Distance and density measuring. 
-* Volume rendering. 
+* High quality Volume rendering for direct 3D visualization.
 * Tissue segmentation based on thresholding. 
 * Surface reconstruction of any segmented tissue. 
 * 3D surface rendering. 
-* Advanced functions available via loadable plugins. 
+* Advanced functions available via extension plugins. 
 
 
 ---
@@ -73,9 +74,8 @@ compile the 3DimViewer:
 
 All required prebuilt 3rd party libraries can be downloaded separately in a 
 single package. Alternatively, you can build them on your own. In that case, 
-we recommend you to build at least OpenSceneGraph, wxWidgets and MDSTk 
-libraries. A more comprehensive guide can be found in 
-''doc/Installation.htm''. For a complete list of required 3rd party libraries 
+we recommend you to build at least OpenSceneGraph, Qt and VPL
+libraries. For a complete list of required 3rd party libraries 
 take a look at ''3rdParty.txt''.
 
 * Where appropriate, download the package of prebuilt 3rd party libraries and 
@@ -91,7 +91,7 @@ makes possible to have multiple independent build targets by creating
 multiple build 
 directories.
 
-* Open the solution ''3Dim.sln'' which will be placed in the build directory 
+* Open the solution ''3Dim.sln'' (or ''Project.sln'') which will be placed in the build directory 
 and compile the project '3DimViewer'...
 
 * Final executable will be placed directly in the 
@@ -145,6 +145,22 @@ viewer on Ubuntu 10.10 (32-bit version):
 ''applications/3DimViewer/plugins'' directory.
 
 
+2.3 Patch for OpenMesh 3.x
+--------------------------
+
+A simple patch has to be applied to OpenMesh's *PolyConnectivity* files.
+Move implementations of the below methods from the *.cc* file to the corresponding *.hh* file.
+
+    /// Begin iterator for vertices
+    VertexIter vertices_begin() { return VertexIter(*this, VertexHandle(0)); }
+    /// Const begin iterator for vertices
+    ConstVertexIter vertices_begin() const { return VertexIter(*this, VertexHandle(0)); }
+    /// End iterator for vertices
+    VertexIter vertices_end() { return ConstVertexIter(*this, VertexHandle(int(n_vertices()))); }
+    /// Const end iterator for vertices
+    ConstVertexIter vertices_end() const { return ConstVertexIter(*this, VertexHandle(int(n_vertices()))); }
+
+
 ---
 
 3 Bug Reporting
@@ -167,6 +183,6 @@ or
 4 Contacts
 ==========
 
-3Dim Laboratory s.r.o.
-E-mail: info@3dim-laboratory.cz
-Web: http://www.3dim-laboratory.cz/
+* 3Dim Laboratory s.r.o.
+* E-mail: info@3dim-laboratory.cz
+* Web: http://www.3dim-laboratory.cz/
