@@ -61,7 +61,6 @@ ADD_LIB_VPL()
 ADD_LIB_OSG()
 ADD_LIB_EIGEN()
 ADD_LIB_OPENMESH()
-ADD_LIB_PHYSFS()
 ADD_LIB_FLANN()
 
 #-------------------------------------------------------------------------------
