@@ -105,9 +105,9 @@ foreach(lib
 
   mark_as_advanced(DCMTK_${lib}d_LIBRARY)
 
-  if(DCMTK_${lib}d_LIBRARY)
-    list(APPEND DCMTK_LIBRARIES debug ${DCMTK_${lib}d_LIBRARY})
-  endif()
+  #if(DCMTK_${lib}d_LIBRARY)
+  #  list(APPEND DCMTK_LIBRARIES debug ${DCMTK_${lib}d_LIBRARY})
+  #endif()
 
   # Optimized libraries
   find_library(DCMTK_${lib}_LIBRARY

@@ -84,6 +84,7 @@ ADD_LIB_QT()
 ADD_LIB_OSG()
 ADD_LIB_VPL()
 ADD_LIB_EIGEN()
+ADD_LIB_FLANN()
 
 if( BUILD_WITH_GDCM )
     ADD_LIB_GDCM()
@@ -98,7 +99,6 @@ ADD_LIB_ICONV()
 ADD_LIB_OPENCTM()
 ADD_LIB_ZLIB()
 ADD_LIB_OPENGL()
-ADD_LIB_FLANN()
 
 if(BUILD_WITH_PYTHON)
     ADD_LIB_3DIMPYTHON()
@@ -306,8 +306,8 @@ if( BUILD_PLUGINS )
                     #${TRIDIM_SEGTOSMALLREGIONS_PLUGIN}
                     #${TRIDIM_DATASHIFT_PLUGIN}
                     ${TRIDIM_DEMO_PLUGIN}
-                    ${TRIDIM_GAUGE_PLUGIN}
                     ${TRIDIM_NOTES_PLUGIN}
+                    ${TRIDIM_GAUGE_PLUGIN}
                     #${TRIDIM_EXPERIMENTALSEG_PLUGIN}
                     )
     
