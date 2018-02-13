@@ -76,6 +76,9 @@ CPreferencesDialog::CPreferencesDialog(const QDir &localeDir, QMenuBar* pMenuBar
     // get threading mode
     int nThreadingMode=settings.value("Threading").toInt();
     ui->comboBoxRenderingMode->setCurrentIndex(nThreadingMode);
+    // antialiasing
+    bool bAntialiasingEnabled = settings.value("AntialiasingEnabled", QVariant(true)).toBool();
+    ui->checkBoxAntialiasing->setChecked(bAntialiasingEnabled);
     // error logging
     bool bLoggingEnabled = settings.value("LoggingEnabled", QVariant(true)).toBool();
     ui->checkBoxLogging->setChecked(bLoggingEnabled);
@@ -309,6 +312,14 @@ void CPreferencesDialog::on_CPreferencesDialog_accepted()
         m_bChangesNeedRestart=true;
     }
 
+    const bool bWantAntialiasing = ui->checkBoxAntialiasing->isChecked();
+    bool bAntialiasingEnabled = settings.value("AntialiasingEnabled", QVariant(DEFAULT_ANTIALIASING)).toBool();
+    if (bWantAntialiasing != bAntialiasingEnabled)
+    {
+        settings.setValue("AntialiasingEnabled", bWantAntialiasing);
+        m_bChangesNeedRestart = true;
+    }
+
     const bool bWantLogging = ui->checkBoxLogging->isChecked();
     bool bLoggingEnabled = settings.value("LoggingEnabled", QVariant(DEFAULT_LOGGING)).toBool();
     if (bWantLogging!=bLoggingEnabled)
@@ -417,6 +428,8 @@ void CPreferencesDialog::resetDefaultsPressed( )
 {
     // set threading to single threaded
     ui->comboBoxRenderingMode->setCurrentIndex(0);
+    // set antialiasing
+    ui->checkBoxAntialiasing->setChecked(DEFAULT_ANTIALIASING);
     // set error logging
     ui->checkBoxLogging->setChecked(DEFAULT_LOGGING);
 	// Set model/region link

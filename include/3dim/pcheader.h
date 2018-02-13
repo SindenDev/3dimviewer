@@ -9,13 +9,8 @@
 
 #ifndef Q_MOC_RUN
 
-#ifdef USED_LIB_GLEW
-  // GLEW must be included first!
-  #ifdef __APPLE__
-    #include <glew.h>
-  #else
-    #include <GL/glew.h>
-  #endif
+#ifdef USED_LIB_GLAD
+#include <glad/glad.h>
 #endif
 
 #include <iostream>

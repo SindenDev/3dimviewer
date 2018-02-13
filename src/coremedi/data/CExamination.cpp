@@ -858,6 +858,8 @@ CExamination::ELoadState CExamination::loadDicomData(data::CSerieInfo * serie,
     YAxis.normalize();
     ZAxis.normalize();
 
+    VPL_LOG_INFO("Axis  " << XAxis.getX() << "," << XAxis.getY() << "," << XAxis.getZ() << "  " << YAxis.getX() << "," << YAxis.getY() << "," << YAxis.getZ() << "  " << ZAxis.getX() << "," << ZAxis.getY() << "," << ZAxis.getZ());    
+    VPL_LOG_INFO("Slices " << total_dicom_slices);
 
     // PRELOAD ALL SLICES
 
@@ -1206,6 +1208,7 @@ CExamination::ELoadState CExamination::loadDicomData(data::CSerieInfo * serie,
         goto lFinishLoading;
     }
 
+    VPL_LOG_INFO("Applying transformation");
 
     // BEGIN - THE TRANSFORMATION
     {

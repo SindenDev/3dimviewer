@@ -152,17 +152,31 @@ int main(int argc, char *argv[])
     QCoreApplication::setOrganizationName("3Dim Laboratory s.r.o.");
     QCoreApplication::setOrganizationDomain("3dim-laboratory.cz");
     QCoreApplication::setApplicationName("3DimViewer");
+
+    {
+        QSettings settings;
+
+        const bool bAntialiasing = settings.value("AntialiasingEnabled", DEFAULT_ANTIALIASING).toBool();
+
+        QSurfaceFormat format = QSurfaceFormat::defaultFormat();
+        format.setRenderableType(QSurfaceFormat::OpenGL);
+        format.setProfile(QSurfaceFormat::CoreProfile);
+        format.setVersion(4, 3);
+        format.setOption(QSurfaceFormat::DeprecatedFunctions, false);
+
+        if (bAntialiasing)
+        {
+            format.setSamples(8);
+        }
+
+        QSurfaceFormat::setDefaultFormat(format);
+    }
+
     C3DimApplication app(argc, argv);
     // set application icon - however this affects running application only
     // TODO: add platform dependent application icon
     //       see http://developer.qt.nokia.com/doc/qt-4.8/appicon.html
     app.setWindowIcon(QIcon(":/icons/3dim.ico"));
-
-#if (QT_VERSION >= QT_VERSION_CHECK(5, 0, 0)) // with Qt5 enable depth buffer
-    QSurfaceFormat format = QSurfaceFormat::defaultFormat();
-    format.setDepthBufferSize(32);
-    QSurfaceFormat::setDefaultFormat(format);
-#endif
 
     // Remove trailing 'bin' from the current working directory
     //QString workDir = QDir::currentPath();

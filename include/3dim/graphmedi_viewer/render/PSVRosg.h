@@ -80,11 +80,7 @@ public:
     virtual void drawImplementation(osg::RenderInfo& ri) const;
 
     //! Computes the bounding box.
-#if OSG_VERSION_GREATER_OR_EQUAL(3,1,10)
     virtual osg::BoundingBox computeBoundingBox() const;
-#else
-    virtual osg::BoundingBox computeBound() const;
-#endif
 
 protected:
     //! Pointer to the volume rendering.

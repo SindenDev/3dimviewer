@@ -41,24 +41,30 @@ namespace data
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //! Object serialization wrapper.
 
-template< typename T >
+template <typename T>
 class CSerializableData
 {
 public:
-	//! Serialize
-	template < class tpSerializer >
-	static void serialize( const T * VPL_UNUSED(sd), vpl::mod::CChannelSerializer<tpSerializer> & Writer )
+    //! Serialize
+    template <class tpSerializer>
+    static void serialize(const T * VPL_UNUSED(sd), vpl::mod::CChannelSerializer<tpSerializer> &Writer)
     {
 #pragma unused(Writer)
         assert(false);
     }
 
-	//! Deserialize
-	template < class tpSerializer >
-	static void deserialize( T * VPL_UNUSED(sd), vpl::mod::CChannelSerializer<tpSerializer> & Reader )
+    //! Deserialize
+    template <class tpSerializer>
+    static void deserialize(T * VPL_UNUSED(sd), vpl::mod::CChannelSerializer<tpSerializer> &Reader)
     {
 #pragma unused(Reader)
         assert(false);
+    }
+
+    static bool deserializationFinished(T * VPL_UNUSED(sd))
+    {
+        assert(false);
+        return false;
     }
 
 }; // class CSerializableData
@@ -72,16 +78,45 @@ public:
 //!\param	type	The type to serialize. 
 
 #define DECLARE_SERIALIZATION_WRAPPER( type ) \
-    template<> \
-    class CSerializableData< type > \
+    template <> \
+    class CSerializableData<type> \
     { \
     public: \
-	    template < class tpSerializer > \
-	    static void serialize( type * sd, vpl::mod::CChannelSerializer<tpSerializer> & Writer ) \
-	    { sd->serialize( Writer );  } \
-	    template < class tpSerializer > \
-	    static void deserialize( type * sd, vpl::mod::CChannelSerializer<tpSerializer> & Reader ) \
-	    { sd->deserialize( Reader ); } \
+        template <class tpSerializer> \
+        static void serialize(type *sd, vpl::mod::CChannelSerializer<tpSerializer> &Writer ) \
+        { \
+            sd->serialize( Writer ); \
+        } \
+        template <class tpSerializer > \
+        static void deserialize(type *sd, vpl::mod::CChannelSerializer<tpSerializer> &Reader ) \
+        { \
+            sd->deserialize(Reader); \
+        } \
+        static bool deserializationFinished(type *sd) \
+        { \
+            return false; \
+        } \
+    };
+
+#define DECLARE_EXTENDED_SERIALIZATION_WRAPPER( type ) \
+    template <> \
+    class CSerializableData<type> \
+    { \
+    public: \
+        template <class tpSerializer> \
+        static void serialize(type *sd, vpl::mod::CChannelSerializer<tpSerializer> &Writer ) \
+        { \
+            sd->serialize( Writer ); \
+        } \
+        template <class tpSerializer > \
+        static void deserialize(type *sd, vpl::mod::CChannelSerializer<tpSerializer> &Reader ) \
+        { \
+            sd->deserialize(Reader); \
+        } \
+        static bool deserializationFinished(type *sd) \
+        { \
+            return sd->deserializationFinished(); \
+        } \
     };
 
 

@@ -1028,6 +1028,9 @@ void CMeshCutter::performCut(geometry::CMesh *source, const std::vector<CMeshOct
         }
 #endif
 
+        m_vertices->dirty();
+        m_indices->dirty();
+
 #if(0)
         clk = clock() - clk;
         char sss[32];
@@ -1097,9 +1100,12 @@ void CMeshCutter::operator()(const osg::Vec3 &v1, const osg::Vec3 &v2, const osg
     {
         m_indices->push_back(i);
     }
+
+    m_vertices->dirty();
+    m_indices->dirty();
 }
 
-void CMeshCutter::operator()(const osg::Vec3 &v1, const osg::Vec3 &v2, const osg::Vec3 &v3, bool treatVertexDataAsTemporary)
+void CMeshCutter::operator()(const osg::Vec3 &v1, const osg::Vec3 &v2, const osg::Vec3 &v3)
 { 
     VPL_ASSERT(m_initialized);
     
@@ -1162,6 +1168,9 @@ void CMeshCutter::operator()(const osg::Vec3 &v1, const osg::Vec3 &v2, const osg
     {
         m_indices->push_back(i);
     }
+
+    m_vertices->dirty();
+    m_indices->dirty();
 }
 
 ////////////////////////////////////////////////////////////
@@ -1202,7 +1211,7 @@ CMesh &CMesh::operator=(const CMesh &mesh)
     }
 
     CBaseMesh::operator=(mesh);
-    
+
     if( m_octree )
     {
         delete m_octree;
@@ -1214,15 +1223,15 @@ CMesh &CMesh::operator=(const CMesh &mesh)
         m_octree = new CMeshOctree();
         *m_octree = *mesh.m_octree;
     }
-	
-	m_octreeVersion = 0;
 
-    return *this;
+    m_octreeVersion = 0;
 
     m_pp.clear();
     m_pp.insert(m_pp.end(), mesh.m_pp.begin(), mesh.m_pp.end());
 
     request_face_normals();
+
+    return *this;
 }
 
 //! Dtor

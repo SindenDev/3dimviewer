@@ -224,6 +224,17 @@ void CPluginManager::loadPlugins(QMainWindow* pMain,    // pointer to main windo
         ok=m_pluginsDir.cd("plugins");
 #endif
     }
+#ifdef __APPLE__
+    if (!ok)
+    {
+        m_pluginsDir.cdUp();
+#ifdef _DEBUG
+        ok=m_pluginsDir.cd("pluginsd");
+#else
+        ok=m_pluginsDir.cd("plugins");
+#endif
+    }
+#endif
     if (!ok)
         m_pluginsDir = QDir(qApp->applicationDirPath());	
 

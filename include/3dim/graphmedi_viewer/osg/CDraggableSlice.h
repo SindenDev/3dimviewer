@@ -35,7 +35,11 @@
 #include <osgViewer/Viewer>
 #include <osg/CoordinateSystemNode>
 #include <osgText/Text>
-//#include <osg/CTools.h>
+
+namespace osg
+{
+    class CMaterialLineStrip;
+}
 
 class OSGCanvas;
 
@@ -49,10 +53,14 @@ class CFrameGeode : public osg::Geode
 {
 protected:
 	osg::ref_ptr< osg::Geometry > m_FrameGeometry;
+    osg::ref_ptr<osg::Vec4Array> m_color;
 
+    osg::ref_ptr<osg::CMaterialLineStrip> m_lineMaterial;
 public:
 	//! Set color method
 	void setColor( float r, float g, float b );
+
+    void setMaterial(osg::CMaterialLineStrip* material);
 
 protected:
     //! Constructor

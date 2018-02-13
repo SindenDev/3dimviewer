@@ -275,6 +275,9 @@ namespace data
         //! Set model name
         void setLabel(const std::string &label) { m_label = label; }
 
+        void setReserved(bool value = true) { m_reserved = value; };
+        bool getReserved() { return m_reserved; };
+
         //! Get model property
         std::string getProperty(const std::string &prop) const
         {
@@ -869,6 +872,8 @@ namespace data
 
         //! Model name
         std::string m_label;
+
+        bool m_reserved = false;
 
         //! Named model properties
         std::map<std::string, std::string> m_properties;

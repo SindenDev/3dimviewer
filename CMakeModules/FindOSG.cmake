@@ -59,7 +59,7 @@ macro( FIND_OSG_LIBRARY NAME )
       get_filename_component(lib_name ${OSG_${NAME}_LIBRARY} NAME)
       get_filename_component(lib_named ${OSG_${NAME}d_LIBRARY} NAME)
 
-    set( OSG_LIBRARIES ${OSG_LIBRARIES} optimized ${lib_name} debug ${lib_named}d )
+    set( OSG_LIBRARIES ${OSG_LIBRARIES} optimized ${lib_name} debug ${lib_named} )
   else()
     if( OSG_${NAME}_LIBRARY )
         get_filename_component(lib_name ${OSG_${NAME}_LIBRARY} NAME)
@@ -69,7 +69,7 @@ macro( FIND_OSG_LIBRARY NAME )
       if( OSG_${NAME}d_LIBRARY )
           get_filename_component(lib_named ${OSG_${NAME}d_LIBRARY} NAME)
 
-        set( OSG_LIBRARIES ${OSG_LIBRARIES} ${lib_named}d ) #??
+        set( OSG_LIBRARIES ${OSG_LIBRARIES} ${lib_named} ) #??
       endif()
     endif()
   endif()

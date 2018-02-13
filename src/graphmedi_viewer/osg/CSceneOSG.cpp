@@ -34,9 +34,6 @@ scene::CSceneBase::CSceneBase(OSGCanvas * pCanvas)
 {
     setCanvas(pCanvas);
 
-    // turn off the lights
-    this->getOrCreateStateSet()->setMode(GL_LIGHTING, osg::StateAttribute::OFF);
-
     p_AnchorGroup = new osg::MatrixTransform;
     p_AnchorAndCenterGroup = new osg::MatrixTransform;
     this->addChild(p_AnchorGroup.get());

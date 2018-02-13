@@ -42,9 +42,9 @@ namespace osgManipulator
 class  CTranslate2DDragger : public osg::CTwoMaterialsNode< Dragger >
 {
 public:
-	CTranslate2DDragger();
+    CTranslate2DDragger();
 
-	CTranslate2DDragger(const osg::Plane& plane);
+    CTranslate2DDragger(const osg::Plane& plane);
 
     //! Destructor
     virtual ~CTranslate2DDragger();

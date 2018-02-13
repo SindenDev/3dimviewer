@@ -53,9 +53,6 @@ CLineGeode::CLineGeode( int flags ) :
 	normals->push_back(osg::Vec3(0.0f,-1.0f,0.0f));
 	m_geometry->setNormalArray(normals, osg::Array::BIND_OVERALL);
 
-	// Do not use display lists. Its slow for realtime graphics...
-	m_geometry->setUseDisplayList( false );
-
 	// Create draw arrays 
 	m_drawArrays = new DrawArrays( osg::PrimitiveSet::LINE_STRIP, m_geometry->getVertexArray()->getNumElements(), 0 );
 	m_geometry->addPrimitiveSet( m_drawArrays.get() );
@@ -66,13 +63,6 @@ CLineGeode::CLineGeode( int flags ) :
 	// State set
 	m_stateSet = new StateSet;
 	setStateSet( m_stateSet.get() );
-
-	// Line width
-	m_lineWidth = new LineWidth;
-	m_lineWidth->setWidth( 1.0f );
-
-	// Add line width to the state set
-	m_stateSet->setAttributeAndModes( m_lineWidth.get(), osg::StateAttribute::ON );
 
 	// Point size
 	m_pointSize = new Point;
@@ -110,16 +100,15 @@ CLineGeode::CLineGeode( int flags ) :
 // Add line point
 void CLineGeode::AddPoint(const osg::Vec3 &point)
 {
-// Add point
-	osg::Vec3Array * arr = dynamic_cast<osg::Vec3Array *>( m_geometry->getVertexArray() );
-	arr->push_back(point);
+    m_vertices->push_back(point);
+    m_vertices->dirty();
 
 	// Set new count of vertices to draw array
-    m_drawArrays->setCount(arr->size());
+    m_drawArrays->setCount(m_vertices->size());
 	// Set draw arrays dirty
 	m_drawArrays->dirty();
 	// Dirty display list
-	m_geometry->dirtyDisplayList();
+	m_geometry->dirtyGLObjects();
 }
 
 /******************************************************************************

@@ -30,7 +30,6 @@
 #include <osg/Geometry>
 #include <osg/MatrixTransform>
 #include <osg/Depth>
-#include <osg/LineWidth>
 #include <osg/PolygonOffset>
 #include <osg/StateSet>
 #include <osg/Shape>
@@ -41,11 +40,10 @@
 #include <osgManipulator/Translate1DDragger>
 
 #include <3dim/graph/osg/CForceCullCallback.h>
-
+#include <osg/CThickLineMaterial.h>
 
 namespace scene
 {
-    
 
 ///////////////////////////////////////////////////////////////////////////////
 //! Class able to constract dummy geometries of different type.
@@ -176,12 +174,6 @@ protected:
     //! Gizmo geometry
     osg::ref_ptr< osg::Geometry > p_Geometry;
 
-    //! Gizmo state set
-    osg::ref_ptr< osg::StateSet > p_StateSet;
-
-    //! Gizmo line width
-    osg::ref_ptr< osg::LineWidth > p_LineWidth;
-
     //! Gizmo size
     double d_Size;
 
@@ -206,12 +198,6 @@ public:
 
     //! Returns size of gizmo
     double getSize();
-
-    //! Set gizmo line thickness
-    void setThickness( double thickness );
-
-    //! Returns thickness of a gizmo
-    double getThickness();
 };
 
 
@@ -221,6 +207,8 @@ protected:
     osg::Vec3 m_Offset;
 
     osg::Vec3 m_Orientation;
+
+    osg::ref_ptr<osg::CMaterialLineStrip> m_lineMaterial;
 
 public:
 	//! Constructor
@@ -235,6 +223,8 @@ public:
     virtual void setSizeAndOffset( double size, const osg::Vec3 &offset, const osg::Vec3 & orientation);
 
     virtual void setOrientation(const osg::Vec3 & orientation);
+
+    void setMaterial(osg::CMaterialLineStrip* material);
 };
 
 
@@ -242,6 +232,8 @@ class CCircleGizmo : public CGizmo
 {
 protected:
     osg::Vec3 m_Offset;
+
+    osg::ref_ptr<osg::CMaterialLineStrip> m_lineMaterial;
 
 public:
     //! COnstructor
@@ -256,6 +248,8 @@ public:
     virtual void setSize( double size );
 
     virtual void setSizeAndOffset( double size, const osg::Vec3 &offset);
+
+    void setMaterial(osg::CMaterialLineStrip* material);
 };
 
 
@@ -272,6 +266,8 @@ protected:
 
 	osg::ref_ptr< osg::MatrixTransform > p_DummyTransform;
 
+    osg::ref_ptr<osg::CMaterialLines> m_lineMaterial;
+
 public:
 	COrientableLineGizmo( double size, const osg::Vec3 & offset, const osg::Vec3 & orientation );
 
@@ -286,6 +282,8 @@ public:
 	virtual void setOffset( const osg::Vec3 & offset );
 
 	virtual void setOrientation( const osg::Vec3 & orientation );
+
+    void setMaterial(osg::CMaterialLines* material);
 };
 
 
@@ -300,6 +298,8 @@ protected:
 
     osg::ref_ptr< osg::MatrixTransform > p_DummyTransform;
 
+    osg::ref_ptr<osg::CMaterialLines> m_lineMaterial;
+
 public:
     CLineGizmo(double size,
                const osg::Vec3 & offset = osg::Vec3( 0.0, 0.0, 0.0 ),
@@ -313,6 +313,8 @@ public:
     virtual void setSize( double size );
 
     virtual void setOffset( const osg::Vec3 & offset );
+
+    void setMaterial(osg::CMaterialLines* material);
 };
 
 
@@ -320,6 +322,8 @@ class CSquareGizmo : public CGizmo
 {
 protected :
         osg::Vec3 m_Offset;
+
+        osg::ref_ptr<osg::CMaterialLineStrip> m_lineMaterial;
 
 public:
     CSquareGizmo( double size, const osg::Vec3 & offset = osg::Vec3( 0.0, 0.0, 0.0 ), double dummyScale = 1.2 );
@@ -334,6 +338,8 @@ public:
     }
 
     virtual void setSize( double size, double dummyScale );
+
+    void setMaterial(osg::CMaterialLineStrip* material);
 };
 
 

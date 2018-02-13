@@ -24,7 +24,6 @@
 
 #include <osgUtil/SmoothingVisitor>
 #include <osg/KdTree>
-#include <osg/LightModel>
 #include <osg/CullFace>
 #include <osg/Version>
 #include <osg/CForceCullCallback.h>
@@ -60,13 +59,7 @@ osg::CTriMesh::CTriMesh()
     pVisitorsSubTree = new osg::MatrixTransform;
     setVisitorsSubTree(NULL);
 
-    // allways draw original geometry - disable culling and display lists
-    setUseDisplayList(false);
-#if OSG_VERSION_GREATER_OR_EQUAL(3,1,10)
-    pGeometriesVisitors.back()->setCullingActive(false);
-#else
-    pGeometriesVisitors.back()->setCullCallback(new osg::CForceCullCallback(true));
-#endif    
+    pGeometriesVisitors.back()->setCullingActive(false);  
 
     // set draw callback
     pGeometriesVisitors.back()->setDrawCallback(new CTriMeshDrawCallback(pGeometries.back()));
@@ -86,15 +79,6 @@ osg::CTriMesh::CTriMesh()
     pColors = new osg::Vec4Array(1);
     (*pColors)[0] = osg::Vec4(1.0, 1.0, 1.0, 1.0);
     pGeometries.back()->setColorArray(pColors, osg::Array::BIND_OVERALL);
-}
-
-void osg::CTriMesh::setUseDisplayList(bool bUse)
-{
-    for (int i = 0; i < pGeometries.size(); ++i)
-    {
-        pGeometries[i]->setUseDisplayList(bUse);
-        pGeometriesVisitors[i]->setUseDisplayList(bUse);
-    }
 }
 
 void osg::CTriMesh::setVisitorsSubTree(osg::MatrixTransform *visitorsSubTree)
@@ -275,6 +259,8 @@ void osg::CTriMesh::createMesh(geometry::CMesh *mesh, bool createNormals)
     for (int i = 0; i < usedMaterials.size(); ++i)
     {
         pPrimitiveSets[i]->resize(std::max(3, (int)primitiveSetsSizes[i] * 3));
+
+        pPrimitiveSets[i]->dirty();
     }
 
     // Copy triangle vertex indexing
@@ -316,12 +302,14 @@ void osg::CTriMesh::createMesh(geometry::CMesh *mesh, bool createNormals)
 
         for (int i = 0; i < pGeometries.size(); ++i)
         {
-            pGeometries[i]->setVertexAttribArray(6, pVertexGroupIndices);
-            pGeometries[i]->setVertexAttribNormalize(6, false);
-            pGeometries[i]->setVertexAttribBinding(6, osg::Geometry::BIND_PER_VERTEX);
-            pGeometries[i]->setVertexAttribArray(7, pVertexGroupWeights);
-            pGeometries[i]->setVertexAttribNormalize(7, false);
-            pGeometries[i]->setVertexAttribBinding(7, osg::Geometry::BIND_PER_VERTEX);
+            pVertexGroupIndices->setNormalize(false);
+            pGeometries[i]->setVertexAttribArray(6, pVertexGroupIndices, osg::Array::BIND_PER_VERTEX);
+
+            pVertexGroupWeights->setNormalize(false);
+            pGeometries[i]->setVertexAttribArray(7, pVertexGroupWeights, osg::Array::BIND_PER_VERTEX);
+
+            pVertexGroupWeights->dirty();
+            pVertexGroupIndices->dirty();
         }
     }
     else
@@ -335,7 +323,7 @@ void osg::CTriMesh::createMesh(geometry::CMesh *mesh, bool createNormals)
 
     for (int i = 0; i < pGeometries.size(); ++i)
     {
-        pGeometries[i]->dirtyDisplayList();
+        pGeometries[i]->dirtyGLObjects();
         pGeometries[i]->dirtyBound();
     }
 
@@ -357,13 +345,8 @@ void osg::CTriMesh::useVertexColors(bool value, bool force)
 
         for (int i = 0; i < pGeometries.size(); ++i)
         {
-#if OSG_VERSION_GREATER_OR_EQUAL(3,1,10)
-            pGeometries[i]->setColorArray(m_bUseVertexColors ? pVertexColors : pColors, osg::Array::BIND_OVERALL);
-#else
-            pGeometries[i]->setColorArray(m_bUseVertexColors ? pVertexColors : pColors);
-#endif
-            pGeometries[i]->setColorBinding(m_bUseVertexColors ? osg::Geometry::BIND_PER_VERTEX : osg::Geometry::BIND_OVERALL);
-            pGeometries[i]->dirtyDisplayList();
+            pGeometries[i]->setColorArray(m_bUseVertexColors ? pVertexColors : pColors, m_bUseVertexColors ? osg::Array::BIND_PER_VERTEX : osg::Array::BIND_OVERALL);
+            pGeometries[i]->dirtyGLObjects();
         }
     }
 }
@@ -382,10 +365,11 @@ void osg::CTriMesh::setColor(float r, float g, float b, float a)
     if (color != newColor)
     {
         color = newColor;
+        pColors->dirty();
 
         for (int i = 0; i < pGeometries.size(); ++i)
         {
-            pGeometries[i]->dirtyDisplayList();
+            pGeometries[i]->dirtyGLObjects();
         }
     }
 }
@@ -406,7 +390,7 @@ void osg::CTriMesh::useNormals(ENormalsUsage normalsUsage)
             break;
         }
 
-        pGeometries[i]->dirtyDisplayList();
+        pGeometries[i]->dirtyGLObjects();
     }
 }
 
@@ -453,7 +437,7 @@ void osg::CTriMesh::updatePartOfMesh(geometry::CMesh *mesh, const tIdPosVec &ip,
 
     for (int i = 0; i < pGeometries.size(); ++i)
     {
-        pGeometries[i]->dirtyDisplayList();
+        pGeometries[i]->dirtyGLObjects();
         pGeometries[i]->dirtyBound();
     }
 }
@@ -473,14 +457,14 @@ void osg::CTriMesh::applyMaterials()
         for (int i = 0; i < pGeometries.size(); ++i)
         {
             int materialIndex = m_geometryIndexToMaterialIndex[i];
-            pMaterials[materialIndex]->apply(pGeometries[i]);
+            pMaterials[materialIndex]->apply(pGeometries[i], osg::StateAttribute::ON | osg::StateAttribute::OVERRIDE | osg::StateAttribute::PROTECTED);
         }
     }
     else
     {
         for (int i = 0; i < pGeometries.size(); ++i)
         {
-            pDefaultMaterial->apply(pGeometries[i]);
+            pDefaultMaterial->apply(pGeometries[i], osg::StateAttribute::ON | osg::StateAttribute::OVERRIDE | osg::StateAttribute::PROTECTED);
         }
     }
 }
@@ -613,16 +597,12 @@ osg::Geometry *osg::convertOpenMesh2OSGGeometry(geometry::CMesh *mesh, bool vert
     long numtris(mesh->n_faces());
 
     // prepare osg::Geometry
-#if OSG_VERSION_GREATER_OR_EQUAL(3,1,10)
     osg::Vec3Array *pNormals = new osg::Vec3Array(vertexNormals ? numvert : numtris * 3);
     osg::Vec3Array *pVertices = new osg::Vec3Array(vertexNormals ? numvert : numtris * 3);
-#else
-    osg::Vec3Array *pNormals = new osg::Vec3Array(vertexNormals ? numvert : numtris);
-    osg::Vec3Array *pVertices = new osg::Vec3Array(numvert);
-#endif
+
     osg::DrawElementsUInt *pPrimitives = new osg::DrawElementsUInt(osg::PrimitiveSet::TRIANGLES, numtris * 3);
     osg::StateSet *pState = geometry->getOrCreateStateSet();
-    geometry->setNormalArray(pNormals);
+    geometry->setNormalArray(pNormals, osg::Array::BIND_PER_VERTEX);
     geometry->setVertexArray(pVertices);
     geometry->addPrimitiveSet(pPrimitives);
 
@@ -644,10 +624,8 @@ osg::Geometry *osg::convertOpenMesh2OSGGeometry(geometry::CMesh *mesh, bool vert
     }
 
     // Copy triangle vertex indexing
-#if OSG_VERSION_GREATER_OR_EQUAL(3,1,10)
     if (vertexNormals)
     {
-#endif
         index = 0;
         for (geometry::CMesh::FaceIter fit = mesh->faces_begin(); fit != mesh->faces_end(); ++fit)
         {
@@ -656,7 +634,6 @@ osg::Geometry *osg::convertOpenMesh2OSGGeometry(geometry::CMesh *mesh, bool vert
                 (*pPrimitives)[index++] = mesh->property(vProp_bufferIndex, fvit);
             }
         }
-#if OSG_VERSION_GREATER_OR_EQUAL(3,1,10)
     }
     else
     {
@@ -676,7 +653,6 @@ osg::Geometry *osg::convertOpenMesh2OSGGeometry(geometry::CMesh *mesh, bool vert
             }
         }
     }
-#endif
 
     // Copy normals
     if (vertexNormals)
@@ -687,38 +663,12 @@ osg::Geometry *osg::convertOpenMesh2OSGGeometry(geometry::CMesh *mesh, bool vert
             (*pNormals)[index] = osg::Vec3(mesh->normal(vit)[0], mesh->normal(vit)[1], mesh->normal(vit)[2]);
             ++index;
         }
-
-        osg::ShadeModel *pShadeModel = new osg::ShadeModel(osg::ShadeModel::SMOOTH);
-        pState->setAttributeAndModes(pShadeModel, osg::StateAttribute::ON);
-        geometry->setNormalBinding(osg::Geometry::BIND_PER_VERTEX);
     }
-#if OSG_VERSION_GREATER_OR_EQUAL(3,1,10)
-    else
-    {
-        osg::ShadeModel *pShadeModel = new osg::ShadeModel(osg::ShadeModel::FLAT);
-        pState->setAttributeAndModes(pShadeModel, osg::StateAttribute::ON);
-        geometry->setNormalBinding(osg::Geometry::BIND_PER_VERTEX);
-    }
-#else
-    else
-    {
-        triindex = 0;
-        for (geometry::CMesh::FaceIter fit = mesh->faces_begin(); fit != mesh->faces_end(); ++fit)
-        {
-            (*pNormals)[triindex] = osg::Vec3(mesh->normal(fit)[0], mesh->normal(fit)[1], mesh->normal(fit)[2]);
-            ++triindex;
-        }
-
-        osg::ShadeModel *pShadeModel = new osg::ShadeModel(osg::ShadeModel::FLAT);
-        pState->setAttributeAndModes(pShadeModel, osg::StateAttribute::ON);
-        geometry->setNormalBinding(osg::Geometry::BIND_PER_PRIMITIVE);
-    }
-#endif
 
     // remove no longer needed bufferIndex property
     mesh->remove_property(vProp_bufferIndex);
 
-    geometry->dirtyDisplayList();
+    geometry->dirtyGLObjects();
     geometry->dirtyBound();
 
     return geometry;
@@ -759,13 +709,8 @@ osg::Geometry *osg::convertOpenMesh2OSGGeometry(geometry::CMesh *mesh, const osg
     // Enable depth test so that an opaque polygon will occlude a transparent one behind it.
     pStateSet->setMode(GL_DEPTH_TEST, osg::StateAttribute::ON | osg::StateAttribute::PROTECTED);
 
-    // Rescale normals
-    pStateSet->setMode(GL_RESCALE_NORMAL, osg::StateAttribute::ON | osg::StateAttribute::PROTECTED);
-
     // Culling
-    osg::CullFace *pCull = new osg::CullFace();
-    pCull->setMode(osg::CullFace::BACK);
-    pStateSet->setAttributeAndModes(pCull, osg::StateAttribute::OFF);
+    pStateSet->setAttributeAndModes(new osg::CullFace(osg::CullFace::BACK), osg::StateAttribute::OFF);
 
     // Color
     osg::Vec4Array *pColors = new osg::Vec4Array(1);
@@ -775,7 +720,6 @@ osg::Geometry *osg::convertOpenMesh2OSGGeometry(geometry::CMesh *mesh, const osg
 
     // prepare osg::Geometry
     geometry->setNormalArray(pNormals, osg::Array::BIND_PER_VERTEX);
-    geometry->setNormalBinding(osg::Geometry::BIND_PER_VERTEX);
     geometry->setVertexArray(pVertices);
     geometry->addPrimitiveSet(pPrimitives);
 
@@ -805,7 +749,7 @@ osg::Geometry *osg::convertOpenMesh2OSGGeometry(geometry::CMesh *mesh, const osg
         }
     }
 
-    geometry->dirtyDisplayList();
+    geometry->dirtyGLObjects();
     geometry->dirtyBound();
 
     return geometry;

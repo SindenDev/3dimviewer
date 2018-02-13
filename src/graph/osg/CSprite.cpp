@@ -26,6 +26,8 @@
 #include <osgViewer/ViewerEventHandlers>
 #include <osg/Version>
 #include "osg/CSceneOSG.h"
+#include <osg/SimpleShader.h>
+
 
 
 osg::CAdvSprite::CAdvSprite(osg::Texture2D *texture, osg::Vec2 pivotPoint)
@@ -51,19 +53,22 @@ osg::CAdvSprite::CAdvSprite(osg::Texture2D *texture, osg::Vec2 pivotPoint)
     texture->setFilter(osg::Texture::MIN_FILTER, osg::Texture::LINEAR);
     texture->setWrap(osg::Texture::WRAP_S, osg::Texture::CLAMP_TO_EDGE);
     texture->setWrap(osg::Texture::WRAP_T, osg::Texture::CLAMP_TO_EDGE);
-    geode->getOrCreateStateSet()->setTextureAttributeAndModes(0, texture, osg::StateAttribute::ON);
+
     addChild(geode);
 
     osgViewer::InteractiveImageHandler *handler = new osgViewer::InteractiveImageHandler(texture->getImage());
 
-    geode->getOrCreateStateSet()->setMode(GL_LIGHTING, osg::StateAttribute::OFF);
+    auto shader = new osg::Program();
+    shader->addShader(new osg::Shader(osg::Shader::VERTEX, texturedShaderVert));
+    shader->addShader(new osg::Shader(osg::Shader::FRAGMENT, texturedShaderFrag));
+
     geode->getOrCreateStateSet()->setMode(GL_BLEND, osg::StateAttribute::ON);
     geode->getOrCreateStateSet()->setRenderingHint(osg::StateSet::TRANSPARENT_BIN);
-    geode->getOrCreateStateSet()->setAttribute(new osg::Program);
-
-    osg::StateSet *stateSet = geode->getOrCreateStateSet();
-    stateSet->setNestRenderBins(false); // we really REALLY want to separate this layer at the top
-    stateSet->setRenderBinDetails(LAYER_GIZMOS - 1, "RenderBin");
+    geode->getOrCreateStateSet()->setNestRenderBins(false); // we really REALLY want to separate this layer at the top
+    geode->getOrCreateStateSet()->setRenderBinDetails(LAYER_GIZMOS - 1, "RenderBin");
+    geode->getOrCreateStateSet()->setTextureAttributeAndModes(0, texture, osg::StateAttribute::ON);
+    geode->getOrCreateStateSet()->addUniform(new osg::Uniform("texSampler", 0));
+    geode->getOrCreateStateSet()->setAttributeAndModes(shader, osg::StateAttribute::ON | osg::StateAttribute::OVERRIDE | osg::StateAttribute::PROTECTED);
 
     _quad->setEventCallback(handler);
     _quad->setCullCallback(handler);
@@ -231,8 +236,6 @@ const osg::Vec3d &osg::CAdvSprite::getScale() const
     return _scale;
 }
 
-osg::CAdvSprite::~CAdvSprite()
-{ }
 
 ///////////////////////////////////////////////////////////////////////////////
 //
@@ -254,13 +257,6 @@ osg::CSprite::CSpriteComputeBoundingBoxCallback::CSpriteComputeBoundingBoxCallba
     }
 }
 
-
-///////////////////////////////////////////////////////////////////////////////
-//
-osg::CSprite::CSpriteComputeBoundingBoxCallback::~CSpriteComputeBoundingBoxCallback()
-{ }
-
-
 ///////////////////////////////////////////////////////////////////////////////
 //
 osg::BoundingBox osg::CSprite::CSpriteComputeBoundingBoxCallback::computeBound(const osg::Drawable &drawable) const
@@ -268,39 +264,36 @@ osg::BoundingBox osg::CSprite::CSpriteComputeBoundingBoxCallback::computeBound(c
     return m_boundingBox;
 }
 
-
-///////////////////////////////////////////////////////////////////////////////
-//
 osg::CSprite::CSprite(osg::Texture2D *texture, osg::Vec3 position, bool absolutePosition, osg::MatrixTransform *matrix, osg::Vec4 color, osg::Vec2 scale, osg::BlendFunc *blendFunc, osg::Depth *depth)
+    : m_absolutePosition(absolutePosition)
+    , m_texture(texture)
+    , m_position(position)
+    , m_scale(scale)
+    , m_color(color)
+    , m_depth(depth)
+    , m_blend(blendFunc)
+    , m_matrix(matrix)
 {
-    assert(texture != NULL);
-
-    m_absolutePosition = absolutePosition;
-
-    m_texture = texture;
-    m_blend = blendFunc;
-    m_depth = depth;
-    m_scale = scale;
-    m_color = color;
-    m_position = position;
-    m_matrix = matrix;
-
-    if (m_depth == NULL)
+    if (m_depth == nullptr)
     {
-        m_depth = new osg::Depth;
-        m_depth->setFunction(osg::Depth::ALWAYS);
+        m_depth = new osg::Depth(osg::Depth::ALWAYS);
         m_depth->setWriteMask(false);
     }
 
-    if (m_blend == NULL)
+    if (m_blend == nullptr)
     {
         m_blend = new osg::BlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     }
 
-    m_stateSet = getOrCreateStateSet();
-    m_stateSet->setTextureAttributeAndModes(0, m_texture, osg::StateAttribute::ON);
-    m_stateSet->setAttributeAndModes(m_blend, osg::StateAttribute::ON);
-    m_stateSet->setAttributeAndModes(m_depth, osg::StateAttribute::ON);
+    auto shader = new osg::Program();
+    shader->addShader(new osg::Shader(osg::Shader::VERTEX, texturedShaderVert));
+    shader->addShader(new osg::Shader(osg::Shader::FRAGMENT, texturedShaderFrag));
+
+    getOrCreateStateSet()->setTextureAttributeAndModes(0, m_texture, osg::StateAttribute::ON);
+    getOrCreateStateSet()->setAttributeAndModes(m_blend, osg::StateAttribute::ON);
+    getOrCreateStateSet()->setAttributeAndModes(m_depth, osg::StateAttribute::ON);
+    getOrCreateStateSet()->addUniform(new osg::Uniform("texSampler", 0));
+    getOrCreateStateSet()->setAttributeAndModes(shader, osg::StateAttribute::ON | osg::StateAttribute::OVERRIDE | osg::StateAttribute::PROTECTED );
 
     createGeometry();
 
@@ -309,78 +302,20 @@ osg::CSprite::CSprite(osg::Texture2D *texture, osg::Vec3 position, bool absolute
     computeBound();
 }
 
-
-///////////////////////////////////////////////////////////////////////////////
-//
 osg::CSprite::CSprite(osg::Texture2D *texture, osg::MatrixTransform *matrix, osg::Vec4 color, osg::Vec2 scale, osg::BlendFunc *blendFunc, osg::Depth *depth)
+    : CSprite(texture, osg::Vec3(0.0f, 0.0f, 0.0f), false, matrix, color, scale, blendFunc, depth)
 {
-    assert(texture != NULL);
 
-    m_absolutePosition = false;
-
-    m_texture = texture;
-    m_blend = blendFunc;
-    m_depth = depth;
-    m_scale = scale;
-    m_color = color;
-    m_position = osg::Vec3(0.0f, 0.0f, 0.0f);
-    m_matrix = matrix;
-
-    if (m_depth == NULL)
-    {
-        m_depth = new osg::Depth;
-        m_depth->setFunction(osg::Depth::ALWAYS);
-        m_depth->setWriteMask(false);
-    }
-
-    if (m_blend == NULL)
-    {
-        m_blend = new osg::BlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    }
-
-    m_stateSet = getOrCreateStateSet();
-    m_stateSet->setTextureAttributeAndModes(0, m_texture, osg::StateAttribute::ON);
-    m_stateSet->setAttributeAndModes(m_blend, osg::StateAttribute::ON);
-    m_stateSet->setAttributeAndModes(m_depth, osg::StateAttribute::ON);
-
-    createGeometry();
 }
 
 
 //////////////////////////////////////////////////////////////////////////
 //
-osg::CSprite::CSprite(const CSprite &sprite) : osg::Geometry()
+osg::CSprite::CSprite(const CSprite& sprite)
+    : CSprite(sprite.m_texture, sprite.m_position, sprite.m_absolutePosition, sprite.m_matrix, sprite.m_color, sprite.m_scale, sprite.m_blend, sprite.m_depth)
 {
-    m_absolutePosition = sprite.m_absolutePosition;
 
-    m_texture = sprite.m_texture;
-    m_blend = sprite.m_blend;
-    m_depth = sprite.m_depth;
-    m_scale = sprite.m_scale;
-    m_color = sprite.m_color;
-    m_position = sprite.m_position;
-    m_matrix = sprite.m_matrix;
-
-    m_depth = new osg::Depth;
-    m_depth->setFunction(osg::Depth::ALWAYS);
-    m_depth->setWriteMask(false);
-
-    m_blend = new osg::BlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-    m_stateSet = getOrCreateStateSet();
-    m_stateSet->setTextureAttributeAndModes(0, m_texture, osg::StateAttribute::ON);
-    m_stateSet->setAttributeAndModes(m_blend, osg::StateAttribute::ON);
-    m_stateSet->setAttributeAndModes(m_depth, osg::StateAttribute::ON);
-
-    createGeometry();
 }
-
-
-//////////////////////////////////////////////////////////////////////////
-//
-osg::CSprite::~CSprite()
-{ }
-
 
 ///////////////////////////////////////////////////////////////////////////////
 //
@@ -429,6 +364,7 @@ void osg::CSprite::drawImplementation(osg::RenderInfo &renderInfo) const
     // apply calculated matrices
     state->applyProjectionMatrix(new osg::RefMatrix(projectionMatrix));
     state->applyModelViewMatrix(new osg::RefMatrix(modelMatrix * viewMatrix));
+    state->applyModelViewAndProjectionUniformsIfRequired();
 
     if (m_matrix != NULL)
     {
@@ -459,18 +395,10 @@ void osg::CSprite::createGeometry()
     m_texCoords->push_back(osg::Vec2(0.0f, 1.0f));
     m_texCoords->push_back(osg::Vec2(1.0f, 1.0f));
 
-    m_indices = new DrawElementsUInt(GL_QUADS, 4);
-    m_indices->push_back(0);
-    m_indices->push_back(1);
-    m_indices->push_back(3);
-    m_indices->push_back(2);
-
-    setVertexArray(m_vertices.get());
-	setColorArray(m_colors.get(), osg::Array::BIND_OVERALL);
-    setTexCoordArray(0, m_texCoords.get());
-    addPrimitiveSet(m_indices.get());
-
-    setUseDisplayList(false);
+    setVertexArray(m_vertices);
+	setColorArray(m_colors, osg::Array::BIND_OVERALL);
+    setTexCoordArray(0, m_texCoords);
+    addPrimitiveSet(new osg::DrawArrays(osg::PrimitiveSet::TRIANGLE_STRIP, 0, 4));
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -491,12 +419,6 @@ osg::CSpriteNode::CSpriteNode(const CSpriteNode &spriteNode) : osg::Geode()
     m_sprite = new CSprite(*spriteNode.m_sprite);
     addDrawable(m_sprite);
 }
-
-
-///////////////////////////////////////////////////////////////////////////////
-//
-osg::CSpriteNode::~CSpriteNode()
-{ }
 
 ///////////////////////////////////////////////////////////////////////////////
 //
@@ -537,13 +459,6 @@ osg::CSpriteShadow::CSpriteShadow(const CSpriteShadow &shadow) : osg::Geometry()
 
     createGeometry();
 }
-
-
-//////////////////////////////////////////////////////////////////////////
-//
-osg::CSpriteShadow::~CSpriteShadow()
-{ }
-
 
 ///////////////////////////////////////////////////////////////////////////////
 //
@@ -593,15 +508,8 @@ void osg::CSpriteShadow::createGeometry()
         break;
     }
 
-    setVertexArray(m_vertices.get());
-
-    // color for testing
-    /*osg::Vec4Array *color = new osg::Vec4Array;
-    color->push_back(osg::Vec4(0.0, 1.0, 0.0, 1.0));
-
-    setColorArray(color, osg::Array::BIND_OVERALL);
-    */
-    addPrimitiveSet(m_indices.get());
+    setVertexArray(m_vertices);
+    addPrimitiveSet(m_indices);
 }
 
 
@@ -627,8 +535,3 @@ osg::CSpriteShadowNode::CSpriteShadowNode(const CSpriteShadowNode &shadowNode) :
     addChild(m_shadowGeode);
     m_shadowGeode->addDrawable(m_shadow);
 }
-
-///////////////////////////////////////////////////////////////////////////////
-//
-osg::CSpriteShadowNode::~CSpriteShadowNode()
-{ }

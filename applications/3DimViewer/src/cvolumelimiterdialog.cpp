@@ -25,8 +25,10 @@
 #include <QGridLayout>
 #include <QSettings>
 #include <app/Signals.h>
+#include "cpreferencesdialog.h"
 
-CVolumeLimiterDialog::CVolumeLimiterDialog(QWidget *parent) :
+
+CVolumeLimiterDialog::CVolumeLimiterDialog(QWidget* parent) :
 	QDialog(parent, Qt::WindowTitleHint | Qt::WindowSystemMenuHint | Qt::WindowCloseButtonHint | Qt::WindowMinimizeButtonHint | Qt::WindowMaximizeButtonHint),
     ui(new Ui::CVolumeLimiterDialog)
 {
@@ -69,20 +71,24 @@ CVolumeLimiterDialog::~CVolumeLimiterDialog()
 
 void   CVolumeLimiterDialog::createControls()
 {
+    QSettings settings;
+
+    const bool antialiasing = settings.value("AntialiasingEnabled", DEFAULT_ANTIALIASING).toBool();
+
     // XY
-    m_OrthoXYSlice = new OSGOrtho2DCanvas(this);
+    m_OrthoXYSlice = new OSGOrtho2DCanvas(this, antialiasing);
     m_SceneXY = new scene::CLimiterXY(m_OrthoXYSlice);
     m_OrthoXYSlice->setScene(m_SceneXY.get());
     m_OrthoXYSlice->centerAndScale();
 
     // XZ
-    m_OrthoXZSlice = new OSGOrtho2DCanvas(this);
+    m_OrthoXZSlice = new OSGOrtho2DCanvas(this, antialiasing);
     m_SceneXZ = new scene::CLimiterXZ(m_OrthoXZSlice);
     m_OrthoXZSlice->setScene(m_SceneXZ.get());
     m_OrthoXZSlice->centerAndScale();
 
     // YZ
-    m_OrthoYZSlice = new OSGOrtho2DCanvas(this);
+    m_OrthoYZSlice = new OSGOrtho2DCanvas(this, antialiasing);
     m_SceneYZ = new scene::CLimiterYZ(m_OrthoYZSlice);
     m_OrthoYZSlice->setScene(m_SceneYZ.get());
     m_OrthoYZSlice->centerAndScale();

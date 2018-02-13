@@ -20,26 +20,31 @@
 //
 ///////////////////////////////////////////////////////////////////////////////
 
-#ifndef ESnapshotType_H
-#define ESnapshotType_H
+#ifndef CRestorePoint_H
+#define CRestorePoint_H
 
 #include <data/CSnapshot.h>
+#include <set>
 
 namespace data
 {
-
-    //! Types of the undo objects
-    enum EType
+    class CRestorePoint
     {
-//		UNDO_ALL = 0, Already defined in the CSnapshot
-		UNDO_SEGMENTATION = 1,
-		//UNDO_IMPLANTS = 2,
-		UNDO_MODELS = 4,
-		//UNDO_NERVES = 8,
-		//UNDO_TEETH = 16
-        UNDO_NOTES = 64
-    };
+    protected:
+        data::CSnapshot *m_snapshot;
+        std::set<int> m_storageIds;
+        bool m_stored;
 
+    public:
+        CRestorePoint();
+        CRestorePoint(const CRestorePoint &other);
+        ~CRestorePoint();
+        CRestorePoint &operator=(const CRestorePoint &other);
+
+    public:
+        bool addSnapshot(data::CSnapshot *snapshot, int storageId);
+        bool store();
+    };
 } // namespace data
 
-#endif // ESnapshotType_H
+#endif // CRestorePoint_H

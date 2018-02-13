@@ -26,7 +26,6 @@
 #include <osgManipulator/Translate2DDragger>
 #include <osgManipulator/Command>
 #include <osgManipulator/CommandManager>
-#include <osg/Material>
 
 #include <osg/dbout.h>
 
@@ -34,25 +33,22 @@ using namespace osgManipulator;
 
 ///////////////////////////////////////////////////////////////////////////////
 // Constructor - default settings
-CTranslate2DDragger::CTranslate2DDragger()
-	: m_bNoGeometryTransform( true )
-    , m_bTranslating(false)
+CTranslate2DDragger::CTranslate2DDragger() : CTranslate2DDragger(osg::Plane(osg::Vec3(0.0, 0.0, 1.0), osg::Vec3(0.0, 0.0, 0.0)))
 {
-    setName("CTranslate2DDragger");
-	m_initialPlane.set(osg::Vec3(0.0, 0.0, 1.0), osg::Vec3(0.0, 0.0, 0.0));
-	_projector = new PlaneProjector(m_initialPlane);
-	_polygonOffset = new osg::PolygonOffset(-1.0f,-1.0f);
+
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 // Constructor - user set version
 CTranslate2DDragger::CTranslate2DDragger(const osg::Plane& plane)
-: m_initialPlane(plane)
-, m_bNoGeometryTransform( true )
-, m_bTranslating(false)
+    : m_initialPlane(plane)
+    , m_bNoGeometryTransform(true)
+    , m_bTranslating(false)
 {
-	_projector = new PlaneProjector(m_initialPlane);
-	_polygonOffset = new osg::PolygonOffset(-1.0f,-1.0f);
+    setName("CTranslate2DDragger");
+
+    _projector = new PlaneProjector(m_initialPlane);
+    _polygonOffset = new osg::PolygonOffset(-1.0f, -1.0f);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -86,8 +82,8 @@ bool CTranslate2DDragger::handle(const PointerInfo& pointer, const osgGA::GUIEve
 
 			osg::Matrix localToWorld = osg::computeLocalToWorld(nodePathToRoot);
 
-            DBOUT_VEC("TD LIP: ", pointer.getLocalIntersectPoint());
-            DBOUT_MTX("TD LTW: ", localToWorld);
+            //DBOUT_VEC("TD LIP: ", pointer.getLocalIntersectPoint());
+            //DBOUT_MTX("TD LTW: ", localToWorld);
 
 			_projector->setLocalToWorld(localToWorld);
 
@@ -105,7 +101,7 @@ bool CTranslate2DDragger::handle(const PointerInfo& pointer, const osgGA::GUIEve
 				dispatch( *cmd );
 
 				// Set color to pick color.
-				setMaterial( osg::SECOND );
+                applyMaterial(osg::SECOND);
 				getOrCreateStateSet()->setAttributeAndModes(_polygonOffset.get(), osg::StateAttribute::ON);
 
 				aa.requestRedraw();
@@ -156,7 +152,7 @@ bool CTranslate2DDragger::handle(const PointerInfo& pointer, const osgGA::GUIEve
 			dispatch( *cmd );
 
 			// Reset color.
-			setMaterial( osg::FIRST );
+            applyMaterial(osg::FIRST);
 			getOrCreateStateSet()->removeAttribute(_polygonOffset.get());
 
 			aa.requestRedraw();
@@ -175,11 +171,11 @@ void CTranslate2DDragger::revertTransformsOnPlane()
 {
 	osg::Matrix parentMatrix = getParentDragger()->getMatrix();
 
-    DBOUT_MTX("TD PM", parentMatrix);
+    //DBOUT_MTX("TD PM", parentMatrix);
 
 	parentMatrix.invert(parentMatrix);
 
-    DBOUT_MTX("TD IPM", parentMatrix);
+    //DBOUT_MTX("TD IPM", parentMatrix);
 
 	osg::Quat rotation = parentMatrix.getRotate();
 	parentMatrix.makeIdentity();
@@ -187,11 +183,11 @@ void CTranslate2DDragger::revertTransformsOnPlane()
 
 	osg::Plane plane = m_initialPlane;
 
-    DBOUT("TD plane before: " << plane[0] << ", " << plane[1] << ", " << plane[2] << ", " << plane[3]);
+    //DBOUT("TD plane before: " << plane[0] << ", " << plane[1] << ", " << plane[2] << ", " << plane[3]);
 
 	plane.transform(parentMatrix);
 
-    DBOUT("TD plane after: " << plane[0] << ", " << plane[1] << ", " << plane[2] << ", " << plane[3]);
+    //DBOUT("TD plane after: " << plane[0] << ", " << plane[1] << ", " << plane[2] << ", " << plane[3]);
 
 	_projector->setPlane(plane);
 

@@ -50,7 +50,7 @@ target_include_directories(${TRIDIM_LIBRARY_NAME} PRIVATE ${CMAKE_SOURCE_DIR}/in
 target_include_directories(${TRIDIM_LIBRARY_NAME} PRIVATE ${CMAKE_SOURCE_DIR}/include/3dim/qtplugin/ )
 
 ADD_LIB_OSG()
-ADD_LIB_GLEW()
+ADD_LIB_GLAD()
 ADD_LIB_VPL()
 ADD_LIB_EIGEN()
 ADD_LIB_OPENMESH()

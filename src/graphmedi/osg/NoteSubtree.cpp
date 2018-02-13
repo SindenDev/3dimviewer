@@ -1,5 +1,4 @@
 #include <osg/NoteSubtree.h>
-#include <osg/LineWidth>
 
 #include <qdebug.h>
 
@@ -20,10 +19,6 @@ void osg::CNoteGeometry::setData(data::noteLine *line, data::CColor4f& color) {
 		removePrimitiveSet(0);
 
 	addPrimitiveSet(new osg::DrawArrays(osg::PrimitiveSet::LINE_STRIP, 0, line->m_points->size()));
-
-	osg::LineWidth* linewidth = new osg::LineWidth();
-	linewidth->setWidth(line->m_width);
-	getOrCreateStateSet()->setAttributeAndModes(linewidth, osg::StateAttribute::ON);
 
 	//This variant does not work!!!! I suspect it misses element list
 	//addPrimitiveSet(new osg::DrawArrays(osg::PrimitiveSet::POINTS));

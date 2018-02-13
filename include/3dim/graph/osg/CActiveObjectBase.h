@@ -108,10 +108,10 @@ namespace osg
         void setClass( EObjectClass c ) { m_class = c; }
 
         //! Enable/disable active object handling
-        void setEnabled(bool enable) {m_bActive = enable;}
+        void setActive(bool active) { m_active = active;}
 
         //! Is object enabled
-        bool isEnabled() const {return m_bActive;}
+        bool isActive() const {return m_active;}
 
         //! Get on destroy signal
         tOnDestroySignal &getDestroySignal() { return m_destroySignal; }
@@ -127,7 +127,7 @@ namespace osg
         EObjectClass m_class;
 
         //! Is object active?
-        bool m_bActive;
+        bool m_active;
 
         tOnDestroySignal m_destroySignal;
 

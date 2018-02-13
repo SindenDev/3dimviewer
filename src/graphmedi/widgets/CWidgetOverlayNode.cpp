@@ -23,9 +23,7 @@
 #include <widgets/CWidgetOverlayNode.h>
 #include <data/CDensityData.h>
 #include <data/CSceneWidgetParameters.h>
-#include <osg/LightModel>
 #include <osg/ShapeDrawable>
-#include <osg/Material>
 #include <data/CSceneWidgetParameters.h>
 #include <osg/OSGCanvas.h>
 
@@ -61,31 +59,10 @@ scene::CWidgetOverlayNode::CWidgetOverlayNode(OSGCanvas * pCanvas)
     this->addUpdateCallback( new CUpdateTransformCallback() );
 
     // Set state set
-    osg::StateSet * ss = this->getOrCreateStateSet();
-    ss->setMode( GL_BLEND, osg::StateAttribute::ON );
-    ss->setMode( GL_DEPTH_TEST, osg::StateAttribute::ON | osg::StateAttribute::OVERRIDE );
-    ss->setRenderingHint( osg::StateSet::OPAQUE_BIN );
-
-    // Add light source
-    osg::Light * light = m_viewer->getLight();
-
-    //osg::Light * light = new osg::Light();
-    //light->setThreadSafeRefUnref( true );
-    //light->setLightNum( 1 );
-    //light->setAmbient( osg::Vec4(0.0f,0.0f,0.0f,1.0f) );
-    //light->setDiffuse( osg::Vec4(0.8f,0.8f,0.8f,1.0f) );
-    //light->setSpecular( osg::Vec4(1.0f,1.0f,1.0f,1.0f) );
-    //light->setPosition( osg::Vec4(0.0f,0.0f,0.0f,1.0f) );
-
-    osg::LightSource * lightsource = new osg::LightSource();
-    lightsource->setLight( light );
-    lightsource->setStateSetModes( *ss, osg::StateAttribute::ON );
-    lightsource->setReferenceFrame( osg::LightSource::ABSOLUTE_RF );
-    lightsource->setLocalStateSetModes( osg::StateAttribute::ON );
-    this->addChild( lightsource );
-
-    // Enable lighting
-    ss->setMode( GL_LIGHTING, osg::StateAttribute::ON );
+    osg::StateSet* ss = this->getOrCreateStateSet();
+    ss->setMode(GL_BLEND, osg::StateAttribute::ON);
+    ss->setMode(GL_DEPTH_TEST, osg::StateAttribute::OFF | osg::StateAttribute::OVERRIDE);
+    ss->setRenderingHint(osg::StateSet::OPAQUE_BIN);
 
     // Create model view matrix
     m_modelView = new osg::MatrixTransform;

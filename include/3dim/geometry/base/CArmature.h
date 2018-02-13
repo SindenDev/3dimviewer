@@ -38,8 +38,8 @@ namespace geometry
         CArmature(const geometry::Matrix &matrix = geometry::Matrix::identity());
         ~CArmature();
 
-        CArmature *clone(std::map<CBone *, CBone *> &boneMapping) const;
         CArmature *clone() const;
+        CArmature *clone(std::map<CBone *, CBone *>& boneMapping) const;
 
         std::map<std::string, CAction> &getActions();
         const std::map<std::string, CAction> &getActions() const;

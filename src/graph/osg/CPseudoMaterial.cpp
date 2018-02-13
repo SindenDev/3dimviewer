@@ -20,9 +20,9 @@
 //
 ///////////////////////////////////////////////////////////////////////////////
 
-#include <osg/CShaderTester.h>
 #include <osg/CPseudoMaterial.h>
 #include <osg/Geode>
+#include <sstream>
 
 osg::CDirectionalLightSource::CDirectionalLightSource()
     : m_color(1.0, 1.0, 1.0)
@@ -244,14 +244,15 @@ osg::CPseudoMaterial::CPseudoMaterial(bool twoSided, bool flatShading, bool useV
     m_spotLightSourceCount = 0;
     updateLightUniforms();
 
-    singleLightSetup();
-    //fourLightSetup();
+    //singleLightSetup();
+    fourLightSetup();
 
     makeDirty();
 }
 
 osg::CPseudoMaterial::~CPseudoMaterial()
-{ }
+{
+}
 
 void osg::CPseudoMaterial::setFlatShading(bool flatShading)
 {
@@ -476,30 +477,17 @@ osg::Uniform *osg::CPseudoMaterial::uniform(std::string name)
 
 std::string osg::CPseudoMaterial::vertVersion()
 {
-#ifdef __APPLE__
-    return std::string("#version 110");
-#else
-    return std::string("#version 150 compatibility \n");
-#endif
+    return std::string("#version 330 core \n");
 }
 
 std::string osg::CPseudoMaterial::geomVersion()
 {
-#ifdef __APPLE__
-    return std::string("#version 120 \n"
-                       "#extension GL_EXT_geometry_shader4 : enable \n");
-#else
-    return std::string("#version 150 compatibility \n");
-#endif
+    return std::string("#version 330 core \n");
 }
 
 std::string osg::CPseudoMaterial::fragVersion()
 {
-#ifdef __APPLE__
-    return std::string("#version 110");
-#else
-    return std::string("#version 150 compatibility \n");
-#endif
+    return std::string("#version 330 core \n");
 }
 
 std::string osg::CPseudoMaterial::uniforms()
@@ -524,10 +512,10 @@ std::string osg::CPseudoMaterial::uniforms()
 
 std::string osg::CPseudoMaterial::attributes()
 {
-    std::string str = "// ATTRIBUTES \n";
+    std::string str = "// IN PER VERTEX DATA \n";
     for (int i = 0; i < m_attributes.size(); ++i)
     {
-        str += "attribute " + std::string(osg::CAttribute::getTypename(m_attributes[i].type)) + " " + m_attributes[i].name + "; \n";
+        str += "in " + std::string(osg::CAttribute::getTypename(m_attributes[i].type)) + " " + m_attributes[i].name + "; \n";
     }
     return str;
 }
@@ -562,15 +550,6 @@ std::string osg::CPseudoMaterial::fragStruct()
 
 std::string osg::CPseudoMaterial::vertOuts()
 {
-#ifdef __APPLE__
-    std::string str = "// VARYINGs \n";
-    std::vector<std::pair<std::string, std::string> > members = shaderInOuts();
-    for (int i = 0; i < members.size(); ++i)
-    {
-        str += "varying " + members[i].first + " tridim_v_" + members[i].second + "; \n";
-    }
-    return str;
-#else
     std::string str = "// OUTs \n";
     std::vector<std::pair<std::string, std::string> > members = shaderInOuts();
     for (int i = 0; i < members.size(); ++i)
@@ -578,20 +557,10 @@ std::string osg::CPseudoMaterial::vertOuts()
         str += "out " + members[i].first + " tridim_v_" + members[i].second + "; \n";
     }
     return str;
-#endif
 }
 
 std::string osg::CPseudoMaterial::geomIns()
 {
-#ifdef __APPLE__
-    std::string str = "// VARYING INs \n";
-    std::vector<std::pair<std::string, std::string> > members = shaderInOuts();
-    for (int i = 0; i < members.size(); ++i)
-    {
-        str += "varying in " + members[i].first + " tridim_v_" + members[i].second + "[3]; \n";
-    }
-    return str;
-#else
     std::string str = "// INs \n";
     std::vector<std::pair<std::string, std::string> > members = shaderInOuts();
     for (int i = 0; i < members.size(); ++i)
@@ -599,20 +568,10 @@ std::string osg::CPseudoMaterial::geomIns()
         str += "in " + members[i].first + " tridim_v_" + members[i].second + "[3]; \n";
     }
     return str;
-#endif
 }
 
 std::string osg::CPseudoMaterial::geomOuts()
 {
-#ifdef __APPLE__
-    std::string str = "// VARYING OUTs \n";
-    std::vector<std::pair<std::string, std::string> > members = shaderInOuts();
-    for (int i = 0; i < members.size(); ++i)
-    {
-        str += "varying out " + members[i].first + " tridim_f_" + members[i].second + "; \n";
-    }
-    return str;
-#else
     std::string str = "// OUTs \n";
     std::vector<std::pair<std::string, std::string> > members = shaderInOuts();
     for (int i = 0; i < members.size(); ++i)
@@ -620,22 +579,12 @@ std::string osg::CPseudoMaterial::geomOuts()
         str += "out " + members[i].first + " tridim_f_" + members[i].second + "; \n";
     }
     return str;
-#endif
 }
 
 std::string osg::CPseudoMaterial::fragIns()
 {
     std::string prefix = m_flatShading ? "tridim_f_" : "tridim_v_";
 
-#ifdef __APPLE__
-    std::string str = "// VARYINGs \n";
-    std::vector<std::pair<std::string, std::string> > members = shaderInOuts();
-    for (int i = 0; i < members.size(); ++i)
-    {
-        str += "varying " + members[i].first + " " + prefix + members[i].second + "; \n";
-    }
-    return str;
-#else
     std::string str = "// INs \n";
     std::vector<std::pair<std::string, std::string> > members = shaderInOuts();
     for (int i = 0; i < members.size(); ++i)
@@ -643,7 +592,6 @@ std::string osg::CPseudoMaterial::fragIns()
         str += "in " + members[i].first + " " + prefix + members[i].second + "; \n";
     }
     return str;
-#endif
 }
 
 std::string osg::CPseudoMaterial::surfStruct()
@@ -663,22 +611,24 @@ std::string osg::CPseudoMaterial::surfStruct()
 std::string osg::CPseudoMaterial::vertShaderSrc()
 {
     return "// VERTEX \n" + programName() + " \n" + vertVersion() + " \n" + uniforms() + " \n" + attributes() + " \n" + vertOuts() + " \n" + std::string(
+        "uniform mat4 osg_ModelViewProjectionMatrix; \n"
+        "uniform mat4 osg_ModelViewMatrix; \n"
+        "in vec4 osg_Vertex; \n"
+        "in vec4 osg_Color; \n"
+        "in vec3 osg_Normal; \n"
+        "in vec4 osg_MultiTexCoord0; \n"
+        "in vec4 osg_MultiTexCoord1; \n"
         "void main() \n"
         "{ \n"
         "    // Transforming The Vertex \n"
-        "    gl_Position = ftransform(); \n"
-        "    tridim_v_projectionSpacePosition = ftransform(); \n"
-        " \n"
-        "    tridim_v_objectSpacePosition = gl_Vertex.xyz; \n"
-        "    tridim_v_objectSpaceNormal = gl_Normal.xyz; \n"
-        " \n"
-        "    tridim_v_viewSpacePosition = (gl_ModelViewMatrix * gl_Vertex).xyz; \n"
-        "    tridim_v_viewSpaceNormal = normalize((gl_ModelViewMatrix * vec4(gl_Normal.xyz, 1.0) - gl_ModelViewMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz); \n"
-        " \n"
-        "    tridim_v_texCoord0 = gl_TexCoord[0] = gl_MultiTexCoord0; \n"
-        "    tridim_v_texCoord1 = gl_TexCoord[1] = gl_MultiTexCoord1; \n"
-        " \n") + (m_useVertexColors ? std::string(
-        "    tridim_v_color = gl_Color; \n") : std::string(
+        "    gl_Position = tridim_v_projectionSpacePosition = osg_ModelViewProjectionMatrix * osg_Vertex; \n"
+        "    tridim_v_objectSpacePosition = osg_Vertex.xyz; \n"
+        "    tridim_v_objectSpaceNormal = osg_Normal.xyz; \n"
+        "    tridim_v_viewSpacePosition = (osg_ModelViewMatrix * osg_Vertex).xyz; \n"
+        "    tridim_v_viewSpaceNormal = normalize((osg_ModelViewMatrix * vec4(osg_Normal.xyz, 1.0) - osg_ModelViewMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz); \n"
+        "    tridim_v_texCoord0 = osg_MultiTexCoord0; \n"
+        "    tridim_v_texCoord1 = osg_MultiTexCoord1; \n") + (m_useVertexColors ? std::string(
+        "    tridim_v_color = osg_Color; \n") : std::string(
         "    tridim_v_color = vec4(1.0, 1.0, 1.0, 1.0); \n")) + std::string(
         "} \n");
 }
@@ -706,11 +656,9 @@ std::string osg::CPseudoMaterial::geomShaderSrc()
     if (m_flatShading)
     {
     return "// GEOMETRY \n" + programName() + " \n" + geomVersion() + " \n" + uniforms() + " \n" + geomIns() + " \n" + geomOuts() + " \n" + std::string(
-#ifndef __APPLE__
         "layout (triangles) in; \n"
         "layout (triangle_strip, max_vertices = 3) out; \n"
         " \n"
-#endif
         "void main() \n"
         "{ \n"
         "    vec3 n0 = normalize(tridim_v_viewSpacePosition[1].xyz - tridim_v_viewSpacePosition[0].xyz); \n"
@@ -858,6 +806,7 @@ std::string osg::CPseudoMaterial::lightingSrc()
 std::string osg::CPseudoMaterial::fragShaderSrc()
 {
     return "// FRAGMENT \n" + programName() + " \n" + fragVersion() + " \n" + uniforms() + " \n" + fragIns() + " \n" + fragStruct() + " \n" + surfStruct() + " \n" + lightingSrc() + " \n" + surfaceShaderSrc() + " \n" + insToStruct() + " \n" + std::string(
+        "out vec4 outColor; \n"
         "void main() \n"
         "{ \n"
         "    tridim_f I = insToStruct(); \n"
@@ -867,7 +816,7 @@ std::string osg::CPseudoMaterial::fragShaderSrc()
         " \n"
         "    vec3 color = lighting(I, surface); \n"
         " \n"
-        "    gl_FragData[0] = vec4(color.rgb + surface.emission, surface.alpha); \n"
+        "    outColor = vec4(color.rgb + surface.emission, surface.alpha); \n"
         "} \n");
 }
 
@@ -887,7 +836,7 @@ std::string osg::CPseudoMaterial::surfaceShaderSrc()
         "} \n");
 }
 
-void osg::CPseudoMaterial::apply(osg::Object *object, osg::Node *shaderTesterNode)
+void osg::CPseudoMaterial::apply(osg::Object *object, StateAttribute::GLModeValue value/* = osg::StateAttribute::ON | osg::StateAttribute::OVERRIDE*/)
 {
     osg::Node *node = dynamic_cast<osg::Node *>(object);
     osg::Drawable *drawable = dynamic_cast<osg::Drawable *>(object);
@@ -908,10 +857,6 @@ void osg::CPseudoMaterial::apply(osg::Object *object, osg::Node *shaderTesterNod
         {
             m_geomShader = new osg::Shader(osg::Shader::GEOMETRY, geomShaderSrc());
             m_program->addShader(m_geomShader);
-
-            m_program->setParameter(GL_GEOMETRY_INPUT_TYPE_EXT, GL_TRIANGLES);
-            m_program->setParameter(GL_GEOMETRY_OUTPUT_TYPE_EXT, GL_TRIANGLE_STRIP);
-            m_program->setParameter(GL_GEOMETRY_VERTICES_OUT_EXT, 3);
         }
 
         m_fragShader = new osg::Shader(osg::Shader::FRAGMENT, fragShaderSrc());
@@ -921,38 +866,23 @@ void osg::CPseudoMaterial::apply(osg::Object *object, osg::Node *shaderTesterNod
         {
             m_program->addBindAttribLocation(m_attributes[i].name, m_attributes[i].location);
         }
+
+        m_dirty = false;
     }
 
-    osg::StateSet *stateSet = (node != NULL ? node->getOrCreateStateSet() : drawable->getOrCreateStateSet());
+    osg::StateSet *stateSet = node->getOrCreateStateSet();
     CPseudoMaterial *prev = dynamic_cast<CPseudoMaterial *>(stateSet->getUpdateCallback());
     if (prev != NULL)
     {
         prev->revert(node);
     }
     stateSet->setUpdateCallback(this);
-    stateSet->setAttributeAndModes(m_program, osg::StateAttribute::ON | osg::StateAttribute::OVERRIDE);
+    stateSet->setAttributeAndModes(m_program, value);
     for (int i = 0; i < m_uniforms.size(); ++i)
     {
         stateSet->addUniform(m_uniforms[i]);
     }
     m_objects.insert(object);
-
-    if (m_dirty)
-    {
-        // commented: this probably causes crashes because OSG tree can contain Geode containing Geode and that is not checked in some OSG functions
-        osg::Group *group = dynamic_cast<osg::Group *>(shaderTesterNode == NULL ? node : shaderTesterNode);
-        if (group != NULL)
-        {
-            /*
-            CShaderTester *shaderTester = new CShaderTester(programName(), vertShaderSrc(), geomShaderSrc(), fragShaderSrc());
-            osg::Geode *geode = new osg::Geode;
-            geode->addDrawable(shaderTester);
-            group->addChild(geode);
-            */
-        }
-
-        m_dirty = false;
-    }
 }
 
 void osg::CPseudoMaterial::revert(osg::Object *object)
@@ -967,7 +897,7 @@ void osg::CPseudoMaterial::revert(osg::Object *object)
 
     m_objects.erase(object);
 
-    osg::StateSet *stateSet = (node != NULL ? node->getOrCreateStateSet() : drawable->getOrCreateStateSet());
+    osg::StateSet *stateSet = node->getOrCreateStateSet();
     stateSet->removeAttribute(m_program);
     for (int i = 0; i < m_uniforms.size(); ++i)
     {
@@ -1018,9 +948,6 @@ void osg::CPseudoMaterial::operator()(StateSet *stateSet, NodeVisitor *nodeVisit
             if (m_flatShading)
             {
                 m_program->addShader(m_geomShader);
-                m_program->setParameter(GL_GEOMETRY_INPUT_TYPE_EXT, GL_TRIANGLES);
-                m_program->setParameter(GL_GEOMETRY_OUTPUT_TYPE_EXT, GL_TRIANGLE_STRIP);
-                m_program->setParameter(GL_GEOMETRY_VERTICES_OUT_EXT, 3);
             }
 
             for (int i = 0; i < m_attributes.size(); ++i)
@@ -1044,9 +971,6 @@ void osg::CPseudoMaterial::operator()(StateSet *stateSet, NodeVisitor *nodeVisit
             if (m_flatShading)
             {
                 m_program->addShader(m_geomShader);
-                m_program->setParameter(GL_GEOMETRY_INPUT_TYPE_EXT, GL_TRIANGLES);
-                m_program->setParameter(GL_GEOMETRY_OUTPUT_TYPE_EXT, GL_TRIANGLE_STRIP);
-                m_program->setParameter(GL_GEOMETRY_VERTICES_OUT_EXT, 3);
             }
 
             m_program->dirtyProgram();
@@ -1111,16 +1035,23 @@ osg::CPseudoMaterial_Skinned::~CPseudoMaterial_Skinned()
 std::string osg::CPseudoMaterial_Skinned::vertShaderSrc()
 {
     return "// VERTEX \n" + programName() + " \n" + vertVersion() + " \n" + uniforms() + " \n" + attributes() + " \n" + vertOuts() + " \n" + std::string(
+        "uniform mat4 osg_ModelViewProjectionMatrix; \n"
+        "uniform mat4 osg_ModelViewMatrix; \n"
+        "in vec4 osg_Vertex; \n"
+        "in vec4 osg_Color; \n"
+        "in vec3 osg_Normal; \n"
+        "in vec4 osg_MultiTexCoord0; \n"
+        "in vec4 osg_MultiTexCoord1; \n"
         "void main() \n"
         "{ \n"
         "    // Transforming The Vertex \n"
         "    ivec4 indices = ivec4(vertexGroupIndices.x + 0.5, vertexGroupIndices.y + 0.5, vertexGroupIndices.z + 0.5, vertexGroupIndices.w + 0.5); \n"
         " \n"
         "    vec4 skinnedVertex = vec4(0.0, 0.0, 0.0, 0.0); \n"
-        "    skinnedVertex += vertexGroupWeights.x * (boneMatrices[indices.x] * gl_Vertex); \n"
-        "    skinnedVertex += vertexGroupWeights.y * (boneMatrices[indices.y] * gl_Vertex); \n"
-        "    skinnedVertex += vertexGroupWeights.z * (boneMatrices[indices.z] * gl_Vertex); \n"
-        "    skinnedVertex += vertexGroupWeights.w * (boneMatrices[indices.w] * gl_Vertex); \n"
+        "    skinnedVertex += vertexGroupWeights.x * (boneMatrices[indices.x] * osg_Vertex); \n"
+        "    skinnedVertex += vertexGroupWeights.y * (boneMatrices[indices.y] * osg_Vertex); \n"
+        "    skinnedVertex += vertexGroupWeights.z * (boneMatrices[indices.z] * osg_Vertex); \n"
+        "    skinnedVertex += vertexGroupWeights.w * (boneMatrices[indices.w] * osg_Vertex); \n"
         "    skinnedVertex.w = 1.0; \n"
         " \n"
         "    vec4 skinnedOrigin = vec4(0.0, 0.0, 0.0, 0.0); \n"
@@ -1131,25 +1062,20 @@ std::string osg::CPseudoMaterial_Skinned::vertShaderSrc()
         "    skinnedOrigin.w = 1.0; \n"
         " \n"
         "    vec4 skinnedNormal = vec4(0.0, 0.0, 0.0, 0.0); \n"
-        "    skinnedNormal += vertexGroupWeights.x * (boneMatrices[indices.x] * vec4(gl_Normal.xyz, 1.0)); \n"
-        "    skinnedNormal += vertexGroupWeights.y * (boneMatrices[indices.y] * vec4(gl_Normal.xyz, 1.0)); \n"
-        "    skinnedNormal += vertexGroupWeights.z * (boneMatrices[indices.z] * vec4(gl_Normal.xyz, 1.0)); \n"
-        "    skinnedNormal += vertexGroupWeights.w * (boneMatrices[indices.w] * vec4(gl_Normal.xyz, 1.0)); \n"
+        "    skinnedNormal += vertexGroupWeights.x * (boneMatrices[indices.x] * vec4(osg_Normal.xyz, 1.0)); \n"
+        "    skinnedNormal += vertexGroupWeights.y * (boneMatrices[indices.y] * vec4(osg_Normal.xyz, 1.0)); \n"
+        "    skinnedNormal += vertexGroupWeights.z * (boneMatrices[indices.z] * vec4(osg_Normal.xyz, 1.0)); \n"
+        "    skinnedNormal += vertexGroupWeights.w * (boneMatrices[indices.w] * vec4(osg_Normal.xyz, 1.0)); \n"
         "    skinnedNormal.w = 1.0; \n"
         " \n"
-        "    gl_Position = gl_ModelViewProjectionMatrix * skinnedVertex; \n"
-        "    tridim_v_projectionSpacePosition = gl_ModelViewProjectionMatrix * skinnedVertex; \n"
-        " \n"
+        "    gl_Position = tridim_v_projectionSpacePosition = osg_ModelViewProjectionMatrix * skinnedVertex; \n"
         "    tridim_v_objectSpacePosition = skinnedVertex.xyz; \n"
         "    tridim_v_objectSpaceNormal = skinnedNormal.xyz; \n"
-        " \n"
-        "    tridim_v_viewSpacePosition = (gl_ModelViewMatrix * skinnedVertex).xyz; \n"
-        "    tridim_v_viewSpaceNormal = normalize((gl_ModelViewMatrix * skinnedNormal - gl_ModelViewMatrix * skinnedOrigin).xyz); \n"
-        " \n"
-        "    tridim_v_texCoord0 = gl_TexCoord[0] = gl_MultiTexCoord0; \n"
-        "    tridim_v_texCoord1 = gl_TexCoord[1] = gl_MultiTexCoord1; \n") + (m_useVertexColors ? std::string(
-        " \n"
-        "    tridim_v_color = gl_Color; \n") : std::string(
+        "    tridim_v_viewSpacePosition = (osg_ModelViewMatrix * skinnedVertex).xyz; \n"
+        "    tridim_v_viewSpaceNormal = normalize((osg_ModelViewMatrix * skinnedNormal - osg_ModelViewMatrix * skinnedOrigin).xyz); \n"
+        "    tridim_v_texCoord0 = osg_MultiTexCoord0; \n"
+        "    tridim_v_texCoord1 = osg_MultiTexCoord1; \n") + (m_useVertexColors ? std::string(
+        "    tridim_v_color = osg_Color; \n") : std::string(
         "    tridim_v_color = vec4(1.0, 1.0, 1.0, 1.0); \n")) + std::string(
         "} \n");
 }

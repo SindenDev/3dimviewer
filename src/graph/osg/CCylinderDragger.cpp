@@ -272,7 +272,7 @@ bool osgManipulator::CCylinderDragger::handle( const PointerInfo& pointer, const
 				dispatch(*cmd);
 
 				// Set color to pick color.
-				setMaterial(osg::SECOND);
+				applyMaterial(osg::SECOND);
 
 				_prevWorldProjPt = projectedPoint * _projector->getLocalToWorld();
 				_prevRotation = osg::Quat();
@@ -363,7 +363,7 @@ bool osgManipulator::CCylinderDragger::handle( const PointerInfo& pointer, const
 			dispatch(*cmd);
 
 			// Reset color.
-			setMaterial(osg::FIRST);
+			applyMaterial(osg::FIRST);
 
 			aa.requestRedraw();
 
@@ -376,10 +376,10 @@ bool osgManipulator::CCylinderDragger::handle( const PointerInfo& pointer, const
 
 void osgManipulator::CCylinderDragger::onMouseEnter()
 {
-    setMaterial(osg::SECOND);
+    applyMaterial(osg::SECOND);
 }
 
 void osgManipulator::CCylinderDragger::onMouseLeave()
 {
-    setMaterial(osg::FIRST);
+    applyMaterial(osg::FIRST);
 }

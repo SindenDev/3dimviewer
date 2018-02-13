@@ -46,8 +46,8 @@ namespace geometry
         CBone(const geometry::Matrix &matrix = geometry::Matrix::identity());
         ~CBone();
 
-        CBone *clone(std::map<CBone *, CBone *> &boneMapping) const;
         CBone *clone() const;
+        CBone *clone(std::map<CBone *, CBone *>& boneMapping) const;
 
     protected:
         static void deepCopy(const CBone *src, CBone *dst, std::map<CBone *, CBone *> &boneMapping);

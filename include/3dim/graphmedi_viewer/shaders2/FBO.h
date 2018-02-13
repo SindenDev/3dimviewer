@@ -25,18 +25,24 @@
 
 namespace shader
 {
-
 const char OSRT[] =
-"varying vec4 fragWorldPosition; \n"
+"#version 330 core \n"
+" \n"
+"uniform mat4 osg_ModelViewMatrix; \n"
+"uniform mat4 osg_ProjectionMatrix; \n"
+" \n"
+"in vec4 fragWorldPosition; \n"
+" \n"
+"out vec4 outPosition; \n"
 " \n"
 "void main() \n"
 "{ \n"
 "    vec4 wPos = fragWorldPosition; \n"
-"    vec4 vPos = gl_ModelViewMatrix * wPos; \n"
-"    vec4 pPos = gl_ProjectionMatrix * vPos; \n"
+"    vec4 vPos = osg_ModelViewMatrix * wPos; \n"
+"    vec4 pPos = osg_ProjectionMatrix * vPos; \n"
 "    pPos /= pPos.w; \n"
 " \n"
-"    gl_FragData[0] = vec4(pPos.xyz, 0.0); \n"
+"    outPosition = vec4(pPos.xyz, 0.0); \n"
 "} \n";
 
 } // namespace shader

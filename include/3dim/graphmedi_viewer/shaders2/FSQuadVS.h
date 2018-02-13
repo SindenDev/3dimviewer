@@ -25,14 +25,17 @@
 
 namespace shader
 {
-
 const char FSQuadVS[] =
-    "void main() \n"
-    "{ \n"
-    "    // Transforming The Vertex \n"
-    "    gl_Position = gl_Vertex; \n"
-    "    gl_TexCoord[0] = gl_Vertex * 0.5 + 0.5; \n"
-    "} \n";
+"#version 330 core \n"
+" \n"
+"in vec4 osg_Vertex; \n"
+"out vec2 texCoords; \n"
+" \n"
+"void main() \n"
+"{ \n"
+"    gl_Position = osg_Vertex; \n"
+"    texCoords = osg_Vertex.xy * 0.5 + 0.5; \n"
+"} \n";
 
 } // namespace shader
 

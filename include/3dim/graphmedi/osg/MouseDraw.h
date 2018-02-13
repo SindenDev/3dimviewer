@@ -29,7 +29,6 @@
 #include <osg/Vec3>
 #include <osg/Geometry>
 #include <osg/MatrixTransform>
-#include <osg/LineWidth>
 #include <osg/Point>
 #include <osgUtil/LineSegmentIntersector>
 #include <osg/CIntersectionProspector.h>
@@ -58,9 +57,6 @@ public:
 	//! Add point
 	void AddPoint( const osg::Vec3 & point );
 
-	//! Set width
-	void SetWidth( float width ) { m_lineWidth->setWidth( width ); m_pointSize->setSize( width ); }
-
 	//! Set color
 	void SetColor( const Vec4 & color ) { m_colors->operator[]( 0 ) = color; }
 
@@ -82,9 +78,6 @@ protected:
 
 	//! State set
 	ref_ptr< StateSet > m_stateSet;
-
-	//! Line width
-	ref_ptr< LineWidth > m_lineWidth;
 
 	//! Point size
 	ref_ptr< Point > m_pointSize;

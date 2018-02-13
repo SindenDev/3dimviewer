@@ -38,9 +38,6 @@ namespace scene
 
 COrthoSceneOSG::COrthoSceneOSG(OSGOrtho2DCanvas *pCanvas)
 {
-    // turn off the lights
-    this->getOrCreateStateSet()->setMode(GL_LIGHTING, osg::StateAttribute::OFF);
-
     setCanvas(pCanvas);
 
 	// Initialize and set manipulator
@@ -230,9 +227,6 @@ void COrthoSceneOSG::createGeometry()
 {
 	osg::Group* group = new osg::Group;
 
-	// Turn off lighting 
-	group->getOrCreateStateSet()->setMode(GL_LIGHTING, osg::StateAttribute::OFF);
-
 	// Create the geometry for the slice
 	geom = new osg::Geometry;
 
@@ -258,7 +252,7 @@ void COrthoSceneOSG::createGeometry()
 	(*colors)[0].set(1.0f,1.0f,1.0f,1.0f);
 	geom->setColorArray(colors, osg::Array::BIND_OVERALL);
 
-	geom->addPrimitiveSet(new osg::DrawArrays(GL_QUADS,0,4));
+	geom->addPrimitiveSet(new osg::DrawArrays(osg::PrimitiveSet::TRIANGLE_FAN, 0, 4));
 
 	osg::Geode* GeomGeode = new osg::Geode;
 	GeomGeode->addDrawable(geom.get());
@@ -303,8 +297,7 @@ void COrthoSceneOSG::createGeometry()
 	//    normals->push_back(osg::Vec3(0.0f,-1.0f,0.0f));
 	//    normals->push_back(osg::Vec3(0.0f,-1.0f,0.0f));
 
-	//    lineGeometry->setNormalArray(lineNormals);
-	//    lineGeometry->setNormalBinding(osg::Geometry::BIND_OVERALL);
+	//    lineGeometry->setNormalArray(lineNormals, osg::Array::BIND_OVERALL);
 
 	// Add geometry to geode
 	lineGeode->addDrawable(lineGeometry.get());
@@ -316,14 +309,6 @@ void COrthoSceneOSG::createGeometry()
 	osg::StateSet* stateSet = new osg::StateSet();
 	// Set state set to geode
 	lineGeode->setStateSet(stateSet);
-
-	// Shading etc
-	stateSet->setMode(GL_LIGHTING, osg::StateAttribute::OFF);
-
-	// Set line width
-	linewidth = new osg::LineWidth();
-	linewidth->setWidth(2.0f);
-	stateSet->setAttributeAndModes(linewidth.get(), osg::StateAttribute::ON);
 
 	// Disable depth testing so geometry is draw regardless of depth values
 	// of geometry already draw.

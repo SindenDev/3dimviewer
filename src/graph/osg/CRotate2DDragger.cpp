@@ -28,37 +28,25 @@
 
 #include <osg/ShapeDrawable>
 #include <osg/Geometry>
-#include <osg/LineWidth>
-#include <osg/Material>
-#include <osg/ShadeModel>
 
 // namespace used
 using namespace osgManipulator;
 
 ///////////////////////////////////////////////////////////////////////////////
 // Constructor - default settings
-CRotate2DDragger::CRotate2DDragger()
+CRotate2DDragger::CRotate2DDragger(): CRotate2DDragger(osg::Plane(osg::Vec3(0.0, 0.0, 1.0), osg::Vec3(0.0, 0.0, 0.0)))
 {
-	m_initialPlane.set(osg::Vec3(0.0, 0.0, 1.0), osg::Vec3(0.0, 0.0, 0.0));
-	_projector = new PlaneProjector(m_initialPlane);
-	_polygonOffset = new osg::PolygonOffset(-1.0f,-1.0f);
 }
-
 
 ///////////////////////////////////////////////////////////////////////////////
 // Constructor - user set version
-CRotate2DDragger::CRotate2DDragger(const osg::Plane &plane)
-: m_initialPlane(plane)
+CRotate2DDragger::CRotate2DDragger(const osg::Plane &plane) : m_initialPlane(plane)
 {
-	_projector = new PlaneProjector(m_initialPlane);
-	_polygonOffset = new osg::PolygonOffset(-1.0f,-1.0f);
-}
+    _projector = new PlaneProjector(m_initialPlane);
+    _polygonOffset = new osg::PolygonOffset(-1.0f, -1.0f);
 
-
-///////////////////////////////////////////////////////////////////////////////
-// Destructor
-CRotate2DDragger::~CRotate2DDragger()
-{
+    setDiffuse(osg::FIRST, osg::Vec3(0.0, 0.0, 0.0));
+    setDiffuse(osg::SECOND, osg::Vec3(0.0, 0.0, 0.0));
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -97,7 +85,7 @@ bool CRotate2DDragger::handle(const osgManipulator::PointerInfo &pi, const osgGA
 				dispatch( *cmd );
 
 				// Set color to pick color.
-				setMaterial( osg::SECOND );
+                applyMaterial(osg::SECOND);
 				getOrCreateStateSet()->setAttributeAndModes(_polygonOffset.get(), osg::StateAttribute::ON);
 
 				aa.requestRedraw();
@@ -152,7 +140,7 @@ bool CRotate2DDragger::handle(const osgManipulator::PointerInfo &pi, const osgGA
 			dispatch( *cmd );
 
 			// Reset color.
-			setMaterial( osg::FIRST );
+            applyMaterial(osg::FIRST);
 			getOrCreateStateSet()->removeAttribute(_polygonOffset.get());
 
 			aa.requestRedraw();
@@ -221,10 +209,10 @@ void CRotate2DDragger::updateCommand(MotionCommand & command)
 
 void osgManipulator::CRotate2DDragger::onMouseEnter()
 {
-    setMaterial(osg::SECOND);
+    applyMaterial(osg::SECOND);
 }
 
 void osgManipulator::CRotate2DDragger::onMouseLeave()
 {
-    setMaterial(osg::FIRST);
+    applyMaterial(osg::FIRST);
 }

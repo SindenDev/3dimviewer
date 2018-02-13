@@ -142,7 +142,10 @@ namespace osg
                 m_indices->push_back(0);
             }
 
-            m_geometry->dirtyDisplayList();
+            m_vertices->dirty();
+            m_indices->dirty();
+
+            m_geometry->dirtyGLObjects();
             m_geometry->dirtyBound();
 
             if (m_autoPositioning)

@@ -20,12 +20,6 @@
 //
 ///////////////////////////////////////////////////////////////////////////////
 
-#ifdef __APPLE__
-#   include <glew.h>
-#else
-#   include <GL/glew.h>
-#endif
-
 #include "modelswidget.h"
 #include "ui_modelswidget.h"
 #include <data/CModelManager.h>

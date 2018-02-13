@@ -170,23 +170,7 @@ protected:
 };
 
 //! CSerializableData serialization
-template<>
-class CSerializableData< CVolumeOfInterest >
-{
-public:
-	//! Default class name.
-    VPL_ENTITY_NAME("CVolumeOfInterest");
-
-	//! Serialize 
-	template< class tpSerializer >
-	static void serialize( CVolumeOfInterest * v, vpl::mod::CChannelSerializer<tpSerializer> & Writer )
-	{ v->serialize< tpSerializer >( Writer ); }
-
-	//! Deserialize
-	template< class tpSerializer >
-	static void deserialize( CVolumeOfInterest * v, vpl::mod::CChannelSerializer<tpSerializer> & Reader )
-	{ v->deserialize< tpSerializer >( Reader ); }
-};
+DECLARE_SERIALIZATION_WRAPPER(CVolumeOfInterest)
 
 namespace Storage
 {

@@ -880,7 +880,11 @@ void MainWindow::createToolBars()
     ui->panelsToolBar->addAction(ui->actionOrtho_Slices_Panel);
     ui->panelsToolBar->addAction(ui->actionVolume_Rendering_Panel);
     ui->panelsToolBar->addAction(ui->actionSegmentation_Panel);
-	ui->panelsToolBar->addAction(ui->actionModels_List_Panel);
+
+    if (!m_segmentationPluginsLoaded)
+    {
+        ui->panelsToolBar->addAction(ui->actionModels_List_Panel);
+    }
     
     QAction* pFullScreen = ui->appToolBar->addAction(QIcon(":/icons/resources/fullscreen.png"),tr("Fullscreen"));
 	pFullScreen->setObjectName("actionFullScreen");
@@ -3100,13 +3104,25 @@ void MainWindow::createOSGStuff()
 		spWidgets->setWidgetsScale(dpiFactor);
 		APP_STORAGE.invalidate( spWidgets.getEntryPtr() );
 	}
+
+    QSettings settings;
+
+    const bool bAntialiasing = settings.value("AntialiasingEnabled", DEFAULT_ANTIALIASING).toBool();
+
+    if (bAntialiasing)
+    {
+        VPL_LOG_INFO("Antialiasing enabled");
+
+        osg::DisplaySettings::instance()->setNumMultiSamples(8);
+    }
+
 	// 3D view
 	{
-		m_3DView = new CVolumeRendererWindow();
-		m_3DView->hide();
-		m_Scene3D = new scene::CScene3D(m_3DView);
-		m_Scene3D->setRenderer(&m_3DView->getRenderer());
-		m_3DView->setScene(m_Scene3D.get());
+		m_3DView = new CVolumeRendererWindow(nullptr, bAntialiasing);
+        m_Scene3D = new scene::CScene3D(m_3DView);
+        m_Scene3D->setRenderer(&m_3DView->getRenderer());
+        m_3DView->hide();
+        m_3DView->setScene(m_Scene3D.get());
 
 		// Initialize the model manager
 		for(int i = 0; i < MAX_IMPORTED_MODELS; ++i)
@@ -3160,7 +3176,7 @@ void MainWindow::createOSGStuff()
 
     // XY Slice
 	{
-		m_OrthoXYSlice = new OSGOrtho2DCanvas();
+		m_OrthoXYSlice = new OSGOrtho2DCanvas(nullptr, bAntialiasing);
 		m_OrthoXYSlice->hide();
 		m_SceneXY = new scene::CSceneXY(m_OrthoXYSlice);
 		m_OrthoXYSlice->setScene(m_SceneXY.get());
@@ -3190,7 +3206,7 @@ void MainWindow::createOSGStuff()
 
     // XZ Slice
 	{
-		m_OrthoXZSlice = new OSGOrtho2DCanvas();
+		m_OrthoXZSlice = new OSGOrtho2DCanvas(nullptr, bAntialiasing);
 		m_OrthoXZSlice->hide();
 		m_SceneXZ = new scene::CSceneXZ(m_OrthoXZSlice);
 		m_OrthoXZSlice->setScene(m_SceneXZ.get());
@@ -3220,7 +3236,7 @@ void MainWindow::createOSGStuff()
 
     // YZ Slice
 	{
-		m_OrthoYZSlice = new OSGOrtho2DCanvas();
+		m_OrthoYZSlice = new OSGOrtho2DCanvas(nullptr, bAntialiasing);
 		m_OrthoYZSlice->hide();
 		m_SceneYZ = new scene::CSceneYZ(m_OrthoYZSlice);
 		m_OrthoYZSlice->setScene(m_SceneYZ.get());
@@ -4341,12 +4357,10 @@ void MainWindow::loadAppSettings()
     renderer.enable(settings.value("VREnabled",false).toBool());
     renderer.setQuality(settings.value("VRQuality", renderer.getQuality()).toInt());
 
-	int savedShader = settings.value("VRShader", renderer.getShader()).toInt();
-	if (PSVR::PSVolumeRendering::CUSTOM!=savedShader) // don't restore custom shader (it is used for segmentation data visualization only)
-	{
-		renderer.setShader(settings.value("VRShader", renderer.getShader()).toInt());
-		renderer.setLut(settings.value("VRLUT", renderer.getLut()).toInt());
-	}
+	int savedShader = settings.value("VRShader", static_cast<int>(renderer.getShader())).toInt();
+
+	renderer.setShader(static_cast<PSVR::PSVolumeRendering::EShaders>(settings.value("VRShader", static_cast<int>(PSVR::PSVolumeRendering::EShaders::SURFACE)).toInt()));
+	renderer.setLut(static_cast<PSVR::PSVolumeRendering::ELookups>(settings.value("VRLUT", static_cast<int>(renderer.getLut())).toInt()));
 
     VPL_SIGNAL(SigSetPlaneXYVisibility).invoke(settings.value("ShowXYSlice", false /*VPL_SIGNAL(SigGetPlaneXYVisibility).invoke2()*/).toBool());
     VPL_SIGNAL(SigSetPlaneXZVisibility).invoke(settings.value("ShowZXSlice", false /*VPL_SIGNAL(SigGetPlaneXZVisibility).invoke2()*/).toBool());
@@ -4409,14 +4423,10 @@ void MainWindow::saveAppSettings()
 
     settings.setValue("VREnabled", renderer.isEnabled());
     settings.setValue("VRQuality", renderer.getQuality());
-	if (PSVR::PSVolumeRendering::CUSTOM!=renderer.getShader()) // don't save vr shader info when custom shader is selected
+	if (PSVR::PSVolumeRendering::EShaders::CUSTOM != renderer.getShader()) // don't save vr shader info when custom shader is selected
 	{
-		int shader = renderer.getShader();
-		if (shader == PSVR::PSVolumeRendering::CUSTOM)
-			shader = PSVR::PSVolumeRendering::SURFACE;
-
-		settings.setValue("VRShader", shader);
-		settings.setValue("VRLUT", renderer.getLut());
+		settings.setValue("VRShader", static_cast<int>(renderer.getShader()));
+		settings.setValue("VRLUT", static_cast<int>(renderer.getLut()));
 	}
     settings.setValue("ShowXYSlice",VPL_SIGNAL(SigGetPlaneXYVisibility).invoke2());
     settings.setValue("ShowZXSlice",VPL_SIGNAL(SigGetPlaneXZVisibility).invoke2());
@@ -4881,6 +4891,11 @@ void MainWindow::showPanelsMenu()
     qSort(dws.begin(),dws.end(),dockWidgetNameCompare);
     foreach (QDockWidget * dw, dws)
     {
+        if (m_segmentationPluginsLoaded && dw->objectName() == "Models Panel")
+        {
+            continue;
+        }
+
         if (dw->toggleViewAction()->isEnabled())
             pMenu->addAction(dw->toggleViewAction());            
     }

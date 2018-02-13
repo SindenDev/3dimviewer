@@ -35,6 +35,7 @@ set(OPENMESH_LIB_NAME	"OpenMesh")
 set(STATISMO_LIB_NAME	"Statismo")
 set(FREEGLUT_LIB_NAME   "Freeglut")
 set(LEAPMOTION_LIB_NAME "LeapMotion")
+set(GLAD_LIB_NAME 		"glad")
 set(PYTHONCPP_LIB_NAME  "PythonCppInterop")
 set(PYTHON_LIB_NAME     "PythonLibs")
 
@@ -76,6 +77,7 @@ list(APPEND all_library_names ${OPENMESH_LIB_NAME})
 list(APPEND all_library_names ${STATISMO_LIB_NAME})
 list(APPEND all_library_names ${FREEGLUT_LIB_NAME})
 list(APPEND all_library_names ${LEAPMOTION_LIB_NAME})
+list(APPEND library_names ${GLAD_LIB_NAME})
 list(APPEND all_library_names ${PYTHONCPP_LIB_NAME})
 list(APPEND all_library_names ${PYTHON_LIB_NAME})
 
@@ -264,6 +266,14 @@ endmacro()
 macro(ADD_LIB_BULLET)
     
     ADD_LIB(${BULLET_LIB_NAME} ${ARGV})
+    
+endmacro()
+
+macro(ADD_LIB_GLAD)
+    
+    ADD_LIB(${GLAD_LIB_NAME} ${ARGV})
+	
+	target_compile_definitions( ${TRIDIM_CURRENT_TARGET} PRIVATE NOMINMAX )
     
 endmacro()
 

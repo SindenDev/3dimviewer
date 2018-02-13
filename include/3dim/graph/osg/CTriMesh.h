@@ -32,8 +32,6 @@
 #include <osg/Geometry>
 #include <osg/PrimitiveSet>
 #include <osg/StateSet>
-#include <osg/Material>
-#include <osg/ShadeModel>
 #include <osg/Shape>
 #include <osg/Vec4>
 
@@ -97,9 +95,6 @@ namespace osg
 
         //! Update only part of model
         void updatePartOfMesh(geometry::CMesh *mesh, const tIdPosVec &ip, bool createNormals = true);
-
-        //! Set use display lists
-        void setUseDisplayList(bool bUse);
 
         //! Sets use of multiple materials at once
         void setUseMultipleMaterials(bool value);

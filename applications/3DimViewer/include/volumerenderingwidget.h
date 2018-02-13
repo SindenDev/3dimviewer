@@ -24,7 +24,7 @@
 #define VOLUMERENDERINGWIDGET_H
 
 #include <QWidget>
-
+#include <render/PSVRrenderer.h>
 #include <osg/Vec4>
 
 namespace Ui {
@@ -110,8 +110,8 @@ protected:
     };
 
     void vrDataRemapChange(float expand, float offset);
-    int lutCodeToVrLut(int index);
-    int vrLutToLutCode(int index);
+    PSVR::PSVolumeRendering::ELookups lutCodeToVrLut(int index);
+    int vrLutToLutCode(PSVR::PSVolumeRendering::ELookups index);
 
 	void setCustomVR();
 };

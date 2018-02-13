@@ -50,6 +50,8 @@ namespace geometry
     void getConnectedGeometryInRadius(geometry::CMesh& mesh, geometry::CMesh::VertexHandle seed, geometry::Vec3 center, float radius, std::vector<geometry::CMesh::VertexHandle>& handles, std::vector<geometry::Vec3>& neighbors, std::vector<double>& distances);
     geometry::Vec3 closestPointOnLine(geometry::Vec3 pointOnLine, geometry::Vec3 lineDirection, geometry::Vec3 queryPoint, double& dist);
     geometry::CMesh* cutMeshByVerticesSubset(geometry::CMesh& mesh, std::vector<geometry::CMesh::VertexHandle>& handles);
+    geometry::Vec3 toEuler(const geometry::Quat &q);
+    bool compareMatrices(const geometry::Matrix &a, const geometry::Matrix &b);
 
 } // namespace geometry
 

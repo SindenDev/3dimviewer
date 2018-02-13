@@ -189,6 +189,7 @@ VPL_DECLARE_SIGNAL_1(901, void, bool, SigModelsMultiSelectionEnabled);
 //Signal for xlab denture panel to open add tooth dialog..
 VPL_DECLARE_SIGNAL_0(902, void, SigShowXlabAddToothDialog);
 
+VPL_DECLARE_SIGNAL_0(903, void, SigXlabAddingTeethFinished);
 
 
 #endif // CoreMediSignals_H

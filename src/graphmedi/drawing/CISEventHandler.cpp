@@ -411,7 +411,7 @@ void CISEventHandler::initDraw(const CMousePoint &point)
     // Create new line
     m_line = new osg::CLineGeode( m_lineFlags );
 
-    m_line->SetWidth( m_lineWidth );
+    //m_line->SetWidth( m_lineWidth );
     m_line->SetColor( m_lineColor );
 
     // recompute point to the volume space
@@ -776,7 +776,7 @@ void CISWindowEH::initDraw(const CMousePoint &point)
     // Create new line
     m_line = new osg::CLineGeode( m_lineFlags );
 
-    m_line->SetWidth(m_lineWidth);
+    //m_line->SetWidth(m_lineWidth);
     m_line->SetColor(m_lineColor);
 
     // recompute point to the volume space

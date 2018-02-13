@@ -1765,7 +1765,7 @@ void CNotesPluginPanel::handleDrawing(const osg::Vec3Array *points, const int ha
 
     if (ui->drawPushButton->isChecked() || ui->drawArrowPushButton->isChecked()) {
 
-        Matrix current_matrix = getRenderer()->getViewMatrix();
+        osg::Matrix current_matrix = getRenderer()->getViewMatrix();
 
         if (ui->noteTree->topLevelItemCount() == 0 || currentNote == nullptr || not isTheMatrixSimilar(currentNote->m_sceneTransform, current_matrix)) {
 			currentNote = addNewNote();
@@ -1779,13 +1779,13 @@ void CNotesPluginPanel::handleDrawing(const osg::Vec3Array *points, const int ha
 
         QSize size = getRenderer()->getWindowSize();
 
-		Matrix view = getRenderer()->getViewMatrix();
-		Matrix proj = getRenderer()->getProjectionMatrix();
+        osg::Matrix view = getRenderer()->getViewMatrix();
+        osg::Matrix proj = getRenderer()->getProjectionMatrix();
 
 
          
-        auto view2 = Matrix::inverse(view);
-        auto proj2 = Matrix::inverse(proj);
+        auto view2 = osg::Matrix::inverse(view);
+        auto proj2 = osg::Matrix::inverse(proj);
 
      
 		currentNote->m_lines.push_back(data::noteLine());

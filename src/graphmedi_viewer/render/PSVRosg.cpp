@@ -75,17 +75,13 @@ void osgPSVolumeRendering::drawImplementation(osg::RenderInfo& ri) const
 
     if (m_pRenderer)
     {
-        m_pRenderer->renderVolume();
+        m_pRenderer->renderVolume(ri);
     }
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 //
-#if OSG_VERSION_GREATER_OR_EQUAL(3,1,10)
-    osg::BoundingBox osgPSVolumeRendering::computeBoundingBox() const
-#else
-    osg::BoundingBox osgPSVolumeRendering::computeBound() const
-#endif
+osg::BoundingBox osgPSVolumeRendering::computeBoundingBox() const
 {
     static const float MultCoeff = 1.0f;
 

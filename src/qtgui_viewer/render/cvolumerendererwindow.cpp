@@ -24,14 +24,13 @@
 #include "render/cvolumerendererwindow.h"
 
 
-CVolumeRendererWindow::CVolumeRendererWindow(QWidget *parent)
+CVolumeRendererWindow::CVolumeRendererWindow(QWidget* parent, bool antialiasing)
 #if defined(USE_PSVR)
-    : tBase( parent )
+    : tBase(parent, antialiasing)
 #endif
 {
 #ifdef USE_PSVR
     m_Renderer.setCanvas(this);
-    //m_Renderer.init();
 #endif // USE_PSVR
 }
 

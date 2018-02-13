@@ -29,7 +29,7 @@
 #include <QBuffer>
 #include <QDataStream>
 
-namespace data 
+namespace data
 {
 
 CCustomData::CCustomData()
@@ -39,60 +39,60 @@ CCustomData::CCustomData()
 
 void CCustomData::init()
 {
-	m_data.clear();
+    m_data.clear();
 }
 
 void CCustomData::readXML(const std::string& str)
 {
-	// clear any existing data
-	m_data.clear();
-	// read data from xml
-	QXmlStreamReader xml(QString::fromStdString(str));
-	while(!xml.atEnd() && !xml.hasError())
+    // clear any existing data
+    m_data.clear();
+    // read data from xml
+    QXmlStreamReader xml(QString::fromStdString(str));
+    while (!xml.atEnd() && !xml.hasError())
     {
         QXmlStreamReader::TokenType token = xml.readNext();
-        if(token == QXmlStreamReader::StartDocument)
+        if (token == QXmlStreamReader::StartDocument)
             continue;
-        if(token == QXmlStreamReader::StartElement)
+        if (token == QXmlStreamReader::StartElement)
         {
-            if(xml.name() == "groups")
+            if (xml.name() == "groups")
                 continue;
-            if(xml.name() == "group") 
+            if (xml.name() == "group")
             {
                 QString name;
                 QXmlStreamAttributes attributes = xml.attributes();
-                if(attributes.hasAttribute("name")) 
+                if (attributes.hasAttribute("name"))
                     name = attributes.value("name").toString();
-                xml.readNext();     
-				// create group
-				Q_ASSERT(!name.isEmpty());
-				auto it = m_data.insertMulti(name,QList<sEntry>());
-				// read group entries
-                while(!(xml.tokenType() == QXmlStreamReader::EndElement && xml.name() == "group")) 
+                xml.readNext();
+                // create group
+                Q_ASSERT(!name.isEmpty());
+                auto it = m_data.insertMulti(name, QList<sEntry>());
+                // read group entries
+                while (!(xml.tokenType() == QXmlStreamReader::EndElement && xml.name() == "group"))
                 {
-					if(xml.tokenType() == QXmlStreamReader::Invalid) 
-						break;
-                    if(xml.tokenType() == QXmlStreamReader::StartElement) 
+                    if (xml.tokenType() == QXmlStreamReader::Invalid)
+                        break;
+                    if (xml.tokenType() == QXmlStreamReader::StartElement)
                     {
-						QStringRef e_name = xml.name();
+                        QStringRef e_name = xml.name();
 
                         QString data;
                         QXmlStreamAttributes e_attr = xml.attributes();
                         //if(e_attr.hasAttribute("data")) 
-                            //data = e_attr.value("data").toString();
+                        //data = e_attr.value("data").toString();
 
-                        if(data.isEmpty() && e_attr.hasAttribute("dataX")) 
+                        if (data.isEmpty() && e_attr.hasAttribute("dataX"))
                             data = e_attr.value("dataX").toString();
 
                         QString e_val = xml.readElementText();
-						Q_ASSERT(!e_name.isEmpty());
-						
-						sEntry entry;
-						entry.name = (e_name.toString());
-						entry.value = (e_val);
+                        Q_ASSERT(!e_name.isEmpty());
+
+                        sEntry entry;
+                        entry.name = (e_name.toString());
+                        entry.value = (e_val);
                         entry.data = QVariant();
                         if (!data.isEmpty())
-                        {                      
+                        {
                             QByteArray arr(QByteArray::fromBase64(data.toLatin1()));
                             //qDebug() << arr;
                             QBuffer readBuffer(&arr);
@@ -103,7 +103,7 @@ void CCustomData::readXML(const std::string& str)
                             if (entry.data.type() == QVariant::List)
                             {
                                 QList<QVariant> vl = entry.data.toList();
-                                for(auto it = vl.begin(); it!=vl.end() && bOk; ++it)
+                                for (auto it = vl.begin(); it != vl.end() && bOk; ++it)
                                 {
                                     bOk = (it->type() != QVariant::Invalid);
                                 }
@@ -119,8 +119,8 @@ void CCustomData::readXML(const std::string& str)
                                 s >> entry.data;
                             }
                         }
-						
-						it->push_back(entry);
+
+                        it->push_back(entry);
                     }
                     xml.readNext();
                 }
@@ -131,136 +131,136 @@ void CCustomData::readXML(const std::string& str)
 
 std::string CCustomData::writeXML()
 {
-	QString xmlString;
-	QXmlStreamWriter xmlWriter(&xmlString);
-	xmlWriter.setCodec("UTF-8");
-	xmlWriter.writeStartDocument();
+    QString xmlString;
+    QXmlStreamWriter xmlWriter(&xmlString);
+    xmlWriter.setCodec("UTF-8");
+    xmlWriter.writeStartDocument();
     xmlWriter.writeStartElement("groups");
-	QMapIterator< QString, QList<sEntry> > it(m_data);
-	while(it.hasNext())
-	{
-		it.next();
-		xmlWriter.writeStartElement("group");
-		xmlWriter.writeAttribute("name",it.key());
-		foreach(auto entry, it.value())
-		{
-			Q_ASSERT(!entry.name.isEmpty());
-			xmlWriter.writeStartElement(entry.name);
-			if (!entry.data.isNull() && entry.data.isValid())
-			{
-				//QString xstr;
-				//&xstr << entry.data;
-				//xmlWriter.writeAttribute(QString("data"),xstr);
+    QMapIterator< QString, QList<sEntry> > it(m_data);
+    while (it.hasNext())
+    {
+        it.next();
+        xmlWriter.writeStartElement("group");
+        xmlWriter.writeAttribute("name", it.key());
+        foreach(auto entry, it.value())
+        {
+            Q_ASSERT(!entry.name.isEmpty());
+            xmlWriter.writeStartElement(entry.name);
+            if (!entry.data.isNull() && entry.data.isValid())
+            {
+                //QString xstr;
+                //&xstr << entry.data;
+                //xmlWriter.writeAttribute(QString("data"),xstr);
 
                 QByteArray byteArray;
                 QBuffer writeBuffer(&byteArray);
                 writeBuffer.open(QIODevice::WriteOnly);
-                QDataStream out(&writeBuffer); 
-                out << entry.data; 
+                QDataStream out(&writeBuffer);
+                out << entry.data;
                 writeBuffer.close();
 
-                xmlWriter.writeAttribute(QString("dataX"),byteArray.toBase64());
-			}
-			xmlWriter.writeCharacters(entry.value);
-			xmlWriter.writeEndElement();
-		}
-		xmlWriter.writeEndElement();
-	}
-	xmlWriter.writeEndElement();
-	xmlWriter.writeEndDocument();
+                xmlWriter.writeAttribute(QString("dataX"), byteArray.toBase64());
+            }
+            xmlWriter.writeCharacters(entry.value);
+            xmlWriter.writeEndElement();
+        }
+        xmlWriter.writeEndElement();
+    }
+    xmlWriter.writeEndElement();
+    xmlWriter.writeEndDocument();
 
-	return xmlString.toStdString();
+    return xmlString.toStdString();
 }
 
 
 void CCustomData::setDataValue(const QString& group, const QString& name, const QString& value, const QVariant& data)
 {
-	// get/create group
+    // get/create group
     auto it = m_data.find(group);
-	if (it==m_data.end())
-	{
-		it = m_data.insertMulti(group,QList<sEntry>());
-	}
+    if (it == m_data.end())
+    {
+        it = m_data.insertMulti(group, QList<sEntry>());
+    }
 
-	// find existing entry with the same name
-	for(QList<data::CCustomData::sEntry>::iterator eit = it.value().begin(), eend = it.value().end(); eit!=eend; eit++)
-	{
-		if (0==(eit->name.compare(name,Qt::CaseInsensitive)))
-		{
-			eit->value = value;
-			eit->data = data;
-			return;
-		}
-	}
-	// add a new one
-	sEntry entry;
-	entry.name = name;
-	entry.value = value;
-	entry.data = data;
-	it->push_back(entry);
+    // find existing entry with the same name
+    for (QList<data::CCustomData::sEntry>::iterator eit = it.value().begin(), eend = it.value().end(); eit != eend; eit++)
+    {
+        if (0 == (eit->name.compare(name, Qt::CaseInsensitive)))
+        {
+            eit->value = value;
+            eit->data = data;
+            return;
+        }
+    }
+    // add a new one
+    sEntry entry;
+    entry.name = name;
+    entry.value = value;
+    entry.data = data;
+    it->push_back(entry);
 }
 
 QString CCustomData::getDataValue(const QString& group, const QString& name)
 {
     auto it = m_data.find(group);
-	if (it!=m_data.end())
-	{
-		foreach(auto entry, it.value())
-		{
-			if (0==(entry.name.compare(name,Qt::CaseInsensitive)))
-			{
-				return entry.value;
-			}
-		}
-	}
-	return QString();
+    if (it != m_data.end())
+    {
+        foreach(auto entry, it.value())
+        {
+            if (0 == (entry.name.compare(name, Qt::CaseInsensitive)))
+            {
+                return entry.value;
+            }
+        }
+    }
+    return QString();
 }
 
 bool CCustomData::getDataValue(const QString& group, const QString& name, QString& value, QVariant& data)
 {
     value.clear();
     data.clear();
-	auto it = m_data.find(group);
-	if (it!=m_data.end())
-	{
-		foreach(auto entry, it.value())
-		{
-			if (0==(entry.name.compare(name,Qt::CaseInsensitive)))
-			{
-				value = entry.value;
-				data = entry.data;
-				return true;
-			}
-		}
-	}
-	return false;
+    auto it = m_data.find(group);
+    if (it != m_data.end())
+    {
+        foreach(auto entry, it.value())
+        {
+            if (0 == (entry.name.compare(name, Qt::CaseInsensitive)))
+            {
+                value = entry.value;
+                data = entry.data;
+                return true;
+            }
+        }
+    }
+    return false;
 }
 
 const QList<CCustomData::sEntry>& CCustomData::getGroupData(const QString& group)
-{	
-	auto it = m_data.find(group);
-	if (it!=m_data.end())
-	{
-		return *it;
-	}
-	static QList<CCustomData::sEntry> empty;
-	return empty;
+{
+    auto it = m_data.find(group);
+    if (it != m_data.end())
+    {
+        return *it;
+    }
+    static QList<CCustomData::sEntry> empty;
+    return empty;
 }
 
 //! Clear group data
 void CCustomData::clearGroup(const QString& group)
 {
-	auto it = m_data.find(group);
-	if (it!=m_data.end())
-	{
-		m_data.erase(it);
-	}
+    auto it = m_data.find(group);
+    if (it != m_data.end())
+    {
+        m_data.erase(it);
+    }
 }
 
 //! Clear all data
 void CCustomData::clearAll()
 {
-	m_data.clear();
+    m_data.clear();
 }
 
 }

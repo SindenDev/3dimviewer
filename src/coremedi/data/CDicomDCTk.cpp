@@ -29,6 +29,9 @@
 #include <VPL/System/FileBrowser.h>
 
 // DCMTK
+#ifdef __APPLE__
+  #undef UNICODE
+#endif
 #include <dcmtk/dcmimgle/dcmimage.h>
 #include <dcmtk/dcmdata/dcxfer.h>
 #include <dcmtk/dcmdata/dcfilefo.h>
@@ -115,7 +118,7 @@ long data::CDicomDCTk::saveToBuffer(char * buffer, long length)
         switch ( m_Compression )
         {
             case LOSSLESS:
-#if defined(PACKAGE_VERSION_NUMBER) && (PACKAGE_VERSION_NUMBER == 361)
+#if defined(PACKAGE_VERSION_NUMBER) && (PACKAGE_VERSION_NUMBER == 361 || PACKAGE_VERSION_NUMBER == 362)
                 if ( m_pHandle->write( stream, EXS_JPEGProcess14SV1, EET_UndefinedLength, NULL ) == EC_Normal )
 #else
                 if ( m_pHandle->write( stream, EXS_JPEGProcess14SV1TransferSyntax, EET_UndefinedLength, NULL ) == EC_Normal )
@@ -536,14 +539,14 @@ bool data::CDicomDCTk::compressLosslessJPEG()
     DJ_RPLossless params; // codec parameters, we use the defaults		
 
     // this causes the lossless JPEG version of the dataset to be created
-#if defined(PACKAGE_VERSION_NUMBER) && (PACKAGE_VERSION_NUMBER == 361)
+#if defined(PACKAGE_VERSION_NUMBER) && (PACKAGE_VERSION_NUMBER == 361 || PACKAGE_VERSION_NUMBER == 362)
     dataset->chooseRepresentation(EXS_JPEGProcess14SV1, &params);
 #else
     dataset->chooseRepresentation(EXS_JPEGProcess14SV1TransferSyntax, &params);
 #endif
 
     // check if everything went well
-#if defined(PACKAGE_VERSION_NUMBER) && (PACKAGE_VERSION_NUMBER == 361)
+#if defined(PACKAGE_VERSION_NUMBER) && (PACKAGE_VERSION_NUMBER == 361 || PACKAGE_VERSION_NUMBER == 362)
     if (dataset->canWriteXfer(EXS_JPEGProcess14SV1))
 #else
     if (dataset->canWriteXfer(EXS_JPEGProcess14SV1TransferSyntax))

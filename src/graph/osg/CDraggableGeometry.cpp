@@ -300,9 +300,6 @@ void osg::CDraggableGeometry::buildTree( const osg::Matrix & initialMatrix )
 	m_geometryMatrixTransform = new MatrixTransform;
     m_geometryScaleTransform = new MatrixTransform;
 
-    // Majkl: This caused that implants are wrongly illuminated!!!
-//    m_geometryMatrixTransform->getOrCreateStateSet()->setMode(GL_RESCALE_NORMAL, osg::StateAttribute::ON );
-
 	// Create geometries switch
 	m_geometrySwitch = new Switch;
 

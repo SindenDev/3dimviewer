@@ -27,7 +27,7 @@
 #include <osg/Version>
 #include <sstream>
 #include <app/Signals.h>
-
+#include <osg/CThickLineMaterial.h>
 
 using namespace scene;
 
@@ -53,6 +53,8 @@ CMeasurementsEH::CMeasurementsEH( OSGCanvas * canvas,scene::CSceneBase * scene, 
 
     // Connect to the measurements parameter changed signal
     APP_MODE.getMeasuringParametersSignal().connect( this, &CMeasurementsEH::OnParametersChanged );
+
+    m_gizmoLineMaterial = new osg::CMaterialLines(canvas->getView()->getCamera(), 2.0f);
 }
 
 //**************************************************
@@ -115,6 +117,7 @@ bool CMeasurementsEH::handleDistance( const osgGA::GUIEventAdapter& ea, osgGA::G
 
 		// Create ruler geometry
 		m_ruler = new CRulerGizmo;
+        m_ruler->setMaterial(m_gizmoLineMaterial);
 
 		// Add ruler to the scene
 		m_scene->addGizmo( m_ruler.get() );
@@ -522,8 +525,6 @@ CRulerGizmo::CRulerGizmo()
 		
 		m_lineGeometry->addPrimitiveSet(new osg::DrawArrays(osg::PrimitiveSet::LINES,0,2));
 
-		m_lineGeometry->setUseDisplayList( false );
-		
 		// Line color
 		osg::ref_ptr<osg::Vec4Array> color = new osg::Vec4Array;
 		color->push_back( m_lineColor );
@@ -567,27 +568,12 @@ CRulerGizmo::CRulerGizmo()
 			color->push_back( m_lineColor );
             crossGeometry[ i ]->setColorArray(color.get(), osg::Array::BIND_OVERALL);
 
-			osg::LineWidth* crossLinewidth = new osg::LineWidth();
-
-			crossLinewidth->setWidth(2.0f);
-			crossGeodes[ i ]->getOrCreateStateSet()->setAttributeAndModes(crossLinewidth, osg::StateAttribute::ON);
-			crossGeodes[ i ]->getOrCreateStateSet()->setMode(GL_LIGHTING,osg::StateAttribute::OFF);
-			crossGeodes[ i ]->getOrCreateStateSet()->setMode(GL_ALPHA_TEST, osg::StateAttribute::ON );
 			crossGeodes[ i ]->getOrCreateStateSet()->setMode(GL_BLEND, osg::StateAttribute::ON );
 
 			// Disable depth testing so geometry is drawn regardless of depth values
 			// of geometry already draw.
 			crossGeodes[ i ]->getOrCreateStateSet()->setMode(GL_DEPTH_TEST,osg::StateAttribute::OFF);
 			crossGeodes[ i ]->getOrCreateStateSet()->setRenderingHint( osg::StateSet::TRANSPARENT_BIN );
-
-			// Need to make sure this geometry is drawn last. RenderBins are handled
-			// in numerical order so set bin number to 11
-			//crossGeodes[ i ]->getOrCreateStateSet()->setRenderBinMode(osg::StateSet::OVERRIDE_RENDERBIN_DETAILS);//:USE_RENDERBIN_DETAILS);
-			//crossGeodes[ i ]->getOrCreateStateSet()->setRenderBinDetails( 111, "RenderBin");
-
-			// Line smoothing
-			crossGeodes[ i ]->getOrCreateStateSet()->setMode(GL_LINE_SMOOTH, osg::StateAttribute::ON);
-			crossGeodes[ i ]->getOrCreateStateSet()->setMode(GL_POLYGON_SMOOTH, osg::StateAttribute::ON);
 
 			m_mt[ i ]->addChild( crossGeodes[ i ].get() );
 
@@ -597,26 +583,12 @@ CRulerGizmo::CRulerGizmo()
 
 	// Turn of lighting for line and set line width.
 	{
-		osg::LineWidth* linewidth = new osg::LineWidth();
-		linewidth->setWidth(2.0f);
-		m_lineGeode->getOrCreateStateSet()->setAttributeAndModes(linewidth, osg::StateAttribute::ON);
-		m_lineGeode->getOrCreateStateSet()->setMode(GL_LIGHTING,osg::StateAttribute::OFF);
-		m_lineGeode->getOrCreateStateSet()->setMode(GL_ALPHA_TEST, osg::StateAttribute::ON );
 		m_lineGeode->getOrCreateStateSet()->setMode(GL_BLEND, osg::StateAttribute::ON );
 
 		// Disable depth testing so geometry is draw regardless of depth values
 		// of geometry already draw.
 		m_lineGeode->getOrCreateStateSet()->setMode(GL_DEPTH_TEST,osg::StateAttribute::OFF);
 		m_lineGeode->getOrCreateStateSet()->setRenderingHint( osg::StateSet::TRANSPARENT_BIN );
-
-		// Need to make sure this geometry is drawn last. RenderBins are handled
-		// in numerical order so set bin number to 11
-//		m_lineGeode->getOrCreateStateSet()->setRenderBinMode(osg::StateSet::OVERRIDE_RENDERBIN_DETAILS);//:USE_RENDERBIN_DETAILS);
-//		m_lineGeode->getOrCreateStateSet()->setRenderBinDetails( 111, "RenderBin");
-
-		// Line smoothing
-		m_lineGeode->getOrCreateStateSet()->setMode(GL_LINE_SMOOTH, osg::StateAttribute::ON);
-		m_lineGeode->getOrCreateStateSet()->setMode(GL_POLYGON_SMOOTH, osg::StateAttribute::ON);
 
 		// Disable culling
 		setCullingActive(false);
@@ -694,6 +666,14 @@ void CRulerGizmo::update( const osg::Vec3 & spoint, const osg::Vec3 & snormal, c
 	m_lineGeometry->setVertexArray(m_vertices.get());
 }
 
+void scene::CRulerGizmo::setMaterial(osg::CMaterialLines * material)
+{
+    m_gizmoLineMaterial = material;
+    m_gizmoLineMaterial->apply(m_lineGeometry);
+    m_gizmoLineMaterial->apply(m_mt[0]);
+    m_gizmoLineMaterial->apply(m_mt[1]);
+}
+
 /******************************************************************************
 	Density meter gizmo
 ******************************************************************************/
@@ -735,7 +715,6 @@ CDensityGizmo::CDensityGizmo( const double value, const double radius, const osg
 
 		m_geometry->setVertexArray(m_vertices.get());
 		m_geometry->addPrimitiveSet(new osg::DrawArrays(osg::PrimitiveSet::LINES,0, m_vertices->size()));
-		m_geometry->setUseDisplayList( false );
 
 		// Line color
 		osg::ref_ptr<osg::Vec4Array> color = new osg::Vec4Array;
@@ -747,11 +726,6 @@ CDensityGizmo::CDensityGizmo( const double value, const double radius, const osg
 
 	// Turn of lighting for line and set line width.
 	{
-		osg::LineWidth* linewidth = new osg::LineWidth();
-		linewidth->setWidth(1.0f);
-		m_geode->getOrCreateStateSet()->setAttributeAndModes(linewidth, osg::StateAttribute::ON);
-		m_geode->getOrCreateStateSet()->setMode(GL_LIGHTING,osg::StateAttribute::OFF);
-		m_geode->getOrCreateStateSet()->setMode(GL_ALPHA_TEST, osg::StateAttribute::ON );
 		m_geode->getOrCreateStateSet()->setMode(GL_BLEND, osg::StateAttribute::ON );
 
 
@@ -760,9 +734,6 @@ CDensityGizmo::CDensityGizmo( const double value, const double radius, const osg
 		m_geode->getOrCreateStateSet()->setMode(GL_DEPTH_TEST,osg::StateAttribute::OFF);
 		m_geode->getOrCreateStateSet()->setRenderingHint( osg::StateSet::TRANSPARENT_BIN );
 
-		// Line smoothing
-		m_geode->getOrCreateStateSet()->setMode(GL_LINE_SMOOTH, osg::StateAttribute::ON);
-
 		// Disable culling
 		setCullingActive(false);
 	}
@@ -770,12 +741,9 @@ CDensityGizmo::CDensityGizmo( const double value, const double radius, const osg
 	// Set text geode parameters
 	{
 //		m_textGeode->getOrCreateStateSet()->setAttributeAndModes(linewidth, osg::StateAttribute::ON);
-		m_textGeode->getOrCreateStateSet()->setMode(GL_LIGHTING,osg::StateAttribute::OFF);
-		m_textGeode->getOrCreateStateSet()->setMode(GL_ALPHA_TEST, osg::StateAttribute::ON );
 		m_textGeode->getOrCreateStateSet()->setMode(GL_BLEND, osg::StateAttribute::ON );
 		m_textGeode->getOrCreateStateSet()->setMode(GL_DEPTH_TEST,osg::StateAttribute::OFF);
 		m_textGeode->getOrCreateStateSet()->setRenderingHint( osg::StateSet::TRANSPARENT_BIN );
-		m_textGeode->getOrCreateStateSet()->setMode(GL_LINE_SMOOTH, osg::StateAttribute::ON);
 	}
 
 	// Get volume size

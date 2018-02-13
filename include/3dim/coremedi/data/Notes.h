@@ -12,7 +12,7 @@
 #include <data/CObjectHolder.h>
 #include <data/storage_ids_core.h>
 #include <data/CSerializableData.h>
-#include <data/CSnapshot.h>
+#include <data/ESnapshotType.h>
 
 
 

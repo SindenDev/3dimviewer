@@ -26,9 +26,7 @@
 #include <VPL/Base/SharedPtr.h>
 #include <VPL/Module/Serializable.h>
 #include <VPL/Module/BinarySerializer.h>
-
 #include "CChangedEntries.h"
-
 
 namespace data
 {
@@ -54,7 +52,6 @@ class CStorageEntry;
 //   ...
 //   CEntryPtr<CMyData> spData = APP_STORAGE.getEntryPtr(MyData::Id);
 
-
 ///////////////////////////////////////////////////////////////////////////////
 //! Base class for all objects that can be stored in the data storage.
 //! - All storable objects have to declare a reference counting smart pointer!
@@ -64,27 +61,31 @@ class CStorableData : public vpl::base::CObject, public vpl::mod::CSerializable
 {
 public:
     //! Simple error checking...
-    enum { STORABLE_DATA };
+    enum
+    {
+        STORABLE_DATA,
+    };
 
     //! Smart pointer type.
     //! - Declares type tSmartPtr.
     VPL_SHAREDPTR(CStorableData);
 
 public:
-	//! Object creation function.
-	//! - Each derived object has to declare creation function like this.
+    //! Object creation function.
+    //! - Each derived object has to declare creation function like this.
     static CStorableData *create();
 
-	//! Virtual destructor.
-    virtual ~CStorableData() {}
+    //! Virtual destructor.
+    virtual ~CStorableData()
+    { }
 
     //! Regenerates the object state according to any changes in the data storage.
     //! - This method is called if any parent object has changed its value.
     //! - All updates are deferred until the data are going to be accessed.
     //! - The entry is locked automatically.
-    virtual void update(const CChangedEntries& Changes) = 0;
+    virtual void update(const CChangedEntries &Changes) = 0;
 
-	//! Initializes the object to its default state.
+    //! Initializes the object to its default state.
     //! - The entry is locked automatically.
     virtual void init() = 0;
 
@@ -104,16 +105,19 @@ public:
     }
 
     //! Serialize. 
-	virtual void serialize(vpl::mod::CBinarySerializer & VPL_UNUSED(Writer))
-    {
-    }
+    virtual void serialize(vpl::mod::CBinarySerializer & VPL_UNUSED(Writer))
+    { }
 
-	//! Deserialize
-	virtual void deserialize(vpl::mod::CBinarySerializer& VPL_UNUSED(Reader))
+    //! Deserialize
+    virtual void deserialize(vpl::mod::CBinarySerializer & VPL_UNUSED(Reader))
+    { }
+
+    //! Deserialize
+    virtual bool deserializationFinished()
     {
+        return false;
     }
 };
-
 
 } // namespace data
 

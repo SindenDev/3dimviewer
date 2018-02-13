@@ -26,7 +26,6 @@
 #include <QDebug>
 #include <QDesktopWidget>
 #include <QDir>
-//#include <VPL/Base/Logging.h>
 #include <app/CProductInfo.h>
 #include <QApplication>
 #include <C3DimApplication.h>
@@ -36,15 +35,10 @@
     #include <windows.h> // to detect wow64 process
 #endif
 
-#ifdef __APPLE__
-#   include <glew.h>
-#else
-#   include <GL/glew.h>
-#endif
-//#include <GL/glew.h>
-
 #include <QOpenGLWidget>
 #include <QOpenGLWindow>
+#include <QOpenGLFunctions>
+#include <QOpenGLContext>
 
 #ifdef _WIN32 // Windows specific
     #include <Windows.h>
@@ -53,6 +47,7 @@
     #pragma comment(lib, "wbemuuid.lib")
     #pragma comment(lib, "Version.lib" )
     #include <dxgi.h>
+    #include <ddraw.h>
     #ifndef SAFE_RELEASE
 	    #define SAFE_RELEASE(p)      { if (p) { (p)->Release(); (p)=nullptr; } }
     #endif
@@ -67,6 +62,10 @@
 #include <OpenGL/OpenGL.h>
 #include <sys/param.h>
 #include <sys/mount.h>
+#include <mach/mach.h>
+#include <mach/mach_port.h>
+#include <mach-o/dyld_images.h>
+#include <IOKit/graphics/IOGraphicsLib.h>
 #endif
 
 #ifdef Q_OS_LINUX
@@ -105,45 +104,158 @@ QString CSysInfo::getApplicationName(QString subType)
     return res;
 }
 
-void CSysInfo::getOpenGLInfo()
+void CSysInfo::logVideoMemoryUsage()
 {
-	// get OpenGL info
-	QString glInfo;
-	{
-		const GLubyte* pVendor = glGetString(GL_VENDOR);
-        QString qstrVendor, qstrCardName;
-		if (NULL!=pVendor)
-		{
-            qstrVendor = QString(QLatin1String((const char*)pVendor));
-			glInfo = qstrVendor;
-		}
-		const GLubyte* pRenderer = glGetString(GL_RENDERER);
-		if (NULL!=pRenderer)
-		{
-            qstrCardName = QString(QLatin1String((const char*)pRenderer));
-			glInfo += "\n" + qstrCardName;
+#ifdef _WIN32 // video memory check using direct draw
+    {
+        HINSTANCE hInstDDraw = LoadLibrary(L"ddraw.dll"); // to prevent linkage to ddraw
+        if (nullptr != hInstDDraw)
+        {
+            typedef HRESULT(WINAPI* LPDIRECTDRAWCREATE)(GUID FAR *lpGUID, LPDIRECTDRAW FAR *lplpDD, IUnknown FAR *pUnkOuter);
+            LPDIRECTDRAWCREATE pDDCreate = (LPDIRECTDRAWCREATE)GetProcAddress(hInstDDraw, "DirectDrawCreate");
+            if (nullptr != pDDCreate)
+            {
+                LPDIRECTDRAW mDDraw = nullptr;
+                IDirectDraw7* mDDraw2 = nullptr;
+                HRESULT  mDDrawResult = pDDCreate(NULL, &mDDraw, NULL);
+                if (nullptr != mDDraw)
+                {
+                    const GUID FAR IID_IDirectDraw7{ 0x15e65ec0, 0x3b9c, 0x11d2,{ 0xb9, 0x2f, 0x00, 0x60, 0x97, 0x97, 0xea, 0x5b } }; // so we don't have to link dxguid
+                    mDDrawResult = mDDraw->QueryInterface(IID_IDirectDraw7, (LPVOID *)&mDDraw2);
+                    if (nullptr != mDDraw2)
+                    {
+                        DDSCAPS2 ddscaps = {};
+                        DWORD   totalmem = 0, freemem = 0, totalmemloc = 0, freememloc = 0;
+                        ddscaps.dwCaps = DDSCAPS_VIDEOMEMORY /*| DDSCAPS_LOCALVIDMEM*/;
+                        mDDrawResult = mDDraw2->GetAvailableVidMem(&ddscaps, &totalmem, &freemem);
+                        ddscaps.dwCaps = DDSCAPS_VIDEOMEMORY | DDSCAPS_LOCALVIDMEM;
+                        mDDrawResult = mDDraw2->GetAvailableVidMem(&ddscaps, &totalmemloc, &freememloc);
+                        if (SUCCEEDED(mDDrawResult))
+                        {
+                            VPL_LOG_INFO("VRAM Check " << formatBytes(freemem) << "/" << formatBytes(totalmem) << " local " << formatBytes(freememloc) << "/" << formatBytes(totalmemloc));
+                        }
+                        mDDraw2->Release();
+                    }
+                    mDDraw->Release();
+                }
+            }
+            FreeLibrary(hInstDDraw);
+        }
+        return;
+    }
+#endif
+#ifdef __APPLE__
+    {
+        // free vram check
+        kern_return_t krc = KERN_SUCCESS;
+        mach_port_t masterPort = kIOMasterPortDefault;
+        krc = IOMasterPort(bootstrap_port, &masterPort);
+        if (krc == KERN_SUCCESS)
+        {
+            CFMutableDictionaryRef pattern = IOServiceMatching(kIOAcceleratorClassName);
+            //CFShow(pattern);
+
+            io_iterator_t deviceIterator;
+            krc = IOServiceGetMatchingServices(masterPort, pattern, &deviceIterator);
+            if (krc == KERN_SUCCESS)
+            {
+                io_object_t object;
+                while ((object = IOIteratorNext(deviceIterator)))
+                {
+                    CFMutableDictionaryRef properties = NULL;
+                    krc = IORegistryEntryCreateCFProperties(object, &properties, kCFAllocatorDefault, (IOOptionBits)0);
+                    if (krc == KERN_SUCCESS)
+                    {
+                        CFMutableDictionaryRef perf_properties = (CFMutableDictionaryRef)CFDictionaryGetValue(properties, CFSTR("PerformanceStatistics"));
+                        //CFShow(perf_properties);
+                        if (perf_properties)
+                        {
+                            // look for a number of keys (this is mostly reverse engineering and best-guess effort)
+                            const void* free_vram_number = CFDictionaryGetValue(perf_properties, CFSTR("vramFreeBytes"));
+                            if (free_vram_number)
+                            {
+                                ssize_t vramFreeBytes = 0;
+                                CFNumberGetValue((CFNumberRef)free_vram_number, kCFNumberSInt64Type, &vramFreeBytes);
+                                VPL_LOG_INFO("Free VRAM " << vramFreeBytes / (1024 * 1024) << "MB");
+                            }
+                            const void* used_vram_number = CFDictionaryGetValue(perf_properties, CFSTR("vramUsedBytes"));
+                            if (used_vram_number)
+                            {
+                                ssize_t vramUsedBytes = 0;
+                                CFNumberGetValue((CFNumberRef)used_vram_number, kCFNumberSInt64Type, &vramUsedBytes);
+                                VPL_LOG_INFO("Used VRAM " << vramUsedBytes / (1024 * 1024) << "MB");
+                            }
+                        }
+                    }
+                    if (properties)
+                        CFRelease(properties);
+                    IOObjectRelease(object);
+                }
+                IOObjectRelease(deviceIterator);
+            }
+            mach_port_deallocate(mach_task_self(), masterPort);
+        }
+        return;
+    }
+#endif
+}
+
+void CSysInfo::getOpenGLInfo(QOpenGLContext* context)
+{
+    if (nullptr == context)
+        return;
+
+    QOpenGLFunctions fnGL(context);
+    // get OpenGL info
+    QString glInfo;
+    {
+        QOpenGLContext::OpenGLModuleType ogltype = QOpenGLContext::openGLModuleType();
+        if (QOpenGLContext::LibGL == ogltype)
+            glInfo = "LibGL";
+        if (QOpenGLContext::LibGLES == ogltype)
+            glInfo = "LibGLES";
+    }
+    {
+        const GLubyte* pVendor = fnGL.glGetString(GL_VENDOR);
+        if (NULL != pVendor)
+        {
+            glInfo += "\n" + QString(QLatin1String((const char*)pVendor));
+        }
+        const GLubyte* pRenderer = fnGL.glGetString(GL_RENDERER);
+        if (NULL != pRenderer)
+        {
+            glInfo += "\n" + QString(QLatin1String((const char*)pRenderer));
             if (m_sCardName.empty())
-                m_sCardName=(const char*)pRenderer;
-		}
-		const GLubyte* pVersion = glGetString(GL_VERSION);
-		if (NULL!=pVersion)
-		{
-			glInfo += "\n" + QString(QLatin1String((const char*)pVersion));
-		}        
-	}
+                m_sCardName = (const char*)pRenderer;
+        }
+        const GLubyte* pVersion = fnGL.glGetString(GL_VERSION);
+        if (NULL != pVersion)
+        {
+            glInfo += "\n" + QString(QLatin1String((const char*)pVersion));
+        }
+    }
     m_sOpenGLInfo = glInfo.toStdString();
 
     GLint maxTextureSize = 0;
-    glGetIntegerv(GL_MAX_TEXTURE_SIZE, &maxTextureSize);
-    glInfo += "\nGL_MAX_TEXTURE_SIZE "+QString::number(maxTextureSize);        
+    fnGL.glGetIntegerv(GL_MAX_TEXTURE_SIZE, &maxTextureSize);
+    glInfo += "\nGL_MAX_TEXTURE_SIZE " + QString::number(maxTextureSize);
     m_maxTextureSize = maxTextureSize;
 
     GLint max3DTextureSize = 0;
-    glGetIntegerv(GL_MAX_3D_TEXTURE_SIZE, &max3DTextureSize);
-    glInfo += "\nGL_MAX_3D_TEXTURE_SIZE "+QString::number(max3DTextureSize);        
+    fnGL.glGetIntegerv(GL_MAX_3D_TEXTURE_SIZE, &max3DTextureSize);
+    glInfo += "\nGL_MAX_3D_TEXTURE_SIZE " + QString::number(max3DTextureSize);
     m_max3DTextureSize = max3DTextureSize;
 
+    m_bTexturesNPOT = fnGL.hasOpenGLFeature(QOpenGLFunctions::NPOTTextures);
+    glInfo += "\nNon power of two textures ";
+    if (m_bTexturesNPOT)
+        glInfo += "Yes";
+    else
+        glInfo += "No";
+
     VPL_LOG_INFO(glInfo.toStdString());
+
+    logVideoMemoryUsage();
 }
 
 void   CSysInfo::getComputerInfo()
@@ -443,48 +555,47 @@ void   CSysInfo::getProcessorInfo()
     typedef BOOL (WINAPI *LPFN_ISWOW64PROCESS) (HANDLE, PBOOL);
 #endif
 
-
 void   CSysInfo::getExtendedOperatingSystemInfo()
 {
 #ifdef _WIN32
     // http://msdn.microsoft.com/en-us/library/windows/desktop/aa394512%28v=vs.85%29.aspx
 
     // Obtain the initial locator to WMI
-    IWbemLocator *pLoc = NULL;    
+    IWbemLocator *pLoc = NULL;
     HRESULT hres = CoCreateInstance(
         CLSID_WbemLocator,
         0,
-        CLSCTX_INPROC_SERVER, 
+        CLSCTX_INPROC_SERVER,
         IID_IWbemLocator,
-        (LPVOID *) &pLoc
-        );
-    if( FAILED(hres) )
+        (LPVOID *)&pLoc
+    );
+    if (FAILED(hres))
     {
         return;
     }
 
     // Connect to WMI through the IWbemLocator::ConnectServer method
     IWbemServices *pSvc = NULL;
-	
+
     // Connect to the root\cimv2 namespace with
     // the current user and obtain pointer pSvc
     // to make IWbemServices calls.
     hres = pLoc->ConnectServer(
-         _bstr_t(L"root\\cimv2"), // Object path of WMI namespace
-         NULL,                    // User name. NULL = current user
-         NULL,                    // User password. NULL = current
-         0,                       // Locale. NULL indicates current
-         NULL,                    // Security flags.
-         0,                       // Authority (e.g. Kerberos)
-         0,                       // Context object 
-         &pSvc                    // pointer to IWbemServices proxy
-         );
-    if( FAILED(hres) )
+        _bstr_t(L"root\\cimv2"), // Object path of WMI namespace
+        NULL,                    // User name. NULL = current user
+        NULL,                    // User password. NULL = current
+        0,                       // Locale. NULL indicates current
+        NULL,                    // Security flags.
+        0,                       // Authority (e.g. Kerberos)
+        0,                       // Context object 
+        &pSvc                    // pointer to IWbemServices proxy
+    );
+    if (FAILED(hres))
     {
         pLoc->Release();
         return;
     }
-    
+
     // Set security levels on the proxy
     hres = CoSetProxyBlanket(
         pSvc,                        // Indicates the proxy to set
@@ -495,8 +606,8 @@ void   CSysInfo::getExtendedOperatingSystemInfo()
         RPC_C_IMP_LEVEL_IMPERSONATE, // RPC_C_IMP_LEVEL_xxx
         NULL,                        // client identity
         EOAC_NONE                    // proxy capabilities 
-        );
-    if( FAILED(hres) )
+    );
+    if (FAILED(hres))
     {
         pSvc->Release();
         pLoc->Release();
@@ -509,14 +620,14 @@ void   CSysInfo::getExtendedOperatingSystemInfo()
     {
         // Get serial number of the first physical disk
         hres = pSvc->ExecQuery(
-            bstr_t("WQL"), 
+            bstr_t("WQL"),
             bstr_t("SELECT * FROM Win32_OperatingSystem"),
-            WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY, 
+            WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY,
             NULL,
             &pEnumerator
-            );
-        
-        if( FAILED(hres) )
+        );
+
+        if (FAILED(hres))
         {
             pSvc->Release();
             pLoc->Release();
@@ -527,18 +638,18 @@ void   CSysInfo::getExtendedOperatingSystemInfo()
         IWbemClassObject *pclsObj = 0;
         ULONG uReturn = 0;
 
-        while( pEnumerator )
+        while (pEnumerator)
         {
             HRESULT hr = pEnumerator->Next(WBEM_INFINITE, 1, &pclsObj, &uReturn);
-            if( uReturn == 0 )
+            if (uReturn == 0)
             {
                 break;
             }
 
-            VARIANT vtProp;           
+            VARIANT vtProp;
 
             hr = pclsObj->Get(L"MaxProcessMemorySize", 0, &vtProp, 0, 0);
-            if( FAILED(hr) || vtProp.vt == VT_NULL )
+            if (FAILED(hr) || vtProp.vt == VT_NULL)
             {
                 pclsObj->Release();
                 continue;
@@ -551,7 +662,7 @@ void   CSysInfo::getExtendedOperatingSystemInfo()
             }
 
             hr = pclsObj->Get(L"FreePhysicalMemory", 0, &vtProp, 0, 0);
-            if( FAILED(hr) || vtProp.vt == VT_NULL )
+            if (FAILED(hr) || vtProp.vt == VT_NULL)
             {
                 pclsObj->Release();
                 continue;
@@ -564,7 +675,7 @@ void   CSysInfo::getExtendedOperatingSystemInfo()
             }
 
             hr = pclsObj->Get(L"FreeVirtualMemory", 0, &vtProp, 0, 0);
-            if( FAILED(hr) || vtProp.vt == VT_NULL )
+            if (FAILED(hr) || vtProp.vt == VT_NULL)
             {
                 pclsObj->Release();
                 continue;
@@ -693,6 +804,15 @@ void   CSysInfo::getOperatingSystemInfo()
 			operatingSystemString = "Mac OS X 10.10 Yosemite";     
 			break;
 #endif
+        case QSysInfo::MV_10_11:
+            operatingSystemString = "Mac OS X 10.11 El Capitan";
+            break;
+        case QSysInfo::MV_10_12:
+            operatingSystemString = "Mac OS X 10.12 Sierra";
+            break;
+        case Q_MV_OSX(10, 13):
+            operatingSystemString = "Mac OS X 10.13 High Sierra";
+            break;
         case QSysInfo::MV_Unknown :
             operatingSystemString = "An unknown and currently unsupported platform";
             break;
@@ -950,6 +1070,7 @@ void   CSysInfo::getGraphicsCardInfo()
             VariantClear(&vtProp);
 
             // Get the driver version property
+            QDate driverDate;
             hr = pclsObj->Get(L"DriverDate", 0, &vtProp, 0, 0);  
             std::wstring wsDriverDate;
             if( FAILED(hr) || vtProp.vt == VT_NULL )
@@ -971,6 +1092,22 @@ void   CSysInfo::getGraphicsCardInfo()
                 }
                 if (vtProp.vt == VT_BSTR)
                     wsDriverDate = vtProp.bstrVal;
+                if (!wsDriverDate.empty())
+                {
+                    QString str = QString::fromUtf16((const ushort*)wsDriverDate.c_str());
+                    QRegExp rexp("^[0-9]{14}\\.");
+                    if (0 == rexp.indexIn(str))
+                    {
+                        QDate date = QDate::fromString(str.left(8), "yyyyMMdd");
+                        if (date.isValid())
+                        {
+                            driverDate = date;
+                            //if (m_gfxDriverDate.isNull() || !m_gfxDriverDate.isValid() || m_gfxDriverDate>date)
+                            //   m_gfxDriverDate = date;
+                            //qDebug() << m_gfxDriverDate.toString();
+                        }
+                    }
+                }
             }
             VariantClear(&vtProp);
 
@@ -986,6 +1123,10 @@ void   CSysInfo::getGraphicsCardInfo()
             {
                 if (SUCCEEDED(VariantChangeType(&vtProp,&vtProp,0,VT_UI8)))
                     nCardRam = vtProp.ullVal;
+                else if (vtProp.vt == VT_I4)
+                {
+                    nCardRam = *(unsigned int*)(&vtProp.intVal);
+                }
             }
             VariantClear(&vtProp);
             
@@ -1318,6 +1459,7 @@ void CSysInfo::init()
         VPL_LOG_INFO( "Couldn't detect GPU memory! Assume " << m_adapterRam/(1024*1024) << "MB" );
     }
     getOperatingSystemInfo();
+    VPL_LOG_INFO(QSslSocket::sslLibraryVersionString().toStdString());
     getEnviromentInfo();
     getDrivesInfo();
     {     
@@ -1328,11 +1470,11 @@ void CSysInfo::init()
 		cx.makeCurrent(&sf);
 
         // ask opengl info
-        getOpenGLInfo();
+        getOpenGLInfo(&cx);
 
         // check version
-		m_bOpenGLOk = cx.format().majorVersion()>2 || (cx.format().majorVersion() == 2 && cx.format().minorVersion() >= 1);
-        VPL_LOG_INFO( "OpenGL 2.1 support: " << (m_bOpenGLOk?"true":"false") );
+        m_bOpenGLOk = cx.format().majorVersion()>3 || (cx.format().majorVersion() == 3 && cx.format().minorVersion() >= 3);
+        VPL_LOG_INFO("OpenGL 3.3 support: " << (m_bOpenGLOk ? "true" : "false"));
     }
     logLoadedModules();
 }
