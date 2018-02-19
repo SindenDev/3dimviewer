@@ -78,7 +78,7 @@ background-repeat: none;</string>
       </size>
      </property>
      <property name="currentIndex">
-      <number>3</number>
+      <number>0</number>
      </property>
      <widget class="QWidget" name="pageGeneral">
       <layout class="QFormLayout" name="formLayout_3">
@@ -126,7 +126,7 @@ background-repeat: none;</string>
          </item>
         </widget>
        </item>
-       <item row="2" column="0">
+       <item row="3" column="0">
         <widget class="QCheckBox" name="checkBoxLogging">
          <property name="toolTip">
           <string>Allows logging.</string>
@@ -139,14 +139,14 @@ background-repeat: none;</string>
          </property>
         </widget>
        </item>
-       <item row="2" column="1">
+       <item row="3" column="1">
         <widget class="QPushButton" name="pushButtonShowLog">
          <property name="text">
           <string>Show Log...</string>
          </property>
         </widget>
        </item>
-       <item row="3" column="0">
+       <item row="4" column="0">
         <widget class="QCheckBox" name="checkBoxLinkModels">
          <property name="enabled">
           <bool>true</bool>
@@ -156,14 +156,14 @@ background-repeat: none;</string>
          </property>
         </widget>
        </item>
-       <item row="6" column="0">
+       <item row="7" column="0">
         <widget class="QLabel" name="label_3">
          <property name="text">
           <string>Background Color</string>
          </property>
         </widget>
        </item>
-       <item row="6" column="1">
+       <item row="7" column="1">
         <widget class="QPushButton" name="buttonBGColor">
          <property name="maximumSize">
           <size>
@@ -176,14 +176,14 @@ background-repeat: none;</string>
          </property>
         </widget>
        </item>
-       <item row="7" column="0">
+       <item row="8" column="0">
         <widget class="QLabel" name="label_4">
          <property name="text">
           <string>DICOM Port</string>
          </property>
         </widget>
        </item>
-       <item row="7" column="1">
+       <item row="8" column="1">
         <widget class="QSpinBox" name="spinBoxDicomPort">
          <property name="maximum">
           <number>65535</number>
@@ -193,7 +193,7 @@ background-repeat: none;</string>
          </property>
         </widget>
        </item>
-       <item row="8" column="0">
+       <item row="9" column="0">
         <spacer name="verticalSpacer">
          <property name="orientation">
           <enum>Qt::Vertical</enum>
@@ -206,7 +206,7 @@ background-repeat: none;</string>
          </property>
         </spacer>
        </item>
-       <item row="4" column="0" colspan="2">
+       <item row="5" column="0" colspan="2">
         <widget class="QGroupBox" name="groupBox">
          <property name="toolTip">
           <string>Save path for segmentation and model data</string>
@@ -232,7 +232,7 @@ background-repeat: none;</string>
          </layout>
         </widget>
        </item>
-       <item row="5" column="0" colspan="2">
+       <item row="6" column="0" colspan="2">
         <widget class="QGroupBox" name="groupBox_3">
          <property name="title">
           <string>Default Name of Saved Files</string>
@@ -253,6 +253,13 @@ background-repeat: none;</string>
            </widget>
           </item>
          </layout>
+        </widget>
+       </item>
+       <item row="2" column="0">
+        <widget class="QCheckBox" name="checkBoxAntialiasing">
+         <property name="text">
+          <string>Antialiasing</string>
+         </property>
         </widget>
        </item>
       </layout>

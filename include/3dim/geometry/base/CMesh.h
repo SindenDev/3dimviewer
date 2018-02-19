@@ -97,7 +97,7 @@ public:
     ~CMeshCutter();
     
     void operator()(const osg::Vec3 &v1, const osg::Vec3 &v2, const osg::Vec3 &v3, float d1, float d2, float d3);
-    void operator()(const osg::Vec3 &v1, const osg::Vec3 &v2, const osg::Vec3 &v3, bool treatVertexDataAsTemporary);
+    void operator()(const osg::Vec3 &v1, const osg::Vec3 &v2, const osg::Vec3 &v3);
 
     bool initialize(osg::Vec3Array *vertices, osg::DrawElementsUInt *indices, osg::Plane plane, osg::Matrix worldMatrix);
     bool initialize(osg::Vec3Array *vertices, osg::DrawElementsUInt *indices, float planePosition);

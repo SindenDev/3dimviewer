@@ -24,7 +24,7 @@
 #define CSnapshot_H
 
 #include <VPL/Base/Lock.h>
-#include <data/ESnapshotType.h>
+//#include <data/ESnapshotType.h> // DO NOT INCLUDE FROM SPECIALISED LIBRARIES!!!
 
 namespace data
 {
@@ -33,6 +33,11 @@ namespace data
 // CLASS CUndoProvider - predeclaration
 
 class CUndoProvider;
+
+enum EBaseSnapshotTypes
+{
+	UNDO_ALL = 0,
+};
 
 ///////////////////////////////////////////////////////////////////////////////
 //! CLASS CSnapshot - interface for the undo objects.

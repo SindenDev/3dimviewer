@@ -25,15 +25,31 @@
 
 namespace shader
 {
-
 const char Vert[] =
-"varying vec4 fragWorldPosition; \n"
+"#version 330 core \n"
+" \n"
+"uniform mat4 osg_ModelViewProjectionMatrix; \n"
+" \n"
+"in vec4 osg_Vertex; \n"
 " \n"
 "void main() \n"
 "{ \n"
-"    // Transforming The Vertex \n"
-"    gl_Position = ftransform(); \n"
-"    fragWorldPosition = vec4(gl_Vertex.xyz, 1.0); \n"
+"    gl_Position = osg_ModelViewProjectionMatrix * osg_Vertex; \n"
+"} \n";
+
+const char Vert2[] =
+"#version 330 core \n"
+" \n"
+"uniform mat4 osg_ModelViewProjectionMatrix; \n"
+" \n"
+"in vec4 osg_Vertex; \n"
+" \n"
+"out vec4 fragWorldPosition; \n"
+" \n"
+"void main() \n"
+"{ \n"
+"    gl_Position = osg_ModelViewProjectionMatrix * osg_Vertex; \n"
+"    fragWorldPosition = vec4(osg_Vertex.xyz, 1.0); \n"
 "} \n";
 
 } // namespace shader

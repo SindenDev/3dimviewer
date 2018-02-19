@@ -27,19 +27,17 @@
 #include <data/CSceneManipulatorDummy.h>
 
 #include <osg/ShapeDrawable>
-#include <osg/LineWidth>
-#include <osg/Material>
 #include <osgDB/ReadFile>
 #include <osgDB/FileUtils>
 #include <osgWidget/WindowManager>
 #include <osgText/Text>
 #include <osgText/Font>
-#include <osg/ShadeModel>
-#include <osg/LightModel>
 #include <osg/CullFace>
 #include <osg/Shape>
 #include <osg/Version>
 #include <cmath>
+
+#include <osg/CThickLineMaterial.h>
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //
@@ -230,6 +228,12 @@ scene::CSceneOrientationWidget::CSceneOrientationWidget(OSGCanvas *pCanvas,
     // Release options - are used in the create scene method
     ptrOptions.release();
 
+    m_materialBodyRegular = new osg::CPseudoMaterial;
+    m_materialBodyRegular->uniform("Shininess")->set(0.0f);
+    m_materialBodyRegular->uniform("Specularity")->set(0.0f);
+    m_materialBodyRegular->uniform("Diffuse")->set(osg::Vec3(0.5f, 0.5f, 0.5f));
+    m_materialBodyRegular->uniform("Emission")->set(osg::Vec3(0.4f, 0.4f, 0.4f));
+
     // Add orientation marker scene centered and scaled
 	createScene();
 	m_scaleCenter->addChild( m_sceneGeometry );
@@ -292,6 +296,8 @@ void scene::CSceneOrientationWidget::createScene(void)
     {
         m_model = convertOpenMesh2OSGGeometry(pMesh, osg::Vec4(1.0, 1.0, 1.0, 1.0));
         m_sceneGeometry->addDrawable( m_model.get() );
+
+        m_materialBodyRegular->apply(m_model);
     }
 #endif // USE_BODY
 
@@ -353,16 +359,6 @@ osg::MatrixTransform * scene::CSceneOrientationWidget::createLabel( const std::s
 {
     // Create text geode
     osg::Geode * textGeode = new osg::Geode;
-    osg::StateSet * stateSet = textGeode->getOrCreateStateSet();
-
-    // Turn of lighting for line and set line width.
-    osg::LineWidth * lineWidth = new osg::LineWidth();
-    lineWidth->setWidth( 1.0f );
-    stateSet->setAttributeAndModes( lineWidth, osg::StateAttribute::ON | osg::StateAttribute::OVERRIDE );
-    stateSet->setMode( GL_LIGHTING, osg::StateAttribute::OFF | osg::StateAttribute::OVERRIDE );
-
-    // Line smoothing
-    textGeode->getOrCreateStateSet()->setMode( GL_LINE_SMOOTH, osg::StateAttribute::ON );
 
     // Value text
     osgText::Text * text = new osgText::Text;
@@ -420,59 +416,12 @@ osg::MatrixTransform * scene::CSceneOrientationWidget::createArrow( const osg::V
         // Color array
         osg::Vec4Array * colors = new osg::Vec4Array;
         colors->push_back( color );
-#if OSG_VERSION_GREATER_OR_EQUAL(3,1,10)
+
 		lineGeometry->setColorArray(colors, osg::Array::BIND_OVERALL);
-#else
-        lineGeometry->setColorArray(colors);
-#endif
-        lineGeometry->setColorBinding(osg::Geometry::BIND_OVERALL);
-
-        // Line width
-        osg::LineWidth * lineWidth = new osg::LineWidth;
-        lineWidth->setWidth( 1.0f );
-        lineGeometry->getOrCreateStateSet()->setAttributeAndModes( lineWidth, osg::StateAttribute::ON );
-
-        // No lighting
-        lineGeometry->getOrCreateStateSet()->setMode( GL_LIGHTING, osg::StateAttribute::OFF | osg::StateAttribute::OVERRIDE );
-
-        // Line smoothing
-        lineGeometry->getOrCreateStateSet()->setMode( GL_LINE_SMOOTH, osg::StateAttribute::ON );
-        lineGeometry->getOrCreateStateSet()->setMode( GL_POLYGON_SMOOTH, osg::StateAttribute::ON );
 
         // Add line to the geode
         geode->addDrawable( lineGeometry );
     }
-
-    // Cone
-/*    {
-        osg::Cone * cone = new osg::Cone( coneCenter, coneRadius, coneHeight );
-        osg::Quat rotation;
-        rotation.makeRotate( osg::Vec3( 0.0, 0.0, 1.0 ), osg::Vec3(1.0f, 0.0f, 0.0f) );
-        cone->setRotation( rotation );
-        osg::ShapeDrawable * coneDrawable = new osg::ShapeDrawable( cone );
-        coneDrawable->setColor( color );
-        geode->addDrawable( coneDrawable );
-
-        osg::Material * mat = dynamic_cast<osg::Material*>( coneDrawable->getOrCreateStateSet()->getAttribute(osg::StateAttribute::MATERIAL) );
-        if( !mat )
-        {
-            mat = new osg::Material;
-            coneDrawable->getOrCreateStateSet()->setAttribute( mat, osg::StateAttribute::ON );
-            coneDrawable->getOrCreateStateSet()->setAttributeAndModes( mat, osg::StateAttribute::OVERRIDE | osg::StateAttribute::ON );       
-        }
-
-        mat->setAmbient(osg::Material::FRONT_AND_BACK, color);
-        mat->setDiffuse(osg::Material::FRONT_AND_BACK, color);
-        mat->setSpecular(osg::Material::FRONT_AND_BACK, color);
-        mat->setEmission(osg::Material::FRONT_AND_BACK, osg::Vec4(0.0, 0.0, 0.0, 1.0));
-        mat->setShininess(osg::Material::FRONT_AND_BACK, 25.0);
-
-        // Enable lighting
-        coneDrawable->getOrCreateStateSet()->setMode( GL_LIGHTING, osg::StateAttribute::ON | osg::StateAttribute::OVERRIDE );
-
-        // Normalization of normals
-        coneDrawable->getOrCreateStateSet()->setMode( GL_RESCALE_NORMAL, osg::StateAttribute::ON | osg::StateAttribute::PROTECTED );
-	}*/
 
     // Create matrix transform to rotate arrow to the position
     osg::MatrixTransform * mt = new osg::MatrixTransform( osg::Matrix::rotate( osg::Vec3( 1.0, 0.0, 0.0 ), vec ) );
@@ -630,24 +579,11 @@ osg::Group * scene::CRulerWidget::createRulerScene()
 		// Color array
 		osg::Vec4Array * colors = new osg::Vec4Array;
 		colors->push_back( m_usedColor );
-#if OSG_VERSION_GREATER_OR_EQUAL(3,1,10)
+
 		m_lineGeometry->setColorArray(colors, osg::Array::BIND_OVERALL);
-#else
-		m_lineGeometry->setColorArray(colors);
-#endif
-		m_lineGeometry->setColorBinding(osg::Geometry::BIND_OVERALL);
 
-		// Line width
-		osg::LineWidth * lineWidth = new osg::LineWidth;
-		lineWidth->setWidth( 1.0f );
-		m_lineGeometry->getOrCreateStateSet()->setAttributeAndModes( lineWidth, osg::StateAttribute::ON );
-
-		// No lighting, alpha and depth testing and blending
-		m_lineGeometry->getOrCreateStateSet()->setMode( GL_LIGHTING,osg::StateAttribute::OFF );
-
-		// Line smoothing
-		m_lineGeometry->getOrCreateStateSet()->setMode(GL_LINE_SMOOTH, osg::StateAttribute::ON);
-		m_lineGeometry->getOrCreateStateSet()->setMode(GL_POLYGON_SMOOTH, osg::StateAttribute::ON);
+        m_lineMaterial = new osg::CMaterialLines(m_pCanvas->getView()->getCamera(), 1.25f);
+        m_lineMaterial->apply(m_lineGeometry);
 
 		// Add line to the geode
 		geode->addDrawable( m_lineGeometry.get() );	
@@ -671,6 +607,8 @@ void scene::CRulerWidget::CRulerUpdateCallback::operator()(osg::Node* node, osg:
 	{
 		widget->onWMSizeChanged( widget->getWindowManager()->getWidth(), widget->getWindowManager()->getHeight() );
 	}
+
+    traverse(node, nv);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -731,7 +669,8 @@ void scene::CRulerWidget::modifyLine(float w, float h, float marksDistance)
 	m_drawArrays->setCount( 2 + mCount*2 );
 	m_drawArrays->dirty();
 	m_vertexArray->dirty();
-	m_lineGeometry->dirtyDisplayList();
+
+	m_lineGeometry->dirtyGLObjects();
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

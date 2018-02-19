@@ -210,7 +210,7 @@ namespace osg
         virtual std::string lightingSrc();
 
     public:
-        virtual void apply(osg::Object *object, osg::Node *shaderTesterNode = NULL);
+        virtual void apply(osg::Object *object, StateAttribute::GLModeValue value = osg::StateAttribute::ON | osg::StateAttribute::OVERRIDE);
 
         //! you really should know what you're doing if you try to call this
         void revert(osg::Object *object);

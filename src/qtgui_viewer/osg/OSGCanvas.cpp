@@ -33,11 +33,6 @@ On Mac OS X, when Qt is built with Cocoa support, a QGLWidget can't have any sib
 widgets placed ontop of itself. This is due to limitations in the Cocoa API and is not
 supported by Apple.
 */
-#ifdef __APPLE__
-    #include <glew.h>
-#else
-    #include <GL/glew.h>
-#endif
 
 #include "render/cvolumerendererwindow.h"
 
@@ -63,8 +58,8 @@ supported by Apple.
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 
-OSGCanvas::OSGCanvas(QWidget *parent) :
-    QGLOSGWidget(parent)
+OSGCanvas::OSGCanvas(QWidget *parent, bool antialiasing) :
+    QGLOSGWidget(parent, osg::Vec4(0, 0, 0, 0), antialiasing)
 {
     // Sets the widget's clear color
     data::CObjectPtr<data::CAppSettings> settings( APP_STORAGE.getEntry(data::Storage::AppSettings::Id) );

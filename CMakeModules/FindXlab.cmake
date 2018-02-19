@@ -53,7 +53,7 @@ macro( FIND_XLAB_LIBRARY NAME )
       get_filename_component(lib_name ${XLAB_${NAME}_LIBRARY} NAME)
       get_filename_component(lib_named ${XLAB_${NAME}d_LIBRARY} NAME)
 
-    set( XLAB_LIBRARIES ${XLAB_LIBRARIES} optimized ${lib_name} debug ${lib_named}d )
+    set( XLAB_LIBRARIES ${XLAB_LIBRARIES} optimized ${lib_name} debug ${lib_named} )
   else()
     if( XLAB_${NAME}_LIBRARY )
         get_filename_component(lib_name ${XLAB_${NAME}_LIBRARY} NAME)
@@ -63,7 +63,7 @@ macro( FIND_XLAB_LIBRARY NAME )
       if( XLAB_${NAME}d_LIBRARY )
           get_filename_component(lib_named ${XLAB_${NAME}d_LIBRARY} NAME)
 
-        set( XLAB_LIBRARIES ${XLAB_LIBRARIES} ${lib_named}d ) #??
+        set( XLAB_LIBRARIES ${XLAB_LIBRARIES} ${lib_named} ) #??
       endif()
     endif()
   endif()

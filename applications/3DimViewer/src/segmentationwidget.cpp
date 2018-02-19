@@ -19,11 +19,6 @@
 // limitations under the License.
 //
 ///////////////////////////////////////////////////////////////////////////////
-#ifdef __APPLE__
-#   include <glew.h>
-#else
-#   include <GL/glew.h>
-#endif
 
 #include "segmentationwidget.h"
 #include "ui_segmentationwidget.h"

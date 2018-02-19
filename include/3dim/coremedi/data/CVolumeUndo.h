@@ -28,7 +28,7 @@
 #include <data/CUndoBase.h>
 #include <data/CRLECompress.h>
 #include <data/CDataStorage.h>
-
+#include <data/ESnapshotType.h>
 
 namespace data
 {

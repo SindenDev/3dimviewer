@@ -27,7 +27,6 @@
 
 #include <osg/CullFace>
 #include <osg/Depth>
-#include <osg/LightModel>
 
 
 //////////////////////////////////////////////////////////////////////////
@@ -41,38 +40,9 @@ bool osg::ModelVisualizer::setupModelStateSet(osg::Geode *pMesh)
         return false;
     }
 
-    osg::StateSet * stateSet = pMesh->getOrCreateStateSet();
-
     // Enable depth test so that an opaque polygon will occlude a transparent one behind it.
-    stateSet->setMode( GL_DEPTH_TEST, osg::StateAttribute::ON | osg::StateAttribute::PROTECTED );
-
-    // Rescale normals
-    stateSet->setMode( GL_RESCALE_NORMAL, osg::StateAttribute::ON | osg::StateAttribute::PROTECTED );
-
-    // Setup the light model
-    osg::ref_ptr< osg::LightModel > pLightModel = new osg::LightModel();
-    pLightModel->setTwoSided( true );
-    pLightModel->setAmbientIntensity( Vec4(0.1, 0.1, 0.1, 1.0) );
-    stateSet->setAttributeAndModes( pLightModel.get(), osg::StateAttribute::ON | osg::StateAttribute::PROTECTED );
-
-    // Enable lighting
-//    stateSet->setMode( GL_LIGHTING, osg::StateAttribute::OFF );
-    stateSet->setMode( GL_LIGHTING, osg::StateAttribute::ON );
-
-    // Culling
-    osg::CullFace * cull = new osg::CullFace();
-    cull->setMode( osg::CullFace::BACK );
-    stateSet->setAttributeAndModes( cull, osg::StateAttribute::OFF );
-//    stateSet->setAttributeAndModes( cull, osg::StateAttribute::ON );
-//    stateSet->setMode( GL_CULL_FACE, osg::StateAttribute::OFF );
-
-#if(0)
-    osg::ref_ptr<osg::PolygonMode> polygonMode = new osg::PolygonMode;
-    polygonMode->setMode(osg::PolygonMode::FRONT_AND_BACK, osg::PolygonMode::LINE);
-    stateSet->setAttributeAndModes(polygonMode, osg::StateAttribute::ON | osg::StateAttribute::OVERRIDE | osg::StateAttribute::PROTECTED);
-#endif
-
-    pMesh->setStateSet( stateSet );
+    pMesh->getOrCreateStateSet()->setMode( GL_DEPTH_TEST, osg::StateAttribute::ON | osg::StateAttribute::PROTECTED );
+    pMesh->getOrCreateStateSet()->setAttributeAndModes(new osg::CullFace(osg::CullFace::BACK), osg::StateAttribute::OFF );
 
     return true;
 }

@@ -23,6 +23,7 @@
 #include <data/CModel.h>
 #include <data/CDensityData.h>
 #include <coremedi/app/Signals.h>
+#include <data/ESnapshotType.h>
 
 #include <array>
 
@@ -273,6 +274,7 @@ osg::Matrix data::CModel::calculateSurfaceAlignedPositionMatrix(const osg::Vec3 
 	mesh->update_normals();
 
     // Try to get octree
+	mesh->updateOctree();
     geometry::CMeshOctree *octree = mesh->getOctree();
     if (octree == NULL)
     {

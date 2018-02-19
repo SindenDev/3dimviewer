@@ -51,17 +51,20 @@ std::string glErrorEnumString(GLenum value)
         outString = "GL_OUT_OF_MEMORY";
         break;
 
-    case GL_STACK_UNDERFLOW:
+   /* case GL_STACK_UNDERFLOW:
         outString = "GL_STACK_UNDERFLOW";
         break;
 
     case GL_STACK_OVERFLOW:
         outString = "GL_STACK_OVERFLOW";
-        break;
+        break;*/
 
     case GL_NO_ERROR:
-    default:
         outString = "";
+        break;
+
+    default:
+        outString = "UNKNOWN_ERROR";
         break;
     }
     return outString;
@@ -124,4 +127,20 @@ std::string glGetErrors(std::string functionName)
         i++;
     }
     return errorString;
+}
+
+bool isDebugContext()
+{
+    int glVersion[2] = { -1, -1 };
+    glGetIntegerv(GL_MAJOR_VERSION, &glVersion[0]);
+    glGetIntegerv(GL_MINOR_VERSION, &glVersion[1]);
+
+    return (glVersion[0] > 4) || (glVersion[0] == 4 && glVersion[1] >= 3);
+}
+
+bool glDebugCallbackReady()
+{
+    static bool debugContext = isDebugContext();
+
+    return debugContext;
 }

@@ -25,7 +25,7 @@
 
 #include "data/CStorageInterface.h"
 #include "CModel.h"
-#include <data/CSnapshot.h>
+#include <data/ESnapshotType.h>
 
 
 namespace data

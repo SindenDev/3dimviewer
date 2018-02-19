@@ -46,8 +46,8 @@ public:
     // Mutual access.
     typedef vpl::base::CLockableObject<OSGCanvas>::CLock tLock;
     // Default constructor
-    explicit OSGCanvas(QWidget *parent = NULL);
-    explicit OSGCanvas(QWidget *parent, const osg::Vec4& bgColor);
+    explicit OSGCanvas(QWidget* parent, bool antialiasing);
+    explicit OSGCanvas(QWidget* parent, const osg::Vec4& bgColor);
     // Destructor.
     virtual ~OSGCanvas();
 protected:

@@ -43,18 +43,17 @@ CBone::~CBone()
     deleteChildren();
 }
 
-CBone *CBone::clone(std::map<CBone *, CBone *> &boneMapping) const
+CBone *CBone::clone() const
+{
+    std::map<CBone *, CBone *> boneMapping;
+
+    return clone(boneMapping);
+}
+
+CBone *CBone::clone(std::map<CBone *, CBone *>& boneMapping) const
 {
     CBone *copy = new CBone;
     deepCopy(this, copy, boneMapping);
-    return copy;
-}
- 
-CBone *CBone::clone() const
-{
-    CBone *copy = new CBone;
-    auto tmp = std::map<CBone *, CBone *>();
-    deepCopy(this, copy, tmp);
     return copy;
 }
 

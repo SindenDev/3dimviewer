@@ -27,12 +27,7 @@
 #ifndef GlErrorReporting_H
 #define GlErrorReporting_H
 
-// GLEW must be included first!
-#ifdef __APPLE__
-#    include <glew.h>
-#else
-#    include <GL/glew.h>
-#endif
+#include <osg/GL>
 
 #include <string>
 
@@ -44,5 +39,7 @@ std::string glFramebufferStatusString(GLenum value);
 
 //! Creates sensible error message to put to log
 std::string glGetErrors(std::string functionName);
+
+bool glDebugCallbackReady();
 
 #endif

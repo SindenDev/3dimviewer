@@ -26,87 +26,73 @@
 #include <osg/Camera>
 #include <osg/Image>
 #include <osg/Texture2D>
+#include <osg/FrameBufferObject>
 
 #include <VPL/Module/Signal.h>
 
 namespace osg
 {
 
-///////////////////////////////////////////////////////////////////////////////
-//! CLASS CScrrenshotCapture - draw callback
+    ///////////////////////////////////////////////////////////////////////////////
+    //! CLASS CScrrenshotCapture - draw callback
 
-class CScreenshotCapture : public osg::Camera::DrawCallback
-{
-public:
-	//! Constructor
-	CScreenshotCapture();
+    class CScreenshotCapture : public osg::Camera::DrawCallback
+    {
+    public:
+        //! Constructor
+        CScreenshotCapture();
 
-	//! Destructor
-	~CScreenshotCapture();
+        //! Callback operator
+        virtual void operator () (osg::RenderInfo& renderInfo) const;
 
-	//! Callback operator
-	virtual void operator () (osg::RenderInfo& renderInfo) const;
+        //! Get image copy
+        void getImage(osg::Image * image) const;
 
-	//! Get image copy
-	void getImage( osg::Image * image ) const;
-
-	//! Enable/disable capturing
-	void enable( bool enable = true ) { m_enabled = enable; }
-
-protected:
-	//! Image
-	osg::ref_ptr< osg::Image > m_image;
-
-	//! Osg lock
-	mutable OpenThreads::Mutex  m_lock;
-
-	//! Is capturing enabled?
-	bool m_enabled;
+    protected:
+        //! Image
+        osg::ref_ptr<osg::Image> m_image;
+        osg::ref_ptr< osg::Texture2D > m_texture;
+        osg::ref_ptr<osg::FrameBufferObject> m_fbo;
+    };
 
 
-};
+    ///////////////////////////////////////////////////////////////////////////////
+    //! CLASS CCaptureCamera
 
+    class CCaptureCamera : public osg::Camera
+    {
+    public:
+        //! Capturing mode
+        enum ECaptureMode
+        {
+            MODE_DISABLED,	// disable capturing
+            MODE_SINGLE,	// capture one frame only
+            MODE_CONTINUOUS	// captura continuously
+        };
 
-///////////////////////////////////////////////////////////////////////////////
-//! CLASS CCaptureCamera
+        //! final draw callback - copy image
 
-class CCaptureCamera : public osg::Camera
-{
-public:
-	//! Capturing mode
-	enum ECaptureMode
-	{
-		MODE_DISABLED,	// disable capturing
-		MODE_SINGLE,	// capture one frame only
-		MODE_CONTINUOUS	// captura continuously
-	};
+    public:
+        //! Constructor
+        CCaptureCamera();
 
-	//! final draw callback - copy image
+        //! Set capturing mode
+        void setMode(ECaptureMode mode);
 
-public:
-	//! Constructor
-	CCaptureCamera();
+        // Set masking mode
+        void setMask(osg::Node::NodeMask mask);
 
-	//! Set capturing mode
-	void setMode( ECaptureMode mode );
+    protected:
+        //! Render buffer
+        osg::ref_ptr< osg::Texture2D > m_renderBuffer;
 
-	//! Get image copy
-	void getImage( osg::Image * image ) const;
+        //! currently used rendering node mask
+        osg::Node::NodeMask m_mask;
 
-	// Set masking mode
-	void setMask( osg::Node::NodeMask mask );
+        //! Single mode on?
+        bool m_single;
 
-protected:
-	//! Render buffer
-	osg::ref_ptr< osg::Texture2D > m_renderBuffer;
-
-	//! currently used rendering node mask
-	osg::Node::NodeMask m_mask;
-
-	//! Single mode on?
-	bool m_single;
-
-};
+    };
 
 
 } // namespace osg

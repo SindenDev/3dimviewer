@@ -31,6 +31,13 @@ CArmature::CArmature(const geometry::Matrix &defaultMatrix)
 CArmature::~CArmature()
 { }
 
+CArmature *CArmature::clone() const
+{
+    std::map<CBone *, CBone *> boneMapping;
+
+    return clone(boneMapping);
+}
+
 CArmature *CArmature::clone(std::map<CBone *, CBone *> &boneMapping) const
 {
     CArmature *copy = new CArmature;
@@ -38,14 +45,6 @@ CArmature *CArmature::clone(std::map<CBone *, CBone *> &boneMapping) const
     return copy;
 }
 
-    CArmature *CArmature::clone() const
-    {
-        CArmature *copy = new CArmature;
-        auto tmp = std::map<CBone *, CBone *>();
-        deepCopy(this, copy, tmp);
-        return copy;
-    }
-    
 std::map<std::string, CAction> &CArmature::getActions()
 {
     return m_actions;

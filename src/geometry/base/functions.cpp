@@ -22,6 +22,7 @@
 #include <geometry/base/functions.h>
 #include <geometry/base/CBoundingRectangle.h>
 #include <Eigen/Eigenvalues>
+#include <array>
 
 namespace geometry
 {
@@ -655,6 +656,63 @@ bool checkSelfIntersections(std::vector<geometry::Vec2> &polygon, double snapThr
     }
 
     return false;
+}
+
+//! calculates Euler angles from given quaternion
+/*
+- Quaternion does not need to be normalized
+- Resulting rotation is supposed to be applied in this order: X firts, Y second and Z last
+- Right hand coordinate system
+- Angles are in radians
+*/
+geometry::Vec3 toEuler(const geometry::Quat &q)
+{
+    double sqx = q.x() * q.x();
+    double sqy = q.y() * q.y();
+    double sqz = q.z() * q.z();
+    double sqw = q.w() * q.w();
+
+    double unit = sqx + sqy + sqz + sqw;
+    double test = q.x() * q.y() + q.z() * q.w();
+    double x, y, z;
+
+    if (test > 0.499)
+    {
+        y = 2 * std::atan2(q.x(), q.w());
+        z = vpl::math::getPi<double>() * 0.5;
+        x = 0.0;
+    }
+    else if (test < -0.499)
+    {
+        y = -2 * std::atan2(q.x(), q.w());
+        z = -vpl::math::getPi<double>() * 0.5;
+        x = 0.0;
+    }
+    else
+    {
+        y = atan2(2 * q.y() * q.w() - 2 * q.x() * q.z(), sqx - sqy - sqz + sqw);
+        z = asin(2 * test / unit);
+        x = atan2(2 * q.x() * q.w() - 2 * q.y() * q.z(), -sqx + sqy - sqz + sqw);
+    }
+
+    return geometry::Vec3(x, y, z);
+}
+
+//! Compares two matrices - returns TRUE if matrices are the same, FALSE otherwise
+bool compareMatrices(const geometry::Matrix &a, const geometry::Matrix &b)
+{
+    for (int y = 0; y < 4; ++y)
+    {
+        for (int x = 0; x < 4; ++x)
+        {
+            if (a.at(y, x) != b.at(y, x))
+            {
+                return false;
+            }
+        }
+    }
+
+    return true;
 }
 
 } // namespace geometry

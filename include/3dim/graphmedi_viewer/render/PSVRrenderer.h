@@ -23,45 +23,22 @@
 #ifndef PSVRrenderer_H
 #define PSVRrenderer_H
 
-#include "AppConfigure.h"
 #include <configure.h>
 
-// Check predefined type of volume rendering algorithm
 #ifdef USE_PSVR
 
-///////////////////////////////////////////////////////////////////////////////
-// includes
 #include <VPL/Base/Lock.h>
 #include <VPL/System/Thread.h>
 #include <VPL/System/Condition.h>
-#include <VPL/System/Mutex.h>
-#include <VPL/Image/DensityVolume.h>
-#include <VPL/Image/Point3.h>
 #include <VPL/System/Stopwatch.h>
-#include <QWidget>
-#include <osg/Array>
-
-#include <qdebug.h>
-#include <Signals.h>
-#include <PluginInterface.h>
 
 #include <render/CVolumeRenderer.h>
-#include <render/CGraficCardDesc.h>
 
-// STL
-#include <vector>
-
-//! Enables dynamic loading of shaders and lookup tables at runtime.
-#ifndef LOAD_SHADERS
-//#define LOAD_SHADERS
-#endif
-
-//! Enables 16bit 3D texture.
-//#ifndef FULL_3D_TEXTURE
-#define FULL_3D_TEXTURE
-//#endif
+#include <osg/Texture3D>
+#include <osg/FrameBufferObject>
 
 #define PSVR_FAIL_LIMIT 10
+
 
 ///////////////////////////////////////////////////////////////////////////////
 // forward declarations
@@ -69,96 +46,17 @@ class OSGCanvas;
 
 namespace PSVR
 {
-
-    //! Class storing partial OpenGL state (stuff that is changed from somewhere within VR)
-    //! - it can work automatically (constructor grabs current state, destructor restores it)
-    //!   or manually (user calls grab() and restore() methods when needed)
-    class COpenGlState
-    {
-    protected:
-        bool m_automatic;
-        bool m_grabbed;
-        bool m_restored;
-
-        GLboolean CullFace;                         // GL_CULL_FACE
-        GLenum CullFaceMode;                        // GL_CULL_FACE_MODE
-        GLint DrawFramebufferBinding;               // GL_DRAW_FRAMEBUFFER_BINDING
-        GLint ReadFramebufferBinding;               // GL_READ_FRAMEBUFFER_BINDING
-        GLint MaxDrawBuffers;                       // GL_MAX_DRAW_BUFFERS
-        GLenum *DrawBuffers;                        // GL_DRAW_BUFFERi
-        GLint CurrentProgram;                       // GL_CURRENT_PROGRAM
-        GLdouble ClearDepth;                        // GL_DEPTH_CLEAR_VALUE
-        GLboolean DepthTest;                        // GL_DEPTH_TEST
-        GLenum DepthFunc;                           // GL_DEPTH_FUNC
-        GLint ActiveTexture;                        // GL_ACTIVE_TEXTURE
-        GLint MaxTextureUnits;                      // GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS
-        GLint *TextureBindingTexture1D;             // GL_TEXTURE_BINDING_1D
-        GLint *TextureBindingTexture2D;             // GL_TEXTURE_BINDING_2D
-        GLint *TextureBindingTexture3D;             // GL_TEXTURE_BINDING_3D
-        GLint *TextureBindingTexture1DArray;        // GL_TEXTURE_BINDING_1D_ARRAY
-        GLint *TextureBindingTexture2DArray;        // GL_TEXTURE_BINDING_2D_ARRAY
-        GLint *TextureBindingTextureRectangle;      // GL_TEXTURE_BINDING_RECTANGLE
-        GLint *TextureBindingTextureCubeMap;        // GL_TEXTURE_BINDING_CUBE_MAP
-        GLint *TextureBindingTextureCubeMapArray;   // GL_TEXTURE_BINDING_CUBE_MAP_ARRAY
-        GLint *TextureBindingTextureBuffer;         // GL_TEXTURE_BINDING_BUFFER
-        GLenum MatrixMode;                          // GL_MATRIX_MODE
-        GLint ModelviewMatrixStackDepth;            // GL_MODELVIEW_STACK_DEPTH
-        GLint ProjectionMatrixStackDepth;           // GL_PROJECTION_STACK_DEPTH
-        GLdouble *ModelviewMatrices;                // GL_MODELVIEW_MATRIX
-        GLdouble *ProjectionMatrices;               // GL_PROJECTION_MATRIX
-        GLboolean VertexArray;                      // GL_VERTEX_ARRAY
-        GLboolean TexCoordArray;                    // GL_TEXTURE_COORD_ARRAY
-        GLboolean NormalArray;                      // GL_NORMAL_ARRAY
-        GLboolean ColorArray;                       // GL_COLOR_ARRAY
-        GLboolean IndexArray;                       // GL_INDEX_ARRAY
-        GLboolean SecondaryColorArray;              // GL_SECONDARY_COLOR_ARRAY
-        GLboolean EdgeFlagArray;                    // GL_GL_EDGE_FLAG_ARRAY_ARRAY
-        GLboolean FogCoordArray;                    // GL_GL_FOG_COORD_ARRAY_ARRAY
-        GLint VertexArraySize;                      // GL_VERTEX_ARRAY_SIZE
-        GLenum VertexArrayType;                     // GL_VERTEX_ARRAY_TYPE
-        GLsizei VertexArrayStride;                  // GL_VERTEX_ARRAY_STRIDE
-        GLvoid *VertexArrayPointer;                 // GL_VERTEX_ARRAY_POINTER
-        GLint VertexArrayBinding;                   // GL_VERTEX_ARRAY_BINDING
-        GLint PixelUnpackBufferBinding;             // GL_PIXEL_UNPACK_BUFFER_BINDING
-        GLenum ReadBufferMode;                      // GL_READ_BUFFER
-        GLint UnpackAlignment;                      // GL_UNPACK_ALIGNMENT
-        GLint UnpackSwapBytes;                      // GL_UNPACK_SWAP_BYTES
-        GLint UnpackLSBFirst;                       // GL_UNPACK_LSB_FIRST
-        GLint UnpackRowLength;                      // GL_UNPACK_ROW_LENGTH
-        GLint UnpackSkipRows;                       // GL_UNPACK_SKIP_ROWS
-        GLint UnpackSkipPixels;                     // GL_UNPACK_SKIP_PIXELS
-        GLint Viewport[4];                          // GL_VIEWPORT
-        GLboolean Blend;                            // GL_BLEND
-        GLenum BlendSrcRgb;                         // GL_BLEND_SRC_RGB
-        GLenum BlendSrcAlpha;                       // GL_BLEND_SRC_ALPHA
-        GLenum BlendDstRgb;                         // GL_BLEND_DST_RGB
-        GLenum BlendDstAlpha;                       // GL_BLEND_DST_ALPHA
-
-    public:
-        COpenGlState(bool automatic = true);
-        ~COpenGlState();
-
-    public:
-        void grab();
-        void restore();
-
-    private:
-        void clean();
-    };
-
-
-///////////////////////////////////////////////////////////////////////////////
-// forward declarations
-class osgPSVolumeRendering;
-class osgPSVolumeRenderingGeode;
-
 ///////////////////////////////////////////////////////////////////////////////
 //! Volume rendering routines suitable for OSG
 class PSVolumeRendering : public vpl::base::CLockableObject<PSVolumeRendering>, public CVolumeRenderer
 {
 public:
+    // Friend classes
+    friend class osgPSVolumeRendering;
+    friend class osgPSVolumeRenderingGeode;
+
     //! Predefined shaders.
-    enum EShaders
+    enum class EShaders
     {
         XRAY = 0,
         MIP,
@@ -171,7 +69,7 @@ public:
     };
 
     //! Predefined lookup tables.
-    enum ELookups
+    enum class ELookups
     {
         MIP_SOFT = 0,
         MIP_HARD,
@@ -202,17 +100,17 @@ public:
     //! Error codes.
     enum EError
     {
-        PSVR_NO_ERROR               = 0,
-        DATA_NOT_SPECIFIED          = 1 << 0,
-        GLEW_INIT_FAILED            = 1 << 1,
-        UNDEFINED_GL_CANVAS         = 1 << 2,
-        UNSUPPORTED_SHADER_MODEL    = 1 << 3,
-        UNSUPPORTED_GRAPHIC_CARD    = 1 << 4,
-        LOOKUP_NOT_FOUND            = 1 << 5,
-        SHADER_NOT_FOUND            = 1 << 6,
-        INIT_FAILED                 = 1 << 7,
-        CANNOT_CREATE_3D_TEXTURE    = 1 << 8,
-        CUSTOM_DATA_NOT_SPECIFIED   = 1 << 9,
+        PSVR_NO_ERROR = 0,
+        DATA_NOT_SPECIFIED = 1 << 0,
+        GLEW_INIT_FAILED = 1 << 1,
+        UNDEFINED_GL_CANVAS = 1 << 2,
+        UNSUPPORTED_SHADER_MODEL = 1 << 3,
+        UNSUPPORTED_GRAPHIC_CARD = 1 << 4,
+        LOOKUP_NOT_FOUND = 1 << 5,
+        SHADER_NOT_FOUND = 1 << 6,
+        INIT_FAILED = 1 << 7,
+        CANNOT_CREATE_3D_TEXTURE = 1 << 8,
+        CUSTOM_DATA_NOT_SPECIFIED = 1 << 9,
     };
 
     //! Scoped lock.
@@ -225,64 +123,29 @@ public:
     //! Destructor.
     virtual ~PSVolumeRendering();
 
-// implementing CVolumeRenderer interface
+    // implementing CVolumeRenderer interface
 public:
-    //! returns flag if custom shader is really used a displayed
-    virtual bool isCustomShaderActive();
-
     // window
-    virtual QSize getWindowSize();
+    virtual QSize getWindowSize() override;
 
     // transform matrix
-    virtual osg::Matrix getWorldMatrix();
-    virtual osg::Matrix getViewMatrix();
-    virtual osg::Matrix getProjectionMatrix();
-    virtual osg::Matrix getTransformMatrix();
-
-    // custom shader
-    virtual void setParameter(unsigned int shaderId, std::string name, int value);
-    virtual void setParameter(unsigned int shaderId, std::string name, float value);
-    virtual void setParameter(unsigned int shaderId, std::string name, osg::Vec2 value);
-    virtual void setParameter(unsigned int shaderId, std::string name, osg::Vec3 value);
-    virtual void setParameter(unsigned int shaderId, std::string name, osg::Vec4 value);
-    virtual void setParameter(unsigned int shaderId, std::string name, osg::Matrix value);
-    virtual void setParameter(unsigned int shaderId, std::string name, int *value, int count);
-    virtual void setParameter(unsigned int shaderId, std::string name, float *value, int count);
-    virtual void setParameter(unsigned int shaderId, std::string name, osg::Vec2 *value, int count);
-    virtual void setParameter(unsigned int shaderId, std::string name, osg::Vec3 *value, int count);
-    virtual void setParameter(unsigned int shaderId, std::string name, osg::Vec4 *value, int count);
-    virtual void setParameter(unsigned int shaderId, std::string name, osg::Matrix *value, int count);
-
-    // custom volume
-    virtual void getDataFromCustomVolume(unsigned int volumeId, vpl::img::CVolume<bool> &volume);
-    virtual void getDataFromCustomVolume(unsigned int volumeId, vpl::img::CVolume<vpl::img::tPixel16> &volume);
-    virtual void getDataFromCustomVolume(unsigned int volumeId, vpl::img::CVolume<vpl::img::tPixel8> &volume);
-    virtual void getDataFromCustomVolume(unsigned int volumeId, vpl::img::CVolume<vpl::img::tRGBPixel> &volume);
+    virtual osg::Matrix getWorldMatrix() override;
+    virtual osg::Matrix getViewMatrix() override;
+    virtual osg::Matrix getProjectionMatrix() override;
+    virtual osg::Matrix getTransformMatrix() override;
 
     // lookup tables
-    virtual void resetLookupTables();
-    virtual void updateLookupTables(std::string lutName = "");
+    virtual void resetLookupTables() override;
+    virtual void updateLookupTables(std::string lutName = "") override;
+
+    void setCustomShaderUniforms(std::vector<osg::ref_ptr<osg::Uniform>>&& uniforms);
 
 protected:
     // custom volume
-    virtual unsigned int internalCreateCustomVolume();
-    virtual void internalSetDataToCustomVolume(unsigned int volumeId, vpl::img::CVolume<bool> &volume, vpl::img::CVolume<vpl::img::tPixel8> &auxVolume);
-    virtual void internalSetDataToCustomVolume(unsigned int volumeId, vpl::img::CVolume<vpl::img::tPixel16> &volume, vpl::img::CVolume<vpl::img::tPixel8> &auxVolume);
-    virtual void internalSetDataToCustomVolume(unsigned int volumeId, vpl::img::CVolume<vpl::img::tPixel8> &volume, vpl::img::CVolume<vpl::img::tPixel8> &auxVolume);
-    virtual void internalSetDataToCustomVolume(unsigned int volumeId, vpl::img::CVolume<vpl::img::tRGBPixel> &volume, vpl::img::CVolume<vpl::img::tPixel8> &auxVolume);
-    virtual void internalDeleteCustomVolume(unsigned int volumeId);
+    virtual void internalSetDataToCustomVolume() override;
 
     // custom shader
-    unsigned int internalCreateCustomShader(std::string vertexShaderSource, std::string fragmentShaderSource);
-    void internalUseCustomShader(unsigned int shaderId);
-    void internalDeleteCustomShader(unsigned int shaderId);
-
-private:
-    std::map<unsigned int, std::vector<unsigned int> > m_programShaders;
-    unsigned int m_customShaderId;
-    std::vector<unsigned short *> m_internalLookupTables;
-    std::vector<osg::Vec4> m_skipConditions;
-    vr::CGraficCardDesc Desc;
+    virtual void internalCreateCustomShader(std::string vertexShaderSource, std::string fragmentShaderSource) override;
 
 public:
     //! Returns pointer to the used canvas.
@@ -296,33 +159,24 @@ public:
     }
 
     //! Enforce redrawing of the OpenGL canvas.
-    virtual void redraw(bool bEraseBackground = false);
+    virtual void redraw(bool bEraseBackground = false) override;
 
     //! Enables the rendering.
-    virtual void enable(bool bEnable = true);
-
-    //! Reloads current shader from file
-    void reloadShader();
+    virtual void enable(bool bEnable = true) override;
     
     //! Returns true of the rendering is enabled.
-    virtual bool isEnabled() const { return m_Enabled; }
-
-    //! Checks the shader model, graphic memory, etc.
-    bool canStart();
+    virtual bool isEnabled() const override;
 
     //! Initializes the volume rendering.
     //! - This method must be called once at the begining!
     //! - A valid pointer to the GL canvas must be already set!
-    virtual bool init();
+    virtual bool init() override;
 
     //! Resets initialization failure counter
     void resetFailureCounter();
 
     //! Returns if init has failed too many times in a row
     bool constantFailure();
-
-    //! Returns all error strings
-    std::vector<std::string> getErrorStrings();
 
     //! Returns true if some error has occured during the initialization phase
     //! or during the rendering itself.
@@ -352,14 +206,14 @@ private:
 	vpl::mod::tSignalConnection noteMatrixSignalConnection;
 public:
     // Methods for VR control
-    int getLut() const;
-    int getShader() const;
+    ELookups getLut() const;
+    EShaders getShader() const;
     int getQuality() const;
 
     void setMouseMode(bool bEnable);
     void setMousePressed(bool bPressed);
-    void setShader(int shader);
-    void setLut(int lut);
+    void setShader(EShaders shader);
+    void setLut(ELookups lut);
     void setQuality(int quality);
     void setSamplingDistance(float distance);
     void setPicture(float brightness, float contrast);
@@ -383,7 +237,7 @@ public:
 
     //! Renders the data.
     //! - This method is usually called during 'OSG drawable' rendering.
-    void renderVolume();
+    void renderVolume(osg::RenderInfo& renderInfo);
 
 protected:
     //! Internal flags.
@@ -431,22 +285,34 @@ protected:
         INVALID = INIT_INVALID | LUT_INVALID | OSR_INVALID | DATA_INVALID | TEXTURE_INVALID | AUX_TEXTURE_INVALID | CUSTOM_DATA_INVALID | CUSTOM_TEXTURE_INVALID,
     };
 
-    // Forward declaration (OpenGL variables).
-    struct PSVolumeRenderingData;
+    //! Predefined constants...
+    enum EConf
+    {
+        //! Init size of volumes
+        INIT_SIZE = 32,
+
+        //! Size of the 1D color lookup tables.
+        LUT_2D_W = 4096,
+        LUT_2D_H = 128,
+
+        //! Size of the noise table.
+        NOISE_SIZE = 1024,
+
+        LUT_SIZE = 512,
+    };
 
     // Forward declaration (rendering parameters).
     struct PSVolumeRenderingParams;
 
 protected:
-    bool storeVolumeToTexture(vpl::img::CVolume<vpl::img::tPixel8> volume);
-    bool storeVolumeToTexture(vpl::img::CVolume<vpl::img::tPixel16> volume);
-    bool storeVolumeToTexture(vpl::img::CVolume<vpl::img::tRGBPixel> volume);
-
-    //! Checks the shader model, graphic memory, etc.
-    bool internalCanStart();
+    void storeVolumeToTexture(vpl::img::CVolume<vpl::img::tPixel8>& volume, osg::Texture3D* texture);
+    void storeVolumeToTexture(vpl::img::CVolume<vpl::img::tPixel16>& volume, osg::Texture3D* texture);
+    void storeVolumeToTexture(vpl::img::CVolume<vpl::img::tRGBPixel>& volume, osg::Texture3D* texture);
 
     //! First-time initialization of the OpenGL.
     bool internalInitRendering();
+
+    void setShaderInternal(EShaders shader);
 
     //! Prepares the volume data.
     bool internalUploadData();
@@ -469,7 +335,7 @@ protected:
     bool internalUploadCustomAuxTexture();
 
     //! Changes rendering resolution.
-    bool internalSetRenderingSize(PSVolumeRenderingParams *pParams, int Flags);
+    bool internalSetRenderingSize(PSVolumeRenderingParams& params, const osg::Vec2i& currentViewport, const osg::Vec2i& newViewport, int flags);
 
     //! Changes color lookup table.
     bool internalSetLUT(PSVolumeRenderingParams *pParams);
@@ -492,42 +358,18 @@ protected:
     //! Returns the rendering resolution.
     //! - The value depends on the current rendering resolution
     //!   and whether the mouse mode is enabled.
-    vpl::img::CPoint3D getRenderingSize(PSVolumeRenderingParams *pParams, int Flags) const;
+    osg::Vec2i getRenderingSize(PSVolumeRenderingParams& params, const osg::Vec2i& currentViewport, int flags) const;
 
     //! Return the 3D texture sampling step along a ray.
     //! - The value depends on the current rendering resolution
     //!   and whether the mouse mode is enabled.
     float getVolumeSamplingDistance(PSVolumeRenderingParams *pParams, int Flags) const;
 
-protected:
-    //! Pre-processed volume data
-#ifdef FULL_3D_TEXTURE
-    typedef vpl::img::CVolume<vpl::img::tPixel16> tVolumeData;
-#else
-    typedef vpl::img::CVolume<vpl::img::tPixel8> tVolumeData;
-#endif // FULL_3D_TEXTURE
-
-    //! Pre-processed subvolume data
-    typedef vpl::img::CVolume<vpl::img::tRGBPixel> tAuxVolumeData;
-
-    //! Pre-processed custom data
-    typedef vpl::img::CVolume<vpl::img::tPixel8> tCustomData_bool;
-    typedef vpl::img::CVolume<vpl::img::tPixel8> tCustomData_tPixel8;
-    typedef vpl::img::CVolume<vpl::img::tPixel16> tCustomData_tPixel16;
-    typedef vpl::img::CVolume<vpl::img::tRGBPixel> tCustomData_tRGBPixel;
-
-    //! Pre-processed custom data subvolume
-    typedef vpl::img::CVolume<vpl::img::tPixel8> tAuxCustomData;
+    void updateShaderUniforms(PSVR::PSVolumeRendering::PSVolumeRenderingParams& params, const osg::Vec2i& newViewport, int flags);
 
 protected:
-    //! Is the GLEW library correctly initialized?
-    volatile int m_GlewInit;
-
-    //! maximum available size of 3D texture for volume
-    long m_maximumVolumeSize;
-
     //! Used canvas.
-    OSGCanvas * m_pCanvas;
+    OSGCanvas* m_pCanvas;
 
     //! Enables/disables volume rendering.
     volatile bool m_Enabled;
@@ -541,9 +383,6 @@ protected:
     //! Init failure counter
     volatile int m_FailureCounter;
 
-    //! Error strings
-    std::vector<std::string> m_ErrorStrings;
-
     //! Mutex for mutual access to internal flags.
     vpl::sys::CMutex m_Mutex;
 
@@ -553,9 +392,6 @@ protected:
     //! Helper thread.
     vpl::sys::CThread m_Thread;
 
-    //! OpenGL variables used by the renderer.
-    vpl::base::CScopedPtr<PSVolumeRenderingData> m_spGLData;
-
     //! Rendering parameters.
     vpl::base::CScopedPtr<PSVolumeRenderingParams> m_spParams;
 
@@ -563,61 +399,93 @@ protected:
     vpl::img::CDensityVolume::tSmartPtr m_spVolumeData;
 
     //! Pre-processed volume data
-    tVolumeData m_VolumeData;
+    vpl::img::CVolume<vpl::img::tPixel16> m_VolumeData;
 
     //! Pre-processed subvolume data
-    tAuxVolumeData m_AuxVolumeData;
+    vpl::img::CVolume<vpl::img::tRGBPixel> m_AuxVolumeData;
 
     //! Pre-processed custom data
-    tCustomData_bool m_customData_bool;
-    tCustomData_tPixel8 m_customData_tPixel8;
-    tCustomData_tPixel16 m_customData_tPixel16;
-    tCustomData_tRGBPixel m_customData_tRGBPixel;
-    tAuxCustomData m_auxCustomData;
-
-    ////////////////////////////////////////////////////////////////////////////
-    // Look-Up Tables (LUT)
-    
-    //! Predefined constants...
-    enum EConf
-    {
-        //! Init size of volumes
-        INIT_SIZE = 32,
-
-        //! Size of the 1D color lookup tables.
-        LUT_2D_W = 4096,
-        LUT_2D_H = 128,
-
-        //! Size of the noise table.
-        NOISE_SIZE = 1024
-    };
-
-    //! Random noise table.
-    unsigned char noise[NOISE_SIZE * NOISE_SIZE];
-
-    ////////////////////////////////////////////////////////////////////////////
-    // Latest version of the geometry (The Cube)
-    // - GL_TRIANGLES, VAO (Vertex Array Object)
-    
-    //! Single vertex (or texture) coordinates.
-    typedef vpl::img::CPoint3<float> tCoords;
-    
-    //! Vector of vertices (or texture coordinates).
-    typedef std::vector<tCoords> tArray;
-
-    //! Auxilliary vector of vertices (i.e. triangles).
-    tArray m_Triangles;
+    vpl::img::CVolume<vpl::img::tPixel8> m_customData_bool;
+    vpl::img::CVolume<vpl::img::tPixel8> m_customData_tPixel8;
+    vpl::img::CVolume<vpl::img::tPixel16> m_customData_tPixel16;
+    vpl::img::CVolume<vpl::img::tRGBPixel> m_customData_tRGBPixel;
+    vpl::img::CVolume<vpl::img::tPixel8> m_auxCustomData;
 
 protected:
-    //! Prepares the box that bounds volume data.
-    void prepareBox(int NumOfQuads);
+    void prepareBox(int numOfQuads);
+    void prepareQuad();
 
-    //! Rendering of the box that bounds the volume data...
-    void renderBox(PSVolumeRenderingParams *pParams, const tArray& Triangles);
+protected:
+    std::vector<unsigned short*> m_internalLookupTables;
+    std::vector<osg::Vec4> m_skipConditions;
 
-    // Friend classes
-    friend class osgPSVolumeRendering;
-    friend class osgPSVolumeRenderingGeode;
+    osg::ref_ptr<osg::Geometry> m_box;
+    osg::ref_ptr<osg::Geometry> m_quad;
+
+    std::map<EShaders, osg::ref_ptr<osg::Program>> m_shaders;
+
+    osg::ref_ptr<osg::Program> m_shaderOsrt;
+    osg::ref_ptr<osg::Program> m_shaderResize;
+
+    osg::ref_ptr<osg::Uniform> m_uniform_t3D;
+    osg::ref_ptr<osg::Uniform> m_uniform_tSkip3D;
+    osg::ref_ptr<osg::Uniform> m_uniform_LookUp;
+    osg::ref_ptr<osg::Uniform> m_uniform_Noise;
+    osg::ref_ptr<osg::Uniform> m_uniform_tRaysStartEnd;
+    osg::ref_ptr<osg::Uniform> m_uniform_Depth;
+
+    //CUSTOM
+    std::vector<osg::ref_ptr<osg::Uniform>> m_customUniforms;
+    osg::ref_ptr<osg::Uniform> m_uniform_tCustom3D;
+    //CUSTOM
+
+    osg::ref_ptr<osg::Uniform> m_uniform_textureSampling;
+    osg::ref_ptr<osg::Uniform> m_uniform_inputAdjustment;
+    osg::ref_ptr<osg::Uniform> m_uniform_imageAdjustment;
+    osg::ref_ptr<osg::Uniform> m_uniform_sVector;
+    osg::ref_ptr<osg::Uniform> m_uniform_skipTexSize;
+    osg::ref_ptr<osg::Uniform> m_uniform_tResolution;
+    osg::ref_ptr<osg::Uniform> m_uniform_tSkipResolution;
+    osg::ref_ptr<osg::Uniform> m_uniform_StopCondition;
+    osg::ref_ptr<osg::Uniform> m_uniform_wSize;
+    osg::ref_ptr<osg::Uniform> m_uniform_pl;
+    osg::ref_ptr<osg::Uniform> m_uniform_plNear;
+    osg::ref_ptr<osg::Uniform> m_uniform_plFar;
+    osg::ref_ptr<osg::Uniform> m_uniform_invProjectionMatrix;
+    osg::ref_ptr<osg::Uniform> m_uniform_invModelViewMatrix;
+    osg::ref_ptr<osg::Uniform> m_uniform_skipCondition;
+
+    //SURFACE
+    osg::ref_ptr<osg::Uniform> m_uniform_surfacePar;
+    //SURFACE
+
+    osg::ref_ptr<osg::Uniform> m_uniform_image;
+    osg::ref_ptr<osg::Uniform> m_uniform_kernel;
+    osg::ref_ptr<osg::Uniform> m_uniform_resolution;
+
+    osg::ref_ptr<osg::StateSet> m_stateSetFrontBox;
+    osg::ref_ptr<osg::StateSet> m_stateSetBackBox;
+    osg::ref_ptr<osg::StateSet> m_stateSetVolumeRender;
+    osg::ref_ptr<osg::StateSet> m_stateSetVolumeRenderBackup;
+    osg::ref_ptr<osg::StateSet> m_stateSetResize;
+
+    osg::ref_ptr<osg::FrameBufferObject> m_fboFrontBox;
+    osg::ref_ptr<osg::FrameBufferObject> m_fboBackBox;
+    osg::ref_ptr<osg::FrameBufferObject> m_fboDepth;
+    osg::ref_ptr<osg::FrameBufferObject> m_fboVolumeRender;
+
+    osg::ref_ptr<osg::Texture3D> m_textureRaysStartEnd;
+    osg::ref_ptr<osg::Texture2D> m_textureVolumeRender;
+
+    osg::ref_ptr<osg::Texture2D> m_textureDepth;
+
+    osg::ref_ptr<osg::Texture3D> m_textureVolume;
+    osg::ref_ptr<osg::Texture3D> m_textureAuxVolume;
+    osg::ref_ptr<osg::Texture3D> m_textureCustomAuxVolume;
+    osg::ref_ptr<osg::Texture3D> m_textureCurrentVolume;
+    osg::ref_ptr<osg::Texture2D> m_textureLookUp;
+    osg::ref_ptr<osg::Texture1D> m_textureBicubicKernel;
+    osg::ref_ptr<osg::Texture2D> m_textureNoise;
 };
 
 } // namespace PSVR

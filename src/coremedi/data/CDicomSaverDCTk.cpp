@@ -35,6 +35,9 @@
 #include <memory>
 
 // DCMTK
+#ifdef __APPLE__
+  #undef UNICODE
+#endif
 #include "dcmtk/config/osconfig.h"
 #include "dcmtk/ofstd/ofconapp.h"
 #include "dcmtk/dcmdata/dcuid.h"
@@ -278,14 +281,14 @@ bool CDicomSaverDCTk::saveSerie(std::string dirName, bool bSaveSegmented, bool b
         {
             DJ_RPLossless params; // codec parameters, we use the defaults        			
             // this causes the lossless JPEG version of the dataset to be created
-#if defined(PACKAGE_VERSION_NUMBER) && (PACKAGE_VERSION_NUMBER == 361)
+#if defined(PACKAGE_VERSION_NUMBER) && (PACKAGE_VERSION_NUMBER == 361 || PACKAGE_VERSION_NUMBER == 362)
             pDataset->chooseRepresentation(EXS_JPEGProcess14SV1, &params);
 #else
             pDataset->chooseRepresentation(EXS_JPEGProcess14SV1TransferSyntax, &params);
 #endif
 
             // check if everything went well
-#if defined(PACKAGE_VERSION_NUMBER) && (PACKAGE_VERSION_NUMBER == 361)
+#if defined(PACKAGE_VERSION_NUMBER) && (PACKAGE_VERSION_NUMBER == 361 || PACKAGE_VERSION_NUMBER == 362)
             if (pDataset->canWriteXfer(EXS_JPEGProcess14SV1))
             {
                 xfer = EXS_JPEGProcess14SV1;

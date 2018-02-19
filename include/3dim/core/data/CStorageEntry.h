@@ -340,6 +340,19 @@ public:
         }
     }
 
+    //! Post-processing called after all entries have been deserialized. Returns true if this entry has changed and needs to be invalidated.
+    virtual bool deserializationFinished()
+    {
+        if (m_spData.get())
+        {
+            vpl::sys::tScopedLock dataLock(m_DataLock);
+
+            return m_spData->deserializationFinished();
+        }
+
+        return false;
+    }
+
     //! Announces all observers about the change.
     //! - Invokes the internal signal.
     void notify()

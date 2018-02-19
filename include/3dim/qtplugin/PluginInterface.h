@@ -62,25 +62,6 @@ class PluginInterface;
 
 class CAppBindings : public vpl::base::CObject
 {
-private:
-    class CDeleteCallback : public CVolumeRenderer::tRendererCallback
-    {
-    public:
-        CAppBindings *appBindings;
-    public:
-        CDeleteCallback()
-        { }
-
-        ~CDeleteCallback()
-        { }
-
-        void operator()()
-        {
-            appBindings->m_pRenderer = NULL;
-            appBindings->onRendererDelete();
-        }
-    };
-
 public:
     //! Smart pointer type.
     VPL_SHAREDPTR(CAppBindings);
@@ -99,7 +80,6 @@ public:
         , m_pPlugin(NULL)
 		, m_vplSignals(NULL)
     {
-        m_deleteCallback.appBindings = this;
     }
 
     //! Kind of copy constructor
@@ -121,21 +101,12 @@ public:
             m_pPlugin = pBindings->getPluginInstance();
             m_pRenderer = pBindings->getRenderer();
 			m_vplSignals = pBindings->getVPLSignals();
-            if (m_pRenderer != NULL)
-            {
-                m_pRenderer->registerOnDeleteCallback(&m_deleteCallback);
-            }
         }
-        m_deleteCallback.appBindings = this;
     }
 
     //! Destructor.
     virtual ~CAppBindings()
     {
-        if (m_pRenderer != NULL)
-        {
-            m_pRenderer->deregisterOnDeleteCallback(&m_deleteCallback);
-        }
     }
 
     //! Initializes binding of the plugin to application.
@@ -196,16 +167,13 @@ public:
     //! Initializes binding of the plugin to application.
     CAppBindings& setRenderer(CVolumeRenderer *pRenderer)
     {
-        if (m_pRenderer != NULL)
+        if (m_pRenderer != nullptr)
         {
             onRendererDelete();
-            m_pRenderer->deregisterOnDeleteCallback(&m_deleteCallback);
         }
+
         m_pRenderer = pRenderer;
-        if (m_pRenderer != NULL)
-        {
-            m_pRenderer->registerOnDeleteCallback(&m_deleteCallback);
-        }
+
         return *this;
     }
 
@@ -297,8 +265,6 @@ protected:
     { }
 
 protected:
-    CDeleteCallback m_deleteCallback;
-
     //! Pointer to the class managing mouse mode in the application.
     scene::CAppMode *m_pAppMode;
 

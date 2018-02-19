@@ -72,42 +72,9 @@ compile the 3DimViewer:
 2.1 Compilation using MS Visual Studio
 --------------------------------------
 
-All required prebuilt 3rd party libraries can be downloaded separately in a 
-single package. Alternatively, you can build them on your own. In that case, 
-we recommend you to build at least OpenSceneGraph, Qt and VPL
-libraries. A more comprehensive guide can be found in 
-''doc/Installation.htm''. For a complete list of required 3rd party libraries 
-take a look at ''3rdParty.txt''.
+Compilation guide is newly on wiki page:
 
-* Where appropriate, download the package of prebuilt 3rd party libraries and 
-unpack it into the ''3rdParty'' directory.
-
-* Use the utility ''CMakeSetup'' (or ''cmake-gui'' recently) to generate 
-project and solution files for your MS Visual Studio.
-
-* Setup a build directory different (e.g. ''build'') from the source 
-directory. Advantage of such out-of-source build is that temporary files 
-created by CMake and compiler won't disturb the source directory. Also, it 
-makes possible to have multiple independent build targets by creating 
-multiple build 
-directories.
-
-* Open the solution ''3Dim.sln'' which will be placed in the build directory 
-and compile the project '3DimViewer'...
-
-* Final executable will be placed directly in the 
-'applications/3DimViewer/bin' directory and loadable plugins in the 
-''applications/3DimViewer/plugins'' directory.
-
-* Set working directory of the '3DimViewer' project to be 
-''applications/3DimViewer'' by opening project properties and setting 
-''Debugging->Working Directory'' option.
-
-* Add ''3rdParty\bin'' directory into your PATH, or copy all dll-libraries 
-into the ''applications/3DimViewer/bin'' directory.
-
-* Now, you can run the 3DimViewer directly from Visual Studio. All icons, 
-images, etc. will be correctly found.
+  * [Compilation](https://bitbucket.org/3dimlab/3dimviewer/wiki/Compilation)
 
 
 2.2 Compilation on Linux

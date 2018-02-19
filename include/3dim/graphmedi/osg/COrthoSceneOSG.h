@@ -45,7 +45,6 @@
 #include <osg/Geode>
 #include <osg/Vec3>
 #include <osg/Geometry>
-#include <osg/LineWidth>
 
 #include "osg/CPlaneConstraint.h"
 #include "osg/CPlaneUpdateSelection.h"
@@ -98,9 +97,6 @@ protected:
 
     //! Line geometry
 	osg::ref_ptr<osg::Geometry> lineGeometry;
-
-    //! Width
-	osg::ref_ptr<osg::LineWidth> linewidth;
 
     //! Invisible cylinder
 	osg::ref_ptr<osg::Cylinder> cylinder;

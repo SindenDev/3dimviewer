@@ -51,7 +51,7 @@ osg::CActiveObjectBase::CActiveObjectBase( const std::string & name /*= "ActiveO
     : m_name( name )
     , m_priority( priority )
     , m_class( oc )
-    , m_bActive(true)
+    , m_active(true)
 {
 
 }

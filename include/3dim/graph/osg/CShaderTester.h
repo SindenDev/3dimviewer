@@ -22,11 +22,7 @@
 
 #ifndef CShaderTester_H_included
 #define CShaderTester_H_included
-#ifdef __APPLE__
-    #include <glew.h>
-#else
-    #include <GL/glew.h>
-#endif
+
 #include <string>
 #include <VPL/Base/Logging.h>
 #include <osg/Geometry>

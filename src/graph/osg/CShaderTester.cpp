@@ -117,7 +117,7 @@ void osg::CShaderTester::drawImplementation(osg::RenderInfo &renderInfo) const
 
     VPL_LOG_INFO("Testing shader program: " << m_programName << " ...");
     if (m_vertSource.length() > 0) { vertShader = createAndCompileShader(GL_VERTEX_SHADER, m_vertSource.c_str()); }
-    if (m_geomSource.length() > 0) { geomShader = createAndCompileShader(GL_GEOMETRY_SHADER_EXT, m_geomSource.c_str()); }
+    if (m_geomSource.length() > 0) { geomShader = createAndCompileShader(GL_GEOMETRY_SHADER, m_geomSource.c_str()); }
     if (m_fragSource.length() > 0) { fragShader = createAndCompileShader(GL_FRAGMENT_SHADER, m_fragSource.c_str()); }
 
     if (vertShader > 0) { glAttachShader(program, vertShader); }

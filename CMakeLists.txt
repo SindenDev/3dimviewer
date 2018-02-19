@@ -198,36 +198,35 @@ set( TRIDIM_OSS_PLUGINS_PATH ${CMAKE_SOURCE_DIR}/plugins )
 #include_directories( ${CMAKE_SOURCE_DIR}/include/3dim/qtgui/ )
 
 
-
-
 #generate debug symbols for release too..  so for everything
 if(MSVC)
     #https://msdn.microsoft.com/en-us/library/8f8h5cxt.aspx  -optimization flags
 
-    set( CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /Zi" )
-    set( CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} /Zi")
-    set( CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /Zi" ) # plus /map file
+    set( CMAKE_CXX_FLAGS_DEBUG              "${CMAKE_CXX_FLAGS_DEBUG} /Zi" )
+    set( CMAKE_CXX_FLAGS_RELWITHDEBINFO     "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} /Zi")
+    set( CMAKE_CXX_FLAGS_RELEASE            "${CMAKE_CXX_FLAGS_RELEASE} /Zi" ) # plus /map file
 
-    set( CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS_RELEASE} /MAP" ) 
+    set( CMAKE_EXE_LINKER_FLAGS_RELEASE     "${CMAKE_EXE_LINKER_FLAGS_RELEASE} /MAP" ) 
 
 elseif(XCODE)
     #https://clang.llvm.org/docs/UsersManual.html#controlling-size-of-debug-information
     #http://stackoverflow.com/questions/15548023/clang-optimization-levels
 
-    set( CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g" )
-    set( CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} -g")
-    set( CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -g -O2" )
+    set( CMAKE_CXX_FLAGS_DEBUG              "${CMAKE_CXX_FLAGS_DEBUG} -g" )
+    set( CMAKE_CXX_FLAGS_RELWITHDEBINFO     "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} -g")
+    set( CMAKE_CXX_FLAGS_RELEASE            "${CMAKE_CXX_FLAGS_RELEASE} -g -O2" )
 
 elseif(CMAKE_COMPILER_IS_GNUCXX)
 
-    set( CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g3" )
-    set( CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} -g3")
-    set( CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -g3 -O2" )
+    set( CMAKE_CXX_FLAGS_DEBUG              "${CMAKE_CXX_FLAGS_DEBUG} -g3" )
+    set( CMAKE_CXX_FLAGS_RELWITHDEBINFO     "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} -g3")
+    set( CMAKE_CXX_FLAGS_RELEASE            "${CMAKE_CXX_FLAGS_RELEASE} -g3 -O2" )
 
 endif()
 
 
 
+include ("${CMAKE_MODULE_PATH}/Warnings.cmake")
 
 
 # set global compiler options depending on platform and capabilities

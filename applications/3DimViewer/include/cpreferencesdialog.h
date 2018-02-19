@@ -40,6 +40,7 @@
 #define DEFAULT_STYLESHEET              ""
 #define DEFAULT_DICOM_PORT              5678
 #define DEFAULT_BIG_ICONS				true
+#define DEFAULT_ANTIALIASING            true
 
 // Proxy style for custom icon size
 class BigIconsProxyStyle : public QProxyStyle

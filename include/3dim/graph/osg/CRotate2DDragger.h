@@ -48,9 +48,6 @@ public:
 
 	CRotate2DDragger(const osg::Plane& plane);
 
-	//! Destructor
-    virtual ~CRotate2DDragger();
-
 	/** Handle pick events on dragger and generate TranslateInLine commands. */
 	virtual bool handle(const PointerInfo& pi, const osgGA::GUIEventAdapter& ea, osgGA::GUIActionAdapter& aa);
 

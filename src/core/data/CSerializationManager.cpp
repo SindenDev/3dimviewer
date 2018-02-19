@@ -140,8 +140,7 @@ void CSerializationManager::deserialize(vpl::mod::CBinarySerializer & Reader, tI
     CProgress::setProgressMax( ids.size() );
 
     // deserialize all items
-    tIdVector::iterator iter;
-    for(iter = ids.begin(); iter != ids.end(); ++iter)
+    for (tIdVector::iterator iter = ids.begin(); iter != ids.end(); ++iter)
     {
         int i = m_idMapper->getId(*iter);
         // Is id valid storage id?
@@ -207,9 +206,39 @@ void CSerializationManager::deserialize(vpl::mod::CBinarySerializer & Reader, tI
     }
 
     // Read the terminal block
-    if( !vpl::mod::BinarySerializer::readTerminal(*Reader.getChannelPtr()) )
+    if (!vpl::mod::BinarySerializer::readTerminal(*Reader.getChannelPtr()))
     {
         throw vpl::mod::Serializer::CReadFailed();
+    }
+
+    // notify all items that deserialization has finished
+    for (tIdVector::iterator iter = ids.begin(); iter != ids.end(); ++iter)
+    {
+        int i = m_idMapper->getId(*iter);
+
+        // Is id valid storage id?
+        if (!m_dataStorage->isEntryValid(i))
+        {
+            continue;
+        }
+
+        data::CStorageEntry *entry = m_dataStorage->getEntry(i).get();
+        if (entry != NULL)
+        {
+            entry->lockData();
+            bool invalidate = entry->deserializationFinished();
+            entry->unlockData();
+
+            if (invalidate)
+            {
+                m_dataStorage->invalidate(entry, data::Storage::FORCE_UPDATE | data::StorageEntry::DESERIALIZED);
+            }
+        }
+
+        if (!CProgress::progress())
+        {
+            return;
+        }
     }
 
     CProgress::endProgress();

@@ -20,820 +20,40 @@
 //
 ///////////////////////////////////////////////////////////////////////////////
 
-#include <configure.h>
+#include <render/PSVRrenderer.h>
 
-//#define USE_VAORECT // there's a bug in that code - find it if you want to use it
-
-// Check predefined type of volume rendering algorithm
 #ifdef USE_PSVR
-
-///////////////////////////////////////////////////////////////////////////////
-// include files
-
-// GLEW must be included first!
-#ifdef __APPLE__
-#    include <glew.h>
-#else
-#    include <GL/glew.h>
-#endif
-//#include <GL/gl.h>
 
 #include <osg/OSGCanvas.h>
 
-#include <render/PSVRrenderer.h>
 #include <render/PSVRosg.h>
 #include <render/PSVRshaders.h>
-#include <render/CGraficCardDesc.h>
-#include <osg/CSceneOSG.h>
-#include "render/cvolumerendererwindow.h"
 #include <render/glErrorReporting.h>
 #include <osg/CSceneManipulator.h>
+#include <osg/CSceneOSG.h>
+
+#include <osg/CullFace>
+#include <osg/Texture1D>
+#include <osg/Texture3D>
 
 #include <VPL/Math/Base.h>
 #include <VPL/Math/Random.h>
 #include <VPL/System/Sleep.h>
-//#include <VPL/Base/Logging.h>
 #include <VPL/Image/VolumeFilters/Sobel.h>
 #include <VPL/Image/VolumeFilters/Gaussian.h>
 
-#include <coremedi/app/Signals.h>
+#ifdef __APPLE__
+    #define LOOKUP_TEXTURE_FORMAT   GL_RGBA12
+#else
+    #define LOOKUP_TEXTURE_FORMAT   GL_RGBA16
+#endif
 
-//#define ROUNDING_MASK 0xFFFFFFFE
 #define ROUNDING_MASK 0xFFFFFFFC
 
-static int depthTextureParameters[] = { GL_DEPTH_COMPONENT24, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT }; // this works for both glCopyTexSubImage2D and glBlitFramebuffer
-//static int depthTextureParameters[] = { GL_DEPTH_COMPONENT32F, GL_DEPTH_COMPONENT, GL_FLOAT }; // this works only for glCopyTexSubImage2D
-
-
-#ifdef __APPLE__
-    #define glGenVertexArraysX    glGenVertexArraysAPPLE
-    #define glBindVertexArrayX    glBindVertexArrayAPPLE
-    #define glDeleteVertexArraysX glDeleteVertexArraysAPPLE
-    #define glIsVertexArrayX      glIsVertexArrayAPPLE
-#else
-    #define glGenVertexArraysX    glGenVertexArrays
-    #define glBindVertexArrayX    glBindVertexArray
-    #define glDeleteVertexArraysX glDeleteVertexArrays
-    #define glIsVertexArrayX      glIsVertexArray
-#endif
-
-// https://github.com/OpenGLInsights/OpenGLInsightsCode/blob/master/Chapter%2033%20ARB_debug_output%20A%20Helping%20Hand%20for%20Desperate%20Developers/OpenGLInsightsDebug/vsDebugLib.cpp
-
-//#define USE_OPENGL_CALLBACK
-
-#ifdef USE_OPENGL_CALLBACK
-void APIENTRY openglCallbackFunction(GLenum source,
-    GLenum type,
-    GLuint id,
-    GLenum severity,
-    GLsizei length,
-    const GLchar* message,
-    const void* userParam)
-{
-    std::stringstream ss;
-    ss << "message: " << message << " ";
-    ss << "type: ";
-    switch (type) {
-    case GL_DEBUG_TYPE_ERROR:
-        ss << "ERROR";
-        break;
-    case GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR:
-        ss << "DEPRECATED_BEHAVIOR";
-        break;
-    case GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR:
-        ss << "UNDEFINED_BEHAVIOR";
-        break;
-    case GL_DEBUG_TYPE_PORTABILITY:
-        ss << "PORTABILITY";
-        break;
-    case GL_DEBUG_TYPE_PERFORMANCE:
-        ss << "PERFORMANCE";
-        break;
-    case GL_DEBUG_TYPE_OTHER:
-        ss << "OTHER";
-        break;
-    }
-    ss << " " << "id: " << id << " " << "severity: ";
-    switch (severity){
-    case GL_DEBUG_SEVERITY_LOW:
-        ss << "LOW";
-        break;
-    case GL_DEBUG_SEVERITY_MEDIUM:
-        ss << "MEDIUM";
-        break;
-    case GL_DEBUG_SEVERITY_HIGH:
-        ss << "HIGH";
-        break;
-    }
-    std::string s = ss.str();
-    VPL_LOG_ERROR(s);
-#ifdef _WIN32
-    OutputDebugStringA(s.c_str());
-    OutputDebugStringA("\n");
-#endif    
-}
-#endif
-
-
-bool reportErrors(std::string functionName)
-{
-    std::string errorString = glGetErrors(functionName);
-    if (!errorString.empty())
-    {
-        VPL_LOG_ERROR(errorString);
-        return true;
-    }
-    return false;
-}
-
-#define tridimGlError(name, errorExp, glExp) glExp; { if (reportErrors(name)) { errorExp; } }
-#define tridimGlBool(name, glExp) tridimGlError(name, return false, glExp)
-#define tridimGl(name, glExp) tridimGlError(name, return, glExp)
-#define tridimGlR(name, glExp) glExp; reportErrors(name);
-
-class CContextGuardian
-{
-    OSGCanvas* m_pCanvas;
-    bool m_bCurrent;
-public:
-    CContextGuardian(OSGCanvas* pCanvas) : m_pCanvas(pCanvas), m_bCurrent(false)
-    {
-        if (NULL!=m_pCanvas)
-            m_bCurrent = m_pCanvas->getGraphicWindow()->makeCurrentImplementation();
-    }
-    ~CContextGuardian()
-    {
-        if (NULL != m_pCanvas && m_bCurrent)
-            m_pCanvas->getGraphicWindow()->releaseContextImplementation();
-    }
-    bool isCurrent() const { return m_bCurrent; }
-};
+#define tridimGlR(name, glExp) glExp; { if(!glDebugCallbackReady()){std::string errorString = glGetErrors(name); if (!errorString.empty()) VPL_LOG_ERROR(errorString);} }
 
 namespace PSVR
 {
-
-    COpenGlState::COpenGlState(bool automatic)
-        : m_automatic(automatic)
-        , m_grabbed(false)
-        , m_restored(false)
-    {
-        DrawBuffers = NULL;
-        TextureBindingTexture1D = NULL;
-        TextureBindingTexture2D = NULL;
-        TextureBindingTexture3D = NULL;
-        TextureBindingTexture1DArray = NULL;
-        TextureBindingTexture2DArray = NULL;
-        TextureBindingTextureRectangle = NULL;
-        TextureBindingTextureCubeMap = NULL;
-        TextureBindingTextureCubeMapArray = NULL;
-        TextureBindingTextureBuffer = NULL;
-        ModelviewMatrices = NULL;
-        ProjectionMatrices = NULL;
-        CullFace = false;
-        CullFaceMode = 0;
-        DrawFramebufferBinding = 0;
-        ReadFramebufferBinding = 0;
-        MaxDrawBuffers = 0;
-        CurrentProgram = 0;
-        ClearDepth = false;
-        DepthTest = false;
-        DepthFunc = 0;
-        ActiveTexture = 0;
-        MaxTextureUnits = 0;
-        MatrixMode = 0;
-        ModelviewMatrixStackDepth = 0;
-        ProjectionMatrixStackDepth = 0;
-        VertexArray = false;
-        TexCoordArray = false;
-        NormalArray = false;
-        ColorArray = false;
-        IndexArray = false;
-        SecondaryColorArray = false;
-        EdgeFlagArray = false;
-        FogCoordArray = false;
-        VertexArraySize = false;
-        VertexArrayType = 0;
-        VertexArrayStride = 0;
-        VertexArrayPointer = NULL;
-        VertexArrayBinding = 0;
-        PixelUnpackBufferBinding = 0;
-        ReadBufferMode = 0;
-        UnpackAlignment = 0;
-        UnpackSwapBytes = 0;
-        UnpackLSBFirst = 0;
-        UnpackRowLength = 0;
-        UnpackSkipRows = 0;
-        UnpackSkipPixels = 0;
-        Viewport[0] = Viewport[1] = Viewport[2] = Viewport[3] = 0;
-        Blend = false;
-        BlendSrcRgb = 0;
-        BlendSrcAlpha = 0;
-        BlendDstRgb = 0;
-        BlendDstAlpha = 0;
-
-
-        if (m_automatic)
-        {
-            grab();
-        }
-    }
-
-    COpenGlState::~COpenGlState()
-    {
-        if (m_automatic && m_grabbed && !m_restored)
-        {
-            restore();
-        }
-
-        clean();
-    }
-
-    void COpenGlState::grab()
-    {
-        // NOTE BY MW & VT: you really do not want to do this (it is already done in OSGCanvas init)
-        /*if (glewInit() != GLEW_OK)
-        {
-        return;
-        }*/
-
-        if (m_grabbed)
-        {
-            clean();
-        }
-
-        CullFace = glIsEnabled(GL_CULL_FACE);
-        glGetIntegerv(GL_CULL_FACE_MODE, reinterpret_cast<GLint *>(&CullFaceMode));
-        glGetIntegerv(GL_DEPTH_FUNC, reinterpret_cast<GLint *>(&DepthFunc));
-        glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &DrawFramebufferBinding);
-        glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &ReadFramebufferBinding);
-        glGetIntegerv(GL_MAX_DRAW_BUFFERS, &MaxDrawBuffers);
-        DrawBuffers = new GLenum[MaxDrawBuffers];
-        for (int i = 0; i < MaxDrawBuffers; ++i)
-        {
-            glGetIntegerv(GL_DRAW_BUFFER0 + i, reinterpret_cast<GLint *>(&(DrawBuffers[i])));
-        }
-        glGetIntegerv(GL_CURRENT_PROGRAM, &CurrentProgram);
-        glGetDoublev(GL_DEPTH_CLEAR_VALUE, &ClearDepth);
-        glGetBooleanv(GL_DEPTH_TEST, &DepthTest);
-        glGetIntegerv(GL_DEPTH_FUNC, reinterpret_cast<GLint *>(&DepthFunc));
-        glGetIntegerv(GL_ACTIVE_TEXTURE, &ActiveTexture);
-        glGetIntegerv(GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS, &MaxTextureUnits);
-        TextureBindingTexture1D = new GLint[MaxTextureUnits];
-        TextureBindingTexture2D = new GLint[MaxTextureUnits];
-        TextureBindingTexture3D = new GLint[MaxTextureUnits];
-        TextureBindingTexture1DArray = new GLint[MaxTextureUnits];
-        TextureBindingTexture2DArray = new GLint[MaxTextureUnits];
-        TextureBindingTextureRectangle = new GLint[MaxTextureUnits];
-        TextureBindingTextureCubeMap = new GLint[MaxTextureUnits];
-        TextureBindingTextureCubeMapArray = new GLint[MaxTextureUnits];
-        TextureBindingTextureBuffer = new GLint[MaxTextureUnits];
-        for (int i = 0; i < MaxTextureUnits; ++i)
-        {
-            glActiveTexture(GL_TEXTURE0 + i);
-            glGetIntegerv(GL_TEXTURE_BINDING_1D, &(TextureBindingTexture1D[i]));
-            glGetIntegerv(GL_TEXTURE_BINDING_2D, &(TextureBindingTexture2D[i]));
-            glGetIntegerv(GL_TEXTURE_BINDING_3D, &(TextureBindingTexture3D[i]));
-            glGetIntegerv(GL_TEXTURE_BINDING_1D_ARRAY, &(TextureBindingTexture1DArray[i]));
-            glGetIntegerv(GL_TEXTURE_BINDING_2D_ARRAY, &(TextureBindingTexture2DArray[i]));
-            glGetIntegerv(GL_TEXTURE_BINDING_RECTANGLE, &(TextureBindingTextureRectangle[i]));
-            glGetIntegerv(GL_TEXTURE_BINDING_CUBE_MAP, &(TextureBindingTextureCubeMap[i]));
-            // doesn't work on mac
-            //glGetIntegerv(GL_TEXTURE_BINDING_CUBE_MAP_ARRAY_ARB, &(TextureBindingTextureCubeMapArray[i]));
-            //glGetIntegerv(GL_TEXTURE_BINDING_BUFFER_ARB, &(TextureBindingTextureBuffer[i]));
-        }
-        glActiveTexture(ActiveTexture);
-        glGetIntegerv(GL_MATRIX_MODE, reinterpret_cast<GLint *>(&MatrixMode));
-        glGetIntegerv(GL_MODELVIEW_STACK_DEPTH, &ModelviewMatrixStackDepth);
-        glGetIntegerv(GL_PROJECTION_STACK_DEPTH, &ProjectionMatrixStackDepth);
-        ModelviewMatrices = new GLdouble[16 * ModelviewMatrixStackDepth];
-        glMatrixMode(GL_MODELVIEW);
-        for (int i = 0; i < ModelviewMatrixStackDepth; ++i)
-        {
-            glGetDoublev(GL_MODELVIEW_MATRIX, &(ModelviewMatrices[(ModelviewMatrixStackDepth - 1 - i) * 16]));
-            if (i != 0)
-            {
-                glPopMatrix();
-            }
-        }
-        for (int i = 0; i < ModelviewMatrixStackDepth; ++i)
-        {
-            glLoadMatrixd(&(ModelviewMatrices[i * 16]));
-            if (i != ModelviewMatrixStackDepth - 1)
-            {
-                glPushMatrix();
-            }
-        }
-        ProjectionMatrices = new GLdouble[16 * ProjectionMatrixStackDepth];
-        glMatrixMode(GL_PROJECTION);
-        for (int i = 0; i < ProjectionMatrixStackDepth; ++i)
-        {
-            glGetDoublev(GL_PROJECTION_MATRIX, &(ProjectionMatrices[(ProjectionMatrixStackDepth - 1 - i) * 16]));
-            if (i != 0)
-            {
-                glPopMatrix();
-            }
-        }
-        for (int i = 0; i < ProjectionMatrixStackDepth; ++i)
-        {
-            glLoadMatrixd(&(ProjectionMatrices[i * 16]));
-            if (i != ProjectionMatrixStackDepth - 1)
-            {
-                glPushMatrix();
-            }
-        }
-        glMatrixMode(MatrixMode);
-        VertexArray = glIsEnabled(GL_VERTEX_ARRAY);
-        TexCoordArray = glIsEnabled(GL_TEXTURE_COORD_ARRAY);
-        NormalArray = glIsEnabled(GL_NORMAL_ARRAY);
-        ColorArray = glIsEnabled(GL_COLOR_ARRAY);
-        IndexArray = glIsEnabled(GL_INDEX_ARRAY);
-        SecondaryColorArray = glIsEnabled(GL_SECONDARY_COLOR_ARRAY);
-        EdgeFlagArray = glIsEnabled(GL_EDGE_FLAG_ARRAY);
-        FogCoordArray = glIsEnabled(GL_FOG_COORD_ARRAY);
-        glGetIntegerv(GL_VERTEX_ARRAY_SIZE, &VertexArraySize);
-        glGetIntegerv(GL_VERTEX_ARRAY_TYPE, reinterpret_cast<GLint *>(&VertexArrayType));
-        glGetIntegerv(GL_VERTEX_ARRAY_STRIDE, &VertexArrayStride);
-        glGetPointerv(GL_VERTEX_ARRAY_POINTER, &VertexArrayPointer);
-        glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &VertexArrayBinding);
-        glGetIntegerv(GL_PIXEL_UNPACK_BUFFER_BINDING, &PixelUnpackBufferBinding);        
-        glGetIntegerv(GL_READ_BUFFER, reinterpret_cast<GLint *>(&ReadBufferMode));
-        glGetIntegerv(GL_UNPACK_ALIGNMENT, &UnpackAlignment);
-        glGetIntegerv(GL_UNPACK_SWAP_BYTES, &UnpackSwapBytes);
-        glGetIntegerv(GL_UNPACK_LSB_FIRST, &UnpackLSBFirst);
-        glGetIntegerv(GL_UNPACK_ROW_LENGTH, &UnpackRowLength);
-        glGetIntegerv(GL_UNPACK_SKIP_ROWS, &UnpackSkipRows);
-        glGetIntegerv(GL_UNPACK_SKIP_PIXELS, &UnpackSkipPixels);
-        glGetIntegerv(GL_VIEWPORT, Viewport);
-        Blend = glIsEnabled(GL_BLEND);
-        glGetIntegerv(GL_BLEND_SRC_RGB, reinterpret_cast<GLint *>(&BlendSrcRgb));
-        glGetIntegerv(GL_BLEND_SRC_ALPHA, reinterpret_cast<GLint *>(&BlendSrcAlpha));
-        glGetIntegerv(GL_BLEND_DST_RGB, reinterpret_cast<GLint *>(&BlendDstRgb));
-        glGetIntegerv(GL_BLEND_DST_ALPHA, reinterpret_cast<GLint *>(&BlendDstAlpha));
-
-        m_grabbed = true;
-        m_restored = false;
-    }
-
-    void COpenGlState::restore()
-    {
-        // NOTE BY MW & VT: you really do not want to do this (it is already done in OSGCanvas init)
-        /*if (glewInit() != GLEW_OK)
-        {
-        return;
-        }*/
-
-        if (!m_grabbed)
-        {
-            return;
-        }
-
-        CullFace ? glEnable(GL_CULL_FACE) : glDisable(GL_CULL_FACE);
-        glCullFace(CullFaceMode);
-        glDepthFunc(DepthFunc);
-        glBindFramebufferEXT(GL_DRAW_FRAMEBUFFER, DrawFramebufferBinding);
-        glBindFramebufferEXT(GL_READ_FRAMEBUFFER, ReadFramebufferBinding);
-        int nEmpty = 0;
-        for (int i = 0; i < MaxDrawBuffers; ++i)
-        {
-            if (DrawBuffers[i] == GL_NONE)
-            {
-                nEmpty++;
-            }
-        }
-        if ((nEmpty == MaxDrawBuffers - 1) && (DrawBuffers[0] == GL_BACK))
-        {
-            glDrawBuffer(GL_BACK);
-        }
-        else
-        {
-            glDrawBuffers(MaxDrawBuffers, DrawBuffers);
-        }
-        glUseProgram(CurrentProgram);
-        glClearDepth(ClearDepth);
-        DepthTest ? glEnable(GL_DEPTH_TEST) : glDisable(GL_DEPTH_TEST);
-        glDepthFunc(DepthFunc);
-        for (int i = 0; i < MaxTextureUnits; ++i)
-        {
-            glActiveTexture(GL_TEXTURE0 + i);
-            glBindTexture(GL_TEXTURE_1D, TextureBindingTexture1D[i]);
-            glBindTexture(GL_TEXTURE_2D, TextureBindingTexture2D[i]);
-            glBindTexture(GL_TEXTURE_3D, TextureBindingTexture3D[i]);
-            glBindTexture(GL_TEXTURE_1D_ARRAY, TextureBindingTexture1DArray[i]);
-            glBindTexture(GL_TEXTURE_2D_ARRAY, TextureBindingTexture2DArray[i]);
-            glBindTexture(GL_TEXTURE_RECTANGLE, TextureBindingTextureRectangle[i]);
-            glBindTexture(GL_TEXTURE_CUBE_MAP, TextureBindingTextureCubeMap[i]);
-            // doesnt work on mac
-            //glBindTexture(GL_TEXTURE_CUBE_MAP_ARRAY_ARB, TextureBindingTextureCubeMapArray[i]);
-            //glBindTexture(GL_TEXTURE_BUFFER_ARB, TextureBindingTextureBuffer[i]);
-        }
-        glActiveTexture(ActiveTexture);
-        GLint modelviewMatrixStackDepth;
-        GLint projectionMatrixStackDepth;
-        glGetIntegerv(GL_MODELVIEW_STACK_DEPTH, &modelviewMatrixStackDepth);
-        glGetIntegerv(GL_PROJECTION_STACK_DEPTH, &projectionMatrixStackDepth);
-        glMatrixMode(GL_MODELVIEW);
-        for (int i = 0; i < modelviewMatrixStackDepth; ++i)
-        {
-            if (i != 0)
-            {
-                glPopMatrix();
-            }
-        }
-        for (int i = 0; i < ModelviewMatrixStackDepth; ++i)
-        {
-            glLoadMatrixd(&(ModelviewMatrices[i * 16]));
-            if (i != ModelviewMatrixStackDepth - 1)
-            {
-                glPushMatrix();
-            }
-        }
-        glMatrixMode(GL_PROJECTION);
-        for (int i = 0; i < projectionMatrixStackDepth; ++i)
-        {
-            if (i != 0)
-            {
-                glPopMatrix();
-            }
-        }
-        for (int i = 0; i < ProjectionMatrixStackDepth; ++i)
-        {
-            glLoadMatrixd(&(ProjectionMatrices[i * 16]));
-            if (i != ProjectionMatrixStackDepth - 1)
-            {
-                glPushMatrix();
-            }
-        }
-        glMatrixMode(MatrixMode);
-        VertexArray ? glEnableClientState(GL_VERTEX_ARRAY) : glDisableClientState(GL_VERTEX_ARRAY);
-        TexCoordArray ? glEnableClientState(GL_TEXTURE_COORD_ARRAY) : glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-        NormalArray ? glEnableClientState(GL_NORMAL_ARRAY) : glDisableClientState(GL_NORMAL_ARRAY);
-        ColorArray ? glEnableClientState(GL_COLOR_ARRAY) : glDisableClientState(GL_COLOR_ARRAY);
-        IndexArray ? glEnableClientState(GL_INDEX_ARRAY) : glDisableClientState(GL_INDEX_ARRAY);
-        SecondaryColorArray ? glEnableClientState(GL_SECONDARY_COLOR_ARRAY) : glDisableClientState(GL_SECONDARY_COLOR_ARRAY);
-        EdgeFlagArray ? glEnableClientState(GL_EDGE_FLAG_ARRAY) : glDisableClientState(GL_EDGE_FLAG_ARRAY);
-        FogCoordArray ? glEnableClientState(GL_FOG_COORD_ARRAY) : glDisableClientState(GL_FOG_COORD_ARRAY);
-        glVertexPointer(VertexArraySize, VertexArrayType, VertexArrayStride, VertexArrayPointer);
-        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, PixelUnpackBufferBinding);
-        glReadBuffer(ReadBufferMode);
-        glPixelStorei(GL_UNPACK_ALIGNMENT, UnpackAlignment);
-        glPixelStorei(GL_UNPACK_SWAP_BYTES, UnpackSwapBytes);
-        glPixelStorei(GL_UNPACK_LSB_FIRST, UnpackLSBFirst);
-        glPixelStorei(GL_UNPACK_ROW_LENGTH, UnpackRowLength);
-        glPixelStorei(GL_UNPACK_SKIP_ROWS, UnpackSkipRows);
-        glPixelStorei(GL_UNPACK_SKIP_PIXELS, UnpackSkipPixels);
-        glViewport(Viewport[0], Viewport[1], Viewport[2], Viewport[3]);
-        glBlendFuncSeparate(BlendSrcRgb, BlendDstRgb, BlendSrcAlpha, BlendDstAlpha);
-
-        m_restored = true;
-    }
-
-    void COpenGlState::clean()
-    {
-        delete[] DrawBuffers;
-        delete[] TextureBindingTexture1D;
-        delete[] TextureBindingTexture2D;
-        delete[] TextureBindingTexture3D;
-        delete[] TextureBindingTexture1DArray;
-        delete[] TextureBindingTexture2DArray;
-        delete[] TextureBindingTextureRectangle;
-        delete[] TextureBindingTextureCubeMap;
-        delete[] TextureBindingTextureCubeMapArray;
-        delete[] TextureBindingTextureBuffer;
-        delete[] ModelviewMatrices;
-        delete[] ProjectionMatrices;
-    }
-
-
-///////////////////////////////////////////////////////////////////////////////
-//! Creates shader program from a given string.
-//! - Returns false on failure.
-bool createShaderProgram(const char * frag, GLuint * shader, GLuint * program)
-{
-    if (!frag || !shader || !program)
-    {
-        return false;
-    }
-
-    *shader = glCreateShader(GL_FRAGMENT_SHADER);
-    glShaderSource(*shader, 1, &frag, NULL);
-    glCompileShader(*shader);
-
-    if (glGetShaderiv)
-    {
-        GLint Result = GL_FALSE;
-        glGetShaderiv(*shader, GL_COMPILE_STATUS, &Result);
-        if (Result != GL_TRUE)
-        {
-            VPL_LOG_INFO("Error: Cannot compile fragment shader!");
-
-            GLchar buffer[2048 + 1] = {};
-            GLsizei length;
-            GLsizei size = 2048;
-            glGetShaderInfoLog(*shader, size, &length, buffer);
-            if (0 != buffer[0])
-                VPL_LOG_INFO("glGetShaderInfoLog():" << std::endl << buffer);
-
-            return false;
-        }
-    }
-
-    *program = glCreateProgram();
-    glAttachShader(*program, *shader);
-    glLinkProgram(*program);
-
-    if (glGetProgramiv)
-    {
-        GLint Result = GL_FALSE;
-        glGetProgramiv(*program, GL_LINK_STATUS, &Result);
-        if (Result != GL_TRUE)
-        {
-            VPL_LOG_INFO("Error: Cannot link shader program!");
-
-            GLchar buffer[2048 + 1] = {};
-            GLsizei length;
-            GLsizei size = 2048;
-            glGetProgramInfoLog(*program, size, &length, buffer);
-            if (0 != buffer[0])
-                VPL_LOG_INFO("glGetProgramInfoLog():" << std::endl << buffer);
-
-            return false;
-        }
-    }
-
-    return true;
-}
-
-///////////////////////////////////////////////////////////////////////////////
-// Creates shader program from a given string.
-bool createShaderProgram(const char * frag, const char * vert, GLuint * FragShader, GLuint * VertShader, GLuint * program)
-{
-    if (!frag || !vert || !FragShader || !VertShader || !program)
-    {
-        return false;
-    }
-
-    *FragShader = glCreateShader(GL_FRAGMENT_SHADER);
-    glShaderSource(*FragShader, 1, &frag, NULL);
-    glCompileShader(*FragShader);
-
-    if (glGetShaderiv)
-    {
-        GLint Result = GL_FALSE;
-        glGetShaderiv(*FragShader, GL_COMPILE_STATUS, &Result);
-        if (Result != GL_TRUE)
-        {
-            VPL_LOG_INFO("Error: Cannot compile fragment shader!");
-
-            GLchar buffer[2048 + 1] = {};
-            GLsizei length;
-            GLsizei size = 2048;
-            glGetShaderInfoLog(*FragShader, size, &length, buffer);
-            if (0 != buffer[0])
-                VPL_LOG_INFO("glGetShaderInfoLog():" << std::endl << buffer);
-
-            return false;
-        }
-    }
-
-    *VertShader = glCreateShader(GL_VERTEX_SHADER);
-    glShaderSource(*VertShader, 1, &vert, NULL);
-    glCompileShader(*VertShader);
-
-    if (glGetShaderiv)
-    {
-        GLint Result = GL_FALSE;
-        glGetShaderiv(*VertShader, GL_COMPILE_STATUS, &Result);
-        if (Result != GL_TRUE)
-        {
-            VPL_LOG_INFO("Error: Cannot compile vertex shader!");
-
-            GLchar buffer[2048 + 1] = {};
-            GLsizei length;
-            GLsizei size = 2048;
-            glGetShaderInfoLog(*VertShader, size, &length, buffer);
-            if (0 != buffer[0])
-                VPL_LOG_INFO("glGetShaderInfoLog():" << std::endl << buffer);
-
-            return false;
-        }
-    }
-
-    *program = glCreateProgram();
-    glAttachShader(*program, *FragShader);
-    glAttachShader(*program, *VertShader);
-    glLinkProgram(*program);
-
-    if (glGetProgramiv)
-    {
-        GLint Result = GL_FALSE;
-        glGetProgramiv(*program, GL_LINK_STATUS, &Result);
-        if (Result != GL_TRUE)
-        {
-            VPL_LOG_INFO("Error: Cannot link shader program!");
-
-            GLchar buffer[2048 + 1] = {};
-            GLsizei length;
-            GLsizei size = 2048;
-            glGetProgramInfoLog(*program, size, &length, buffer);
-            if (0 != buffer[0])
-                VPL_LOG_INFO("glGetProgramInfoLog():" << std::endl << buffer);
-
-            return false;
-        }
-    }
-
-    return true;
-}
-
-///////////////////////////////////////////////////////////////////////////////
-//
-char * readShader(const char * Filename)
-{
-    FILE * pFile = fopen(Filename, "rb");
-    if (!pFile)
-    {
-        return NULL;
-    }
-    fseek(pFile, 0, SEEK_END);
-    long lSize = ftell(pFile);
-    rewind(pFile);
-    char * buffer = (char *)malloc(sizeof(char) * lSize + 1);
-    size_t result = fread(buffer, 1, lSize, pFile);
-    buffer[lSize] = '\0';
-    fclose(pFile);
-    return buffer;
-}
-
-///////////////////////////////////////////////////////////////////////////////
-//
-bool loadShaderProgram(const char * filename, unsigned * shader, unsigned * program)
-{
-    if (!filename || !shader || !program)
-    {
-        return false;
-    }
-
-    *shader = glCreateShader(GL_FRAGMENT_SHADER);
-    const GLchar * shaderfile = readShader(filename);
-    if (!shaderfile)
-    {
-        VPL_LOG_INFO("Error: Cannot find shader program (" << filename << ")!");
-        return false;
-    }
-    glShaderSource(*shader, 1, &shaderfile, NULL);
-    free((void*)shaderfile);
-    glCompileShader(*shader);
-
-    if (glGetShaderiv)
-    {
-        GLint Result = GL_FALSE;
-        glGetShaderiv(*shader, GL_COMPILE_STATUS, &Result);
-        if (Result != GL_TRUE)
-        {
-            VPL_LOG_INFO("Error: Cannot compile fragment shader (" << filename << ")!");
-
-            GLchar buffer[2048 + 1] = {};
-            GLsizei length;
-            GLsizei size = 2048;
-            glGetShaderInfoLog(*shader, size, &length, buffer);
-            if (0 != buffer[0])
-                VPL_LOG_INFO("glGetShaderInfoLog():" << std::endl << buffer);
-
-            return false;
-        }
-    }
-
-    *program = glCreateProgram();
-    glAttachShader(*program, *shader);
-    glLinkProgram(*program);
-
-    if (glGetProgramiv)
-    {
-        GLint Result = GL_FALSE;
-        glGetProgramiv(*program, GL_LINK_STATUS, &Result);
-        if (Result != GL_TRUE)
-        {
-            VPL_LOG_INFO("Error: Cannot link shader program!");
-
-            GLchar buffer[2048 + 1] = {};
-            GLsizei length;
-            GLsizei size = 2048;
-            glGetProgramInfoLog(*program, size, &length, buffer);
-            if (0 != buffer[0])
-                VPL_LOG_INFO("glGetProgramInfoLog():" << std::endl << buffer);
-
-            return false;
-        }
-    }
-
-    return true;
-}
-
-///////////////////////////////////////////////////////////////////////////////
-//
-bool loadShaderProgram(const char * fragfilename, const char * vertfilename, unsigned * fragshader, unsigned * vertshader, unsigned * program)
-{
-    if (!fragfilename || !vertfilename || !fragshader || !vertshader || !program)
-    {
-        return false;
-    }
-
-    if (glIsShader(*fragshader) == GL_FALSE)
-    {
-        *fragshader = glCreateShader(GL_FRAGMENT_SHADER);
-    }
-
-    const GLchar * shaderfile = readShader(fragfilename);
-    if (!shaderfile)
-    {
-        VPL_LOG_INFO("Error: Cannot find shader program (" << fragfilename << ")!");
-        return false;
-    }
-    glShaderSource(*fragshader, 1, &shaderfile, NULL);
-    free((void*)shaderfile);
-    glCompileShader(*fragshader);
-
-    if (glGetShaderiv)
-    {
-        GLint Result = GL_FALSE;
-        glGetShaderiv(*fragshader, GL_COMPILE_STATUS, &Result);
-        if (Result != GL_TRUE)
-        {
-            VPL_LOG_INFO("Error: Cannot compile fragment shader (" << fragfilename << ")!");
-
-            GLchar buffer[2048 + 1] = {};
-            GLsizei length;
-            GLsizei size = 2048;
-            glGetShaderInfoLog(*fragshader, size, &length, buffer);
-            if (0 != buffer[0])
-                VPL_LOG_INFO("glGetShaderInfoLog():" << std::endl << buffer);
-
-            return false;
-        }
-    }
-
-    if (glIsShader(*vertshader) == GL_FALSE)
-    {
-        *vertshader = glCreateShader(GL_VERTEX_SHADER);
-    }
-    shaderfile = readShader(vertfilename);
-    if (!shaderfile)
-    {
-        VPL_LOG_INFO("Error: Cannot find shader program (" << vertfilename << ")!");
-        return false;
-    }
-    glShaderSource(*vertshader, 1, &shaderfile, NULL);
-    free((void*)shaderfile);
-    glCompileShader(*vertshader);
-
-    if (glGetShaderiv)
-    {
-        GLint Result = GL_FALSE;
-        glGetShaderiv(*vertshader, GL_COMPILE_STATUS, &Result);
-        if (Result != GL_TRUE)
-        {
-            VPL_LOG_INFO("Error: Cannot compile vertex shader (" << vertfilename << ")!");
-
-            GLchar buffer[2048 + 1] = {};
-            GLsizei length;
-            GLsizei size = 2048;
-            glGetShaderInfoLog(*vertshader, size, &length, buffer);
-            if (0 != buffer[0])
-                VPL_LOG_INFO("glGetShaderInfoLog():" << std::endl << buffer);
-
-            return false;
-        }
-    }
-
-    if (glIsProgram(*program) == GL_FALSE)
-    {
-        *program = glCreateProgram();
-    }
-    glAttachShader(*program, *fragshader);
-    glAttachShader(*program, *vertshader);
-    glLinkProgram(*program);
-
-    if (glGetProgramiv)
-    {
-        GLint Result = GL_FALSE;
-        glGetProgramiv(*program, GL_LINK_STATUS, &Result);
-        if (Result != GL_TRUE)
-        {
-            VPL_LOG_INFO("Error: Cannot link shader program!");
-
-            GLchar buffer[2048 + 1] = {};
-            GLsizei length;
-            GLsizei size = 2048;
-            glGetProgramInfoLog(*program, size, &length, buffer);
-            if (0 != buffer[0])
-                VPL_LOG_INFO("glGetProgramInfoLog():" << std::endl << buffer);
-
-            return false;
-        }
-    }
-
-    return true;
-}
 
 ///////////////////////////////////////////////////////////////////////////////
 //! sqrt(2)/2
@@ -854,10 +74,7 @@ namespace conf
     const double NoiseSigma = 35.0;
 
     //! Number of quads that forms side of the rendered box.
-    const int NumOfQuads = 15;
-
-    //! Number of quads that forms side of the rendered box.
-    const int NumOfBatches  = 10;
+    const int NumOfQuads = 1;
 
     // Rendering parameters for different quality levels.
     /////////////////////////////////////////////////////
@@ -881,34 +98,7 @@ namespace conf
     //! 3D texture sampling (mouse mode).
     //const float MouseTextureSampling[PSVolumeRendering::QUALITY_LEVELS] = { 0.8f, 0.8f, 0.8f, 0.8f };
     const float MouseTextureSampling[PSVolumeRendering::QUALITY_LEVELS] = { 0.75f, 0.75f, 0.75f, 0.75f };
-
-    // Rectangular polygon
-    /////////////////////////////////////////////////////
-
-    static const float rectVertices[] = { 
-         1.0f,  1.0f, 0.0f,   -1.0f,  1.0f, 0.0f,   -1.0f, -1.0f, 0.0f,
-        -1.0f, -1.0f, 0.0f,    1.0f, -1.0f, 0.0f,    1.0f,  1.0f, 0.0f
-    };
 }
-
-///////////////////////////////////////////////////////////////////////////////
-//! OpenGL variables used by the renderer.
-struct PSVolumeRendering::PSVolumeRenderingData
-{
-    GLuint VolumeTexture, AuxVolumeTexture, CustomAuxVolumeTexture, LookUpTexture;
-
-    GLuint BicKerTexture, NoiseTexture, RTTexture, DEPTexture, RaysStartEnd;
-    GLuint OffScreenFramebuffer0, OffScreenFramebuffer1, ResizeFramebuffer;
-    
-    GLuint GeometryDepthTexture;
-
-    GLuint shaderFBO, PshaderFBO, shaderResize, PshaderResize;
-    GLuint shaderRayCast[SHADERS_COUNT - 1], PshaderRayCast[SHADERS_COUNT - 1];
-    GLuint vertexShader, fsQuadVS;
-
-    GLuint VAOBox[conf::NumOfBatches], VAORect;
-    GLuint VBOBox[conf::NumOfBatches], VBORect;
-};
 
 //! Parameters of the rendering.
 struct PSVolumeRendering::PSVolumeRenderingParams
@@ -968,35 +158,29 @@ struct PSVolumeRendering::PSVolumeRenderingParams
     int renderingSize;
 
     //! Currently selected shader.
-    int selectedShader;
+    EShaders selectedShader;
 
     //! Currently selected color LUT.
-    int selectedLut;
+    ELookups selectedLut;
 
     //! Inverted matrices for object-space position reconstruction of VR box
-    float invProjectionMatrix[16];
-    float invModelViewMatrix[16];
+    osg::Matrix invProjectionMatrix;
+    osg::Matrix invModelViewMatrix;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
 //! constructor - initialize main variables
 PSVolumeRendering::PSVolumeRendering()
-    : m_GlewInit(0)
-    , m_maximumVolumeSize(-1)
-    , m_pCanvas(NULL)
+    : m_pCanvas(NULL)
     , m_Enabled(false)
     , m_Error(DATA_NOT_SPECIFIED)
     , m_Flags(0)
     , m_FailureCounter(0)
     , m_Mutex(false)
     , m_Thread(setupLoop, this, false)
-    , m_spGLData(new PSVolumeRenderingData)
     , m_spParams(new PSVolumeRenderingParams)
     , m_spVolumeData(NULL)
-    , m_customShaderId(0)
 {
-    memset(m_spGLData, 0, sizeof(PSVolumeRenderingData));
-
     m_Thread.resume();
 
     // Initialize volume and surface data
@@ -1040,12 +224,12 @@ PSVolumeRendering::PSVolumeRendering()
     m_spParams->volumeSamplingDistance = conf::TextureSampling[LOW_QUALITY];
     m_spParams->renderingSize = conf::RenderingSize[LOW_QUALITY];
 
-    m_spParams->selectedShader = SURFACE;
-    m_spParams->selectedLut = SURFACE_BONE;
+    m_spParams->selectedShader = EShaders::SURFACE;
+    m_spParams->selectedLut = ELookups::SURFACE_BONE;
 
     // Prepare the box bounding volume data
     prepareBox(conf::NumOfQuads);
-    //prepareBox(1);
+    prepareQuad();
 
     // create default lookup tables
     createLookupTables();
@@ -1053,10 +237,9 @@ PSVolumeRendering::PSVolumeRendering()
 	noteMatrixSignalConnection = VPL_SIGNAL(SigNewTransformMatrixFromNote).connect(this, &PSVolumeRendering::setNewTransformMatrix);
 }
 
-
 void PSVolumeRendering::setNewTransformMatrix(osg::Matrix& newTransformMatrix, double distance) {
 
-    auto cameraManipulator = dynamic_cast<osg::CSceneManipulator *>(this->getCanvas()->getView()->getCameraManipulator());
+    auto cameraManipulator = dynamic_cast<osg::CSceneManipulator *>(getCanvas()->getView()->getCameraManipulator());
 
     if (cameraManipulator == nullptr)
         return;
@@ -1066,25 +249,10 @@ void PSVolumeRendering::setNewTransformMatrix(osg::Matrix& newTransformMatrix, d
     this->redraw();
 }
 
-
-///////////////////////////////////////////////////////////////////////////////
-//
 PSVolumeRendering::~PSVolumeRendering()
 {
-    // Do not accept any changes
-    //m_Thread.terminate(true);
-
     // Stop the rendering
     release();
-
-    cleanup(); // we need that the destruction callback are called before destruction of this object
-}
-
-///////////////////////////////////////////////////////////////////////////////
-// renderer plugin interface implementation
-bool PSVolumeRendering::isCustomShaderActive()
-{
-    return (getShader() == CUSTOM);
 }
 
 QSize PSVolumeRendering::getWindowSize()
@@ -1096,13 +264,7 @@ osg::Matrix PSVolumeRendering::getWorldMatrix()
 {
     osg::Matrix retMatrix = osg::Matrix::identity();
 
-    CVolumeRendererWindow *vrWindow = dynamic_cast<CVolumeRendererWindow *>(m_pCanvas);
-    if (vrWindow == NULL)
-    {
-        return retMatrix;
-    }
-
-    scene::CScene3D *vrScene = dynamic_cast<scene::CScene3D *>(vrWindow->getView()->getSceneData());
+    scene::CScene3D *vrScene = dynamic_cast<scene::CScene3D*>(getCanvas()->getView()->getSceneData());
     if (vrScene == NULL)
     {
         return retMatrix;
@@ -1124,30 +286,12 @@ osg::Matrix PSVolumeRendering::getWorldMatrix()
 
 osg::Matrix PSVolumeRendering::getViewMatrix()
 {
-    osg::Matrix retMatrix = osg::Matrix::identity();
-
-    CVolumeRendererWindow *vrWindow = dynamic_cast<CVolumeRendererWindow *>(m_pCanvas);
-    if (vrWindow == NULL)
-    {
-        return retMatrix;
-    }
-    retMatrix = vrWindow->getView()->getCamera()->getViewMatrix();
-
-    return retMatrix;
+    return getCanvas()->getView()->getCamera()->getViewMatrix();
 }
 
 osg::Matrix PSVolumeRendering::getProjectionMatrix()
 {
-    osg::Matrix retMatrix = osg::Matrix::identity();
-
-    CVolumeRendererWindow *vrWindow = dynamic_cast<CVolumeRendererWindow *>(m_pCanvas);
-    if (vrWindow == NULL)
-    {
-        return retMatrix;
-    }
-    retMatrix = vrWindow->getView()->getCamera()->getProjectionMatrix();
-
-    return retMatrix;
+    return getCanvas()->getView()->getCamera()->getProjectionMatrix();
 }
 
 osg::Matrix PSVolumeRendering::getTransformMatrix()
@@ -1155,576 +299,20 @@ osg::Matrix PSVolumeRendering::getTransformMatrix()
     return getWorldMatrix() * getViewMatrix() * getProjectionMatrix();
 }
 
-unsigned int PSVolumeRendering::internalCreateCustomShader(std::string vertexShaderSource, std::string fragmentShaderSource)
+void PSVolumeRendering::internalCreateCustomShader(std::string vertexShaderSource, std::string fragmentShaderSource)
 { 
-    if (!testFlag(INITIALIZED))
-    {
-        return 0;
-    }
-
-    CContextGuardian guard(m_pCanvas);
-    if (!guard.isCurrent())
-        return 0;
-
-    GLuint vertexShaderId, fragmentShaderId, programId;
-    if (!createShaderProgram(fragmentShaderSource.c_str(), vertexShaderSource.c_str(), &fragmentShaderId, &vertexShaderId, &programId))
-    {
-        return 0;
-    }
-
-    m_programShaders[programId].push_back(fragmentShaderId);
-    m_programShaders[programId].push_back(vertexShaderId);
-
-    return programId;
+    m_shaders[EShaders::CUSTOM] = new osg::Program();
+    m_shaders[EShaders::CUSTOM]->addShader(new osg::Shader(osg::Shader::VERTEX, vertexShaderSource));
+    m_shaders[EShaders::CUSTOM]->addShader(new osg::Shader(osg::Shader::FRAGMENT, fragmentShaderSource));
 }
 
-void PSVolumeRendering::internalDeleteCustomShader(unsigned int shaderId)
-{
-    CContextGuardian guard(m_pCanvas);
-    if (!guard.isCurrent())
-        return;
-
-    if ((getShader() == CUSTOM) && (m_customShaderId == shaderId))
-    {
-        useCustomShader(0);
-    }
-
-    std::vector<unsigned int> shaders = m_programShaders[shaderId];
-    for (std::size_t i = 0; i < shaders.size(); ++i)
-    {
-        glDeleteShader(shaders[i]);
-    }
-    glDeleteProgram(shaderId);
-
-    m_programShaders.erase(shaderId);
-}
-
-void PSVolumeRendering::internalUseCustomShader(unsigned int shaderId)
-{
-    m_customShaderId = shaderId;
-    setShader(CUSTOM);
-    enable();
-}
-
-void PSVolumeRendering::setParameter(unsigned int shaderId, std::string name, int value)
-{
-    if (0 == shaderId) return;
-    GLint pos = glGetUniformLocation(shaderId, name.c_str());
-    reportErrors("glGetUniformLocation");
-    tridimGlR("glUniform1i", glUniform1i(pos, value););
-}
-
-void PSVolumeRendering::setParameter(unsigned int shaderId, std::string name, float value)
-{
-    if (0 == shaderId) return;
-    GLint pos = glGetUniformLocation(shaderId, name.c_str());
-    reportErrors("glGetUniformLocation");
-    tridimGlR("glUniform1f", glUniform1f(pos, value););
-}
-
-void PSVolumeRendering::setParameter(unsigned int shaderId, std::string name, osg::Vec2 value)
-{
-    if (0 == shaderId) return;
-    GLint pos = glGetUniformLocation(shaderId, name.c_str());
-    reportErrors("glGetUniformLocation");
-    tridimGlR("glUniform2f", glUniform2f(pos, value.x(), value.y()););
-}
-
-void PSVolumeRendering::setParameter(unsigned int shaderId, std::string name, osg::Vec3 value)
-{
-    if (0 == shaderId) return;
-    GLint pos = glGetUniformLocation(shaderId, name.c_str());
-    reportErrors("glGetUniformLocation");
-    tridimGlR("glUniform3f", glUniform3f(pos, value.x(), value.y(), value.z()););
-}
-
-void PSVolumeRendering::setParameter(unsigned int shaderId, std::string name, osg::Vec4 value)
-{
-    if (0 == shaderId) return;
-    GLint pos = glGetUniformLocation(shaderId, name.c_str());
-    reportErrors("glGetUniformLocation");
-    tridimGlR("glUniform4f", glUniform4f(pos, value.x(), value.y(), value.z(), value.w()););
-}
-
-void PSVolumeRendering::setParameter(unsigned int shaderId, std::string name, osg::Matrix value)
-{
-    setParameter(shaderId, name, &value, 1);
-}
-
-void PSVolumeRendering::setParameter(unsigned int shaderId, std::string name, int *value, int count)
-{
-    if (0 == shaderId) return;
-    GLint pos = glGetUniformLocation(shaderId, name.c_str());
-    reportErrors("glGetUniformLocation");
-    tridimGlR("glUniform1iv", glUniform1iv(pos, count, value););
-}
-
-void PSVolumeRendering::setParameter(unsigned int shaderId, std::string name, float *value, int count)
-{
-    if (0 == shaderId) return;
-    GLint pos = glGetUniformLocation(shaderId, name.c_str());
-    reportErrors("glGetUniformLocation");
-    tridimGlR("glUniform1fv", glUniform1fv(pos, count, value););
-}
-
-void PSVolumeRendering::setParameter(unsigned int shaderId, std::string name, osg::Vec2 *value, int count)
-{
-    if (0 == shaderId) return;
-    GLint pos = glGetUniformLocation(shaderId, name.c_str());
-    reportErrors("glGetUniformLocation");
-    osg::Vec2::value_type *temp = new osg::Vec2::value_type[2 * count];
-    for (int i = 0; i < count; ++i)
-    {
-        temp[i * 2 + 0] = value[i][0];
-        temp[i * 2 + 1] = value[i][1];
-    }
-    tridimGlR("glUniform2fv", glUniform2fv(pos, count, temp););
-    delete [] temp;
-}
-
-void PSVolumeRendering::setParameter(unsigned int shaderId, std::string name, osg::Vec3 *value, int count)
-{
-    if (0 == shaderId) return;
-    GLint pos = glGetUniformLocation(shaderId, name.c_str());
-    reportErrors("glGetUniformLocation");
-    osg::Vec3::value_type *temp = new osg::Vec3::value_type[3 * count];
-    for (int i = 0; i < count; ++i)
-    {
-        temp[i * 3 + 0] = value[i][0];
-        temp[i * 3 + 1] = value[i][1];
-        temp[i * 3 + 2] = value[i][2];
-    }
-    tridimGlR("glUniform3fv",glUniform3fv(pos, count, temp););
-    delete [] temp;
-}
-
-void PSVolumeRendering::setParameter(unsigned int shaderId, std::string name, osg::Vec4 *value, int count)
-{
-    if (0 == shaderId) return;
-    GLint pos = glGetUniformLocation(shaderId, name.c_str());
-    reportErrors("glGetUniformLocation");
-    osg::Vec4::value_type *temp = new osg::Vec4::value_type[4 * count];
-    for (int i = 0; i < count; ++i)
-    {
-        temp[i * 4 + 0] = value[i][0];
-        temp[i * 4 + 1] = value[i][1];
-        temp[i * 4 + 2] = value[i][2];
-        temp[i * 4 + 3] = value[i][3];
-    }
-    tridimGlR("glUniform4fv", glUniform4fv(pos, count, temp););
-    delete [] temp;
-}
-
-void PSVolumeRendering::setParameter(unsigned int shaderId, std::string name, osg::Matrix *value, int count)
-{
-    if (0 == shaderId) return;
-    GLint pos = glGetUniformLocation(shaderId, name.c_str());
-    reportErrors("glGetUniformLocation");
-    float *temp = new float[16 * count];
-    for (int m = 0; m < count; ++m)
-    {
-        for (int i = 0; i < 16; i++)
-        {
-            temp[m * 16 + i] = value[m].ptr()[i];
-        }
-    }
-    tridimGlR("glUniformMatrix4fv", glUniformMatrix4fv(pos, count, false, temp););
-    delete [] temp;
-}
-
-unsigned int PSVolumeRendering::internalCreateCustomVolume()
-{
-    if (!testFlag(INITIALIZED))
-    {
-        return 0;
-    }
-
-    CContextGuardian guard(m_pCanvas);
-    if (!guard.isCurrent())
-        return 0;
-
-    unsigned int textureId = 0;
-    glGenTextures(1, &textureId);
-
-    int currBinding = 0;
-    glGetIntegerv(GL_TEXTURE_BINDING_3D, &currBinding);
-    glBindTexture(GL_TEXTURE_3D, textureId);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
-    glBindTexture(GL_TEXTURE_3D, currBinding);
-
-    return textureId;
-}
-
-void PSVolumeRendering::internalSetDataToCustomVolume(unsigned int volumeId, vpl::img::CVolume<bool> &volume, vpl::img::CVolume<vpl::img::tPixel8> &auxVolume)
+void PSVolumeRendering::internalSetDataToCustomVolume()
 {
     tLock(*this);
     m_Error &= (0xffff - CUSTOM_DATA_NOT_SPECIFIED);
     setAndSignalFlag(CUSTOM_DATA_INVALID);
 }
 
-void PSVolumeRendering::internalSetDataToCustomVolume(unsigned int volumeId, vpl::img::CVolume<vpl::img::tPixel16> &volume, vpl::img::CVolume<vpl::img::tPixel8> &auxVolume)
-{
-    tLock(*this);
-    m_Error &= (0xffff - CUSTOM_DATA_NOT_SPECIFIED);
-    setAndSignalFlag(CUSTOM_DATA_INVALID);
-}
-
-void PSVolumeRendering::internalSetDataToCustomVolume(unsigned int volumeId, vpl::img::CVolume<vpl::img::tPixel8> &volume, vpl::img::CVolume<vpl::img::tPixel8> &auxVolume)
-{
-    tLock(*this);
-    m_Error &= (0xffff - CUSTOM_DATA_NOT_SPECIFIED);
-    setAndSignalFlag(CUSTOM_DATA_INVALID);
-}
-
-void PSVolumeRendering::internalSetDataToCustomVolume(unsigned int volumeId, vpl::img::CVolume<vpl::img::tRGBPixel> &volume, vpl::img::CVolume<vpl::img::tPixel8> &auxVolume)
-{
-    tLock(*this);
-    m_Error &= (0xffff - CUSTOM_DATA_NOT_SPECIFIED);
-    setAndSignalFlag(CUSTOM_DATA_INVALID);
-}
-
-void PSVolumeRendering::getDataFromCustomVolume(unsigned int volumeId, vpl::img::CVolume<bool> &volume)
-{
-    tLock(*this);
-    bool loadingData = testFlag(CUSTOM_DATA_INVALID);
-    bool loadingTexture = testFlag(CUSTOM_TEXTURE_INVALID);
-
-    // custom data is copied from CVolumeRenderer::m_volume_bool to PSVolumeRendering::m_customData_bool
-    if (loadingData)
-    {
-        volume.copy(m_volume_bool);
-    }
-    // custom data is copied from PSVolumeRendering::m_customData_bool to texture
-    else if (loadingTexture)
-    {
-        vpl::tSize XSize = m_customData_bool.getXSize();
-        vpl::tSize YSize = m_customData_bool.getYSize();
-        vpl::tSize ZSize = m_customData_bool.getZSize();
-
-        volume.resize(XSize, YSize, ZSize, 0);
-
-#pragma omp parallel for schedule(static) default(shared)
-        for (vpl::tSize z = 0; z < ZSize; z++)
-        {
-            for (vpl::tSize y = 0; y < YSize; y++)
-            {
-                for (vpl::tSize x = 0; x < XSize; x++)
-                {
-                    volume(x, y, z) = m_customData_bool(x, y, z);
-                }
-            }
-        }
-    }
-    // custom data is in the graphics card
-    else
-    {
-        // save state
-        GLint boundTexture, boundReadFbo;
-        glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING_EXT, &boundReadFbo);
-        glGetIntegerv(GL_TEXTURE_3D_BINDING_EXT, &boundTexture);
-
-        // create working framebuffer
-        GLuint workingFbo;
-        glGenFramebuffersEXT(1, &workingFbo);
-
-        // bind working objects
-        glBindTexture(GL_TEXTURE_3D, volumeId);
-        glBindFramebufferEXT(GL_READ_FRAMEBUFFER_EXT, workingFbo);
-        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
-
-        // get volume info
-        GLint w, h, d;
-        glGetTexLevelParameteriv(GL_TEXTURE_3D, 0, GL_TEXTURE_WIDTH, &w);
-        glGetTexLevelParameteriv(GL_TEXTURE_3D, 0, GL_TEXTURE_HEIGHT, &h);
-        glGetTexLevelParameteriv(GL_TEXTURE_3D, 0, GL_TEXTURE_DEPTH, &d);
-
-        volume.resize(w, h, d);
-
-        // grab 3D texture slice by slice
-        vpl::img::CImage<vpl::img::tPixel8, vpl::base::CRefData> slice_tPixel8(volume.getXSize(), volume.getYSize());
-        vpl::img::CImage<bool, vpl::base::CRefData> slice_bool(volume.getXSize(), volume.getYSize());
-        for (vpl::tSize z = 0; z < volume.getZSize(); ++z)
-        {
-            glFramebufferTexture3DEXT(GL_READ_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0, GL_TEXTURE_3D, volumeId, 0, z);
-            glReadBuffer(GL_COLOR_ATTACHMENT0_EXT);
-            glReadPixels(0, 0, w, h, GL_RED, GL_UNSIGNED_BYTE, slice_tPixel8.getPtr());
-
-            // convert to bool values
-            for (vpl::tSize y = 0; y < slice_bool.getYSize(); ++y)
-            {
-                for (vpl::tSize x = 0; x < slice_bool.getXSize(); ++x)
-                {
-                    vpl::img::tPixel8 value = slice_tPixel8.at(x, y);
-                    slice_bool.at(x, y) = (value != 0);
-                }
-            }
-
-            volume.setPlaneXY(z, slice_bool);
-        }
-
-        // restore state
-        glBindFramebufferEXT(GL_READ_FRAMEBUFFER_EXT, boundReadFbo);
-        glBindTexture(GL_TEXTURE_3D, boundTexture);
-
-        // clean
-        glDeleteFramebuffersEXT(1, &workingFbo);
-
-        // grab error
-        GLenum error = glGetError();
-    }
-
-    return;
-}
-
-void PSVolumeRendering::getDataFromCustomVolume(unsigned int volumeId, vpl::img::CVolume<vpl::img::tPixel16> &volume)
-{
-    tLock(*this);
-    bool loadingData = testFlag(CUSTOM_DATA_INVALID);
-    bool loadingTexture = testFlag(CUSTOM_TEXTURE_INVALID);
-
-    // custom data is copied from CVolumeRenderer::m_volume_tPixel16 to PSVolumeRendering::m_customData_tPixel16
-    if (loadingData)
-    {
-        volume.copy(m_volume_tPixel16);
-    }
-    // custom data is copied from PSVolumeRendering::m_customData_tPixel16 to texture
-    else if (loadingTexture)
-    {
-        vpl::tSize XSize = m_customData_tPixel16.getXSize();
-        vpl::tSize YSize = m_customData_tPixel16.getYSize();
-        vpl::tSize ZSize = m_customData_tPixel16.getZSize();
-
-        volume.resize(XSize, YSize, ZSize, 0);
-
-#pragma omp parallel for schedule(static) default(shared)
-        for (vpl::tSize z = 0; z < ZSize; z++)
-        {
-            for (vpl::tSize y = 0; y < YSize; y++)
-            {
-                for (vpl::tSize x = 0; x < XSize; x++)
-                {
-                    volume(x, y, z) = m_customData_tPixel16(x, y, z);
-                }
-            }
-        }
-    }
-    // custom data is in the graphics card
-    else
-    {
-        // save state
-        GLint boundTexture, boundReadFbo;
-        glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING_EXT, &boundReadFbo);
-        glGetIntegerv(GL_TEXTURE_3D_BINDING_EXT, &boundTexture);
-
-        // create working framebuffer
-        GLuint workingFbo;
-        glGenFramebuffersEXT(1, &workingFbo);
-
-        // bind working objects
-        glBindTexture(GL_TEXTURE_3D, volumeId);
-        glBindFramebufferEXT(GL_READ_FRAMEBUFFER_EXT, workingFbo);
-        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
-
-        // get volume info
-        GLint w, h, d;
-        glGetTexLevelParameteriv(GL_TEXTURE_3D, 0, GL_TEXTURE_WIDTH, &w);
-        glGetTexLevelParameteriv(GL_TEXTURE_3D, 0, GL_TEXTURE_HEIGHT, &h);
-        glGetTexLevelParameteriv(GL_TEXTURE_3D, 0, GL_TEXTURE_DEPTH, &d);
-
-        volume.resize(w, h, d);
-
-        // grab 3D texture slice by slice
-        vpl::img::CImage<vpl::img::tPixel16, vpl::base::CRefData> slice(volume.getXSize(), volume.getYSize());
-        for (vpl::tSize z = 0; z < volume.getZSize(); ++z)
-        {
-            glFramebufferTexture3DEXT(GL_READ_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0, GL_TEXTURE_3D, volumeId, 0, z);
-            glReadBuffer(GL_COLOR_ATTACHMENT0_EXT);
-            glReadPixels(0, 0, w, h, GL_RED, GL_UNSIGNED_SHORT, slice.getPtr());
-
-            volume.setPlaneXY(z, slice);
-        }
-
-        // restore state
-        glBindFramebufferEXT(GL_READ_FRAMEBUFFER_EXT, boundReadFbo);
-        glBindTexture(GL_TEXTURE_3D, boundTexture);
-
-        // clean
-        glDeleteFramebuffersEXT(1, &workingFbo);
-
-        // grab error
-        GLenum error = glGetError();
-    }
-
-    return;
-}
-
-void PSVolumeRendering::getDataFromCustomVolume(unsigned int volumeId, vpl::img::CVolume<vpl::img::tPixel8> &volume)
-{
-    tLock(*this);
-    bool loadingData = testFlag(CUSTOM_DATA_INVALID);
-    bool loadingTexture = testFlag(CUSTOM_TEXTURE_INVALID);
-
-    // custom data is copied from CVolumeRenderer::m_volume_tPixel8 to PSVolumeRendering::m_customData_tPixel8
-    if (loadingData)
-    {
-        volume.copy(m_volume_tPixel8);
-    }
-    // custom data is copied from PSVolumeRendering::m_customData_tPixel8 to texture
-    else if (loadingTexture)
-    {
-        vpl::tSize XSize = m_customData_tPixel8.getXSize();
-        vpl::tSize YSize = m_customData_tPixel8.getYSize();
-        vpl::tSize ZSize = m_customData_tPixel8.getZSize();
-
-        volume.resize(XSize, YSize, ZSize, 0);
-
-#pragma omp parallel for schedule(static) default(shared)
-        for (vpl::tSize z = 0; z < ZSize; z++)
-        {
-            for (vpl::tSize y = 0; y < YSize; y++)
-            {
-                for (vpl::tSize x = 0; x < XSize; x++)
-                {
-                    volume(x, y, z) = m_customData_tPixel8(x, y, z);
-                }
-            }
-        }
-    }
-    // custom data is in the graphics card
-    else
-    {
-        // save state
-        GLint boundTexture, boundReadFbo;
-        glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING_EXT, &boundReadFbo);
-        glGetIntegerv(GL_TEXTURE_3D_BINDING_EXT, &boundTexture);
-
-        // create working framebuffer
-        GLuint workingFbo;
-        glGenFramebuffersEXT(1, &workingFbo);
-
-        // bind working objects
-        glBindTexture(GL_TEXTURE_3D, volumeId);
-        glBindFramebufferEXT(GL_READ_FRAMEBUFFER_EXT, workingFbo);
-        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
-
-        // get volume info
-        GLint w, h, d;
-        glGetTexLevelParameteriv(GL_TEXTURE_3D, 0, GL_TEXTURE_WIDTH, &w);
-        glGetTexLevelParameteriv(GL_TEXTURE_3D, 0, GL_TEXTURE_HEIGHT, &h);
-        glGetTexLevelParameteriv(GL_TEXTURE_3D, 0, GL_TEXTURE_DEPTH, &d);
-
-        volume.resize(w, h, d);
-
-        // grab 3D texture slice by slice
-        vpl::img::CImage<vpl::img::tPixel8, vpl::base::CRefData> slice(volume.getXSize(), volume.getYSize());
-        for (vpl::tSize z = 0; z < volume.getZSize(); ++z)
-        {
-            glFramebufferTexture3DEXT(GL_READ_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0, GL_TEXTURE_3D, volumeId, 0, z);
-            glReadBuffer(GL_COLOR_ATTACHMENT0_EXT);
-            glReadPixels(0, 0, w, h, GL_RED, GL_UNSIGNED_BYTE, slice.getPtr());
-
-            volume.setPlaneXY(z, slice);
-        }
-
-        // restore state
-        glBindFramebufferEXT(GL_READ_FRAMEBUFFER_EXT, boundReadFbo);
-        glBindTexture(GL_TEXTURE_3D, boundTexture);
-
-        // clean
-        glDeleteFramebuffersEXT(1, &workingFbo);
-
-        // grab error
-        GLenum error = glGetError();
-    }
-
-    return;
-}
-
-void PSVolumeRendering::getDataFromCustomVolume(unsigned int volumeId, vpl::img::CVolume<vpl::img::tRGBPixel> &volume)
-{
-    tLock(*this);
-    bool loadingData = testFlag(CUSTOM_DATA_INVALID);
-    bool loadingTexture = testFlag(CUSTOM_TEXTURE_INVALID);
-
-    // custom data is copied from CVolumeRenderer::m_volume_tRGBPixel to PSVolumeRendering::m_customData_tRGBPixel
-    if (loadingData)
-    {
-        volume.copy(m_volume_tRGBPixel);
-    }
-    // custom data is copied from PSVolumeRendering::m_customData_tRGBPixel to texture
-    else if (loadingTexture)
-    {
-        vpl::tSize XSize = m_customData_tRGBPixel.getXSize();
-        vpl::tSize YSize = m_customData_tRGBPixel.getYSize();
-        vpl::tSize ZSize = m_customData_tRGBPixel.getZSize();
-
-        volume.resize(XSize, YSize, ZSize, 0);
-
-#pragma omp parallel for schedule(static) default(shared)
-        for (vpl::tSize z = 0; z < ZSize; z++)
-        {
-            for (vpl::tSize y = 0; y < YSize; y++)
-            {
-                for (vpl::tSize x = 0; x < XSize; x++)
-                {
-                    volume(x, y, z) = m_customData_tRGBPixel(x, y, z);
-                }
-            }
-        }
-    }
-    // custom data is in the graphics card
-    else
-    {
-        // save state
-        GLint boundTexture, boundReadFbo;
-        glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING_EXT, &boundReadFbo);
-        glGetIntegerv(GL_TEXTURE_3D_BINDING_EXT, &boundTexture);
-
-        // create working framebuffer
-        GLuint workingFbo;
-        glGenFramebuffersEXT(1, &workingFbo);
-
-        // bind working objects
-        glBindTexture(GL_TEXTURE_3D, volumeId);
-        glBindFramebufferEXT(GL_READ_FRAMEBUFFER_EXT, workingFbo);
-        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
-
-        // get volume info
-        GLint w, h, d;
-        glGetTexLevelParameteriv(GL_TEXTURE_3D, 0, GL_TEXTURE_WIDTH, &w);
-        glGetTexLevelParameteriv(GL_TEXTURE_3D, 0, GL_TEXTURE_HEIGHT, &h);
-        glGetTexLevelParameteriv(GL_TEXTURE_3D, 0, GL_TEXTURE_DEPTH, &d);
-
-        volume.resize(w, h, d);
-
-        // grab 3D texture slice by slice
-        vpl::img::CImage<vpl::img::tRGBPixel, vpl::base::CRefData> slice(volume.getXSize(), volume.getYSize());
-        for (vpl::tSize z = 0; z < volume.getZSize(); ++z)
-        {
-            glFramebufferTexture3DEXT(GL_READ_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0, GL_TEXTURE_3D, volumeId, 0, z);
-            glReadBuffer(GL_COLOR_ATTACHMENT0_EXT);
-            glReadPixels(0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, slice.getPtr());
-
-            volume.setPlaneXY(z, slice);
-        }
-
-        // restore state
-        glBindFramebufferEXT(GL_READ_FRAMEBUFFER_EXT, boundReadFbo);
-        glBindTexture(GL_TEXTURE_3D, boundTexture);
-
-        // clean
-        glDeleteFramebuffersEXT(1, &workingFbo);
-
-        // grab error
-        GLenum error = glGetError();
-    }
-
-    return;
-}
 
 void PSVolumeRendering::resetLookupTables()
 {
@@ -1734,29 +322,34 @@ void PSVolumeRendering::resetLookupTables()
 
 void PSVolumeRendering::updateLookupTables(std::string lutName)
 {
-    std::vector<std::pair<int, std::string> > luts;
-    luts.push_back(std::pair<int, std::string>(MIP_SOFT,     "MIP_SOFT"));
-    luts.push_back(std::pair<int, std::string>(MIP_HARD,     "MIP_HARD"));
-    luts.push_back(std::pair<int, std::string>(XRAY_SOFT,    "XRAY_SOFT"));
-    luts.push_back(std::pair<int, std::string>(XRAY_HARD,    "XRAY_HARD"));
-    luts.push_back(std::pair<int, std::string>(SHA_AIR,      "SHA_AIR"));
-    luts.push_back(std::pair<int, std::string>(SHA_TRAN,     "SHA_TRAN"));
-    luts.push_back(std::pair<int, std::string>(SHA_BONE0,    "SHA_BONE0"));
-    luts.push_back(std::pair<int, std::string>(SHA_BONE1,    "SHA_BONE1"));
-    luts.push_back(std::pair<int, std::string>(SHA_BONE2,    "SHA_BONE2"));
-    luts.push_back(std::pair<int, std::string>(SURFACE_SKIN, "SURFACE_SKIN"));
-    luts.push_back(std::pair<int, std::string>(SURFACE_BONE, "SURFACE_BONE"));
+    std::vector<std::pair<ELookups, std::string> > luts;
+    luts.push_back(std::make_pair(ELookups::MIP_SOFT,     "MIP_SOFT"));
+    luts.push_back(std::make_pair(ELookups::MIP_HARD,     "MIP_HARD"));
+    luts.push_back(std::make_pair(ELookups::XRAY_SOFT,    "XRAY_SOFT"));
+    luts.push_back(std::make_pair(ELookups::XRAY_HARD,    "XRAY_HARD"));
+    luts.push_back(std::make_pair(ELookups::SHA_AIR,      "SHA_AIR"));
+    luts.push_back(std::make_pair(ELookups::SHA_TRAN,     "SHA_TRAN"));
+    luts.push_back(std::make_pair(ELookups::SHA_BONE0,    "SHA_BONE0"));
+    luts.push_back(std::make_pair(ELookups::SHA_BONE1,    "SHA_BONE1"));
+    luts.push_back(std::make_pair(ELookups::SHA_BONE2,    "SHA_BONE2"));
+    luts.push_back(std::make_pair(ELookups::SURFACE_SKIN, "SURFACE_SKIN"));
+    luts.push_back(std::make_pair(ELookups::SURFACE_BONE, "SURFACE_BONE"));
 
     #pragma omp parallel for
     for (int i = 0; i < luts.size(); ++i)
     {
         if ((lutName.empty()) || (lutName == m_lookupTables[luts[i].second].name()))
         {
-            updateLookupTable(m_lookupTables[luts[i].second], m_internalLookupTables[luts[i].first], m_skipConditions[luts[i].first]);
+            updateLookupTable(m_lookupTables[luts[i].second], m_internalLookupTables[static_cast<int>(luts[i].first)], m_skipConditions[static_cast<int>(luts[i].first)]);
         }
     }
 
     setLut(getLut());
+}
+
+void PSVolumeRendering::setCustomShaderUniforms(std::vector<osg::ref_ptr<osg::Uniform>>&& uniforms)
+{
+    m_customUniforms = std::move(uniforms);
 }
 
 void PSVolumeRendering::updateLookupTable(CLookupTable &lookupTable, unsigned short *internalLookupTable, osg::Vec4 &skipCondition)
@@ -1789,13 +382,6 @@ void PSVolumeRendering::updateLookupTable(CLookupTable &lookupTable, unsigned sh
     }
 }
 
-void PSVolumeRendering::internalDeleteCustomVolume(unsigned int volumeId)
-{
-    glDeleteTextures(1, &volumeId);
-}
-
-///////////////////////////////////////////////////////////////////////////////
-//
 float PSVolumeRendering::getRealXSize() const
 {
     return m_spParams->RealXSize;
@@ -1811,8 +397,6 @@ float PSVolumeRendering::getRealZSize() const
     return m_spParams->RealZSize;
 }
 
-///////////////////////////////////////////////////////////////////////////////
-//
 void PSVolumeRendering::redraw(bool bEraseBackground)
 {
     if (m_pCanvas)
@@ -1821,17 +405,10 @@ void PSVolumeRendering::redraw(bool bEraseBackground)
     }
 }
 
-///////////////////////////////////////////////////////////////////////////////
-//
 void PSVolumeRendering::enable(bool bEnable)
 {
     m_Enabled = bEnable;
 
-    // reload shaders
-    if ((m_Enabled) && (m_Flags & INITIALIZED))
-    {
-        reloadShader();
-    }
     // signal others that VR has been enabled
     VPL_SIGNAL(SigVREnabledChange).invoke(bEnable);
 
@@ -1842,20 +419,9 @@ void PSVolumeRendering::enable(bool bEnable)
     }
 }
 
-///////////////////////////////////////////////////////////////////////////////
-// are we able to render?
-bool PSVolumeRendering::canStart()
-{
-    tLock Lock(*this);
+//! Returns true of the rendering is enabled.
 
-    // Set the current OpenGL rendering context
-    CContextGuardian guard(m_pCanvas);
-    if (!guard.isCurrent())
-        return false;
-    
-    bool bResult = internalCanStart();
-    return bResult;
-}
+inline bool PSVolumeRendering::isEnabled() const { return m_Enabled; }
 
 ///////////////////////////////////////////////////////////////////////////////
 // take CDensityVolume and copy data and information
@@ -1896,13 +462,11 @@ void PSVolumeRendering::updateRenderTargets()
     setFlag(OSR_INVALID);
 }
 
-///////////////////////////////////////////////////////////////////////////////
-//
 void PSVolumeRendering::createLookupTables()
 {
     m_internalLookupTables.clear();
     m_skipConditions.clear();
-    for (int i = 0; i < LOOKUPS_COUNT; ++i)
+    for (int i = 0; i < static_cast<int>(ELookups::LOOKUPS_COUNT); ++i)
     {
         m_internalLookupTables.push_back(new unsigned short[4 * LUT_2D_W * LUT_2D_H]);
         m_skipConditions.push_back(osg::Vec4(0.0f, 1.0f, 0.0f, 1.0f));
@@ -2052,49 +616,6 @@ void PSVolumeRendering::release()
     m_Enabled = false;
     m_Error = DATA_NOT_SPECIFIED;
 
-    if (testFlag(INITIALIZED))
-    {
-        // delete textures
-        glDeleteTextures(1, &m_spGLData->VolumeTexture);
-        glDeleteTextures(1, &m_spGLData->LookUpTexture);
-        glDeleteTextures(1, &m_spGLData->AuxVolumeTexture);
-        glDeleteTextures(1, &m_spGLData->CustomAuxVolumeTexture);
-
-        glDeleteTextures(1, &m_spGLData->RaysStartEnd);
-        glDeleteTextures(1, &m_spGLData->BicKerTexture);
-        glDeleteTextures(1, &m_spGLData->RTTexture);
-        glDeleteTextures(1, &m_spGLData->DEPTexture);
-        glDeleteTextures(1, &m_spGLData->NoiseTexture);
-
-        glDeleteTextures(1, &m_spGLData->GeometryDepthTexture);
-
-        // delete framebuffers
-        glDeleteFramebuffersEXT(1, &m_spGLData->OffScreenFramebuffer0);
-        glDeleteFramebuffersEXT(1, &m_spGLData->OffScreenFramebuffer1);
-        glDeleteFramebuffersEXT(1, &m_spGLData->ResizeFramebuffer);
-
-        // delete shaders
-        glDeleteProgram(m_spGLData->PshaderFBO);
-        for (int i = 0; i < SHADERS_COUNT - 1; ++i)
-        {
-            glDeleteProgram(m_spGLData->PshaderRayCast[i]);
-            glDeleteShader(m_spGLData->shaderRayCast[i]);
-        }
-        glDeleteProgram(m_spGLData->PshaderResize);
-        glDeleteShader(m_spGLData->vertexShader);
-        glDeleteShader(m_spGLData->fsQuadVS);
-
-        // VAO
-        glDeleteVertexArraysX(conf::NumOfBatches, m_spGLData->VAOBox);
-#ifdef USE_VAORECT
-        glDeleteVertexArraysX(1, &m_spGLData->VAORect);
-#endif
-
-        // VBO
-        glDeleteBuffersARB(conf::NumOfBatches, m_spGLData->VBOBox);
-        glDeleteBuffersARB(1, &m_spGLData->VBORect);
-    }
-
     // Clear all flags
     m_Flags = PSVR_NO_FLAGS;
 }
@@ -2220,16 +741,9 @@ bool PSVolumeRendering::internalUploadData()
     // Scaling factor
     static const vpl::img::tDensityPixel voxelMax = vpl::img::CPixelTraits<vpl::img::tDensityPixel>::getPixelMax();
     static const vpl::img::tDensityPixel voxelMin = vpl::img::CPixelTraits<vpl::img::tDensityPixel>::getPixelMin();
-#ifdef FULL_3D_TEXTURE
+
     static const float dataScale = 65536.0f / float(voxelMax - voxelMin);
     static const float skipScale = 255.0f / 65536.0f;
-#else
-    static const float dataScale = 255.0f / float(voxelMax - voxelMin);
-    static const float skipScale = 1.0f;
-#endif // FULL_3D_TEXTURE
-
-    //osg::Timer timer;
-    //osg::Timer_t t1 = timer.tick();
 
     // Check if the data are empty (i.e. reset of the storage, etc.)
     vpl::img::tDensityPixel MaxValue = vpl::img::getMax<vpl::img::tDensityPixel>(*workingPtr);
@@ -2239,7 +753,7 @@ bool PSVolumeRendering::internalUploadData()
     if (bEmptyData)
     {
         // Just clear the internal volume
-        m_VolumeData.fillEntire(tVolumeData::tVoxel(0));
+        m_VolumeData.fillEntire(vpl::img::CVolume<vpl::img::tPixel16>::tVoxel(0));
     }
     else
     {
@@ -2259,7 +773,7 @@ bool PSVolumeRendering::internalUploadData()
                     Point.x() = 0.0;
                     for (vpl::tSize x = 0; x < m_spParams->XSize; x++, Point.x() += XStep)
                     {
-                        tVolumeData::tVoxel normalizedPixel = tVolumeData::tVoxel(float(workingPtr->interpolate(Point) - voxelMin) * dataScale);
+                        auto normalizedPixel = vpl::img::CVolume<vpl::img::tPixel16>::tVoxel(float(workingPtr->interpolate(Point) - voxelMin) * dataScale);
                         m_VolumeData(x, y, z) = normalizedPixel;
                     }
                 }
@@ -2269,7 +783,6 @@ bool PSVolumeRendering::internalUploadData()
         // No sub-sampling is required...
         else
         {
-            //int clk = clock();
 //#define MDSTK_GAUSS
 #ifdef MDSTK_GAUSS
             // Gaussian filter
@@ -2291,22 +804,17 @@ bool PSVolumeRendering::internalUploadData()
 #else
                         float Pixel = float(getFilteredVal(workingPtr, x, y, z));
 #endif
-                        tVolumeData::tVoxel normalizedPixel = tVolumeData::tVoxel((Pixel - voxelMin) * dataScale);
-                        //tVolumeData::tVoxel normalizedPixel = tVolumeData::tVoxel(float(workingPtr->at(x, y, z) - voxelMin) * dataScale);
+                        auto normalizedPixel = vpl::img::CVolume<vpl::img::tPixel16>::tVoxel((Pixel - voxelMin) * dataScale);
                         m_VolumeData(x, y, z) = normalizedPixel;
                    }
                 }
             }
-            //clk = clock()-clk;
-            //char sss[64]={};
-            //sprintf(sss,"%d\n",clk);
-            //OutputDebugStringA(sss);
         }
 
         // Sobel filters
-        vpl::img::CVolumeSobelX<tVolumeData> SobelX;
-        vpl::img::CVolumeSobelY<tVolumeData> SobelY;
-        vpl::img::CVolumeSobelZ<tVolumeData> SobelZ;
+        vpl::img::CVolumeSobelX<vpl::img::CVolume<vpl::img::tPixel16>> SobelX;
+        vpl::img::CVolumeSobelY<vpl::img::CVolume<vpl::img::tPixel16>> SobelY;
+        vpl::img::CVolumeSobelZ<vpl::img::CVolume<vpl::img::tPixel16>> SobelZ;
 
         // Gradient normalization
         float gradScale = 0.33f * skipScale;
@@ -2360,763 +868,373 @@ bool PSVolumeRendering::internalUploadData()
         }
     }
 
-    //osg::Timer_t t2 = timer.tick();
-    //double diff1 = timer.delta_m(t1, t2);
-    //osg::Timer_t t3 = timer.tick();
-    //double diff2 = timer.delta_m(t2, t3);
-
     // O.K.
     return true;
 }
 
-///////////////////////////////////////////////////////////////////////////////
-//
-bool PSVolumeRendering::storeVolumeToTexture(vpl::img::CVolume<vpl::img::tPixel8> volume)
+void PSVolumeRendering::storeVolumeToTexture(vpl::img::CVolume<vpl::img::tPixel8>& volume, osg::Texture3D* texture)
 {
-    //VPL_LOG_INFO("storeVolumeToTexture tPixel8 " << volume.getXSize() << "x" << volume.getYSize() << "x" << volume.getZSize());
-    if (0 == volume.getXSize() || 0 == volume.getYSize() || 0 == volume.getZSize()) // hotfix - should not happen, but there is some flags related bug in the code
-    {
-        VPL_LOG_INFO("storeVolumeToTexture tPixel8 empty volume!");
-        return false;
-    }
-
-    // create texture
-    glTexImage3D(GL_TEXTURE_3D, 0,
-        GL_LUMINANCE8,
-        volume.getXSize(), volume.getYSize(), volume.getZSize(),
-        0, GL_LUMINANCE,
-        GL_UNSIGNED_BYTE,
-        NULL);
-
-    if (reportErrors("storeVolumeToTexture::glTexImage3D"))
-        return false;
+    auto sliceSize = volume.getXSize() * volume.getYSize();
+    auto data = new unsigned char[volume.getZSize() * sliceSize];
 
     // fill it with data slice by slice
     vpl::img::CImage<vpl::img::tPixel8, vpl::base::CRefData> slice(volume.getXSize(), volume.getYSize());
+
     for (vpl::tSize z = 0; z < volume.getZSize(); ++z)
     {
         volume.getPlaneXY(z, slice);
 
-        glTexSubImage3D(GL_TEXTURE_3D, 0,
-            0, 0, z,
-            volume.getXSize(), volume.getYSize(), 1,
-            GL_LUMINANCE,
-            GL_UNSIGNED_BYTE,
-            slice.getPtr());
+        std::memcpy(data + z * sliceSize, slice.getPtr(), sliceSize);
     }
-    return true;
+
+    texture->getImage()->setImage(volume.getXSize(), volume.getYSize(), volume.getZSize(), GL_R8, GL_RED, GL_UNSIGNED_BYTE, data, osg::Image::USE_NEW_DELETE);
+    texture->dirtyTextureObject();
 }
 
-bool PSVolumeRendering::storeVolumeToTexture(vpl::img::CVolume<vpl::img::tPixel16> volume)
+void PSVolumeRendering::storeVolumeToTexture(vpl::img::CVolume<vpl::img::tPixel16>& volume, osg::Texture3D* texture)
 {
-    //VPL_LOG_INFO("storeVolumeToTexture tPixel16 " << volume.getXSize() << "x" << volume.getYSize() << "x" << volume.getZSize());
-    if (0 == volume.getXSize() || 0 == volume.getYSize() || 0 == volume.getZSize()) // hotfix - should not happen, but there is some flags related bug in the code
-    {
-        VPL_LOG_INFO("storeVolumeToTexture tPixel16 empty volume!");
-        return false;
-    }
-
-    // create texture
-    glTexImage3D(GL_TEXTURE_3D, 0,
-        GL_LUMINANCE16,
-        volume.getXSize(), volume.getYSize(), volume.getZSize(),
-        0, GL_LUMINANCE,
-        GL_UNSIGNED_SHORT,
-        NULL);
-
-    if (reportErrors("storeVolumeToTexture::glTexImage3D"))
-        return false;
+    auto sliceSize = volume.getXSize() * volume.getYSize() * 2;
+    auto data = new unsigned char[volume.getZSize() * sliceSize];
 
     // fill it with data slice by slice
     vpl::img::CImage<vpl::img::tPixel16, vpl::base::CRefData> slice(volume.getXSize(), volume.getYSize());
+
     for (vpl::tSize z = 0; z < volume.getZSize(); ++z)
     {
         volume.getPlaneXY(z, slice);
 
-        glTexSubImage3D(GL_TEXTURE_3D, 0,
-            0, 0, z,
-            volume.getXSize(), volume.getYSize(), 1,
-            GL_LUMINANCE,
-            GL_UNSIGNED_SHORT,
-            slice.getPtr());
+        std::memcpy(data + z * sliceSize, slice.getPtr(), sliceSize);
     }
 
-    return true;
+    texture->getImage()->setImage(volume.getXSize(), volume.getYSize(), volume.getZSize(), GL_R16, GL_RED, GL_UNSIGNED_SHORT, data, osg::Image::USE_NEW_DELETE);
+    texture->dirtyTextureObject();
 }
 
-bool PSVolumeRendering::storeVolumeToTexture(vpl::img::CVolume<vpl::img::tRGBPixel> volume)
+void PSVolumeRendering::storeVolumeToTexture(vpl::img::CVolume<vpl::img::tRGBPixel>& volume, osg::Texture3D* texture)
 {
-    //VPL_LOG_INFO("storeVolumeToTexture tRGBPixel " << volume.getXSize() << "x" << volume.getYSize() << "x" << volume.getZSize());
-    if (0 == volume.getXSize() || 0 == volume.getYSize() || 0 == volume.getZSize()) // hotfix - should not happen, but there is some flags related bug in the code
-    {
-        VPL_LOG_INFO("storeVolumeToTexture tRGBPixel empty volume!");
-        return false;
-    }
-
-    // create texture
-    glTexImage3D(GL_TEXTURE_3D, 0,
-        GL_RGBA8,
-        volume.getXSize(), volume.getYSize(), volume.getZSize(),
-        0, GL_RGBA,
-        GL_UNSIGNED_BYTE,
-        NULL);
-
-    if (reportErrors("storeVolumeToTexture::glTexImage3D"))
-        return false;
+    auto sliceSize = volume.getXSize() * volume.getYSize() * 4;
+    auto data = new unsigned char[volume.getZSize() * sliceSize];
 
     // fill it with data slice by slice
     vpl::img::CImage<vpl::img::tRGBPixel, vpl::base::CRefData> slice(volume.getXSize(), volume.getYSize());
+
     for (vpl::tSize z = 0; z < volume.getZSize(); ++z)
     {
         volume.getPlaneXY(z, slice);
 
-        glTexSubImage3D(GL_TEXTURE_3D, 0,
-            0, 0, z,
-            volume.getXSize(), volume.getYSize(), 1,
-            GL_RGBA,
-            GL_UNSIGNED_BYTE,
-            slice.getPtr());
+        std::memcpy(data + z * sliceSize, slice.getPtr(), sliceSize);
     }
 
-    return true;
-}
-
-///////////////////////////////////////////////////////////////////////////////
-//
-bool PSVolumeRendering::internalCanStart()
-{
-    if (!m_pCanvas)
-    {
-        m_Error |= UNDEFINED_GL_CANVAS;
-        VPL_LOG_INFO("Error: OpengGL canvas was not set!");
-        return false;
-    }
-
-    // Check size of graphic card memory
-    try
-    {        
-        //std::string ssName = Desc.getAdapterName();
-        unsigned int uiMem = Desc.getAdapterRAM();
-        if (uiMem < 256)
-        {
-            m_Error |= UNSUPPORTED_GRAPHIC_CARD;
-            VPL_LOG_INFO("Error: Not enough graphic memory!");
-            return false;
-        }
-    }
-    catch (...)
-    {
-        //m_Error |= UNSUPPORTED_GRAPHIC_CARD;
-        //VPL_LOG_INFO("Error: Cannot inspect your graphic card!");
-        //return false;
-    }
-
-    // First-time init of the GLEW library
-    if (m_GlewInit == 0)
-    {
-        m_GlewInit = -1;
-        glewExperimental = GL_TRUE;
-        int res = glewInit();
-        if (res == GLEW_OK)
-            m_GlewInit = 1;
-        if (res == GLEW_ERROR_NO_GL_VERSION)
-            m_GlewInit = 0; // no valid context, try again later
-    }
-    if (m_GlewInit <= 0)
-    {
-        m_Error |= GLEW_INIT_FAILED;
-        if (m_GlewInit != 0) // will try again later
-            VPL_LOG_INFO("Error: Cannot initialize the GLEW library!");
-        return false;
-    }
-
-    // check maximum size of volume texture
-    if (m_maximumVolumeSize == -1)
-    {
-        GLuint texture;
-        glGenTextures(1, &texture);
-        glBindTexture(GL_TEXTURE_3D, texture);
-        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
-
-        long maximumSize = 1;
-        int maximumTextureDimensions;
-        glGetIntegerv(GL_MAX_3D_TEXTURE_SIZE, &maximumTextureDimensions);
-        for (long size = 1; size <= maximumTextureDimensions; size *= 2)
-        {
-            glTexImage3D(GL_PROXY_TEXTURE_3D, 0, GL_RGB, size, size, size, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
-            GLenum error = glGetError();
-            int w, h, d;
-            glGetTexLevelParameteriv(GL_PROXY_TEXTURE_3D, 0, GL_TEXTURE_WIDTH, &w);
-            glGetTexLevelParameteriv(GL_PROXY_TEXTURE_3D, 0, GL_TEXTURE_HEIGHT, &h);
-            glGetTexLevelParameteriv(GL_PROXY_TEXTURE_3D, 0, GL_TEXTURE_DEPTH, &d);
-
-            if ((error == GL_NO_ERROR) && (w == size) && (h == size) && (d == size))
-            {
-                maximumSize = size;
-            }
-            else
-            {
-                break;
-            }
-        }
-        glDeleteTextures(1, &texture);
-
-        m_maximumVolumeSize = maximumSize;
-    }
-
-    // Check the OpenGL version
-    if (!glewIsSupported("GL_VERSION_2_1") ||
-        !glewIsSupported("GL_ARB_shading_language_100") ||
-        !glewIsSupported("GL_ARB_vertex_buffer_object") ||
-        !glewIsSupported("GL_ARB_vertex_array_object") ||
-        !glewIsSupported("GL_EXT_framebuffer_object") ||
-        //!glewIsSupported("GL_EXT_gpu_shader4") ||
-        !glTexImage3D || !glCreateShader || !glGetUniformLocation ||
-        !glFramebufferTexture2DEXT || !glGenBuffers)
-    {
-        m_Error |= UNSUPPORTED_SHADER_MODEL;
-        VPL_LOG_INFO("Error: Unsupported graphic hardware (OpenGL 2.1 required)!");
-        if (!glewIsSupported("GL_VERSION_2_1"))
-            VPL_LOG_INFO("GL_VERSION_2_1 not supported");
-        if (!glewIsSupported("GL_ARB_shading_language_100"))
-            VPL_LOG_INFO("GL_ARB_shading_language_100 not supported");
-        if (!glewIsSupported("GL_ARB_vertex_buffer_object"))
-            VPL_LOG_INFO("GL_ARB_vertex_buffer_object not supported");
-        if (!glewIsSupported("GL_ARB_vertex_array_object"))
-            VPL_LOG_INFO("GL_ARB_vertex_array_object not supported");
-        if (!glewIsSupported("GL_EXT_framebuffer_object"))
-            VPL_LOG_INFO("GL_EXT_framebuffer_object not supported");
-        if (!glTexImage3D || !glCreateShader || !glGetUniformLocation || !glFramebufferTexture2DEXT || !glGenBuffers)
-            VPL_LOG_INFO("Some gl functions missing");
-        return false;
-    }
-    if (sizeof(tCoords) != (3 * sizeof(float)))
-    {
-        m_Error |= UNSUPPORTED_SHADER_MODEL;
-        VPL_LOG_INFO("Error: Unsupported memory alignment!");
-        return false;
-    }
-
-    // O.K.
-    return true;
+    texture->getImage()->setImage(volume.getXSize(), volume.getYSize(), volume.getZSize(), GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE, data, osg::Image::USE_NEW_DELETE);
+    texture->dirtyTextureObject();
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 // first-time initialization of OpenGL state, textures, shaders, lookups, ...
 bool PSVolumeRendering::internalInitRendering()
 {
-    // Save current state
-    bool bVertexArray = glIsEnabled(GL_VERTEX_ARRAY);
-    bool bTexCoordArray = glIsEnabled(GL_TEXTURE_COORD_ARRAY);
-    bool bNormalArray = glIsEnabled(GL_NORMAL_ARRAY);
-    bool bColorArray = glIsEnabled(GL_COLOR_ARRAY);
-    bool bIndexArray = glIsEnabled(GL_INDEX_ARRAY);
-    bool bSecondaryColorArray = glIsEnabled(GL_SECONDARY_COLOR_ARRAY);
-    bool bEdgeFlagArray = glIsEnabled(GL_EDGE_FLAG_ARRAY);
-    bool bFogCoordArray = glIsEnabled(GL_FOG_COORD_ARRAY);
-
-    GLint arrayBuffer, elementArrayBuffer;
-    glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &arrayBuffer);
-    glGetIntegerv(GL_ELEMENT_ARRAY_BUFFER_BINDING, &elementArrayBuffer);
-
-    m_ErrorStrings.clear();
-
     // Already initialized?
     if (testFlag(INITIALIZED))
     {
         return true;
     }
 
-    bool retVal = true;
-    int glerr = 0;
+    m_textureRaysStartEnd = new osg::Texture3D();
+    m_textureRaysStartEnd->setFilter(osg::Texture::MIN_FILTER, osg::Texture::NEAREST);
+    m_textureRaysStartEnd->setFilter(osg::Texture::MAG_FILTER, osg::Texture::NEAREST);
+    m_textureRaysStartEnd->setWrap(osg::Texture::WRAP_S, osg::Texture::CLAMP_TO_EDGE);
+    m_textureRaysStartEnd->setWrap(osg::Texture::WRAP_T, osg::Texture::CLAMP_TO_EDGE);
+    m_textureRaysStartEnd->setWrap(osg::Texture::WRAP_R, osg::Texture::CLAMP_TO_EDGE);
+    m_textureRaysStartEnd->setInternalFormat(GL_RGB32F);
+    m_textureRaysStartEnd->setSourceFormat(GL_RGB);
+    m_textureRaysStartEnd->setSourceType(GL_FLOAT);
 
-    // general OpenGL settings
-    //glClearColor(0.2f, 0.2f, 0.4f, 0.0f);
-    //glClearDepth(1.0f);
-    //glEnable(GL_DEPTH_TEST);
-    //glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST);
-    //glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_FASTEST);
-    {
-        GLenum error = glGetError();
-        if (GL_NO_ERROR != error)
-        {
-            m_Error |= INIT_FAILED;
-            return false;
-        }
-    }
-    glGetErrors(""); // reset gl errors
+    m_textureVolumeRender = new osg::Texture2D();
+    m_textureVolumeRender->setFilter(osg::Texture::MIN_FILTER, osg::Texture::NEAREST);
+    m_textureVolumeRender->setFilter(osg::Texture::MAG_FILTER, osg::Texture::NEAREST);
+    m_textureVolumeRender->setWrap(osg::Texture::WRAP_S, osg::Texture::CLAMP_TO_EDGE);
+    m_textureVolumeRender->setWrap(osg::Texture::WRAP_T, osg::Texture::CLAMP_TO_EDGE);
+    m_textureVolumeRender->setInternalFormat(GL_RGBA); 
 
+    m_textureDepth = new osg::Texture2D();
+    m_textureDepth->setFilter(osg::Texture::MIN_FILTER, osg::Texture::LINEAR);
+    m_textureDepth->setFilter(osg::Texture::MAG_FILTER, osg::Texture::LINEAR);
+    m_textureDepth->setWrap(osg::Texture::WRAP_S, osg::Texture::CLAMP_TO_EDGE);
+    m_textureDepth->setWrap(osg::Texture::WRAP_T, osg::Texture::CLAMP_TO_EDGE);
+    m_textureDepth->setInternalFormat(GL_DEPTH24_STENCIL8);
+    m_textureDepth->setSourceFormat(GL_DEPTH_STENCIL);
+    m_textureDepth->setSourceType(GL_UNSIGNED_INT_24_8);
 
-    // generate textures
-    glGenTextures(1, &m_spGLData->VolumeTexture);
-    glGenTextures(1, &m_spGLData->LookUpTexture);
-    glGenTextures(1, &m_spGLData->AuxVolumeTexture);
-    glGenTextures(1, &m_spGLData->CustomAuxVolumeTexture);
+    m_fboFrontBox = new osg::FrameBufferObject();
+    m_fboFrontBox->setAttachment(osg::Camera::COLOR_BUFFER0, osg::FrameBufferAttachment(m_textureRaysStartEnd, 0));
 
-    glGenTextures(1, &m_spGLData->RaysStartEnd);
-    glGenTextures(1, &m_spGLData->BicKerTexture);
-    glGenTextures(1, &m_spGLData->RTTexture);
-    glGenTextures(1, &m_spGLData->DEPTexture);
-    glGenTextures(1, &m_spGLData->NoiseTexture);
+    m_fboBackBox = new osg::FrameBufferObject();
+    m_fboBackBox->setAttachment(osg::Camera::COLOR_BUFFER0, osg::FrameBufferAttachment(m_textureRaysStartEnd, 1));
 
-    glGenTextures(1, &m_spGLData->GeometryDepthTexture);
+    m_fboDepth = new osg::FrameBufferObject();
+    m_fboDepth->setAttachment(osg::Camera::DEPTH_BUFFER, osg::FrameBufferAttachment(m_textureDepth));
 
-    // generate framebuffers
-    glGenFramebuffersEXT(1, &m_spGLData->OffScreenFramebuffer0);
-    glGenFramebuffersEXT(1, &m_spGLData->OffScreenFramebuffer1);
-    glGenFramebuffersEXT(1, &m_spGLData->ResizeFramebuffer);
+    m_fboVolumeRender = new osg::FrameBufferObject();
+    m_fboVolumeRender->setAttachment(osg::Camera::COLOR_BUFFER0, osg::FrameBufferAttachment(m_textureVolumeRender));
 
     // Setup 3D texture
     ///////////////////////////////////////////////////////////////////////////
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_3D, m_spGLData->VolumeTexture);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+    m_textureVolume = new osg::Texture3D(new osg::Image());
+    m_textureVolume->setFilter(osg::Texture::MIN_FILTER, osg::Texture::LINEAR);
+    m_textureVolume->setFilter(osg::Texture::MAG_FILTER, osg::Texture::LINEAR);
+    m_textureVolume->setWrap(osg::Texture::WRAP_S, osg::Texture::CLAMP_TO_EDGE);
+    m_textureVolume->setWrap(osg::Texture::WRAP_T, osg::Texture::CLAMP_TO_EDGE);
+    m_textureVolume->setWrap(osg::Texture::WRAP_R, osg::Texture::CLAMP_TO_EDGE);
+    m_textureVolume->setUseHardwareMipMapGeneration(false);
+    m_textureVolume->setResizeNonPowerOfTwoHint(false);
 
-    // Create the texture
-    //glPixelStorei(GL_UNPACK_ALIGNMENT, 2);
-    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_ALIGNMENT, 4););
-    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_SWAP_BYTES, 0););
-    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_LSB_FIRST, 0););
-    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_ROW_LENGTH, 0););
-    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_ROWS, 0););
-    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0););
-    storeVolumeToTexture(m_VolumeData);
-#ifndef __APPLE__
-    {
-        GLenum error = glGetError();
+    storeVolumeToTexture(m_VolumeData, m_textureVolume);
 
-        int w, h, d;
-        glGetTexLevelParameteriv(GL_TEXTURE_3D, 0, GL_TEXTURE_WIDTH, &w);
-        glGetTexLevelParameteriv(GL_TEXTURE_3D, 0, GL_TEXTURE_HEIGHT, &h);
-        glGetTexLevelParameteriv(GL_TEXTURE_3D, 0, GL_TEXTURE_DEPTH, &d);
-
-        if ((error != GL_NO_ERROR) || (w != m_VolumeData.getXSize()) || (h != m_VolumeData.getYSize()) || (d != m_VolumeData.getZSize()))
-        {
-            m_Error |= INIT_FAILED;
-            VPL_LOG_INFO("Error: Cannot initialize 3D texture!");
-            return false;
-        }
-    }
-#endif
+    // Setup aux 3D texture
+    ///////////////////////////////////////////////////////////////////////////
+    m_textureCurrentVolume = new osg::Texture3D(new osg::Image());
+    m_textureCurrentVolume->setFilter(osg::Texture::MIN_FILTER, osg::Texture::NEAREST);
+    m_textureCurrentVolume->setFilter(osg::Texture::MAG_FILTER, osg::Texture::NEAREST);
+    m_textureCurrentVolume->setWrap(osg::Texture::WRAP_S, osg::Texture::CLAMP_TO_EDGE);
+    m_textureCurrentVolume->setWrap(osg::Texture::WRAP_T, osg::Texture::CLAMP_TO_EDGE);
+    m_textureCurrentVolume->setWrap(osg::Texture::WRAP_R, osg::Texture::CLAMP_TO_EDGE);
+    m_textureCurrentVolume->setUseHardwareMipMapGeneration(false);
+    m_textureCurrentVolume->setResizeNonPowerOfTwoHint(false);
 
     // Setup skipping 3D texture
     ///////////////////////////////////////////////////////////////////////////
-    glActiveTexture(GL_TEXTURE1);
-    glBindTexture(GL_TEXTURE_3D, m_spGLData->AuxVolumeTexture);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+    m_textureAuxVolume = new osg::Texture3D(new osg::Image());
+    m_textureAuxVolume->setFilter(osg::Texture::MIN_FILTER, osg::Texture::NEAREST);
+    m_textureAuxVolume->setFilter(osg::Texture::MAG_FILTER, osg::Texture::NEAREST);
+    m_textureAuxVolume->setWrap(osg::Texture::WRAP_S, osg::Texture::CLAMP_TO_EDGE);
+    m_textureAuxVolume->setWrap(osg::Texture::WRAP_T, osg::Texture::CLAMP_TO_EDGE);
+    m_textureAuxVolume->setWrap(osg::Texture::WRAP_R, osg::Texture::CLAMP_TO_EDGE);
+    m_textureAuxVolume->setUseHardwareMipMapGeneration(false);
+    m_textureAuxVolume->setResizeNonPowerOfTwoHint(false);
 
-    // Create the texture
-    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_ALIGNMENT, 4););
-    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_SWAP_BYTES, 0););
-    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_LSB_FIRST, 0););
-    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_ROW_LENGTH, 0););
-    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_ROWS, 0););
-    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0););
-    storeVolumeToTexture(m_AuxVolumeData);
-#ifndef __APPLE__
-    {
-        GLenum error = glGetError();
+    storeVolumeToTexture(m_AuxVolumeData, m_textureAuxVolume);
 
-        int w, h, d;
-        glGetTexLevelParameteriv(GL_TEXTURE_3D, 0, GL_TEXTURE_WIDTH, &w);
-        glGetTexLevelParameteriv(GL_TEXTURE_3D, 0, GL_TEXTURE_HEIGHT, &h);
-        glGetTexLevelParameteriv(GL_TEXTURE_3D, 0, GL_TEXTURE_DEPTH, &d);
-
-        if ((error != GL_NO_ERROR) || (w != m_AuxVolumeData.getXSize()) || (h != m_AuxVolumeData.getYSize()) || (d != m_AuxVolumeData.getZSize()))
-        {
-            m_Error |= INIT_FAILED;
-            VPL_LOG_INFO("Error: Cannot initialize skipping 3D texture!");
-            return false;
-        }
-    }
-#endif
+    m_textureCustomAuxVolume = new osg::Texture3D(new osg::Image());
+    m_textureCustomAuxVolume->setFilter(osg::Texture::MIN_FILTER, osg::Texture::NEAREST);
+    m_textureCustomAuxVolume->setFilter(osg::Texture::MAG_FILTER, osg::Texture::NEAREST);
+    m_textureCustomAuxVolume->setWrap(osg::Texture::WRAP_S, osg::Texture::CLAMP_TO_EDGE);
+    m_textureCustomAuxVolume->setWrap(osg::Texture::WRAP_T, osg::Texture::CLAMP_TO_EDGE);
+    m_textureCustomAuxVolume->setWrap(osg::Texture::WRAP_R, osg::Texture::CLAMP_TO_EDGE);
+    m_textureCustomAuxVolume->setUseHardwareMipMapGeneration(false);
+    m_textureCustomAuxVolume->setResizeNonPowerOfTwoHint(false);
 
     // LUT texture
     ///////////////////////////////////////////////////////////////////////////
-    // setup 1D lookup texture in OpenGL and pre-load the first one
-    glActiveTexture(GL_TEXTURE2);
-    glBindTexture(GL_TEXTURE_2D, m_spGLData->LookUpTexture);
-    //glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    //glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_ALIGNMENT, 4););
-    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_SWAP_BYTES, 0););
-    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_LSB_FIRST, 0););
-    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_ROW_LENGTH, 0););
-    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_ROWS, 0););
-    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0););
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16, LUT_2D_W, LUT_2D_H, 0, GL_RGBA, GL_UNSIGNED_SHORT, m_internalLookupTables[0]);
-
-    // load shaders from string constants
-    ///////////////////////////////////////////////////////////////////////////
-#ifdef LOAD_SHADERS
-    if (!loadShaderProgram("shaders2/fbo.frag", "shaders2/simple.vert", &m_spGLData->shaderFBO, &m_spGLData->vertexShader, &m_spGLData->PshaderFBO))
-    {
-        m_Error |= INIT_FAILED;
-        m_ErrorStrings.push_back("Error: Cannot initialize shader (off-screen rendering)!");
-        VPL_LOG_INFO(m_ErrorStrings.back().c_str());
-        retVal = false;
-    }
-    for (int i = 0; i < SHADERS_COUNT - 1; ++i)
-    {
-        if (!loadShaderProgram(conf::shaderFilenames[i], "shaders2/simple.vert", &m_spGLData->shaderRayCast[i], &m_spGLData->vertexShader, &m_spGLData->PshaderRayCast[i]))
-        {
-            m_Error |= INIT_FAILED;
-            m_ErrorStrings.push_back("Error: Cannot initialize shader (volume rendering)!");
-            VPL_LOG_INFO(m_ErrorStrings.back().c_str());
-            retVal = false;
-        }
-    }
-    if (!loadShaderProgram("shaders2/resize2.frag", "shaders2/fsquad.vert", &m_spGLData->shaderResize, &m_spGLData->fsQuadVS, &m_spGLData->PshaderResize))
-    {
-        m_Error |= INIT_FAILED;
-        m_ErrorStrings.push_back("Error: Cannot initialize shader (image composition)!");
-        VPL_LOG_INFO(m_ErrorStrings.back().c_str());
-        retVal = false;
-    }
-#else
-    if (!createShaderProgram(shader::OSRT, shader::Vert, &m_spGLData->shaderFBO, &m_spGLData->vertexShader, &m_spGLData->PshaderFBO))
-    {
-        m_Error |= INIT_FAILED;
-        m_ErrorStrings.push_back("Error: Cannot initialize shader (off-screen rendering)!");
-        VPL_LOG_INFO(m_ErrorStrings.back().c_str());
-        retVal = false;
-    }
-    if (!createShaderProgram(shader::XRay, shader::Vert, &m_spGLData->shaderRayCast[0], &m_spGLData->vertexShader, &m_spGLData->PshaderRayCast[0]))
-    {
-        m_Error |= INIT_FAILED;
-        m_ErrorStrings.push_back("Error: Cannot initialize shader (x-ray)!");
-        VPL_LOG_INFO(m_ErrorStrings.back().c_str());
-        retVal = false;
-    }
-    if (!createShaderProgram(shader::MAX_IP, shader::Vert, &m_spGLData->shaderRayCast[1], &m_spGLData->vertexShader, &m_spGLData->PshaderRayCast[1]))
-    {
-        m_Error |= INIT_FAILED;
-        m_ErrorStrings.push_back("Error: Cannot initialize shader (MIP)!");
-        VPL_LOG_INFO(m_ErrorStrings.back().c_str());
-        retVal = false;
-    }
-    if (!createShaderProgram(shader::Shade, shader::Vert, &m_spGLData->shaderRayCast[2], &m_spGLData->vertexShader, &m_spGLData->PshaderRayCast[2]))
-    {
-        m_Error |= INIT_FAILED;
-        m_ErrorStrings.push_back("Error: Cannot initialize shader (shading)!");
-        VPL_LOG_INFO(m_ErrorStrings.back().c_str());
-        retVal = false;
-    }
-    if (!createShaderProgram(shader::Add, shader::Vert, &m_spGLData->shaderRayCast[3], &m_spGLData->vertexShader, &m_spGLData->PshaderRayCast[3]))
-    {
-        m_Error |= INIT_FAILED;
-        m_ErrorStrings.push_back("Error: Cannot initialize shader (add)!");
-        VPL_LOG_INFO(m_ErrorStrings.back().c_str());
-        retVal = false;
-    }
-    if (!createShaderProgram(shader::Surface, shader::Vert, &m_spGLData->shaderRayCast[4], &m_spGLData->vertexShader, &m_spGLData->PshaderRayCast[4]))
-    {
-        m_Error |= INIT_FAILED;
-        m_ErrorStrings.push_back("Error: Cannot initialize shader (surface)!");
-        VPL_LOG_INFO(m_ErrorStrings.back().c_str());
-        retVal = false;
-    }
-    if (!createShaderProgram(shader::Resize, shader::FSQuadVS, &m_spGLData->shaderResize, &m_spGLData->fsQuadVS, &m_spGLData->PshaderResize))
-    {
-        m_Error |= INIT_FAILED;
-        m_ErrorStrings.push_back("Error: Cannot initialize shader (image composition)!");
-        VPL_LOG_INFO(m_ErrorStrings.back().c_str());
-        retVal = false;
-    }
-#endif // LOAD_SHADERS
+    // setup 2D lookup texture in OpenGL and pre-load the first one
+    m_textureLookUp = new osg::Texture2D(new osg::Image());
+    m_textureLookUp->getImage()->setImage(LUT_2D_W, LUT_2D_H, 1, LOOKUP_TEXTURE_FORMAT, GL_RGBA, GL_UNSIGNED_SHORT, (unsigned char*)m_internalLookupTables[0], osg::Image::NO_DELETE);
+    m_textureLookUp->setFilter(osg::Texture::MIN_FILTER, osg::Texture::NEAREST);
+    m_textureLookUp->setFilter(osg::Texture::MAG_FILTER, osg::Texture::NEAREST);
+    m_textureLookUp->setWrap(osg::Texture::WRAP_S, osg::Texture::CLAMP_TO_EDGE);
+    m_textureLookUp->setWrap(osg::Texture::WRAP_T, osg::Texture::CLAMP_TO_EDGE);
 
     // noise texture
     ///////////////////////////////////////////////////////////////////////////
     // Prepare a random noise texture
-    vpl::math::CNormalPRNG Generator;
-    for (int i = 0; i < NOISE_SIZE * NOISE_SIZE; ++i)
-    {
-        noise[i] = 128 + (unsigned char)Generator.random(0.0, conf::NoiseSigma);
-    }
+    vpl::math::CNormalPRNG generator;
+    unsigned char* noise = new unsigned char[NOISE_SIZE * NOISE_SIZE];
 
-    // setup the noise texture
-    glActiveTexture(GL_TEXTURE3);
-    glBindTexture(GL_TEXTURE_2D, m_spGLData->NoiseTexture);
-    //glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    //glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_ALIGNMENT, 4););
-    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_SWAP_BYTES, 0););
-    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_LSB_FIRST, 0););
-    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_ROW_LENGTH, 0););
-    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_ROWS, 0););
-    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0););
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE8, NOISE_SIZE, NOISE_SIZE, 0, GL_LUMINANCE, GL_UNSIGNED_BYTE, noise);
+    std::generate(noise, noise + NOISE_SIZE * NOISE_SIZE, [&generator]() {return static_cast<unsigned char>(128 + generator.random(0.0, conf::NoiseSigma)); });
 
-    // The current rendering size
-    vpl::img::CPoint3D renderingSize = getRenderingSize(m_spParams, m_Flags);
-
-    // setup addition textures used for off-screen rendering
-    ///////////////////////////////////////////////////////////////////////////
-    // fbo - off screen texture render targer for back culling - texture coords, world coords of rays' starts and texture coords, world coords of rays' ends
-    glBindTexture(GL_TEXTURE_3D, m_spGLData->RaysStartEnd);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
-    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_ALIGNMENT, 2););
-    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_SWAP_BYTES, 0););
-    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_LSB_FIRST, 0););
-    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_ROW_LENGTH, 0););
-    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_ROWS, 0););
-    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0););
-    glTexImage3D(GL_TEXTURE_3D, 0, GL_RGB32F_ARB, renderingSize.x(), renderingSize.y(), 2, 0, GL_RGB, GL_FLOAT, NULL);
-
-    // render target texture
-    glBindTexture(GL_TEXTURE_2D, m_spGLData->RTTexture);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_ALIGNMENT, 4););
-    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_SWAP_BYTES, 0););
-    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_LSB_FIRST, 0););
-    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_ROW_LENGTH, 0););
-    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_ROWS, 0););
-    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0););
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB16F_ARB, renderingSize.x(), renderingSize.y(), 0, GL_RGB, GL_FLOAT, NULL);
-
-    // depth target texture
-    glBindTexture(GL_TEXTURE_2D, m_spGLData->DEPTexture);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_ALIGNMENT, 4););
-    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_SWAP_BYTES, 0););
-    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_LSB_FIRST, 0););
-    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_ROW_LENGTH, 0););
-    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_ROWS, 0););
-    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0););
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB16F_ARB, renderingSize.x(), renderingSize.y(), 0, GL_RGB, GL_FLOAT, NULL);
-
-    // Setup depth texture
-    glBindTexture(GL_TEXTURE_2D, m_spGLData->GeometryDepthTexture);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_ALIGNMENT, 4););
-    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_SWAP_BYTES, 0););
-    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_LSB_FIRST, 0););
-    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_ROW_LENGTH, 0););
-    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_ROWS, 0););
-    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0););
-    tridimGlR("glTexImage2D", glTexImage2D(GL_TEXTURE_2D, 0, depthTextureParameters[0], renderingSize.x(), renderingSize.y(), 0, depthTextureParameters[1], depthTextureParameters[2], NULL););
+    m_textureNoise = new osg::Texture2D(new osg::Image());
+    m_textureNoise->getImage()->setImage(NOISE_SIZE, NOISE_SIZE, 1, GL_R8, GL_RED, GL_UNSIGNED_BYTE, noise, osg::Image::USE_NEW_DELETE);
+    m_textureNoise->setFilter(osg::Texture::MIN_FILTER, osg::Texture::NEAREST);
+    m_textureNoise->setFilter(osg::Texture::MAG_FILTER, osg::Texture::NEAREST);
+    m_textureNoise->setWrap(osg::Texture::WRAP_S, osg::Texture::CLAMP_TO_EDGE);
+    m_textureNoise->setWrap(osg::Texture::WRAP_T, osg::Texture::CLAMP_TO_EDGE);
 
     // create and upload 1D resize kernel texture (used for image interpolation)
     ///////////////////////////////////////////////////////////////////////////
-    #define LUTSIZE 512
-    static float klut[LUTSIZE];
-    for (int i = 0; i < LUTSIZE; i++)
+    unsigned char* klut = new unsigned char[LUT_SIZE * sizeof(float)];
+    float* data = reinterpret_cast<float*>(klut);
+
+    for (int i = 1; i < LUT_SIZE; i++)
     {
-        double X = double(i) / double(LUTSIZE) * 2.0;
-        klut[i] = float((std::sin(X * vpl::math::PI) / (X * vpl::math::PI)) * (std::sin((X * 0.5f) * vpl::math::PI) / ((X * 0.5) * vpl::math::PI)));
+        double x = double(i) / double(LUT_SIZE) * 2.0;
+
+        data[i] = static_cast<float>((std::sin(x * vpl::math::PI) / (x * vpl::math::PI)) * (std::sin((x * 0.5f) * vpl::math::PI) / ((x * 0.5) * vpl::math::PI)));
     }
-    klut[0] = 1.0f;
+    data[0] = 1.0f;
 
-    glActiveTexture(GL_TEXTURE6);
-    glBindTexture(GL_TEXTURE_1D, m_spGLData->BicKerTexture);
-    glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_ALIGNMENT, 4););
-    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_SWAP_BYTES, 0););
-    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_LSB_FIRST, 0););
-    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_ROW_LENGTH, 0););
-    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_ROWS, 0););
-    tridimGlR("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0););
-    glTexImage1D(GL_TEXTURE_1D, 0, GL_LUMINANCE16F_ARB, LUTSIZE, 0, GL_LUMINANCE, GL_FLOAT, klut);
+    osg::Image* bickerImage = new osg::Image();
+    bickerImage->setImage(LUT_SIZE, 1, 1, GL_R32F, GL_RED, GL_FLOAT, klut, osg::Image::USE_NEW_DELETE);
 
-    // default settings
-    glActiveTexture(GL_TEXTURE0);
+    m_textureBicubicKernel = new osg::Texture1D(bickerImage);
+    m_textureBicubicKernel->setFilter(osg::Texture::MIN_FILTER, osg::Texture::LINEAR);
+    m_textureBicubicKernel->setFilter(osg::Texture::MAG_FILTER, osg::Texture::LINEAR);
+    m_textureBicubicKernel->setWrap(osg::Texture::WRAP_S, osg::Texture::CLAMP_TO_EDGE);
 
-    // BOX rendering
-    VPL_ASSERT((m_Triangles.size() % conf::NumOfBatches) == 0);
-    VPL_ASSERT(3 * sizeof(GLfloat) == sizeof(tCoords));
+    auto shaderVertex = new osg::Shader(osg::Shader::VERTEX, shader::Vert);
 
-    // Generate the box VBOs
-    glGenBuffersARB(conf::NumOfBatches, m_spGLData->VBOBox);
+    m_shaderOsrt = new osg::Program();
+    m_shaderOsrt->addShader(new osg::Shader(osg::Shader::VERTEX, shader::Vert2));
+    m_shaderOsrt->addShader(new osg::Shader(osg::Shader::FRAGMENT, shader::OSRT));
 
-    // Init buffers
-    int BatchSize = m_Triangles.size() / conf::NumOfBatches;
-    for (int b = 0; b < conf::NumOfBatches; ++b)
+    m_shaderResize = new osg::Program();
+    m_shaderResize->addShader(new osg::Shader(osg::Shader::VERTEX, shader::FSQuadVS));
+    m_shaderResize->addShader(new osg::Shader(osg::Shader::FRAGMENT, shader::Resize));
+
+    m_uniform_image = new osg::Uniform("image", 4);
+    m_uniform_kernel = new osg::Uniform("kernel", 6);
+    m_uniform_resolution = new osg::Uniform(osg::Uniform::FLOAT_VEC2, "resolution");
+
+    for (int i = 0; i < static_cast<int>(EShaders::SHADERS_COUNT); i++)
     {
-        // Bind the vertex buffer
-        glBindBufferARB(GL_ARRAY_BUFFER_ARB, m_spGLData->VBOBox[b]);
-        // Load the data
-        glBufferDataARB(GL_ARRAY_BUFFER_ARB, BatchSize * sizeof(tCoords), &(m_Triangles[b * BatchSize]), GL_STATIC_DRAW_ARB);
+        m_shaders[static_cast<EShaders>(i)] = new osg::Program();
     }
 
-    glBindBufferARB(GL_ARRAY_BUFFER_ARB, 0);
-    glBindBufferARB(GL_ELEMENT_ARRAY_BUFFER_ARB, 0);
+    m_shaders[EShaders::XRAY]->addShader(shaderVertex);
+    m_shaders[EShaders::XRAY]->addShader(new osg::Shader(osg::Shader::FRAGMENT, shader::XRay));
 
-    GLint vertexArray;
-    glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &vertexArray);
+    m_shaders[EShaders::MIP]->addShader(shaderVertex);
+    m_shaders[EShaders::MIP]->addShader(new osg::Shader(osg::Shader::FRAGMENT, shader::MAX_IP));
 
-    // Generate box VAOs
-    glGenVertexArraysX(conf::NumOfBatches, m_spGLData->VAOBox);
+    m_shaders[EShaders::SHADING]->addShader(shaderVertex);
+    m_shaders[EShaders::SHADING]->addShader(new osg::Shader(osg::Shader::FRAGMENT, shader::Shade));
 
-    // Init VAOs
-    for (int b = 0; b < conf::NumOfBatches; ++b)
-    {
-        // Bind the VAO
-        glBindVertexArrayX(m_spGLData->VAOBox[b]);
+    m_shaders[EShaders::ADDITIVE]->addShader(shaderVertex);
+    m_shaders[EShaders::ADDITIVE]->addShader(new osg::Shader(osg::Shader::FRAGMENT, shader::Add));
 
-        // Enable vertex arrays
-        glEnableClientState(GL_VERTEX_ARRAY);
-        glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-        glDisableClientState(GL_NORMAL_ARRAY);
-        glDisableClientState(GL_COLOR_ARRAY);
+    m_shaders[EShaders::SURFACE]->addShader(shaderVertex);
+    m_shaders[EShaders::SURFACE]->addShader(new osg::Shader(osg::Shader::FRAGMENT, shader::Surface));
 
-        // And set up vertex attributes
-        glBindBufferARB(GL_ARRAY_BUFFER_ARB, m_spGLData->VBOBox[b]);
-        glVertexPointer(3, GL_FLOAT, 0, 0);
-        //glEnableVertexAttribArray(0);
-        //glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
-    }
+    m_uniform_t3D = new osg::Uniform("t3D", 0);
+    m_uniform_tSkip3D = new osg::Uniform("tSkip3D", 1);
+    m_uniform_LookUp = new osg::Uniform("LookUp", 2);
+    m_uniform_Noise = new osg::Uniform("Noise", 3);
+    m_uniform_tRaysStartEnd = new osg::Uniform("tRaysStartEnd", 4);
+    m_uniform_Depth = new osg::Uniform("Depth", 5);
 
-    // Bind with 0, so, switch back to normal pointer operation
-    glBindVertexArrayX(vertexArray);
+    //CUSTOM
+    m_uniform_tCustom3D = new osg::Uniform("tCustom3D", 7);
 
-    // RECT rendering (two triangles)
+    m_uniform_textureSampling = new osg::Uniform(osg::Uniform::FLOAT, "textureSampling");
+    m_uniform_inputAdjustment = new osg::Uniform(osg::Uniform::FLOAT_VEC2, "inputAdjustment");
+    m_uniform_imageAdjustment = new osg::Uniform(osg::Uniform::FLOAT_VEC2, "imageAdjustment");
+    m_uniform_sVector = new osg::Uniform(osg::Uniform::FLOAT_VEC3, "sVector");
+    m_uniform_skipTexSize = new osg::Uniform(osg::Uniform::FLOAT_VEC3, "skipTexSize");
+    m_uniform_tResolution = new osg::Uniform(osg::Uniform::FLOAT_VEC3, "tResolution");
+    m_uniform_tSkipResolution = new osg::Uniform(osg::Uniform::FLOAT_VEC3, "tSkipResolution");
+    m_uniform_StopCondition = new osg::Uniform("StopCondition", 0.01f);
+    m_uniform_wSize = new osg::Uniform(osg::Uniform::FLOAT_VEC2, "wSize");
+    m_uniform_pl = new osg::Uniform(osg::Uniform::FLOAT_VEC4, "pl");
+    m_uniform_plNear = new osg::Uniform(osg::Uniform::FLOAT_VEC4, "plNear");
+    m_uniform_plFar = new osg::Uniform(osg::Uniform::FLOAT_VEC4, "plFar");
+    m_uniform_invProjectionMatrix = new osg::Uniform(osg::Uniform::FLOAT_MAT4, "invProjectionMatrix");
+    m_uniform_invModelViewMatrix = new osg::Uniform(osg::Uniform::FLOAT_MAT4, "invModelViewMatrix");
+    m_uniform_skipCondition = new osg::Uniform(osg::Uniform::FLOAT_VEC4, "skipCondition");
 
-    // Generate rect's VBOs
-    glGenBuffersARB(1, &m_spGLData->VBORect);
+    //SURFACE
+    m_uniform_surfacePar = new osg::Uniform(osg::Uniform::FLOAT_VEC2, "surfacePar");
 
-    // Bind the vertex buffer
-    glBindBufferARB(GL_ARRAY_BUFFER_ARB, m_spGLData->VBORect);
-    // Load the data
-    glBufferDataARB(GL_ARRAY_BUFFER_ARB, 18 * sizeof(float), conf::rectVertices, GL_STATIC_DRAW_ARB);
+    m_stateSetFrontBox = new osg::StateSet(*m_box->getOrCreateStateSet());
+    m_stateSetBackBox = new osg::StateSet(*m_box->getOrCreateStateSet());
+    m_stateSetVolumeRenderBackup = new osg::StateSet(*m_box->getOrCreateStateSet());
+    m_stateSetResize = new osg::StateSet(*m_quad->getOrCreateStateSet());
 
-    glBindBufferARB(GL_ARRAY_BUFFER_ARB, 0);
-    glBindBufferARB(GL_ELEMENT_ARRAY_BUFFER_ARB, 0);
+    m_stateSetFrontBox->setAttributeAndModes(new osg::CullFace(osg::CullFace::BACK), osg::StateAttribute::ON | osg::StateAttribute::PROTECTED | osg::StateAttribute::OVERRIDE);
+    m_stateSetFrontBox->setMode(GL_DEPTH_TEST, osg::StateAttribute::OFF | osg::StateAttribute::PROTECTED | osg::StateAttribute::OVERRIDE);
+    m_stateSetFrontBox->setAttributeAndModes(m_shaderOsrt, osg::StateAttribute::ON | osg::StateAttribute::PROTECTED | osg::StateAttribute::OVERRIDE);
+    m_stateSetFrontBox->setAttribute(m_fboFrontBox);
 
-#ifdef USE_VAORECT
-    // Generate rect's VAO
-    glGenVertexArraysX(1, &m_spGLData->VAORect);
+    m_stateSetBackBox->setAttributeAndModes(new osg::CullFace(osg::CullFace::FRONT), osg::StateAttribute::ON | osg::StateAttribute::PROTECTED | osg::StateAttribute::OVERRIDE);
+    m_stateSetBackBox->setMode(GL_DEPTH_TEST, osg::StateAttribute::OFF | osg::StateAttribute::PROTECTED | osg::StateAttribute::OVERRIDE);
+    m_stateSetBackBox->setAttributeAndModes(m_shaderOsrt, osg::StateAttribute::ON | osg::StateAttribute::PROTECTED | osg::StateAttribute::OVERRIDE);
+    m_stateSetBackBox->setAttribute(m_fboBackBox);
 
-    // Bind the VAO
-    glBindVertexArrayX(m_spGLData->VAORect);
+    m_stateSetVolumeRenderBackup->setAttributeAndModes(new osg::CullFace(osg::CullFace::FRONT), osg::StateAttribute::ON | osg::StateAttribute::PROTECTED | osg::StateAttribute::OVERRIDE);
+    m_stateSetVolumeRenderBackup->setMode(GL_DEPTH_TEST, osg::StateAttribute::OFF | osg::StateAttribute::PROTECTED | osg::StateAttribute::OVERRIDE);
+    m_stateSetVolumeRenderBackup->setAttribute(m_fboVolumeRender);
+    m_stateSetVolumeRenderBackup->setTextureAttribute(0, m_textureVolume);
+    m_stateSetVolumeRenderBackup->setTextureAttribute(1, m_textureAuxVolume);
+    m_stateSetVolumeRenderBackup->setTextureAttribute(2, m_textureLookUp);
+    m_stateSetVolumeRenderBackup->setTextureAttribute(3, m_textureNoise);
+    m_stateSetVolumeRenderBackup->setTextureAttribute(4, m_textureRaysStartEnd);
+    m_stateSetVolumeRenderBackup->setTextureAttribute(5, m_textureDepth);
+    m_stateSetVolumeRenderBackup->setTextureAttribute(7, m_textureCurrentVolume);
 
-    // Enable vertex arrays
-    glEnableClientState(GL_VERTEX_ARRAY);
-    glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-    glDisableClientState(GL_NORMAL_ARRAY);
-    glDisableClientState(GL_COLOR_ARRAY);
+    m_stateSetResize->addUniform(m_uniform_image);
+    m_stateSetResize->addUniform(m_uniform_kernel);
+    m_stateSetResize->addUniform(m_uniform_resolution);
 
-    // And set up vertex attributes
-    glBindBufferARB(GL_ARRAY_BUFFER_ARB, m_spGLData->VBORect);
-    glVertexPointer(3, GL_FLOAT, 0, 0);
-    //glEnableVertexAttribArray(0);
-    //glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
-#endif
+    m_stateSetResize->setAttributeAndModes(new osg::Depth(osg::Depth::ALWAYS), osg::StateAttribute::ON | osg::StateAttribute::PROTECTED | osg::StateAttribute::OVERRIDE);
+    m_stateSetResize->setAttributeAndModes(new osg::BlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA), osg::StateAttribute::ON | osg::StateAttribute::PROTECTED | osg::StateAttribute::OVERRIDE);
+    m_stateSetResize->setAttributeAndModes(m_shaderResize, osg::StateAttribute::ON | osg::StateAttribute::PROTECTED | osg::StateAttribute::OVERRIDE);
 
-    glBindVertexArrayX(vertexArray);
-    glBindBufferARB(GL_ARRAY_BUFFER_ARB, arrayBuffer);
-    glBindBufferARB(GL_ELEMENT_ARRAY_BUFFER_ARB, elementArrayBuffer);
+    m_stateSetResize->setTextureAttribute(4, m_textureVolumeRender);
+    m_stateSetResize->setTextureAttribute(6, m_textureBicubicKernel);
 
-    // Restore state so that OSG can continue its work
-    bVertexArray            ? glEnableClientState(GL_VERTEX_ARRAY)          : glDisableClientState(GL_VERTEX_ARRAY);
-    bTexCoordArray          ? glEnableClientState(GL_TEXTURE_COORD_ARRAY)   : glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-    bNormalArray            ? glEnableClientState(GL_NORMAL_ARRAY)          : glDisableClientState(GL_NORMAL_ARRAY);
-    bColorArray             ? glEnableClientState(GL_COLOR_ARRAY)           : glDisableClientState(GL_COLOR_ARRAY);
-    bIndexArray             ? glEnableClientState(GL_INDEX_ARRAY)           : glDisableClientState(GL_INDEX_ARRAY);
-    bSecondaryColorArray    ? glEnableClientState(GL_SECONDARY_COLOR_ARRAY) : glDisableClientState(GL_SECONDARY_COLOR_ARRAY);
-    bEdgeFlagArray          ? glEnableClientState(GL_EDGE_FLAG_ARRAY)       : glDisableClientState(GL_EDGE_FLAG_ARRAY);
-    bFogCoordArray          ? glEnableClientState(GL_FOG_COORD_ARRAY)       : glDisableClientState(GL_FOG_COORD_ARRAY);
+    setShaderInternal(static_cast<EShaders>(m_spParams->selectedShader));
 
     // O.K.
-    if (retVal)
-    {
-        m_Flags |= INITIALIZED;
-    }
-    
-    GLenum error = glGetError();
+    m_Flags |= INITIALIZED;
 
-    return retVal;
+    return true;
 }
 
-///////////////////////////////////////////////////////////////////////////////
-//
-void PSVolumeRendering::reloadShader()
+void PSVolumeRendering::setShaderInternal(EShaders shader)
 {
-#ifdef LOAD_SHADERS
-    if (m_spParams->selectedShader == CUSTOM)
+    m_stateSetVolumeRender = new osg::StateSet(*m_stateSetVolumeRenderBackup);
+
+    m_stateSetVolumeRender->addUniform(m_uniform_t3D);
+    m_stateSetVolumeRender->addUniform(m_uniform_tSkip3D);
+    m_stateSetVolumeRender->addUniform(m_uniform_LookUp);
+    m_stateSetVolumeRender->addUniform(m_uniform_Noise);
+    m_stateSetVolumeRender->addUniform(m_uniform_tRaysStartEnd);
+    m_stateSetVolumeRender->addUniform(m_uniform_Depth);
+
+    m_stateSetVolumeRender->addUniform(m_uniform_textureSampling);
+    m_stateSetVolumeRender->addUniform(m_uniform_inputAdjustment);
+    m_stateSetVolumeRender->addUniform(m_uniform_imageAdjustment);
+    m_stateSetVolumeRender->addUniform(m_uniform_sVector);
+    m_stateSetVolumeRender->addUniform(m_uniform_skipTexSize);
+    m_stateSetVolumeRender->addUniform(m_uniform_tResolution);
+    m_stateSetVolumeRender->addUniform(m_uniform_tSkipResolution);
+    m_stateSetVolumeRender->addUniform(m_uniform_StopCondition);
+    m_stateSetVolumeRender->addUniform(m_uniform_wSize);
+    m_stateSetVolumeRender->addUniform(m_uniform_pl);
+    m_stateSetVolumeRender->addUniform(m_uniform_plNear);
+    m_stateSetVolumeRender->addUniform(m_uniform_plFar);
+    m_stateSetVolumeRender->addUniform(m_uniform_invProjectionMatrix);
+    m_stateSetVolumeRender->addUniform(m_uniform_invModelViewMatrix);
+    m_stateSetVolumeRender->addUniform(m_uniform_skipCondition);
+
+    if (shader == EShaders::SURFACE)
     {
-        return;
+        m_stateSetVolumeRender->addUniform(m_uniform_surfacePar);
     }
 
-    int curr = m_spParams->selectedShader;
-    loadShaderProgram(
-        conf::shaderFilenames[curr],
-        "shaders2/simple.vert",
-        &m_spGLData->shaderRayCast[curr],
-        &m_spGLData->vertexShader,
-        &m_spGLData->PshaderRayCast[curr]);
-#endif
+    if (shader == EShaders::CUSTOM)
+    {
+        for (auto uni : m_customUniforms)
+        {
+            m_stateSetVolumeRender->addUniform(uni);
+        }
+
+        m_stateSetVolumeRender->addUniform(m_uniform_tCustom3D);
+
+        m_stateSetVolumeRender->setTextureAttribute(1, m_textureCustomAuxVolume);
+    }
+    else
+    {
+        m_stateSetVolumeRender->setTextureAttribute(1, m_textureAuxVolume);
+
+    }
+
+    m_stateSetVolumeRender->setAttributeAndModes(m_shaders[shader], osg::StateAttribute::ON | osg::StateAttribute::OVERRIDE);
 }
 
-///////////////////////////////////////////////////////////////////////////////
-//
 bool PSVolumeRendering::internalUploadTexture()
 {
     VPL_LOG_TRACE("PSVolumeRendering::internalUploadTexture");
 
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_3D, m_spGLData->VolumeTexture);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+    storeVolumeToTexture(m_VolumeData, m_textureVolume);
 
-    // Create the 3D texture
-    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_ALIGNMENT, 4));
-    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_SWAP_BYTES, 0));
-    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_LSB_FIRST, 0));
-    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_ROW_LENGTH, 0));
-    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_ROWS, 0));
-    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0));
-    storeVolumeToTexture(m_VolumeData);
-    {
-        GLenum error = glGetError();
-
-        int w, h, d;
-        glGetTexLevelParameteriv(GL_TEXTURE_3D, 0, GL_TEXTURE_WIDTH, &w);
-        glGetTexLevelParameteriv(GL_TEXTURE_3D, 0, GL_TEXTURE_HEIGHT, &h);
-        glGetTexLevelParameteriv(GL_TEXTURE_3D, 0, GL_TEXTURE_DEPTH, &d);
-
-        if ((error != GL_NO_ERROR) || (w != m_VolumeData.getXSize()) || (h != m_VolumeData.getYSize()) || (d != m_VolumeData.getZSize()))
-        {
-            m_Error |= CANNOT_CREATE_3D_TEXTURE;
-            VPL_LOG_INFO("Error: Cannot create 3D texture!");
-            return false;
-        }
-    }
-
-    // Release the volume data
     m_VolumeData.resize(0, 0, 0, 0);
 
     return true;
@@ -3124,46 +1242,20 @@ bool PSVolumeRendering::internalUploadTexture()
 
 bool PSVolumeRendering::internalUploadAuxTexture()
 {
-    glActiveTexture(GL_TEXTURE1);
-    glBindTexture(GL_TEXTURE_3D, m_spGLData->AuxVolumeTexture);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+    VPL_LOG_TRACE("PSVolumeRendering::internalUploadAuxTexture");
 
-    // Create the 3D texture
-    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_ALIGNMENT, 4));
-    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_SWAP_BYTES, 0));
-    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_LSB_FIRST, 0));
-    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_ROW_LENGTH, 0));
-    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_ROWS, 0));
-    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0));
-    storeVolumeToTexture(m_AuxVolumeData);
+     storeVolumeToTexture(m_AuxVolumeData, m_textureAuxVolume);
+
+    if (m_spParams->selectedShader != EShaders::CUSTOM)
     {
-        GLenum error = glGetError();
-
-        int w, h, d;
-        glGetTexLevelParameteriv(GL_TEXTURE_3D, 0, GL_TEXTURE_WIDTH, &w);
-        glGetTexLevelParameteriv(GL_TEXTURE_3D, 0, GL_TEXTURE_HEIGHT, &h);
-        glGetTexLevelParameteriv(GL_TEXTURE_3D, 0, GL_TEXTURE_DEPTH, &d);
-
-        if ((error != GL_NO_ERROR) || (w != m_AuxVolumeData.getXSize()) || (h != m_AuxVolumeData.getYSize()) || (d != m_AuxVolumeData.getZSize()))
-        {
-            m_Error |= CANNOT_CREATE_3D_TEXTURE;
-            VPL_LOG_INFO("Error: Cannot create skipping 3D texture!");
-            return false;
-        }
+        m_stateSetVolumeRender->setTextureAttribute(1, m_textureAuxVolume);
     }
 
-    // Release the volume data
     m_AuxVolumeData.resize(0, 0, 0, 0);
 
     return true;
 }
 
-///////////////////////////////////////////////////////////////////////////////
-//
 bool PSVolumeRendering::internalUploadCustomData_bool()
 {
     if (m_volume_bool.getZSize() <= 0)
@@ -3228,8 +1320,6 @@ bool PSVolumeRendering::internalUploadCustomData_bool()
     return true;
 }
 
-///////////////////////////////////////////////////////////////////////////////
-//
 bool PSVolumeRendering::internalUploadCustomData_tPixel8()
 {
     if (m_volume_tPixel8.getZSize() <= 0)
@@ -3294,8 +1384,6 @@ bool PSVolumeRendering::internalUploadCustomData_tPixel8()
     return true;
 }
 
-///////////////////////////////////////////////////////////////////////////////
-//
 bool PSVolumeRendering::internalUploadCustomData_tPixel16()
 {
     if (m_volume_tPixel16.getZSize() <= 0)
@@ -3360,8 +1448,6 @@ bool PSVolumeRendering::internalUploadCustomData_tPixel16()
     return true;
 }
 
-///////////////////////////////////////////////////////////////////////////////
-//
 bool PSVolumeRendering::internalUploadCustomData_tRGBPixel()
 {
     if (m_volume_tRGBPixel.getZSize() <= 0)
@@ -3426,245 +1512,95 @@ bool PSVolumeRendering::internalUploadCustomData_tRGBPixel()
     return true;
 }
 
-///////////////////////////////////////////////////////////////////////////////
-//
 bool PSVolumeRendering::internalUploadCustomTexture_bool()
 {
-    int currBinding = 0;
-    glGetIntegerv(GL_TEXTURE_BINDING_3D, &currBinding);
-    glBindTexture(GL_TEXTURE_3D, m_currentVolume);
+    VPL_LOG_TRACE("PSVolumeRendering::internalUploadCustomTexture_bool");
 
-    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_ALIGNMENT, 4));
-    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_SWAP_BYTES, 0));
-    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_LSB_FIRST, 0));
-    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_ROW_LENGTH, 0));
-    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_ROWS, 0));
-    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0));
-    storeVolumeToTexture(m_customData_bool);
-    {
-        GLenum error = glGetError();
+    storeVolumeToTexture(m_customData_bool, m_textureCurrentVolume);
 
-        int w, h, d;
-        glGetTexLevelParameteriv(GL_TEXTURE_3D, 0, GL_TEXTURE_WIDTH, &w);
-        glGetTexLevelParameteriv(GL_TEXTURE_3D, 0, GL_TEXTURE_HEIGHT, &h);
-        glGetTexLevelParameteriv(GL_TEXTURE_3D, 0, GL_TEXTURE_DEPTH, &d);
-
-        if ((error != GL_NO_ERROR) || (w != m_customData_bool.getXSize()) || (h != m_customData_bool.getYSize()) || (d != m_customData_bool.getZSize()))
-        {
-            m_Error |= CANNOT_CREATE_3D_TEXTURE;
-            VPL_LOG_INFO("Error: Cannot create 3D texture for custom data (bool)!");
-            return false;
-        }
-    }
-
-    // Release the volume data
     m_customData_bool.resize(0, 0, 0, 0);
 
-    glBindTexture(GL_TEXTURE_3D, currBinding);
-
     return true;
 }
 
-///////////////////////////////////////////////////////////////////////////////
-//
 bool PSVolumeRendering::internalUploadCustomTexture_tPixel8()
 {
-    int currBinding = 0;
-    glGetIntegerv(GL_TEXTURE_BINDING_3D, &currBinding);
-    glBindTexture(GL_TEXTURE_3D, m_currentVolume);
+    VPL_LOG_TRACE("PSVolumeRendering::internalUploadCustomTexture_tPixel8");
 
-    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_ALIGNMENT, 4));
-    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_SWAP_BYTES, 0));
-    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_LSB_FIRST, 0));
-    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_ROW_LENGTH, 0));
-    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_ROWS, 0));
-    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0));
-    storeVolumeToTexture(m_customData_tPixel8);
-    {
-        GLenum error = glGetError();
+    storeVolumeToTexture(m_customData_tPixel8, m_textureCurrentVolume);
 
-        int w, h, d;
-        glGetTexLevelParameteriv(GL_TEXTURE_3D, 0, GL_TEXTURE_WIDTH, &w);
-        glGetTexLevelParameteriv(GL_TEXTURE_3D, 0, GL_TEXTURE_HEIGHT, &h);
-        glGetTexLevelParameteriv(GL_TEXTURE_3D, 0, GL_TEXTURE_DEPTH, &d);
-
-        if ((error != GL_NO_ERROR) || (w != m_customData_tPixel8.getXSize()) || (h != m_customData_tPixel8.getYSize()) || (d != m_customData_tPixel8.getZSize()))
-        {
-            m_Error |= CANNOT_CREATE_3D_TEXTURE;
-            VPL_LOG_INFO("Error: Cannot create 3D texture for custom data (tPixel8)!");
-            return false;
-        }
-    }
-
-    // Release the volume data
     m_customData_tPixel8.resize(0, 0, 0, 0);
 
-    glBindTexture(GL_TEXTURE_3D, currBinding);
-
     return true;
 }
 
-///////////////////////////////////////////////////////////////////////////////
-//
 bool PSVolumeRendering::internalUploadCustomTexture_tPixel16()
 {
-    int currBinding = 0;
-    glGetIntegerv(GL_TEXTURE_BINDING_3D, &currBinding);
-    glBindTexture(GL_TEXTURE_3D, m_currentVolume);
+    VPL_LOG_TRACE("PSVolumeRendering::internalUploadCustomTexture_tPixel16");
 
-    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_ALIGNMENT, 4));
-    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_SWAP_BYTES, 0));
-    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_LSB_FIRST, 0));
-    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_ROW_LENGTH, 0));
-    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_ROWS, 0));
-    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0));
-    storeVolumeToTexture(m_customData_tPixel16);
-    {
-        GLenum error = glGetError();
+    storeVolumeToTexture(m_customData_tPixel16, m_textureCurrentVolume);;
 
-        int w, h, d;
-        glGetTexLevelParameteriv(GL_TEXTURE_3D, 0, GL_TEXTURE_WIDTH, &w);
-        glGetTexLevelParameteriv(GL_TEXTURE_3D, 0, GL_TEXTURE_HEIGHT, &h);
-        glGetTexLevelParameteriv(GL_TEXTURE_3D, 0, GL_TEXTURE_DEPTH, &d);
-
-        if ((error != GL_NO_ERROR) || (w != m_customData_tPixel16.getXSize()) || (h != m_customData_tPixel16.getYSize()) || (d != m_customData_tPixel16.getZSize()))
-        {
-            m_Error |= CANNOT_CREATE_3D_TEXTURE;
-            VPL_LOG_INFO("Error: Cannot create 3D texture for custom data (tPixel16)!");
-            return false;
-        }
-    }
-
-    // Release the volume data
     m_customData_tPixel16.resize(0, 0, 0, 0);
-
-    glBindTexture(GL_TEXTURE_3D, currBinding);
 
     return true;
 }
 
-///////////////////////////////////////////////////////////////////////////////
-//
 bool PSVolumeRendering::internalUploadCustomTexture_tRGBPixel()
 {
-    int currBinding = 0;
-    glGetIntegerv(GL_TEXTURE_BINDING_3D, &currBinding);
-    glBindTexture(GL_TEXTURE_3D, m_currentVolume);
+    VPL_LOG_TRACE("PSVolumeRendering::internalUploadCustomTexture_tRGBPixel");
 
-    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_ALIGNMENT, 4));
-    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_SWAP_BYTES, 0));
-    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_LSB_FIRST, 0));
-    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_ROW_LENGTH, 0));
-    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_ROWS, 0));
-    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0));
-    storeVolumeToTexture(m_customData_tRGBPixel);
-    {
-        GLenum error = glGetError();
+    storeVolumeToTexture(m_customData_tRGBPixel, m_textureCurrentVolume);
 
-        int w, h, d;
-        glGetTexLevelParameteriv(GL_TEXTURE_3D, 0, GL_TEXTURE_WIDTH, &w);
-        glGetTexLevelParameteriv(GL_TEXTURE_3D, 0, GL_TEXTURE_HEIGHT, &h);
-        glGetTexLevelParameteriv(GL_TEXTURE_3D, 0, GL_TEXTURE_DEPTH, &d);
-
-        if ((error != GL_NO_ERROR) || (w != m_customData_tRGBPixel.getXSize()) || (h != m_customData_tRGBPixel.getYSize()) || (d != m_customData_tRGBPixel.getZSize()))
-        {
-            m_Error |= CANNOT_CREATE_3D_TEXTURE;
-            VPL_LOG_INFO("Error: Cannot create 3D texture for custom data (tRGBPixel)!");
-            return false;
-        }
-    }
-
-    // Release the volume data
     m_customData_tRGBPixel.resize(0, 0, 0, 0);
-
-    glBindTexture(GL_TEXTURE_3D, currBinding);
 
     return true;
 }
 
 bool PSVolumeRendering::internalUploadCustomAuxTexture()
 {
-    int currBinding = 0;
-    glGetIntegerv(GL_TEXTURE_BINDING_3D, &currBinding);
-    glBindTexture(GL_TEXTURE_3D, m_spGLData->CustomAuxVolumeTexture);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+    VPL_LOG_TRACE("PSVolumeRendering::internalUploadCustomAuxTexture");
 
-    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_ALIGNMENT, 4));
-    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_SWAP_BYTES, 0));
-    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_LSB_FIRST, 0));
-    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_ROW_LENGTH, 0));
-    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_ROWS, 0));
-    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0));
-    storeVolumeToTexture(m_auxCustomData);
-    {
-        GLenum error = glGetError();
+    storeVolumeToTexture(m_auxCustomData, m_textureCustomAuxVolume);
 
-        int w, h, d;
-        glGetTexLevelParameteriv(GL_TEXTURE_3D, 0, GL_TEXTURE_WIDTH, &w);
-        glGetTexLevelParameteriv(GL_TEXTURE_3D, 0, GL_TEXTURE_HEIGHT, &h);
-        glGetTexLevelParameteriv(GL_TEXTURE_3D, 0, GL_TEXTURE_DEPTH, &d);
+    m_stateSetVolumeRender->setTextureAttribute(1, m_textureCustomAuxVolume);
 
-        if ((error != GL_NO_ERROR) || (w != m_auxCustomData.getXSize()) || (h != m_auxCustomData.getYSize()) || (d != m_auxCustomData.getZSize()))
-        {
-            m_Error |= CANNOT_CREATE_3D_TEXTURE;
-            VPL_LOG_INFO("Error: Cannot create 3D texture for custom data (auxiliary volume)!");
-            return false;
-        }
-    }
-
-    // Release the volume data
     m_auxCustomData.resize(0, 0, 0, 0);
-
-    glBindTexture(GL_TEXTURE_3D, currBinding);
 
     return true;
 }
 
-///////////////////////////////////////////////////////////////////////////////
-//
-vpl::img::CPoint3D PSVolumeRendering::getRenderingSize(PSVolumeRenderingParams *pParams, int Flags) const
+osg::Vec2i PSVolumeRendering::getRenderingSize(PSVolumeRenderingParams& params, const osg::Vec2i& currentViewport, int flags) const
 {
-    float desiredDimension = 0.0f;
-    vpl::img::CPoint3D retValue;
+    int desiredDimension = 0;
 
-    if (Flags & MOUSE_MODE)
+    if (flags & MOUSE_MODE)
     {
-        desiredDimension = conf::MouseRenderingSize[pParams->currentQuality];
+        desiredDimension = conf::MouseRenderingSize[params.currentQuality];
     }
     else
     {
-        desiredDimension = pParams->renderingSize;
+        desiredDimension = params.renderingSize;
     }
 
-    GLint viewport[4];
-    glGetIntegerv(GL_VIEWPORT, viewport);
-
-    float width = viewport[2];
-    float height = viewport[3];
+    int width = std::max(1, currentViewport.x());
+    int height = std::max(1, currentViewport.y());
 
     if (width > height)
     {
-        float ratio = height / width;
-        float dimension = vpl::math::getMin<float>(width, desiredDimension);
-        
-        retValue = vpl::img::CPoint3D(dimension, vpl::math::round2Int(dimension * ratio));
+        float ratio = static_cast<float>(height) / width;
+        int dimension = vpl::math::getMin<int>(width, desiredDimension);
+
+        return osg::Vec2i(dimension, vpl::math::round2Int(dimension * ratio));
     }
     else
     {
-        float ratio = width / height;
-        float dimension = vpl::math::getMin<float>(height, desiredDimension);
-        retValue = vpl::img::CPoint3D(vpl::math::round2Int(dimension * ratio), dimension);    
-    }
+        float ratio = static_cast<float>(width) / height;
+        int dimension = vpl::math::getMin<int>(height, desiredDimension);
 
-    return retValue;
+        return osg::Vec2i(vpl::math::round2Int(dimension * ratio), dimension);
+    }
 }
 
-///////////////////////////////////////////////////////////////////////////////
-//
 float PSVolumeRendering::getVolumeSamplingDistance(PSVolumeRenderingParams *pParams, int Flags) const
 {
     if (Flags & MOUSE_MODE)
@@ -3679,27 +1615,25 @@ float PSVolumeRendering::getVolumeSamplingDistance(PSVolumeRenderingParams *pPar
 
 ///////////////////////////////////////////////////////////////////////////////
 // change size of all internal rendering textures
-bool PSVolumeRendering::internalSetRenderingSize(PSVolumeRenderingParams *pParams, int Flags)
+bool PSVolumeRendering::internalSetRenderingSize(PSVolumeRenderingParams& params, const osg::Vec2i& currentViewport, const osg::Vec2i& newViewport, int flags)
 {
-    // The current rendering size
-    vpl::img::CPoint3D renderingSize = getRenderingSize(pParams, Flags);
+    VPL_LOG_TRACE("PSVolumeRendering::internalSetRenderingSize");
 
-    glActiveTexture(GL_TEXTURE4);
-    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_ALIGNMENT, 4));
-    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_SWAP_BYTES, 0));
-    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_LSB_FIRST, 0));
-    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_ROW_LENGTH, 0));
-    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_ROWS, 0));
-    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0));
+    m_textureRaysStartEnd->setTextureSize(newViewport.x(), newViewport.y(), 2);
+    m_textureRaysStartEnd->dirtyTextureObject();
 
-    glBindTexture(GL_TEXTURE_3D, m_spGLData->RaysStartEnd);
-    glTexImage3D(GL_TEXTURE_3D, 0, GL_RGB32F_ARB, renderingSize.x(), renderingSize.y(), 2, 0, GL_RGB, GL_FLOAT, NULL);
+    m_textureVolumeRender->setTextureSize(newViewport.x(), newViewport.y());
+    m_textureVolumeRender->dirtyTextureObject();
 
-    glBindTexture(GL_TEXTURE_2D, m_spGLData->RTTexture);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB16F_ARB, renderingSize.x(), renderingSize.y(), 0, GL_RGB, GL_FLOAT, NULL);
+    m_textureDepth->setTextureSize(currentViewport.x(), currentViewport.y());
+    m_textureDepth->dirtyTextureObject();
 
-    glBindTexture(GL_TEXTURE_2D, m_spGLData->DEPTexture);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB16F_ARB, renderingSize.x(), renderingSize.y(), 0, GL_RGB, GL_FLOAT, NULL);
+    m_fboFrontBox->setAttachment(osg::Camera::COLOR_BUFFER0, osg::FrameBufferAttachment(m_textureRaysStartEnd, 0));
+    m_fboBackBox->setAttachment(osg::Camera::COLOR_BUFFER0, osg::FrameBufferAttachment(m_textureRaysStartEnd, 1));
+
+    m_fboVolumeRender->setAttachment(osg::Camera::COLOR_BUFFER0, osg::FrameBufferAttachment(m_textureVolumeRender));
+
+    m_fboDepth->setAttachment(osg::Camera::DEPTH_BUFFER, osg::FrameBufferAttachment(m_textureDepth));
 
     return true;
 }
@@ -3708,29 +1642,20 @@ bool PSVolumeRendering::internalSetRenderingSize(PSVolumeRenderingParams *pParam
 // upload new, user selected lookup texture to the GPU memory
 bool PSVolumeRendering::internalSetLUT(PSVolumeRenderingParams *pParams)
 {
-    // upload new 1D texture
-    glActiveTexture(GL_TEXTURE2);
-    glBindTexture(GL_TEXTURE_2D, m_spGLData->LookUpTexture);
-    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_ALIGNMENT, 4));
-    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_SWAP_BYTES, 0));
-    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_LSB_FIRST, 0));
-    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_ROW_LENGTH, 0));
-    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_ROWS, 0));
-    tridimGlBool("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0));
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16, LUT_2D_W, LUT_2D_H, 0, GL_RGBA, GL_UNSIGNED_SHORT, m_internalLookupTables[pParams->selectedLut]);
+    VPL_LOG_TRACE("PSVolumeRendering::internalSetLUT");
+
+    m_textureLookUp->getImage()->setImage(LUT_2D_W, LUT_2D_H, 1, LOOKUP_TEXTURE_FORMAT, GL_RGBA, GL_UNSIGNED_SHORT,
+        (unsigned char*)m_internalLookupTables[static_cast<int>(pParams->selectedLut)], osg::Image::NO_DELETE);
+    m_textureLookUp->dirtyTextureObject();
 
     return true;
 }
 
-///////////////////////////////////////////////////////////////////////////////
-//
 void PSVolumeRendering::setFlag(int Flag)
 {
     m_Flags |= Flag;
 }
 
-///////////////////////////////////////////////////////////////////////////////
-//
 void PSVolumeRendering::setAndSignalFlag(int Flag)
 {
     m_Mutex.lock();
@@ -3739,22 +1664,16 @@ void PSVolumeRendering::setAndSignalFlag(int Flag)
     m_Mutex.unlock();
 }
 
-///////////////////////////////////////////////////////////////////////////////
-//
 void PSVolumeRendering::clearFlag(int Flag)
 {
     m_Flags &= (0xffff - Flag);
 }
 
-///////////////////////////////////////////////////////////////////////////////
-//
 bool PSVolumeRendering::testFlag(int Flag)
 {
     return (m_Flags & Flag) != 0;
 }
 
-///////////////////////////////////////////////////////////////////////////////
-//
 VPL_THREAD_ROUTINE(PSVolumeRendering::setupLoop)
 {
     // Console object
@@ -3849,205 +1768,118 @@ VPL_THREAD_ROUTINE(PSVolumeRendering::setupLoop)
     return 0;
 }
 
-///////////////////////////////////////////////////////////////////////////////
-// Latest version
-// - num. of quads specified by the parameter
-// - VAO (Vertex Array Object)
-void PSVolumeRendering::prepareBox(int NumOfQuads)
+void PSVolumeRendering::prepareBox(int numOfQuads)
 {
-    m_Triangles.clear();
+    auto vertices = new osg::Vec3Array();
 
     // Quad size - real and texture coordinates
-    float rs = 2.0f / NumOfQuads;
-    float ts = 1.0f / NumOfQuads;
+    float rs = 2.0f / numOfQuads;
+    float ts = 1.0f / numOfQuads;
 
     // First side
     float b = -1.0f, v = 0.0f;
-    for (int j = 0; j < NumOfQuads; ++j, b += rs, v += ts)
+    for (int j = 0; j < numOfQuads; ++j, b += rs, v += ts)
     {
         float a = -1.0f, u = 0.0f;
-        for (int i = 0; i < NumOfQuads; ++i, a += rs, u += ts)
+        for (int i = 0; i < numOfQuads; ++i, a += rs, u += ts)
         {
-            m_Triangles.push_back(tCoords(a,      b + rs, -1.0f));
-            m_Triangles.push_back(tCoords(a + rs, b + rs, -1.0f));
-            m_Triangles.push_back(tCoords(a + rs, b,      -1.0f));
+            vertices->push_back(osg::Vec3(a, b + rs, -1.0f));
+            vertices->push_back(osg::Vec3(a + rs, b + rs, -1.0f));
+            vertices->push_back(osg::Vec3(a + rs, b, -1.0f));
 
-            m_Triangles.push_back(tCoords(a + rs, b,      -1.0f));
-            m_Triangles.push_back(tCoords(a,      b,      -1.0f));
-            m_Triangles.push_back(tCoords(a,      b + rs, -1.0f));
+            vertices->push_back(osg::Vec3(a + rs, b, -1.0f));
+            vertices->push_back(osg::Vec3(a, b, -1.0f));
+            vertices->push_back(osg::Vec3(a, b + rs, -1.0f));
 
-            m_Triangles.push_back(tCoords(a,      b + rs, 1.0f));
-            m_Triangles.push_back(tCoords(a,      b,      1.0f));
-            m_Triangles.push_back(tCoords(a + rs, b,      1.0f));
+            vertices->push_back(osg::Vec3(a, b + rs, 1.0f));
+            vertices->push_back(osg::Vec3(a, b, 1.0f));
+            vertices->push_back(osg::Vec3(a + rs, b, 1.0f));
 
-            m_Triangles.push_back(tCoords(a + rs, b,      1.0f));
-            m_Triangles.push_back(tCoords(a + rs, b + rs, 1.0f));
-            m_Triangles.push_back(tCoords(a,      b + rs, 1.0f));
+            vertices->push_back(osg::Vec3(a + rs, b, 1.0f));
+            vertices->push_back(osg::Vec3(a + rs, b + rs, 1.0f));
+            vertices->push_back(osg::Vec3(a, b + rs, 1.0f));
         }
     }
 
     b = -1.0f, v = 0.0f;
-    for (int j = 0; j < NumOfQuads; ++j, b += rs, v += ts)
+    for (int j = 0; j < numOfQuads; ++j, b += rs, v += ts)
     {
         float a = -1.0f, u = 0.0f;
-        for (int i = 0; i < NumOfQuads; ++i, a += rs, u += ts)
+        for (int i = 0; i < numOfQuads; ++i, a += rs, u += ts)
         {
-            m_Triangles.push_back(tCoords(a,      -1.0f, b));
-            m_Triangles.push_back(tCoords(a + rs, -1.0f, b));
-            m_Triangles.push_back(tCoords(a + rs, -1.0f, b + rs));
+            vertices->push_back(osg::Vec3(a, -1.0f, b));
+            vertices->push_back(osg::Vec3(a + rs, -1.0f, b));
+            vertices->push_back(osg::Vec3(a + rs, -1.0f, b + rs));
 
-            m_Triangles.push_back(tCoords(a + rs, -1.0f, b + rs));
-            m_Triangles.push_back(tCoords(a,      -1.0f, b + rs));
-            m_Triangles.push_back(tCoords(a,      -1.0f, b));
+            vertices->push_back(osg::Vec3(a + rs, -1.0f, b + rs));
+            vertices->push_back(osg::Vec3(a, -1.0f, b + rs));
+            vertices->push_back(osg::Vec3(a, -1.0f, b));
 
-            m_Triangles.push_back(tCoords(a,      1.0f,  b));
-            m_Triangles.push_back(tCoords(a,      1.0f,  b + rs));
-            m_Triangles.push_back(tCoords(a + rs, 1.0f,  b + rs));
+            vertices->push_back(osg::Vec3(a, 1.0f, b));
+            vertices->push_back(osg::Vec3(a, 1.0f, b + rs));
+            vertices->push_back(osg::Vec3(a + rs, 1.0f, b + rs));
 
-            m_Triangles.push_back(tCoords(a + rs, 1.0f,  b + rs));
-            m_Triangles.push_back(tCoords(a + rs, 1.0f,  b));
-            m_Triangles.push_back(tCoords(a,      1.0f,  b));
+            vertices->push_back(osg::Vec3(a + rs, 1.0f, b + rs));
+            vertices->push_back(osg::Vec3(a + rs, 1.0f, b));
+            vertices->push_back(osg::Vec3(a, 1.0f, b));
         }
     }
 
     b = -1.0f, v = 0.0f;
-    for (int j = 0; j < NumOfQuads; ++j, b += rs, v += ts)
+    for (int j = 0; j < numOfQuads; ++j, b += rs, v += ts)
     {
         float a = -1.0f, u = 0.0f;
-        for (int i = 0; i < NumOfQuads; ++i, a += rs, u += ts)
+        for (int i = 0; i < numOfQuads; ++i, a += rs, u += ts)
         {
-            m_Triangles.push_back(tCoords(-1.0f, a + rs, b + rs));
-            m_Triangles.push_back(tCoords(-1.0f, a + rs, b));
-            m_Triangles.push_back(tCoords(-1.0f, a,      b));
+            vertices->push_back(osg::Vec3(-1.0f, a + rs, b + rs));
+            vertices->push_back(osg::Vec3(-1.0f, a + rs, b));
+            vertices->push_back(osg::Vec3(-1.0f, a, b));
 
-            m_Triangles.push_back(tCoords(-1.0f, a,      b));
-            m_Triangles.push_back(tCoords(-1.0f, a,      b + rs));
-            m_Triangles.push_back(tCoords(-1.0f, a + rs, b + rs));
+            vertices->push_back(osg::Vec3(-1.0f, a, b));
+            vertices->push_back(osg::Vec3(-1.0f, a, b + rs));
+            vertices->push_back(osg::Vec3(-1.0f, a + rs, b + rs));
 
-            m_Triangles.push_back(tCoords(1.0f,  a + rs, b + rs));
-            m_Triangles.push_back(tCoords(1.0f,  a,      b + rs));
-            m_Triangles.push_back(tCoords(1.0f,  a,      b));
+            vertices->push_back(osg::Vec3(1.0f, a + rs, b + rs));
+            vertices->push_back(osg::Vec3(1.0f, a, b + rs));
+            vertices->push_back(osg::Vec3(1.0f, a, b));
 
-            m_Triangles.push_back(tCoords(1.0f,  a,      b));
-            m_Triangles.push_back(tCoords(1.0f,  a + rs, b));
-            m_Triangles.push_back(tCoords(1.0f,  a + rs, b + rs));
+            vertices->push_back(osg::Vec3(1.0f, a, b));
+            vertices->push_back(osg::Vec3(1.0f, a + rs, b));
+            vertices->push_back(osg::Vec3(1.0f, a + rs, b + rs));
         }
     }
+
+    m_box = new osg::Geometry();
+    m_box->setVertexArray(vertices);
+    m_box->addPrimitiveSet(new osg::DrawArrays(GL_TRIANGLES, 0, 3 * 12 * numOfQuads * numOfQuads));
 }
 
-///////////////////////////////////////////////////////////////////////////////
-// Latest version
-// - a complex geometry (more than 6 basic quads)
-// - VAO (Vertex Array Object)
-void PSVolumeRendering::renderBox(PSVolumeRenderingParams *pParams, const tArray& Triangles)
+void PSVolumeRendering::prepareQuad()
 {
-    COpenGlState state;
+    auto vertices = new osg::Vec3Array();
+    vertices->push_back(osg::Vec3(-1.0f, -1.0f, 0.0f));
+    vertices->push_back(osg::Vec3(1.0f, -1.0f, 0.0f));
+    vertices->push_back(osg::Vec3(1.0f, 1.0f, 0.0f));
+    vertices->push_back(osg::Vec3(-1.0f, 1.0f, 0.0f));
 
-    // height of the box (object)
-    float Y = (float)pParams->YSize / (float)pParams->XSize * pParams->aspectRatio_YtoX;
-
-    // depth of the box
-    float Z = (float)pParams->ZSize / (float)pParams->XSize * pParams->aspectRatio_ZtoX;
-
-    // Scaling of the box
-    glMatrixMode(GL_MODELVIEW);
-    glPushMatrix();
-    glScalef(1.0f, Y, Z);
-
-    // grab current matrices and calculate inverse matrices for further processing
-    osg::Matrix projectionMatrix;
-    GLdouble glProjectionMatrix[16];
-    glMatrixMode(GL_PROJECTION);
-    glGetDoublev(GL_PROJECTION_MATRIX, glProjectionMatrix);
-    projectionMatrix.set(glProjectionMatrix);
-    projectionMatrix = osg::Matrix::inverse(projectionMatrix);
-
-    osg::Matrix modelViewMatrix;
-    GLdouble glModelViewMatrix[16];
-    glMatrixMode(GL_MODELVIEW);
-    glGetDoublev(GL_MODELVIEW_MATRIX, glModelViewMatrix);
-    modelViewMatrix.set(glModelViewMatrix);
-    modelViewMatrix = osg::Matrix::inverse(modelViewMatrix);
-
-    // store inverted matrices
-    for (int i = 0; i < 16; i++)
-    {
-        pParams->invModelViewMatrix[i] = modelViewMatrix.ptr()[i];
-        pParams->invProjectionMatrix[i] = projectionMatrix.ptr()[i];
-    }
-
-    // Useless color definition - not visible under normal circumstances
-    glColor3f(0.0f, 0.0f, 0.0f);
-
-    // Save current state
-    GLint vertexArray;
-    glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &vertexArray);
-
-    tridimGl("glEnableClientState", glEnableClientState(GL_VERTEX_ARRAY));
-    tridimGl("glDisableClientState", glDisableClientState(GL_TEXTURE_COORD_ARRAY));
-    tridimGl("glDisableClientState", glDisableClientState(GL_NORMAL_ARRAY));
-    tridimGl("glDisableClientState", glDisableClientState(GL_COLOR_ARRAY));
-
-    // Draw all VBOs
-    int BatchSize = Triangles.size() / conf::NumOfBatches;
-    for (int b = 0; b < conf::NumOfBatches; ++b)
-    {
-#if(0)
-        GLboolean is = glIsVertexArrayX(m_spGLData->VAOBox[b]);
-        if (!is)
-        {
-            glGenVertexArraysX(conf::NumOfBatches, m_spGLData->VAOBox); // just for testing
-        }
-        // Bind the corresponding VAO
-        glBindVertexArrayX(m_spGLData->VAOBox[b]);
-
-        // Enable vertex arrays
-        glEnableClientState(GL_VERTEX_ARRAY);
-        glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-        glDisableClientState(GL_NORMAL_ARRAY);
-        glDisableClientState(GL_COLOR_ARRAY);
-
-        glBindBufferARB(GL_ARRAY_BUFFER_ARB, m_spGLData->VBOBox[b]);
-        glVertexPointer(3, GL_FLOAT, 0, 0);
-
-        // Draw the box
-        glDrawArrays(GL_TRIANGLES, 0, GLsizei(BatchSize));
-#else
-        tridimGl("glVertexPointer", glVertexPointer(3, GL_FLOAT, 0, &(m_Triangles[b * BatchSize])));
-
-        // Draw the box
-        tridimGl("glDrawArrays", glDrawArrays(GL_TRIANGLES, 0, GLsizei(BatchSize)));
-#endif
-    }
-
-    // Unbind the vertex array
-    glBindVertexArrayX(vertexArray);
-
-    // Restore the matrix
-    glPopMatrix();
+    m_quad = new osg::Geometry();
+    m_quad->setVertexArray(vertices);
+    m_quad->addPrimitiveSet(new osg::DrawArrays(osg::PrimitiveSet::TRIANGLE_FAN, 0, 4));
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 // Main volume rendering function called for every frame displayed
 // Initilizes OpenGL when first called, than updates shaders and lookups
 // and finally renders volume in a few steps.
-void PSVolumeRendering::renderVolume()
+void PSVolumeRendering::renderVolume(osg::RenderInfo& renderInfo)
 {
     // Local copy of rendering parameters
-    PSVolumeRenderingParams Params;
-    int Flags = 0;
-
-    COpenGlState state;
+    PSVolumeRenderingParams params;
+    int flags = 0;
 
     // BEGIN: Locked part of the rendering
     {
         tLock Lock(*this);
-
-        // Is rendering enabled?
-        if (!m_Enabled)
-        {
-            return;
-        }
 
         // Do not do anything if init failed many times
         if (constantFailure())
@@ -4058,8 +1890,8 @@ void PSVolumeRendering::renderVolume()
         // Initialize the renderer if required.
         init();
 
-        // Is rendering correctly initialized?
-        if (!testFlag(INITIALIZED))
+        // Is rendering enabled and correctly initialized?
+        if (!m_Enabled || !testFlag(INITIALIZED))
         {
             return;
         }
@@ -4074,27 +1906,27 @@ void PSVolumeRendering::renderVolume()
         }
 
         // Local copy of internal flags
-        Flags = m_Flags;
+        flags = m_Flags;
         clearFlag(TEXTURE_INVALID |
             AUX_TEXTURE_INVALID |
             CUSTOM_TEXTURE_INVALID |
-            OSR_INVALID | 
+            OSR_INVALID |
             LUT_INVALID |
             FAST_REDRAW);
 
         // New texture data?
-        if (Flags & TEXTURE_INVALID)
+        if (flags & TEXTURE_INVALID)
         {
             internalUploadTexture();
         }
 
-        if (Flags & AUX_TEXTURE_INVALID)
+        if (flags & AUX_TEXTURE_INVALID)
         {
             internalUploadAuxTexture();
         }
 
         // New texture data?
-        if (Flags & CUSTOM_TEXTURE_INVALID)
+        if (flags & CUSTOM_TEXTURE_INVALID)
         {
             switch (m_currentType)
             {
@@ -4119,307 +1951,157 @@ void PSVolumeRendering::renderVolume()
         }
 
         // Create a local copy of current rendering parameters
-        Params = *m_spParams;
+        params = *m_spParams;
     }
     // END: Locked part of the rendering
 
+    auto preViewport = renderInfo.getCurrentCamera()->getViewport();
+
+    osg::Vec2i viewportSize = osg::Vec2i(preViewport->width(), preViewport->height());
+    osg::Vec2i renderingSize = getRenderingSize(params, viewportSize, flags);
+
+    auto newViewport = new osg::Viewport(0, 0, renderingSize.x(), renderingSize.y());
+
     // Resolution changed?
-    if (Flags & OSR_INVALID)
+    if (flags & OSR_INVALID)
     {
-        internalSetRenderingSize(&Params, Flags);
+        internalSetRenderingSize(params, viewportSize, renderingSize, flags);
     }
 
     // LUT changed?
-    if (Flags & LUT_INVALID)
+    if (flags & LUT_INVALID)
     {
-        internalSetLUT(&Params);
+        internalSetLUT(&params);
     }
 
-    glGetErrors(""); // reset gl errors
-#ifdef USE_OPENGL_CALLBACK
-    glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
-    glDebugMessageCallback(openglCallbackFunction, nullptr);
-#endif
+    float Y = static_cast<float>(params.YSize) / params.XSize * params.aspectRatio_YtoX;
+    float Z = static_cast<float>(params.ZSize) / params.XSize * params.aspectRatio_ZtoX;
 
-    // general OpenGL settings
-    //glClearColor(0.2f, 0.2f, 0.4f, 0.0f);
-    tridimGl("glClearDepth", glClearDepth(1.0f););
-    tridimGl("glEnable", glEnable(GL_DEPTH_TEST););
-    //glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST);
-    tridimGl("glHint", glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_FASTEST););
+    osg::Matrix prevModelViewMatrix = renderInfo.getState()->getModelViewMatrix();
+    osg::Matrix quadModelViewMatrix = osg::Matrix::scale(params.RealXSize * 0.5f, params.RealXSize * 0.5f, params.RealXSize * 0.5f) * prevModelViewMatrix;
+    osg::Matrix boxModelViewMatrix = osg::Matrix::scale(1.0f, Y, Z) * quadModelViewMatrix;
 
-    // reset to most likely original state
-    //glActiveTexture(GL_TEXTURE0);
+    params.invModelViewMatrix = osg::Matrix::inverse(boxModelViewMatrix);
+    params.invProjectionMatrix = osg::Matrix::inverse(renderInfo.getState()->getProjectionMatrix());
 
-    // The current rendering size
-    vpl::img::CPoint3D renderingSize = getRenderingSize(&Params, Flags);
+    auto stateSet = new osg::StateSet();
+    renderInfo.getState()->captureCurrentState(*stateSet);
 
-    // Store the current matrix
-    tridimGl("glMatrixMode", glMatrixMode(GL_MODELVIEW););
-    tridimGl("glPushMatrix", glPushMatrix(););
+    m_fboDepth->apply(*renderInfo.getState(), osg::FrameBufferObject::DRAW_FRAMEBUFFER);
 
-    // save current render target
-    GLint framebuffer;
-    tridimGl("glGetIntegerv", glGetIntegerv(GL_FRAMEBUFFER_BINDING, &framebuffer););
+    renderInfo.getState()->haveAppliedAttribute(m_fboDepth);
 
-    // save current viewport size
-    GLint viewport[4];
-    tridimGl("glGetIntegerv", glGetIntegerv(GL_VIEWPORT, viewport););
+    tridimGlR("glBlitFramebuffer", glBlitFramebuffer(0, 0, viewportSize.x(), viewportSize.y(), 0, 0, viewportSize.x(), viewportSize.y(), GL_DEPTH_BUFFER_BIT, GL_NEAREST););
 
-    // Setup depth texture
-    tridimGl("glActiveTexture", glActiveTexture(GL_TEXTURE5););
-    tridimGl("glBindTexture", glBindTexture(GL_TEXTURE_2D, m_spGLData->GeometryDepthTexture););
-    tridimGl("glPixelStorei", glPixelStorei(GL_UNPACK_ALIGNMENT, 4););
-    tridimGl("glPixelStorei", glPixelStorei(GL_UNPACK_SWAP_BYTES, 0););
-    tridimGl("glPixelStorei", glPixelStorei(GL_UNPACK_LSB_FIRST, 0););
-    tridimGl("glPixelStorei", glPixelStorei(GL_UNPACK_ROW_LENGTH, 0););
-    tridimGl("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_ROWS, 0););
-    tridimGl("glPixelStorei", glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0););
-    tridimGl("glTexImage2D", glTexImage2D(GL_TEXTURE_2D, 0, depthTextureParameters[0], viewport[2], viewport[3], 0, depthTextureParameters[1], depthTextureParameters[2], NULL););
-    tridimGl("glCopyTexSubImage2D", glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, viewport[2], viewport[3]););
+    renderInfo.getState()->apply(stateSet);
 
-    // and change it to small off-screen texture
-    tridimGl("glViewport", glViewport(0, 0, renderingSize.x(), renderingSize.y()););
+    renderInfo.getState()->applyModelViewMatrix(boxModelViewMatrix);
 
-    // modify OSG transformation matrix
-    tridimGl("glScalef", glScalef(Params.RealXSize * 0.5f, Params.RealXSize * 0.5f, Params.RealXSize * 0.5f););
-
-    tridimGl("glEnable", glEnable(GL_CULL_FACE););
-
-    int val;
     // if fast redraw is not set, render volume
-    if ((Flags & FAST_REDRAW) == 0)
+    if (!(flags & FAST_REDRAW))
     {
-        GLenum drawBuffers0[] = { GL_COLOR_ATTACHMENT0_EXT };
-        GLenum drawBuffers1[] = { GL_COLOR_ATTACHMENT0_EXT, GL_COLOR_ATTACHMENT1_EXT };
+        tridimGlR("glClearColor", glClearColor(0.0f, 0.0f, 0.0f, 0.0f));
 
         // render front side polygons of the box
-        tridimGl("glCullFace", glCullFace(GL_BACK)); // cull back-facing polygons
-        tridimGl("glDepthFunc", glDepthFunc(GL_LESS)); // keep front-most fragments
-        tridimGl("glBindFramebufferEXT", glBindFramebufferEXT(GL_DRAW_FRAMEBUFFER_EXT, m_spGLData->OffScreenFramebuffer0));
-        tridimGl("glFramebufferTexture3DEXT", glFramebufferTexture3DEXT(GL_DRAW_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0_EXT, GL_TEXTURE_3D, m_spGLData->RaysStartEnd, 0, 0));
-        tridimGl("glDrawBuffers", glDrawBuffers(1, drawBuffers0));
-        tridimGl("glUseProgram", glUseProgram(m_spGLData->PshaderFBO)); // use special small shader
-        tridimGl("glClearDepth", glClearDepth(1.0));
-        tridimGl("glClearColor", glClearColor(0.0f, 0.0f, 0.0f, 0.0f));
-        tridimGl("glClear", glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT));
-        renderBox(&Params, m_Triangles);
+        renderInfo.getState()->apply(m_stateSetFrontBox);
+        renderInfo.getState()->applyModelViewAndProjectionUniformsIfRequired();
+        renderInfo.getState()->applyAttribute(newViewport);
+
+        tridimGlR("glClear", glClear(GL_COLOR_BUFFER_BIT));
+
+        m_box->draw(renderInfo);
 
         // render back side polygons of the box
-        tridimGl("glCullFace", glCullFace(GL_FRONT)); // cull front-facing polygons
-        tridimGl("glDepthFunc", glDepthFunc(GL_GREATER)); // keep back-most fragments
-        tridimGl("glBindFramebufferEXT", glBindFramebufferEXT(GL_DRAW_FRAMEBUFFER_EXT, m_spGLData->OffScreenFramebuffer1));
-        tridimGl("glFramebufferTexture3DEXT", glFramebufferTexture3DEXT(GL_DRAW_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0_EXT, GL_TEXTURE_3D, m_spGLData->RaysStartEnd, 0, 1));
-        tridimGl("glDrawBuffers", glDrawBuffers(1, drawBuffers0));
-        tridimGl("glUseProgram", glUseProgram(m_spGLData->PshaderFBO)); // use special small shader
-        tridimGl("glClearDepth", glClearDepth(0.0));
-        tridimGl("glClear", glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT));
-        renderBox(&Params, m_Triangles);
+        renderInfo.getState()->apply(m_stateSetBackBox);
+        renderInfo.getState()->applyModelViewAndProjectionUniformsIfRequired();
+        renderInfo.getState()->applyAttribute(newViewport);
 
-        // render back side polygons of the box - this time using VR shaders and related stuff
-        tridimGl("glBindFramebufferEXT", glBindFramebufferEXT(GL_DRAW_FRAMEBUFFER_EXT, m_spGLData->ResizeFramebuffer)); // render to texture
-        tridimGl("glFramebufferTexture2DEXT", glFramebufferTexture2DEXT(GL_DRAW_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0_EXT, GL_TEXTURE_2D, m_spGLData->RTTexture, 0));
-        tridimGl("glFramebufferTexture2DEXT", glFramebufferTexture2DEXT(GL_DRAW_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT1_EXT, GL_TEXTURE_2D, m_spGLData->DEPTexture, 0));
-        tridimGl("glDrawBuffers", glDrawBuffers(2, drawBuffers1););
-        tridimGl("glClearColor", glClearColor(0.0f, 0.0f, 0.0f, 0.0f));
-        tridimGl("glClear", glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT));
+        tridimGlR("glClear", glClear(GL_COLOR_BUFFER_BIT));
 
-        // use volume rendering shader
-        unsigned int selectedShader = 0;
-        if (Params.selectedShader == CUSTOM)
-        {
-            selectedShader = m_customShaderId;
-        }
-        else
-        {
-            selectedShader = m_spGLData->PshaderRayCast[Params.selectedShader];
-        }
-        tridimGl("glUseProgram", glUseProgram(selectedShader));
+        m_box->draw(renderInfo);
 
-        // bind textures
-        tridimGl("glActiveTexture", glActiveTexture(GL_TEXTURE0));
-        tridimGl("glBindTexture", glBindTexture(GL_TEXTURE_3D, m_spGLData->VolumeTexture));
-        setParameter(selectedShader, "t3D", 0);
+        updateShaderUniforms(params, renderingSize, flags);
 
-        tridimGl("glActiveTexture", glActiveTexture(GL_TEXTURE1));
-        tridimGl("glBindTexture", glBindTexture(GL_TEXTURE_3D, (Params.selectedShader != CUSTOM ? m_spGLData->AuxVolumeTexture : m_spGLData->CustomAuxVolumeTexture)));
-        setParameter(selectedShader, "tSkip3D", 1);
-
-        tridimGl("glActiveTexture", glActiveTexture(GL_TEXTURE2));
-        tridimGl("glBindTexture", glBindTexture(GL_TEXTURE_2D, m_spGLData->LookUpTexture));
-        setParameter(selectedShader, "LookUp", 2);
-
-        tridimGl("glActiveTexture", glActiveTexture(GL_TEXTURE3));
-        tridimGl("glBindTexture", glBindTexture(GL_TEXTURE_2D, m_spGLData->NoiseTexture));
-        setParameter(selectedShader, "Noise", 3);
-
-        tridimGl("glActiveTexture", glActiveTexture(GL_TEXTURE4));
-        tridimGl("glBindTexture", glBindTexture(GL_TEXTURE_3D, m_spGLData->RaysStartEnd));
-        setParameter(selectedShader, "tRaysStartEnd", 4);        
-
-        tridimGl("glActiveTexture", glActiveTexture(GL_TEXTURE5));
-        tridimGl("glBindTexture", glBindTexture(GL_TEXTURE_2D, m_spGLData->GeometryDepthTexture));
-        setParameter(selectedShader, "Depth", 5);
-
-        // nothing in Texture Unit #6
-        //glActiveTexture(GL_TEXTURE6);
-        //glBindTexture(GL_TEXTURE_3D, 0);
-        //setParameter(selectedShader, "", 6);
-
-        if (Params.selectedShader == CUSTOM)
-        {
-            tridimGl("glActiveTexture", glActiveTexture(GL_TEXTURE7));
-            tridimGl("glBindTexture", glBindTexture(GL_TEXTURE_3D, m_currentVolume));
-            setParameter(selectedShader, "tCustom3D", 7);
-        }
-
-        // set shader values
-        float volumeSamplingDistance = getVolumeSamplingDistance(&Params, Flags);
-        osg::Vec3 par_sVector = (Params.selectedShader == CUSTOM ? osg::Vec3(1.25f / float(Params.CustomXSize), 1.25f / float(Params.CustomYSize), 1.25f / float(Params.CustomZSize)) : osg::Vec3(1.25f / float(Params.XSize), 1.25f / float(Params.YSize), 1.25f / float(Params.ZSize)));
-        osg::Vec3 par_skipTexSize = (Params.selectedShader == CUSTOM ? osg::Vec3(Params.CustomAuxTexXSize, Params.CustomAuxTexYSize, Params.CustomAuxTexZSize) : osg::Vec3(Params.AuxTexXSize, Params.AuxTexYSize, Params.AuxTexZSize));
-        osg::Vec3 par_tResolution = (Params.selectedShader == CUSTOM ? osg::Vec3(volumeSamplingDistance / float(Params.CustomXSize), volumeSamplingDistance / float(Params.CustomYSize), volumeSamplingDistance / float(Params.CustomZSize)) : osg::Vec3(volumeSamplingDistance / float(Params.XSize), volumeSamplingDistance / float(Params.YSize), volumeSamplingDistance / float(Params.ZSize)));
-        osg::Vec3 par_tSkipResolution = (Params.selectedShader == CUSTOM ? osg::Vec3(8.0f / float(Params.CustomXSize), 8.0f / float(Params.CustomYSize), 8.0f / float(Params.CustomZSize)) : osg::Vec3(8.0f / float(Params.XSize), 8.0f / float(Params.YSize), 8.0f / float(Params.ZSize)));
-        osg::Matrix invProjectionMatrix = osg::Matrix(Params.invProjectionMatrix);
-        osg::Matrix invModelViewMatrix = osg::Matrix(Params.invModelViewMatrix);
-
-        setParameter(selectedShader, "textureSampling",     volumeSamplingDistance);
-        setParameter(selectedShader, "inputAdjustment",     osg::Vec2(Params.dataPreMultiplication, -Params.dataOffset));
-        setParameter(selectedShader, "imageAdjustment",     osg::Vec2(Params.imageBrightness, Params.imageContrast));
-        setParameter(selectedShader, "sVector",             par_sVector);
-        setParameter(selectedShader, "skipTexSize",         par_skipTexSize);
-        setParameter(selectedShader, "tResolution",         par_tResolution);
-        setParameter(selectedShader, "tSkipResolution",     par_tSkipResolution);
-        setParameter(selectedShader, "StopCondition",       0.01f);
-        setParameter(selectedShader, "wSize",               osg::Vec2(1.0f / float(renderingSize.x()), 1.0f / float(renderingSize.y())));
-        setParameter(selectedShader, "pl",                  osg::Vec4(Params.planeA, Params.planeB, Params.planeC, Params.planeD + Params.planeDeltaNear * Sqrt3Div2));
-        setParameter(selectedShader, "plNear",              osg::Vec4(Params.planeA, Params.planeB, Params.planeC, Params.planeD + Params.planeDeltaNear * Sqrt3Div2));
-        setParameter(selectedShader, "plFar",               osg::Vec4(Params.planeA, Params.planeB, Params.planeC, Params.planeD + Params.planeDeltaFar * Sqrt3Div2));
-        setParameter(selectedShader, "invProjectionMatrix", invProjectionMatrix);
-        setParameter(selectedShader, "invModelViewMatrix",  invModelViewMatrix);
-        setParameter(selectedShader, "skipCondition",       m_skipConditions[Params.selectedLut]);
-
-        if (Params.selectedShader == SURFACE)
-        {
-            setParameter(selectedShader, "surfacePar",  osg::Vec2(Params.surfaceNormalMult, Params.surfaceNormalExp));
-        }
-
-        // let plugin fill custom shader parameters
-        if (Params.selectedShader == CUSTOM)
+        if (params.selectedShader == EShaders::CUSTOM)
         {
             shaderUpdateCallback();
         }
 
-        // actual rendering
-        renderBox(&Params, m_Triangles);
+        m_stateSetVolumeRender->setTextureAttribute(2, m_textureLookUp);
 
-        // restore culling and depth func
-        tridimGl("glCullFace", glCullFace(GL_BACK));
-        tridimGl("glDepthFunc", glDepthFunc(GL_LESS));
-        tridimGl("glClearDepth", glClearDepth(1.0));
+
+        renderInfo.getState()->apply(m_stateSetVolumeRender);
+        renderInfo.getState()->applyModelViewAndProjectionUniformsIfRequired();
+        renderInfo.getState()->applyAttribute(newViewport);
+
+        tridimGlR("glClear", glClear(GL_COLOR_BUFFER_BIT));
+
+        m_box->draw(renderInfo);
     }
 
-    // now RESIZE rendered texture to fit window
-    // AND RENDER BICUBIC RESIZED IMAGE TO WHOLE WINDOW - SCREEN
-    tridimGl("glUseProgram", glUseProgram(m_spGLData->PshaderResize));
-    tridimGl("glBindFramebufferEXT", glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, framebuffer));
-    tridimGl("glViewport", glViewport(viewport[0], viewport[1], viewport[2], viewport[3]));
+    m_uniform_image->set(4);
+    m_uniform_kernel->set(6);
 
-    tridimGl("glActiveTexture", glActiveTexture(GL_TEXTURE4));
-    tridimGl("glBindTexture", glBindTexture(GL_TEXTURE_2D, m_spGLData->RTTexture));
-    setParameter(m_spGLData->PshaderResize, "image", 4);
+    m_uniform_resolution->set(osg::Vec2(renderingSize.x(), renderingSize.y()));
 
-    tridimGl("glActiveTexture", glActiveTexture(GL_TEXTURE5));
-    tridimGl("glBindTexture", glBindTexture(GL_TEXTURE_2D, m_spGLData->DEPTexture));
-    setParameter(m_spGLData->PshaderResize, "outdepth", 5);
+    renderInfo.getState()->apply(m_stateSetResize);
+    renderInfo.getState()->applyModelViewMatrix(quadModelViewMatrix);
+    renderInfo.getState()->applyModelViewAndProjectionUniformsIfRequired();
+    renderInfo.getState()->applyAttribute(preViewport);
 
-    tridimGl("glActiveTexture", glActiveTexture(GL_TEXTURE6));
-    tridimGl("glBindTexture", glBindTexture(GL_TEXTURE_1D, m_spGLData->BicKerTexture));
-    setParameter(m_spGLData->PshaderResize, "kernel", 6);
+    m_quad->draw(renderInfo);
 
-    setParameter(m_spGLData->PshaderResize, "resolution", osg::Vec2(renderingSize.x(), renderingSize.y()));
-
-    // end of parameters
-
-    tridimGl("glColor3f", glColor3f(0, 1, 1)); // no use
-    tridimGl("glEnable", glEnable(GL_BLEND));
-    tridimGl("glBlendFunc", glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA));
-    tridimGl("glDepthFunc", glDepthFunc(GL_ALWAYS));
-    tridimGl("glDisable", glDisable(GL_CULL_FACE););
-    //GLint binding;
-    //glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &binding);
-
-    // Save current state
-    bool bVertexArray = glIsEnabled(GL_VERTEX_ARRAY);
-    bool bTexCoordArray = glIsEnabled(GL_TEXTURE_COORD_ARRAY);
-    bool bNormalArray = glIsEnabled(GL_NORMAL_ARRAY);
-    bool bColorArray = glIsEnabled(GL_COLOR_ARRAY);
-    bool bIndexArray = glIsEnabled(GL_INDEX_ARRAY);
-    bool bSecondaryColorArray = glIsEnabled(GL_SECONDARY_COLOR_ARRAY);
-    bool bEdgeFlagArray = glIsEnabled(GL_EDGE_FLAG_ARRAY);
-    bool bFogCoordArray = glIsEnabled(GL_FOG_COORD_ARRAY);
-
-#ifdef USE_VAORECT
-    GLint vertexArray;
-    glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &vertexArray);
-
-    // Bind the corresponding VAO
-    glBindVertexArrayX(m_spGLData->VAORect);
-
-    // Draw the rect
-    glDrawArrays(GL_TRIANGLES, 0, GLsizei(6));
-
-    // Unboud a previously bound Vertex Array Object (just to be sure)
-    glBindVertexArrayX(vertexArray);
-#else
-    glEnableClientState(GL_VERTEX_ARRAY);
-    glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-    glDisableClientState(GL_NORMAL_ARRAY);
-    glDisableClientState(GL_COLOR_ARRAY);
-
-    // And set up vertex attributes
-    glBindBufferARB(GL_ARRAY_BUFFER_ARB, m_spGLData->VBORect);
-    glVertexPointer(3, GL_FLOAT, 0, 0);
-
-    glDrawArrays(GL_TRIANGLES, 0, GLsizei(6));
-    glBindBufferARB(GL_ARRAY_BUFFER_ARB, 0);
-#endif
-    
-    // Restore state so that OSG can continue its work
-    bVertexArray            ? glEnableClientState(GL_VERTEX_ARRAY)          : glDisableClientState(GL_VERTEX_ARRAY);
-    bTexCoordArray          ? glEnableClientState(GL_TEXTURE_COORD_ARRAY)   : glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-    bNormalArray            ? glEnableClientState(GL_NORMAL_ARRAY)          : glDisableClientState(GL_NORMAL_ARRAY);
-    bColorArray             ? glEnableClientState(GL_COLOR_ARRAY)           : glDisableClientState(GL_COLOR_ARRAY);
-    bIndexArray             ? glEnableClientState(GL_INDEX_ARRAY)           : glDisableClientState(GL_INDEX_ARRAY);
-    bSecondaryColorArray    ? glEnableClientState(GL_SECONDARY_COLOR_ARRAY) : glDisableClientState(GL_SECONDARY_COLOR_ARRAY);
-    bEdgeFlagArray          ? glEnableClientState(GL_EDGE_FLAG_ARRAY)       : glDisableClientState(GL_EDGE_FLAG_ARRAY);
-    bFogCoordArray          ? glEnableClientState(GL_FOG_COORD_ARRAY)       : glDisableClientState(GL_FOG_COORD_ARRAY);
-
-    // restore state
-    glPopMatrix();
-    glUseProgram(0);
-    glActiveTexture(GL_TEXTURE0);
-    glDepthFunc(GL_LESS);
-    glDisable(GL_BLEND);
-    glDisable(GL_CULL_FACE);
-    //glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
-
-    // From http://www.opengl.org/wiki/index.php/Common_Mistakes#Unsupported_formats_.231
-    // 
-    // Use glFlush if you are rendering directly to your window. It is better to
-    // have a double buffered window but if you have a case where you want to render
-    // to the window directly, then go ahead.
-    //
-    // There is a lot of tutorial website that show this 
-    // 
-    // glFlush();
-    // SwapBuffers();
-    //
-    // Never call glFlush before calling SwapBuffers. The SwapBuffer command takes care of flushing and command processing.
-    //glFlush();
+    renderInfo.getState()->applyModelViewMatrix(prevModelViewMatrix);
+    renderInfo.getState()->applyModelViewAndProjectionUniformsIfRequired();
 }
 
-///////////////////////////////////////////////////////////////////////////////
-//
+void PSVolumeRendering::updateShaderUniforms(PSVR::PSVolumeRendering::PSVolumeRenderingParams& params, const osg::Vec2i& newViewport, int flags)
+{
+    float vsd = getVolumeSamplingDistance(&params, flags);
+
+    m_uniform_t3D->set(0);
+    m_uniform_tSkip3D->set(1);
+    m_uniform_LookUp->set(2);
+    m_uniform_Noise->set(3);
+    m_uniform_tRaysStartEnd->set(4);
+    m_uniform_Depth->set(5);
+
+    if (params.selectedShader == EShaders::CUSTOM)
+    {
+        m_uniform_tCustom3D->set(7);
+
+        m_uniform_sVector->set(osg::Vec3(1.25f / float(params.CustomXSize), 1.25f / float(params.CustomYSize), 1.25f / float(params.CustomZSize)));
+        m_uniform_skipTexSize->set(osg::Vec3(params.CustomAuxTexXSize, params.CustomAuxTexYSize, params.CustomAuxTexZSize));
+        m_uniform_tResolution->set(osg::Vec3(vsd / float(params.CustomXSize), vsd / float(params.CustomYSize), vsd / float(params.CustomZSize)));
+        m_uniform_tSkipResolution->set(osg::Vec3(8.0f / float(params.CustomXSize), 8.0f / float(params.CustomYSize), 8.0f / float(params.CustomZSize)));
+    }
+    else
+    {
+        m_uniform_sVector->set(osg::Vec3(1.25f / float(params.XSize), 1.25f / float(params.YSize), 1.25f / float(params.ZSize)));
+        m_uniform_skipTexSize->set(osg::Vec3(params.AuxTexXSize, params.AuxTexYSize, params.AuxTexZSize));
+        m_uniform_tResolution->set(osg::Vec3(vsd / float(params.XSize), vsd / float(params.YSize), vsd / float(params.ZSize)));
+        m_uniform_tSkipResolution->set(osg::Vec3(8.0f / float(params.XSize), 8.0f / float(params.YSize), 8.0f / float(params.ZSize)));
+    }
+
+    m_uniform_textureSampling->set(vsd);
+    m_uniform_inputAdjustment->set(osg::Vec2(params.dataPreMultiplication, -params.dataOffset));
+    m_uniform_imageAdjustment->set(osg::Vec2(params.imageBrightness, params.imageContrast));
+    m_uniform_StopCondition->set(0.01f);
+    m_uniform_wSize->set(osg::Vec2(1.0f / newViewport.x(), 1.0f / newViewport.y()));
+    m_uniform_pl->set(osg::Vec4(params.planeA, params.planeB, params.planeC, params.planeD + params.planeDeltaNear * Sqrt3Div2));
+    m_uniform_plNear->set(osg::Vec4(params.planeA, params.planeB, params.planeC, params.planeD + params.planeDeltaNear * Sqrt3Div2));
+    m_uniform_plFar->set(osg::Vec4(params.planeA, params.planeB, params.planeC, params.planeD + params.planeDeltaFar * Sqrt3Div2));
+    m_uniform_invProjectionMatrix->set(params.invProjectionMatrix);
+    m_uniform_invModelViewMatrix->set(params.invModelViewMatrix);
+    m_uniform_skipCondition->set(m_skipConditions[static_cast<int>(params.selectedLut)]);
+
+    // surface rendering parameters
+    if (params.selectedShader == EShaders::SURFACE)
+    {
+        m_uniform_surfacePar->set(osg::Vec2(params.surfaceNormalMult, params.surfaceNormalExp));
+    }
+}
+
 bool PSVolumeRendering::init()
 {
     tLock Lock(*this);
@@ -4433,19 +2115,11 @@ bool PSVolumeRendering::init()
     // already
     if (!testFlag(INIT_INVALID))
     {
-        // Initial test
-        if (!canStart())
-        {
-            return false;
-        }
-
-        //setAndSignalFlag(INIT_INVALID);
         setFlag(INIT_INVALID);
     }
 
     if (testFlag(INIT_INVALID))
     {
-        CContextGuardian guard(m_pCanvas);
         if (!internalInitRendering())
         {
             m_FailureCounter++;
@@ -4475,34 +2149,16 @@ bool PSVolumeRendering::constantFailure()
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-// Returns all error strings
-std::vector<std::string> PSVolumeRendering::getErrorStrings()
-{
-    return m_ErrorStrings;
-}
-
-///////////////////////////////////////////////////////////////////////////////
 // are we able to render?
 void PSVolumeRendering::setMouseMode(bool bEnable)
 {
     tLock Lock(*this);
 
-    /*clearFlag(FAST_REDRAW);
-    if (APP_MODE.check(scene::CAppMode::COMMAND_DRAW_WINDOW))
-    {
-        if (bEnable)
-        {
-            setFlag(FAST_REDRAW);
-        }
-
-        return;
-    }*/
-
     if (bEnable)
     {
         setAndSignalFlag(MOUSE_MODE | OSR_INVALID);
     }
-    else
+    else if(testFlag(MOUSE_MODE))
     {
         clearFlag(MOUSE_MODE);
         setAndSignalFlag(OSR_INVALID);
@@ -4527,41 +2183,34 @@ void PSVolumeRendering::setMousePressed(bool bPressed)
 
 //////////////////////////////////////////////////////////////////////////////
 //
-void PSVolumeRendering::setShader(int shader)
+void PSVolumeRendering::setShader(EShaders shader)
 {
-    if (shader < 0 || shader >= SHADERS_COUNT)
-    {
-        return;
-    }
-
     tLock Lock(*this);
+
+    if (shader == m_spParams->selectedShader)
+        return;
 
     m_spParams->selectedShader = shader;
 
-    VPL_SIGNAL(SigVRModeChange).invoke(shader);
-}
-
-///////////////////////////////////////////////////////////////////////////////
-//
-void PSVolumeRendering::setLut(int lut)
-{
-    if (lut < 0 || lut >= LOOKUPS_COUNT)
+    if (testFlag(INITIALIZED))
     {
-        return;
+        setShaderInternal(shader);
     }
 
+    VPL_SIGNAL(SigVRModeChange).invoke(static_cast<int>(shader));
+}
+
+void PSVolumeRendering::setLut(ELookups lut)
+{
     tLock Lock(*this);
 
     m_spParams->selectedLut = lut;
 
-    //setAndSignalFlag(LUT_INVALID);
     setFlag(LUT_INVALID);
 
-    VPL_SIGNAL(SigVRLutChange).invoke(lut);
+    VPL_SIGNAL(SigVRLutChange).invoke(static_cast<int>(lut));
 }
 
-///////////////////////////////////////////////////////////////////////////////
-//
 void PSVolumeRendering::setQuality(int quality)
 {
     if (quality < 0 || quality >= QUALITY_LEVELS)
@@ -4586,8 +2235,6 @@ void PSVolumeRendering::setQuality(int quality)
     VPL_SIGNAL(SigVRQualityChange).invoke(quality);
 }
 
-///////////////////////////////////////////////////////////////////////////////
-//
 void PSVolumeRendering::setDataRemap(float expand, float offset)
 {
     tLock Lock(*this);
@@ -4607,8 +2254,6 @@ void PSVolumeRendering::getDataRemap(float& expand, float& offset)
     offset = m_spParams->dataOffset;
 }
 
-///////////////////////////////////////////////////////////////////////////////
-//
 void PSVolumeRendering::setPicture(float brightness, float contrast)
 {
     tLock Lock(*this);
@@ -4617,8 +2262,6 @@ void PSVolumeRendering::setPicture(float brightness, float contrast)
     m_spParams->imageContrast = contrast;
 }
 
-///////////////////////////////////////////////////////////////////////////////
-//
 void PSVolumeRendering::setSurfaceDetection(float mult, float exp)
 {
     tLock Lock(*this);
@@ -4627,8 +2270,6 @@ void PSVolumeRendering::setSurfaceDetection(float mult, float exp)
     m_spParams->surfaceNormalExp = exp;
 }
 
-///////////////////////////////////////////////////////////////////////////////
-//
 void PSVolumeRendering::setRenderingSize(int size)
 {
     if (size < 0)
@@ -4641,8 +2282,6 @@ void PSVolumeRendering::setRenderingSize(int size)
     m_spParams->renderingSize = size;
 }
 
-///////////////////////////////////////////////////////////////////////////////
-//
 void PSVolumeRendering::setCuttingPlane(float a, float b, float c, float d)
 {
     tLock Lock(*this);
@@ -4653,8 +2292,6 @@ void PSVolumeRendering::setCuttingPlane(float a, float b, float c, float d)
     m_spParams->planeD = d;
 }
 
-///////////////////////////////////////////////////////////////////////////////
-//
 void PSVolumeRendering::setCuttingPlaneDisplacement(float deltaNear, float deltaFar)
 {
     tLock Lock(*this);
@@ -4665,24 +2302,18 @@ void PSVolumeRendering::setCuttingPlaneDisplacement(float deltaNear, float delta
     m_spParams->planeDeltaFar = deltaFar;
 }
 
-///////////////////////////////////////////////////////////////////////////////
-//
 void PSVolumeRendering::setNearCuttingPlaneDisplacement(float delta)
 {
     vpl::math::limit<float>(delta, -1.0f, 1.0f);
     setCuttingPlaneDisplacement(delta, m_spParams->planeDeltaFar);
 }
 
-///////////////////////////////////////////////////////////////////////////////
-//
 void PSVolumeRendering::setFarCuttingPlaneDisplacement(float delta)
 {
     vpl::math::limit<float>(delta, -1.0f, 1.0f);
     setCuttingPlaneDisplacement(m_spParams->planeDeltaNear, delta);
 }
 
-///////////////////////////////////////////////////////////////////////////////
-//
 void PSVolumeRendering::getCuttingPlane(float &a, float &b, float &c, float &d)
 {
     a = m_spParams->planeA;
@@ -4691,22 +2322,16 @@ void PSVolumeRendering::getCuttingPlane(float &a, float &b, float &c, float &d)
     d = m_spParams->planeD;
 }
 
-///////////////////////////////////////////////////////////////////////////////
-//
 float PSVolumeRendering::getNearCuttingPlaneDisplacement()
 {
     return m_spParams->planeDeltaNear;
 }
 
-///////////////////////////////////////////////////////////////////////////////
-//
 float PSVolumeRendering::getFarCuttingPlaneDisplacement()
 {
     return m_spParams->planeDeltaFar;
 }
 
-///////////////////////////////////////////////////////////////////////////////
-//
 void PSVolumeRendering::setSamplingDistance(float distance)
 {
     if (distance < 0.0f)
@@ -4721,12 +2346,12 @@ void PSVolumeRendering::setSamplingDistance(float distance)
 
 ///////////////////////////////////////////////////////////////////////////////
 // get methods
-int  PSVolumeRendering::getLut() const
+PSVolumeRendering::ELookups PSVolumeRendering::getLut() const
 {
     return m_spParams->selectedLut;
 }
 
-int  PSVolumeRendering::getShader() const
+PSVolumeRendering::EShaders PSVolumeRendering::getShader() const
 {
     return m_spParams->selectedShader;
 }

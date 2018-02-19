@@ -26,12 +26,6 @@
 //! Includes
 #include <configure.h>
 
-#ifdef __APPLE__
-#   include <glew.h>
-#else
-#   include <GL/glew.h>
-#endif
-
 #include <QMainWindow>
 #include <QLabel>
 #include <QtCore/QTimer>

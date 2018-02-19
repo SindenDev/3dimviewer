@@ -32,6 +32,11 @@
 #include <app/Signals.h>
 #include <osg/CEventHandlerBase.h>
 
+namespace osg
+{
+    class CMaterialLines;
+}
+
 namespace scene
 {
 
@@ -71,6 +76,8 @@ public:
 	// Set shadow color
 	void setShadowColor( const osg::Vec4 & c ){ m_shadowColor = c; }
 
+    void setMaterial(osg::CMaterialLines* material);
+
 protected:
 	//! Is ruler visible?
 	bool m_visible;
@@ -99,6 +106,7 @@ protected:
 	//! Shadow color
 	osg::Vec4 m_shadowColor;
 
+    osg::ref_ptr<osg::CMaterialLines> m_gizmoLineMaterial;
 }; // class CRulerGizmo
 
 
@@ -288,6 +296,7 @@ protected:
 	//! Density collector used
 	CDensitySolver m_collector;
 
+    osg::ref_ptr<osg::CMaterialLines> m_gizmoLineMaterial;
 }; // class CMeasurementseh
 
 

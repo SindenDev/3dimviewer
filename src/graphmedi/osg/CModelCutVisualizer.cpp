@@ -22,6 +22,8 @@
 #include "osg/CModelCutVisualizer.h"
 #include <osg/Version>
 #include <osg/OSGCanvas.h>
+#include <osg/CThickLineMaterial.h>
+
 
 namespace osg
 {
@@ -39,6 +41,9 @@ CModelCutVisualizer::CModelCutVisualizer(OSGCanvas *canvas, bool autoPositioning
     m_geometry = new osg::Geometry;
     m_vertices = new osg::Vec3Array;
     m_indices = new osg::DrawElementsUInt(osg::PrimitiveSet::LINES);
+
+    m_lineMaterial = new osg::CMaterialLines(canvas->getView()->getCamera(), 1.0f);
+    m_lineMaterial->apply(m_geometry);
     
     osg::ref_ptr<osg::Vec4Array> colors = new osg::Vec4Array;
     colors->push_back(osg::Vec4(1.0f, 1.0f, 1.0f, 1.0f));
@@ -46,8 +51,6 @@ CModelCutVisualizer::CModelCutVisualizer(OSGCanvas *canvas, bool autoPositioning
 	m_geometry->setColorArray(colors, osg::Array::BIND_OVERALL);
     m_geometry->setVertexArray(m_vertices);
     m_geometry->addPrimitiveSet(m_indices);
-	m_geometry->dirtyDisplayList();
-	m_geometry->dirtyBound();
 
     m_geode->addDrawable(m_geometry);
 

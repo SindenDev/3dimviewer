@@ -54,7 +54,7 @@ class CVolumeRendererWindow : public tBase
     Q_OBJECT
 
 public:
-    CVolumeRendererWindow(QWidget *parent=NULL);
+    CVolumeRendererWindow(QWidget* parent, bool antialiasing);
     virtual ~CVolumeRendererWindow();
 
     //! Returns reference to the volume renderer.

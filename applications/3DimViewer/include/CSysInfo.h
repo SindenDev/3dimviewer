@@ -25,6 +25,8 @@
 
 #include <QString>
 
+class QOpenGLContext;
+
 //! Basic system information
 class CSysInfo
 {
@@ -40,6 +42,8 @@ public:
     quint64 m_maxTextureSize;
     quint64 m_max3DTextureSize;
     bool    m_bOpenGLOk;
+    bool    m_bTexturesNPOT;
+
 protected:
     // helper methods
     void   getTotalSystemMemory();
@@ -48,11 +52,12 @@ protected:
     void   getOperatingSystemInfo();
     void   getExtendedOperatingSystemInfo();
     void   getEnviromentInfo();
-    void   getOpenGLInfo();
+    void   getOpenGLInfo(QOpenGLContext* context);
     void   getApplicationInfo();
     void   getDrivesInfo();
     void   getComputerInfo();
     void   logLoadedModules();
+    void   logVideoMemoryUsage();
 public:
     quint64 getAdapterRam() const { return m_adapterRam; };
     quint64 getTotalRam() const { return m_totalRam; };

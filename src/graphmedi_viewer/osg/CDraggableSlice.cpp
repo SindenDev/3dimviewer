@@ -27,8 +27,8 @@
 #include <osg/NodeMasks.h>
 #include <osg/COnOffNode.h>
 #include <osg/Version>
+#include <osg/CThickLineMaterial.h>
 
-#include <osg/LineWidth>
 #include <app/Signals.h>
 #include <graph/osg/NodeMasks.h>
 
@@ -37,73 +37,55 @@
 //====================================================================================================================
 scene::CFrameGeode::CFrameGeode() : m_FrameGeometry(new osg::Geometry)
 {
-	osg::Vec4Array * plane_color = new osg::Vec4Array;
-//	plane_color->push_back( osg::Vec4( 1.0, 1.0, 1.0, 1.0 ) );
-	plane_color->push_back( osg::Vec4( 0.0, 0.0, 0.0, 1.0 ) );
+    m_color = new osg::Vec4Array();
+    m_color->push_back(osg::Vec4(0.0, 0.0, 0.0, 1.0));
+    m_FrameGeometry->setColorArray(m_color, osg::Array::BIND_OVERALL);
 
-#if OSG_VERSION_GREATER_OR_EQUAL(3,1,10)
-	m_FrameGeometry->setColorArray( plane_color, osg::Array::BIND_OVERALL );
-#else
-	m_FrameGeometry->setColorArray( plane_color );
-#endif
-	m_FrameGeometry->setColorBinding( osg::Geometry::BIND_OVERALL );
-//	m_FrameGeometry.get()->setColorArray( plane_color );
+    addDrawable(m_FrameGeometry);
 
-	this->addDrawable( m_FrameGeometry.get() );
-
-	// setup polygon offset
-	osg::StateSet * state_set = new osg::StateSet();
-	osg::PolygonOffset * offset = new osg::PolygonOffset( -2.0f, -2.0f );
-	osg::LineWidth * line_width = new osg::LineWidth( 2.0f );
-
-	state_set->setAttributeAndModes( offset, osg::StateAttribute::ON | osg::StateAttribute::OVERRIDE );
-	state_set->setAttributeAndModes( line_width, osg::StateAttribute::ON | osg::StateAttribute::OVERRIDE );	
-
-    m_FrameGeometry->setStateSet( state_set );
-
+    m_FrameGeometry->getOrCreateStateSet()->setAttributeAndModes(new osg::PolygonOffset(-2.0f, -2.0f), osg::StateAttribute::ON | osg::StateAttribute::OVERRIDE);
 }
 
 //====================================================================================================================
-void scene::CFrameGeode::setColor( float r, float g, float b )
+void scene::CFrameGeode::setColor(float r, float g, float b)
 {
-	osg::Vec4Array * color = dynamic_cast< osg::Vec4Array* >( m_FrameGeometry->getColorArray() );
-	(*color)[0][0] = r;
-	(*color)[0][1] = g;
-	(*color)[0][2] = b;
-	(*color)[0][3] = 1.0;
-	m_FrameGeometry->dirtyDisplayList();
+    (*m_color)[0] = osg::Vec4(r, g, b, 1.0f);
+
+    m_color->dirty();
 }
+
+void scene::CFrameGeode::setMaterial(osg::CMaterialLineStrip* material)
+{
+    m_lineMaterial = material;
+    m_lineMaterial->apply(m_FrameGeometry);
+}
+
 
 
 //====================================================================================================================
 //====================================================================================================================
 scene::CFrameXYGeode::CFrameXYGeode()
 {
-	osg::Vec3Array * plane_vertices = new osg::Vec3Array;
-    plane_vertices->push_back( osg::Vec3( 0.0, 0.0, 0.0 ) );
-    plane_vertices->push_back( osg::Vec3( 1.0, 0.0, 0.0 ) );
-    plane_vertices->push_back( osg::Vec3( 1.0, 1.0, 0.0 ) );
-    plane_vertices->push_back( osg::Vec3( 0.0, 1.0, 0.0 ) );
-    plane_vertices->push_back( osg::Vec3( 0.0, 0.0, 0.001 ) );
+    osg::Vec3Array * plane_vertices = new osg::Vec3Array;
+    plane_vertices->push_back(osg::Vec3(0.0, 0.0, 0.0));
+    plane_vertices->push_back(osg::Vec3(1.0, 0.0, 0.0));
+    plane_vertices->push_back(osg::Vec3(1.0, 1.0, 0.0));
+    plane_vertices->push_back(osg::Vec3(0.0, 1.0, 0.0));
 
-	// set slice plane geometry
-	m_FrameGeometry.get()->setVertexArray( plane_vertices );
-	
-	// create primitive set
-	osg::DrawElementsUInt * plane_ps = new osg::DrawElementsUInt( osg::PrimitiveSet::LINES, 0 );
+    // set slice plane geometry
+    m_FrameGeometry.get()->setVertexArray(plane_vertices);
 
-    plane_ps->push_back( 0 );
-	plane_ps->push_back( 1 );
-	plane_ps->push_back( 1 );
-	plane_ps->push_back( 2 );
-	plane_ps->push_back( 2 );
-	plane_ps->push_back( 3 );
-	plane_ps->push_back( 3 );
-	plane_ps->push_back( 0 );
-	plane_ps->push_back( 0 );
-	plane_ps->push_back( 4 );
+    // create primitive set
+    osg::DrawElementsUInt* plane_ps = new osg::DrawElementsUInt(osg::PrimitiveSet::LINE_STRIP_ADJACENCY, 4);
 
-    m_FrameGeometry.get()->addPrimitiveSet( plane_ps );	
+    std::iota(plane_ps->begin(), plane_ps->end(), 0);
+
+    // Insert auxiliary adjacent vertices
+    plane_ps->insert(plane_ps->begin(), 3);
+    plane_ps->insert(plane_ps->end(), 0);
+    plane_ps->insert(plane_ps->end(), 1);
+
+    m_FrameGeometry.get()->addPrimitiveSet(plane_ps);
 }
 
 
@@ -111,63 +93,53 @@ scene::CFrameXYGeode::CFrameXYGeode()
 //====================================================================================================================
 scene::CFrameXZGeode::CFrameXZGeode()
 {
-	osg::Vec3Array * plane_vertices = new osg::Vec3Array;
+    osg::Vec3Array * plane_vertices = new osg::Vec3Array;
 
-    plane_vertices->push_back( osg::Vec3( 0.0, 0.0, 0.0 ) );
-    plane_vertices->push_back( osg::Vec3( 1.0, 0.0, 0.0 ) );
-    plane_vertices->push_back( osg::Vec3( 1.0, 0.0, 1.0 ) );
-    plane_vertices->push_back( osg::Vec3( 0.0, 0.0, 1.0 ) );
-    plane_vertices->push_back( osg::Vec3( 0.0, 0.001, 0.0 ) );
+    plane_vertices->push_back(osg::Vec3(0.0, 0.0, 0.0));
+    plane_vertices->push_back(osg::Vec3(1.0, 0.0, 0.0));
+    plane_vertices->push_back(osg::Vec3(1.0, 0.0, 1.0));
+    plane_vertices->push_back(osg::Vec3(0.0, 0.0, 1.0));
 
-	// set slice plane geometry
-	m_FrameGeometry.get()->setVertexArray( plane_vertices );
-	
-	// create primitive set
-	osg::DrawElementsUInt * plane_ps = new osg::DrawElementsUInt( osg::PrimitiveSet::LINES, 0 );
+    // set slice plane geometry
+    m_FrameGeometry.get()->setVertexArray(plane_vertices);
 
-    plane_ps->push_back( 0 );
-	plane_ps->push_back( 1 );
-	plane_ps->push_back( 1 );
-	plane_ps->push_back( 2 );
-	plane_ps->push_back( 2 );
-	plane_ps->push_back( 3 );
-	plane_ps->push_back( 3 );
-	plane_ps->push_back( 0 );
-	plane_ps->push_back( 0 );
-	plane_ps->push_back( 4 );
+    // create primitive set
+    osg::DrawElementsUInt* plane_ps = new osg::DrawElementsUInt(osg::PrimitiveSet::LINE_STRIP_ADJACENCY, 4);
 
-    m_FrameGeometry.get()->addPrimitiveSet( plane_ps );	
+    std::iota(plane_ps->begin(), plane_ps->end(), 0);
+
+    // Insert auxiliary adjacent vertices
+    plane_ps->insert(plane_ps->begin(), 3);
+    plane_ps->insert(plane_ps->end(), 0);
+    plane_ps->insert(plane_ps->end(), 1);
+
+    m_FrameGeometry.get()->addPrimitiveSet(plane_ps);
 }
 
 //====================================================================================================================
 scene::CFrameYZGeode::CFrameYZGeode()
 {
-	osg::Vec3Array * plane_vertices = new osg::Vec3Array;
+    osg::Vec3Array * plane_vertices = new osg::Vec3Array;
 
-    plane_vertices->push_back( osg::Vec3( 0.0, 0.0, 0.0 ) );
-    plane_vertices->push_back( osg::Vec3( 0.0, 1.0, 0.0 ) );
-    plane_vertices->push_back( osg::Vec3( 0.0, 1.0, 1.0 ) );
-    plane_vertices->push_back( osg::Vec3( 0.0, 0.0, 1.0 ) );
-    plane_vertices->push_back( osg::Vec3( 0.001, 0.0, 0.0 ) );
+    plane_vertices->push_back(osg::Vec3(0.0, 0.0, 0.0));
+    plane_vertices->push_back(osg::Vec3(0.0, 1.0, 0.0));
+    plane_vertices->push_back(osg::Vec3(0.0, 1.0, 1.0));
+    plane_vertices->push_back(osg::Vec3(0.0, 0.0, 1.0));
 
-	// set slice plane geometry
-	m_FrameGeometry.get()->setVertexArray( plane_vertices );
-	
-	// create primitive set
-	osg::DrawElementsUInt * plane_ps = new osg::DrawElementsUInt( osg::PrimitiveSet::LINES, 0 );
+    // set slice plane geometry
+    m_FrameGeometry.get()->setVertexArray(plane_vertices);
 
-    plane_ps->push_back( 0 );
-	plane_ps->push_back( 1 );
-	plane_ps->push_back( 1 );
-	plane_ps->push_back( 2 );
-	plane_ps->push_back( 2 );
-	plane_ps->push_back( 3 );
-	plane_ps->push_back( 3 );
-	plane_ps->push_back( 0 );
-	plane_ps->push_back( 0 );
-	plane_ps->push_back( 4 );
+    // create primitive set
+    osg::DrawElementsUInt* plane_ps = new osg::DrawElementsUInt(osg::PrimitiveSet::LINE_STRIP_ADJACENCY, 4);
 
-    m_FrameGeometry.get()->addPrimitiveSet( plane_ps );	
+    std::iota(plane_ps->begin(), plane_ps->end(), 0);
+
+    // Insert auxiliary adjacent vertices
+    plane_ps->insert(plane_ps->begin(), 3);
+    plane_ps->insert(plane_ps->end(), 0);
+    plane_ps->insert(plane_ps->end(), 1);
+
+    m_FrameGeometry.get()->addPrimitiveSet(plane_ps);
 }
 
 
@@ -181,14 +153,6 @@ scene::CSliceGeode::CSliceGeode() :
 
 void scene::CSliceGeode::setupScene()
 {
-	//osg::Vec4Array * plane_color = new osg::Vec4Array;
-//	plane_color->push_back( osg::Vec4( 1.0, 1.0, 1.0, 1.0 ) );
-	//plane_color->push_back( osg::Vec4( 0.0, 0.0, 0.0, 1.0 ) );
-
-	//m_SliceGeometry.get()->setColorArray( plane_color );
-	//m_SliceGeometry.get()->setColorBinding( osg::Geometry::BIND_OVERALL );
-    m_SliceGeometry.get()->setDataVariance(osg::Object::DYNAMIC);
-
 	osg::Vec2Array * plane_ta = new osg::Vec2Array;
 	plane_ta->push_back( osg::Vec2( 0.0, 0.0 ) );
 	plane_ta->push_back( osg::Vec2( 1.0, 0.0 ) );
@@ -199,7 +163,6 @@ void scene::CSliceGeode::setupScene()
     m_SliceGeometry.get()->setStateSet( p_StateSet.get() );
 
     p_StateSet->setMode(GL_CULL_FACE, osg::StateAttribute::OFF);
-    p_StateSet->setMode(GL_LIGHTING, osg::StateAttribute::OFF);
 
 	this->addDrawable( m_SliceGeometry.get() );
 
@@ -225,22 +188,18 @@ void scene::CSliceGeode::setTextureAndCoordinates( osg::Texture2D * texture, flo
 
     osg::Vec4Array * plane_color = new osg::Vec4Array;
 	plane_color->push_back( osg::Vec4(1.0, 1.0, 1.0, 1.0) );
-#if OSG_VERSION_GREATER_OR_EQUAL(3,1,10)
+
 	m_SliceGeometry.get()->setColorArray( plane_color, osg::Array::BIND_OVERALL );
-#else
-	m_SliceGeometry.get()->setColorArray( plane_color );
-#endif
-	m_SliceGeometry.get()->setColorBinding( osg::Geometry::BIND_OVERALL );
 
 	(*coords)[0] = osg::Vec2(x_min, y_min);
 	(*coords)[1] = osg::Vec2(x_max, y_min);
 	(*coords)[2] = osg::Vec2(x_max, y_max);
 	(*coords)[3] = osg::Vec2(x_min, y_max);
-	m_SliceGeometry.get()->setTexCoordArray( 0, coords );
-    m_SliceGeometry.get()->getTexCoordArray( 0 )->dirty();
+
+    coords->dirty();
 
 	p_StateSet->setTextureAttributeAndModes( 0, texture, osg::StateAttribute::ON | osg::StateAttribute::OVERRIDE );
-	m_SliceGeometry->dirtyDisplayList();
+	m_SliceGeometry->dirtyGLObjects();
 }
 
 
@@ -258,16 +217,8 @@ scene::CSliceXYGeode::CSliceXYGeode()
 	// set slice plane geometry
 	m_SliceGeometry.get()->setVertexArray( plane_vertices );
 
-	// create primitive set
-	osg::DrawElementsUInt* plane_ps = new osg::DrawElementsUInt( osg::PrimitiveSet::QUADS, 0 );
-
-	plane_ps->push_back( 0 );
-	plane_ps->push_back( 1 );
-	plane_ps->push_back( 2 );
-	plane_ps->push_back( 3 );
-
     // assign primitive set to geometry
-	m_SliceGeometry.get()->addPrimitiveSet( plane_ps );
+	m_SliceGeometry.get()->addPrimitiveSet(new osg::DrawArrays(osg::PrimitiveSet::TRIANGLE_FAN, 0, 4));
 
     setupScene();
 }
@@ -287,16 +238,8 @@ scene::CSliceXZGeode::CSliceXZGeode()
 	// set slice plane geometry
 	m_SliceGeometry.get()->setVertexArray( plane_vertices );
 
-	// create primitive set
-	osg::DrawElementsUInt* plane_ps = new osg::DrawElementsUInt( osg::PrimitiveSet::QUADS, 0 );
-
-	plane_ps->push_back( 0 );
-	plane_ps->push_back( 1 );
-	plane_ps->push_back( 2 );
-	plane_ps->push_back( 3 );
-
 	// assign primitive set to geometry
-	m_SliceGeometry.get()->addPrimitiveSet( plane_ps );	
+	m_SliceGeometry.get()->addPrimitiveSet(new osg::DrawArrays(osg::PrimitiveSet::TRIANGLE_FAN, 0, 4));
 
     setupScene();
 }
@@ -316,16 +259,8 @@ scene::CSliceYZGeode::CSliceYZGeode()
 	// set slice plane geometry
 	m_SliceGeometry.get()->setVertexArray( plane_vertices );
 
-	// create primitive set
-	osg::DrawElementsUInt* plane_ps = new osg::DrawElementsUInt( osg::PrimitiveSet::QUADS, 0 );
-
-	plane_ps->push_back( 0 );
-	plane_ps->push_back( 1 );
-	plane_ps->push_back( 2 );
-	plane_ps->push_back( 3 );
-
 	// assign primitive set to geometry
-	m_SliceGeometry.get()->addPrimitiveSet( plane_ps );
+	m_SliceGeometry.get()->addPrimitiveSet(new osg::DrawArrays(osg::PrimitiveSet::TRIANGLE_FAN, 0, 4));
 
     setupScene();
 }
@@ -504,25 +439,6 @@ void scene::CDraggableSlice::accept(osg::NodeVisitor& nv)
                         dragger->setScaleFactor(m_scaleFactor);
                 }
             }
-            osg::CullStack* cs = dynamic_cast<osg::CullStack*>(&nv);
-            if(cs)
-            {
-                
-//                 m_viewMatrix = *cs->getModelViewMatrix();
-// 
-//                 // Compute scale factor given by view matrix (we want to scale independently on zoom)
-//                 osg::Vec3 scale(m_viewMatrix.getScale());
-// 
-//                 m_scaleFactor = std::min(scale[0], scale[1]);
-// 
-//                 // Set scale factor to the dragger if possible
-//                 if(p_Dragger != 0)
-//                 {
-//                     osgManipulator::CTranslateOtherLineDragger * dragger(dynamic_cast<osgManipulator::CTranslateOtherLineDragger*>(p_Dragger.get()));
-//                     if(dragger != 0)
-//                         dragger->setScaleFactor(m_scaleFactor);
-//                 }
-            }
         }
     }
 
@@ -540,6 +456,7 @@ scene::CDraggableSliceXY::CDraggableSliceXY( OSGCanvas * pCanvas, bool isOrtho, 
 
     p_Frame = new CFrameXYGeode();
     p_Frame->setColor( 0.0, 0.0, 1.0 );
+    p_Frame->setMaterial(new osg::CMaterialLineStrip(getCanvas()->getView()->getCamera(), 2.0f));
 
     p_Selection = new scene::CPlaneXYUpdateSelection();
     
@@ -650,6 +567,7 @@ scene::CDraggableSliceXZ::CDraggableSliceXZ( OSGCanvas * pCanvas, bool isOrtho, 
 
     p_Frame = new CFrameXZGeode();
     p_Frame->setColor( 0.0, 1.0, 0.0 );
+    p_Frame->setMaterial(new osg::CMaterialLineStrip(getCanvas()->getView()->getCamera(), 2.0f));
 
     p_Selection = new scene::CPlaneXZUpdateSelection();
     
@@ -759,6 +677,7 @@ scene::CDraggableSliceYZ::CDraggableSliceYZ( OSGCanvas * pCanvas, bool isOrtho, 
 
     p_Frame = new CFrameYZGeode();
     p_Frame->setColor( 1.0, 0.0, 0.0 );
+    p_Frame->setMaterial(new osg::CMaterialLineStrip(getCanvas()->getView()->getCamera(), 2.0f));
 
     p_Selection = new scene::CPlaneYZUpdateSelection();
     

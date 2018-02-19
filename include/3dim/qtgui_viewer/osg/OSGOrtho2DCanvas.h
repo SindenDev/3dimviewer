@@ -42,7 +42,7 @@ class OSGOrtho2DCanvas : public OSGCanvas
 
 public:
     //! Constructor
-    OSGOrtho2DCanvas(QWidget *parent=NULL);
+    OSGOrtho2DCanvas(QWidget* parent, bool antialiasing);
 
     //! Destructor
     virtual ~OSGOrtho2DCanvas() {}

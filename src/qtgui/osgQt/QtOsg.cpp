@@ -11,10 +11,11 @@ On Mac OS X, when Qt is built with Cocoa support, a QGLWidget can't have any sib
 widgets placed ontop of itself. This is due to limitations in the Cocoa API and is not
 supported by Apple.
 */
-#ifdef __APPLE__
-    #include <glew.h>
-#else
-    #include <GL/glew.h>
+
+#include <glad/glad.h>
+// needed for mac:
+#ifndef GL_GLEXT_FUNCTION_POINTERS
+  #define GL_GLEXT_FUNCTION_POINTERS
 #endif
 
 #include "render/cvolumerendererwindow.h"
@@ -44,6 +45,9 @@ supported by Apple.
 
 #include <osgQt/QtOsg.h>
 
+#ifndef __APPLE__
+#define OPENGL_DEBUG
+#endif
 ///////////////////////////////////////////////////////////////////////////////
 // state which is able to save default frame buffer, because osg doesn't restore it ok
 // see http://forum.openscenegraph.org/viewtopic.php?t=15097
@@ -539,13 +543,10 @@ void QGLOSGWidget::init(QWidget *parent, const osg::Vec4 &bgColor)
     m_view->getCamera()->setProjectionMatrixAsPerspective( 30.0f, static_cast<double>( size.width() )/ static_cast<double>( size.height() ), 1.0f, 10000.0f );
     m_view->getCamera()->setGraphicsContext(m_graphic_window.get());
 
-#if (QT_VERSION >= QT_VERSION_CHECK(5, 0, 0)) // needed for QOpenGLWidget
     // to correctly restore fbo after osg::FrameBufferObject was set via stateset change during draw we change default camera stateset to a new one with our customized 
     // fbo which restores fbo to the one used by QOpenGLWidget
-    osg::StateSet *ssc = m_view->getCamera()->getOrCreateStateSet();
-    ssc->setGlobalDefaults();
-    ssc->setAttributeAndModes(new CExtraFBO);
-#endif    
+    m_view->getCamera()->getOrCreateStateSet()->setGlobalDefaults();
+    m_view->getCamera()->getOrCreateStateSet()->setAttributeAndModes(new CExtraFBO);
 
     // monitor gpu to adjust frame rate
     osg::ref_ptr<osg::Stats> pStats = m_view->getCamera()->getStats();
@@ -569,49 +570,143 @@ void QGLOSGWidget::init(QWidget *parent, const osg::Vec4 &bgColor)
     // set mouse tracking so we can extract continously density from a point under cursor
     setMouseTracking(true);
 
-#if (QT_VERSION >= QT_VERSION_CHECK(5, 0, 0))
+    QSurfaceFormat format = QSurfaceFormat::defaultFormat();
+
     if (m_bAntialiasing)
     {
-        QSurfaceFormat format = QSurfaceFormat::defaultFormat();
-        format.setSamples(4);
-        QOpenGLWidget* pQt5GlWidget = dynamic_cast<QOpenGLWidget*>(this);
-        if (NULL != pQt5GlWidget)
-            pQt5GlWidget->setFormat(format);
+        m_view->getCamera()->getOrCreateStateSet()->setMode(GL_MULTISAMPLE, osg::StateAttribute::ON);
     }
-    if (0) // enable this to be able to use QOpenGLDebugLogger or glDebugMessageCallback
-    {
-        QSurfaceFormat format = QSurfaceFormat::defaultFormat();
-        format.setProfile(QSurfaceFormat::CoreProfile);
-        format.setOption(QSurfaceFormat::DebugContext);
-        QOpenGLWidget* pQt5GlWidget = dynamic_cast<QOpenGLWidget*>(this);
-        if (NULL != pQt5GlWidget)
-            pQt5GlWidget->setFormat(format);
-    }
+
+#ifdef OPENGL_DEBUG
+    format.setOption(QSurfaceFormat::DebugContext);
+
+#ifdef _WIN32
+    osg::setNotifyHandler(new osg::WinDebugNotifyHandler());
 #endif
+
+    osg::setNotifyLevel(osg::WARN);
+#endif
+
+    setFormat(format);
 }
 
 QGLOSGWidget::~QGLOSGWidget()
 {
 }
 
+void APIENTRY openglCallbackFunction(GLenum source,
+    GLenum type,
+    GLuint id,
+    GLenum severity,
+    GLsizei length,
+    const GLchar* message,
+    const void* userParam)
+{
+    static std::set<GLuint> errorDb;
+
+    if (errorDb.find(id) != errorDb.end())
+    {
+        return;
+    }
+
+    errorDb.insert(id);
+
+    std::stringstream ss;
+
+    ss << "OpenGL DEBUG: ";
+
+    switch (type)
+    {
+    case GL_DEBUG_TYPE_ERROR:
+        ss << "ERROR";
+        break;
+    case GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR:
+        ss << "DEPRECATED_BEHAVIOR";
+        break;
+    case GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR:
+        ss << "UNDEFINED_BEHAVIOR";
+        break;
+    case GL_DEBUG_TYPE_PORTABILITY:
+        ss << "PORTABILITY";
+        break;
+    case GL_DEBUG_TYPE_PERFORMANCE:
+        ss << "PERFORMANCE";
+        break;
+    case GL_DEBUG_TYPE_MARKER:
+        ss << "MARKER";
+        break;
+    case GL_DEBUG_TYPE_PUSH_GROUP:
+        ss << "PUSH_GROUP";
+        break;
+    case GL_DEBUG_TYPE_POP_GROUP:
+        ss << "POP_GROUP";
+        break;
+    case GL_DEBUG_TYPE_OTHER:
+        ss << "OTHER";
+        break;
+    }
+
+    ss << " " << "id: " << id << " " << "severity ";
+
+    switch (severity)
+    {
+    case GL_DEBUG_SEVERITY_LOW:
+        ss << "LOW";
+        break;
+    case GL_DEBUG_SEVERITY_MEDIUM:
+        ss << "MEDIUM";
+        break;
+    case GL_DEBUG_SEVERITY_HIGH:
+        ss << "HIGH";
+        break;
+    case GL_DEBUG_SEVERITY_NOTIFICATION:
+        ss << "NOTIFICATION";
+        break;
+    }
+
+    ss << ": " << message;
+
+    auto outputStr = ss.str();
+    if (severity != GL_DEBUG_SEVERITY_NOTIFICATION)
+    {
+        VPL_LOG_ERROR(outputStr);
+
+#ifdef _WIN32
+        OutputDebugStringA((ss.str() + '\n').c_str());
+#endif
+    }
+    else
+    {
+        VPL_LOG_INFO(outputStr);
+
+#ifdef _WIN32
+        OutputDebugStringA((ss.str() + '\n').c_str());
+#endif
+    }
+}
+
 void QGLOSGWidget::initializeGL()
 {
-    /*
-    m_graphic_window->setClearMask( GL_COLOR_BUFFER_BIT |
-                                    GL_DEPTH_BUFFER_BIT );
-    m_graphic_window->clear();
-    m_graphic_window->setClearMask( 0 );
-    */
     m_bInitialized = true;
-    if (glewInit() != GLEW_OK)
+
+    if (!gladLoadGL())
     {
         m_bInitialized = false;
     }
-#if (QT_VERSION >= QT_VERSION_CHECK(5, 0, 0))
-    QOpenGLWidget* pQt5GlWidget = dynamic_cast<QOpenGLWidget*>(this);
-    if (NULL != pQt5GlWidget && m_bAntialiasing)
-        glEnable(GL_MULTISAMPLE);
-#endif
+
+#ifdef OPENGL_DEBUG
+    if (glDebugMessageCallback)
+    {
+        glEnable(GL_DEBUG_OUTPUT);
+        glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
+
+        glDebugMessageCallback(openglCallbackFunction, nullptr);
+
+        GLuint unusedIds = 0;
+        glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, &unusedIds, true);
+    }
+#endif // OPENGL_DEBUG
+
 }
 
 void QGLOSGWidget::resizeGL(int width, int height)
@@ -1010,28 +1105,9 @@ void QGLOSGWidget::screenShot( osg::Image * img, unsigned int scalePercent, bool
     int w, h;
     w = p_OrigView->width();
     h = p_OrigView->height();
-#define max(x,y) (x)>(y)?(x):(y)
-    w = max(1,(int)(w*scalePercent/100.0));
-    h = max(1,(int)(h*scalePercent/100.0));
-    /*
-    if ( maxSide == 0)
-    {
-        w = p_OrigView->width();
-        h = p_OrigView->height();
-    }
-    else
-    {
-        if (p_OrigView->width()>=p_OrigView->height())
-        {
-            w = maxSide;
-            h = maxSide / ratio;
-        }
-        else
-        {
-            w = maxSide * ratio;
-            h = maxSide;
-        }
-    }*/
+
+    w = std::max(1,(int)(w*scalePercent/100.0));
+    h = std::max(1,(int)(h*scalePercent/100.0));
 
     if(bWantWidgets)
     {
@@ -1055,12 +1131,8 @@ void QGLOSGWidget::screenShot( osg::Image * img, unsigned int scalePercent, bool
 
         // setup post draw callback for screenshot capture
         osg::ref_ptr< osg::CScreenshotCapture > p_Capture = new osg::CScreenshotCapture();
-        p_Capture->enable(true);
-#if (QT_VERSION >= QT_VERSION_CHECK(5, 0, 0))
+
         p_Camera->setFinalDrawCallback(p_Capture.get());
-#else
-        p_Camera->setPostDrawCallback(p_Capture.get());
-#endif
 
         // set camera as scene child
         scene->asGroup()->addChild(p_Camera);

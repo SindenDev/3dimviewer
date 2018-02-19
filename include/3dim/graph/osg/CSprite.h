@@ -98,7 +98,6 @@ public:
     void setOffsetFromCenter(double dx, double dy, double dz);
 
 protected:
-    virtual ~CAdvSprite();
     void computeMatrix() const;
     void setRotation(const Quat& quat);
     const Quat &getRotation() const;
@@ -118,7 +117,6 @@ class CSprite : public osg::Geometry
 
     public:
         CSpriteComputeBoundingBoxCallback(CSprite *sprite);
-        ~CSpriteComputeBoundingBoxCallback();
         virtual BoundingBox computeBound(const osg::Drawable &drawable) const;
     };
 
@@ -128,15 +126,13 @@ private:
     osg::Vec3 m_position;
     osg::Vec2 m_scale;
     osg::Vec4 m_color;
-
-    osg::ref_ptr<osg::StateSet> m_stateSet;
-    osg::ref_ptr<osg::Vec3Array> m_vertices;
-    osg::ref_ptr<osg::Vec4Array> m_colors;
-    osg::ref_ptr<osg::Vec2Array> m_texCoords;
-    osg::ref_ptr<DrawElementsUInt> m_indices;
     osg::ref_ptr<osg::Depth> m_depth;
     osg::ref_ptr<osg::BlendFunc> m_blend;
     osg::ref_ptr<osg::MatrixTransform> m_matrix;
+
+    osg::ref_ptr<osg::Vec3Array> m_vertices;
+    osg::ref_ptr<osg::Vec4Array> m_colors;
+    osg::ref_ptr<osg::Vec2Array> m_texCoords;
 
 public:
     //! Ctor - position is given by parents
@@ -148,8 +144,6 @@ public:
     //! Copy Ctor
     CSprite(const CSprite &sprite);
 
-    //! Dtor
-    ~CSprite();
 
 public:
     //! Draw implamentation of sprite
@@ -172,9 +166,6 @@ public:
 
     //! Copy Ctor
     CSpriteNode(const CSpriteNode &spriteNode);
-
-    //! Dtor
-    ~CSpriteNode();
 };
 
 
@@ -202,9 +193,6 @@ public:
     //! Copy Ctor
     CSpriteShadow(const CSpriteShadow &shadow);
 
-    //! Dtor
-    ~CSpriteShadow();
-
 private:
     //! Helper method for creating geometry and state set
     void createGeometry();
@@ -224,10 +212,6 @@ public:
 
     //! Copy Ctor
     CSpriteShadowNode(const CSpriteShadowNode &shadowNode);
-
-    //! Dtor
-    ~CSpriteShadowNode();
-
 };
 
 } // namespace osg

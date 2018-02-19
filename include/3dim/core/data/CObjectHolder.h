@@ -29,7 +29,6 @@
 
 #include "CStorableData.h"
 
-
 namespace data
 {
 
@@ -51,22 +50,26 @@ public:
     typedef typename T::tSmartPtr tObjectPtr;
 
 public:
-	//! Object creation function.
+    //! Object creation function.
     static CStorableData *create()
     {
         return new CObjectHolder(new T());
     }
 
-	//! Virtual destructor.
-    virtual ~CObjectHolder() {}
+    //! Virtual destructor.
+    virtual ~CObjectHolder()
+    { }
 
     //! Returns pointer to the data.
-    T *getObjectPtr() { return m_spObject.get(); }
+    T *getObjectPtr()
+    {
+        return m_spObject.get();
+    }
 
     //! Forwards the update() method...
-    virtual void update(const CChangedEntries& Changes)
+    virtual void update(const CChangedEntries &Changes)
     {
-        if( m_spObject.get() )
+        if (m_spObject.get())
         {
             m_spObject->update(Changes);
         }
@@ -75,7 +78,7 @@ public:
     //! Forwards the init() method...
     virtual void init()
     {
-        if( m_spObject.get() )
+        if (m_spObject.get())
         {
             m_spObject->init();
         }
@@ -84,7 +87,7 @@ public:
     //! Forwards the checkDependency() method...
     virtual bool checkDependency(CStorageEntry *pParent)
     {
-        if( !m_spObject.get() )
+        if (!m_spObject.get())
         {
             return true;
         }
@@ -95,7 +98,7 @@ public:
     //! Forwards hasData() method - returns true, if object contains relevant data
     virtual bool hasData()
     {
-        if( !m_spObject.get() )
+        if (!m_spObject.get())
         {
             return false;
         }
@@ -104,26 +107,33 @@ public:
     }
 
     //! Serialize. 
-    virtual void serialize(vpl::mod::CBinarySerializer & Writer) 
+    virtual void serialize(vpl::mod::CBinarySerializer &Writer)
     {
-        data::CSerializableData<T>::template serialize<vpl::mod::CBinarySerializer>( m_spObject.get(), Writer );
+        data::CSerializableData<T>::template serialize<vpl::mod::CBinarySerializer>(m_spObject.get(), Writer);
     }
 
     //! Deserialize
-    virtual void deserialize(vpl::mod::CBinarySerializer& Reader) 
+    virtual void deserialize(vpl::mod::CBinarySerializer &Reader)
     {
-        data::CSerializableData<T>::template deserialize<vpl::mod::CBinarySerializer>( m_spObject.get(), Reader );
+        data::CSerializableData<T>::template deserialize<vpl::mod::CBinarySerializer>(m_spObject.get(), Reader);
+    }
+
+    //! Deserialize
+    virtual bool deserializationFinished()
+    {
+        return data::CSerializableData<T>::deserializationFinished(m_spObject.get());
     }
 
 protected:
     //! Constructor.
-    CObjectHolder(T *pObj = NULL) : m_spObject(pObj) {}
+    CObjectHolder(T *pObj = NULL)
+        : m_spObject(pObj)
+    { }
 
 protected:
     //! Pointer to the object.
     tObjectPtr m_spObject;
 };
-
 
 } // namespace data
 

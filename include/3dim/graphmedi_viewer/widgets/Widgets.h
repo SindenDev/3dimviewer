@@ -40,6 +40,11 @@
 
 #include <widgets/CPositionedWindow.h>
 
+namespace osg
+{
+    class CMaterialLines;
+}
+
 namespace scene
 {
 
@@ -183,6 +188,8 @@ protected:
     //! Scaling and centering matrix transform
     osg::ref_ptr< osg::MatrixTransform > m_scaleCenter;
 
+    osg::ref_ptr<osg::CPseudoMaterial> m_materialBodyRegular;
+
     //! Model shown in the scene
 #ifndef USE_BODY
     typedef osg::CAnyModelVisualizer<data::CPreviewModel> tModelVisualizer;
@@ -300,6 +307,8 @@ protected:
 
     //! Used color
     osg::Vec4 m_usedColor;
+
+    osg::ref_ptr<osg::CMaterialLines> m_lineMaterial;
 
 protected:
     //! Update callback.

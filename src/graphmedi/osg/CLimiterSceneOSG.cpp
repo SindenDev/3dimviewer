@@ -34,9 +34,6 @@ scene::CLimiterSceneOSG::CLimiterSceneOSG(OSGCanvas *canvas)
     , m_dSizeY(data::CSlice::INIT_SIZE)
     , m_dSizeZ(data::CSlice::INIT_SIZE)
 {
-	// turn off the lights
-	this->getOrCreateStateSet()->setMode(GL_LIGHTING,osg::StateAttribute::OFF);
-
 	m_transformedSlice = new osg::MatrixTransform();
 	osg::StateSet *transformedSliceStateSet = m_transformedSlice->getOrCreateStateSet();
 	this->addChild(m_transformedSlice);
