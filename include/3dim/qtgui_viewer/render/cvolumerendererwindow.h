@@ -22,43 +22,23 @@
 
 #ifndef CVolumeRendererWindow_H
 #define CVolumeRendererWindow_H
-#if(1)
 
 #include <render/PSVRrenderer.h>
+#include <osg/OSGCanvas.h>
 
 #include <QMouseEvent>
 
-#ifdef USE_PSVR
-#   include <osg/OSGCanvas.h>
-#endif // USE_PSVR
-
-
-
-
-///////////////////////////////////////////////////////////////////////////////
-// Used volume renderer
-
-#if defined(USE_PSVR)
-    typedef PSVR::PSVolumeRendering tRenderer;
-#else
-    #error Volume rendering algorithm must be specified! Please, see the Configure.h file.
-#endif
-
-#if defined(USE_PSVR)
-    typedef OSGCanvas tBase;
-#endif
 
 //! Window containing volume rendering
-class CVolumeRendererWindow : public tBase
+class CVolumeRendererWindow : public OSGCanvas
 {
     Q_OBJECT
 
 public:
-    CVolumeRendererWindow(QWidget* parent, bool antialiasing);
-    virtual ~CVolumeRendererWindow();
+    CVolumeRendererWindow(QWidget* parent);
 
     //! Returns reference to the volume renderer.
-    tRenderer& getRenderer() { return m_Renderer; }
+    PSVR::PSVolumeRendering& getRenderer() { return m_Renderer; }
 
     //! Refresh canvas
     virtual void Refresh(bool bEraseBackground)
@@ -68,7 +48,7 @@ public:
 
 protected:
     //! Volume renderer.
-    tRenderer m_Renderer;
+    PSVR::PSVolumeRendering m_Renderer;
 
     //! Initialize on show
     virtual void 	showEvent ( QShowEvent * event );
@@ -88,7 +68,7 @@ protected:
 
     //! Turns off downsampling when mouse leaves window
     virtual void leaveEvent(QEvent *event);
-    virtual void dragLeaveEvent(QDragLeaveEvent *event);};
-#endif
+    virtual void dragLeaveEvent(QDragLeaveEvent *event);
+};
 
 #endif

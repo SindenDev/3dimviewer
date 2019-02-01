@@ -61,6 +61,8 @@ public:
     //! Return storage id of the selected model, -1 if no model is selected
     int getSelectedModelStorageId();
 
+    void setEnabled(bool enabled);
+
 private:
     //! Method called on model change
     void objectChanged(data::CStorageEntry *pEntry, const data::CChangedEntries &changes);
@@ -106,6 +108,8 @@ private:
     bool m_bMyChange;
 	//! Are models linked to the regions?
 	bool m_bModelsLinked;
+
+    bool m_bIsEnabled;
 };
 
 // modelswidget_H_included

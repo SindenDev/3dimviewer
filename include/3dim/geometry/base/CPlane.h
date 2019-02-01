@@ -86,7 +86,7 @@ namespace geometry
         void flip() { m_p = -m_p; }
 
         //!
-        void makeUnitLength() { m_p.normalize(); }
+        void makeUnitLength() { m_p /= vpl::CScalard(getNormal().length()); }
 
         //! Test if plane parameters are valid
         bool valid() const { return !isNaN(); }
@@ -163,10 +163,6 @@ namespace geometry
         geometry::Vec4 m_p;
 
 		geometry::Vec3 m_center;
-
-        //! Plane bounding box corners
-
-        EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     }; // class CPlane
 
     //! Smart pointer type

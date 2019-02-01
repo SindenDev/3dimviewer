@@ -343,7 +343,10 @@ public:
 
 protected:
 	//! Slice moved signal answer
-	void SigSliceMoved( int position ) { CMeasurementsEH::m_scene->clearGizmos(); }
+	void SigSliceMoved( int position )
+    {
+        CMeasurementsEH::m_scene->clearGizmos();
+    }
 
 	//! Slice moved signal connection
 	vpl::mod::tSignalConnection m_conSliceMoved;
@@ -367,7 +370,10 @@ public:
 
 protected:
 	//! Slice moved signal answer
-	void SigSliceMoved( int position ) { CMeasurementsEH::m_scene->clearGizmos(); }
+	void SigSliceMoved( int position )
+    {
+        CMeasurementsEH::m_scene->clearGizmos();
+    }
 
 	//! Slice moved signal connection
 	vpl::mod::tSignalConnection m_conSliceMoved;
@@ -391,7 +397,10 @@ public:
 
 protected:
 	//! Slice moved signal answer
-	void SigSliceMoved( int position ) { CMeasurementsEH::m_scene->clearGizmos(); }
+	void SigSliceMoved( int position )
+    {
+        CMeasurementsEH::m_scene->clearGizmos();
+    }
 
 	//! Slice moved signal connection
 	vpl::mod::tSignalConnection m_conSliceMoved;

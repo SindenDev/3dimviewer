@@ -16,8 +16,8 @@ CNotesPlugin::CNotesPlugin() : QObject(), PluginInterface()
     m_pMenu = nullptr;
     m_pToolBar = nullptr;
     m_pPanel = nullptr;
-    setProperty("Icon", ":/icons/icons/notesplugin.png");
-    setProperty("PanelIcon", ":/icons/icons/notesplugin_dock.png");
+    setProperty("Icon", ":/svg/svg/notesplugin.svg");
+    setProperty("PanelIcon", ":/svg/svg/notesplugin_dock.svg");
 }
 
 CNotesPlugin::~CNotesPlugin()

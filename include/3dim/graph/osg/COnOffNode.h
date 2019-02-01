@@ -23,57 +23,35 @@
 #ifndef COnOffNode_H
 #define COnOffNode_H
 
-///////////////////////////////////////////////////////////////////////////////
-// include files
-
 #include <osg/Switch>
-
 
 namespace osg
 {
-
-///////////////////////////////////////////////////////////////////////////////
-//! class description
-
-class COnOffNode : public Switch
-{
-public:
-    //! Constructor
-    COnOffNode() : m_bIsOn(true) { setName("COnOffNode"); }
-
-    //! Accept node visitor
-    virtual void traverse(NodeVisitor &nv);
-
-    //! Set state
-    void setOnOffState(bool newState); 
-
-    //! Returns true if the node is visible.
-    bool isVisible() const
+    class COnOffNode : public Switch
     {
-        return m_bIsOn;
-    }
+    public:
+        COnOffNode(bool isOn = true);
 
-    //! Hide node
-    void hide()
-    {
-        setOnOffState( false );
-    }
+        void hide();
+        void show();
 
-    //! Show node
-    void show()
-    {
-        setOnOffState( true );
-    }
-    
-protected:
-    //! Current state
-    bool m_bIsOn;
-};
+        bool isVisible() const;
 
+        void setOnOffState(bool newState);
 
-} // namespace osg
+        virtual void traverse(NodeVisitor& nv) override;
+        virtual BoundingSphere computeBound() const override;
 
-#endif // COnOffNode_H
+    protected:
+        using Switch::setAllChildrenOn;
+        using Switch::setAllChildrenOff;
+
+    protected:
+        bool m_isOn;
+    };
+}
+
+#endif
 
 ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////

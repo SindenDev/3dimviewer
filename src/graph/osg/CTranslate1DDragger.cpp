@@ -26,6 +26,7 @@
 
 #include <osg/ShapeDrawable>
 #include <osg/Geometry>
+#include <osg/Geode>
 
 namespace osgManipulator
 {
@@ -68,6 +69,9 @@ namespace osgManipulator
             // Get the LocalToWorld matrix for this node and set it for the projector.
             osg::NodePath nodePathToRoot;
             computeNodePathToRoot(*this, nodePathToRoot);
+
+            revertTransformsOnLine();
+
             osg::Matrix localToWorld = osg::computeLocalToWorld(nodePathToRoot);
             _projector->setLocalToWorld(localToWorld);
 

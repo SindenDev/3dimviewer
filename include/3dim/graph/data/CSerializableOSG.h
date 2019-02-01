@@ -121,7 +121,7 @@ public:
         VPL_ENTITY_NAME(#tpMatrix);		\
     public:																				\
         template< class tpSerializer>                                                   \
-	    static void serialize( tpMatrix * m, vpl::mod::CChannelSerializer<tpSerializer> & s )	\
+	    static void serialize(const tpMatrix * m, vpl::mod::CChannelSerializer<tpSerializer> & s )	\
 	    {																				\
             vpl::sys::tInt32 size = 4;                                                               \
             s.write( size );                                                        	\

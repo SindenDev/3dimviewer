@@ -299,11 +299,25 @@ void CDataStorage::reset()
 {
     tLock Lock(*this);
 
+    tStorage::iterator it, itEnd = m_Storage.end();
+
+    // drop all pending changes, because "old" changes can break flag checking
+    for (it = m_Storage.begin(); it != itEnd; ++it)
+    {
+        CStorageEntry *pEntry = it->get();
+        if (pEntry->getId() == Storage::UNKNOWN)
+            continue;
+        if (pEntry->isDirty())
+        {
+            // Clear the dirty flag and actualize the version number
+            pEntry->clearDirty();
+        }        
+    }
+
     // Invalidated dependent entries
     CEntryDeps Invalidated;
 
-    // First reset all root entries
-    tStorage::iterator it, itEnd = m_Storage.end();
+    // First reset all root entries    
     for( it = m_Storage.begin(); it != itEnd; ++it )
     {
         CStorageEntry *pEntry = it->get();

@@ -94,7 +94,14 @@ bool CISEventHandler::handle(const osgGA::GUIEventAdapter &ea, osgGA::GUIActionA
         point.m_buttonEvent = ea.getButton();
 
         if (point.m_buttonMask == osgGA::GUIEventAdapter::MIDDLE_MOUSE_BUTTON || osgGA::GUIEventAdapter::SCROLL == ea.getEventType())
+        {
+            if ((data::CDrawingOptions::DRAW_STROKE == m_handlingMode || data::CDrawingOptions::DRAW_POINT == m_handlingMode) && osgGA::GUIEventAdapter::SCROLL == ea.getEventType())
+            {
+                VPL_SIGNAL(SigScrollPerformed).invoke((ea.getScrollingMotion() == osgGA::GUIEventAdapter::SCROLL_UP) ? 1 : -1);
+            }
+
             return false;
+        }
 
         switch ( ea.getEventType() )
         {
@@ -112,6 +119,11 @@ bool CISEventHandler::handle(const osgGA::GUIEventAdapter &ea, osgGA::GUIActionA
             // Call callback
             OnMousePush( point );
 
+            if (APP_MODE.isContinuousDrawingEnabled() && m_handlingMode == data::CDrawingOptions::DRAW_STROKE)
+            {
+                VPL_SIGNAL(SigDrawingInProgress).invoke(true);
+            }
+
             return true;
 
         case osgGA::GUIEventAdapter::DRAG :
@@ -125,20 +137,33 @@ bool CISEventHandler::handle(const osgGA::GUIEventAdapter &ea, osgGA::GUIActionA
             m_buttonMask = point.m_buttonMask;
             OnMouseDrag( point );
 
-            if (bDrawing && data::CDrawingOptions::DRAW_STROKE==m_handlingMode && APP_MODE.isContinuousDrawingEnabled())
+            if (bDrawing && data::CDrawingOptions::DRAW_STROKE == m_handlingMode && APP_MODE.isContinuousDrawingEnabled())
             {
                 // Get array
                 osg::ref_ptr<osg::Vec3Array> points = m_line->GetVertices();
-                if (((int)points->size())-m_nPointsReported>8)
+                size_t pointsSize = points->size();
+                if ((int)pointsSize - m_nPointsReported > 0)
                 {
                     osg::ref_ptr< osg::Vec3Array > volumePoints = new osg::Vec3Array;
                     osg::ref_ptr< osg::Vec3Array > buffer = new osg::Vec3Array;
-                    osg::Vec3Array::iterator i;
-                    for( i = points->begin()+m_nPointsReported; i != points->end(); ++i )
-                        volumePoints->push_back( RecomputeToVolume( *i ) );
-                    m_nPointsReported = points->size()-1;
+
+                    for (size_t i = m_nPointsReported; i < pointsSize; ++i)
+                    {
+                        volumePoints->push_back(RecomputeToVolume(points->at(i)));
+                    }
+
+                    m_nPointsReported = pointsSize - 1;
+
                     if (!VPL_SIGNAL(SigIsRegionColoringEnabled).invoke2())
-                        VPL_SIGNAL( SigEnableRegionColoring ).invoke( true );
+                    {
+                        VPL_SIGNAL(SigEnableRegionColoring).invoke(true);
+                    }
+
+                    if (!VPL_SIGNAL(SigIsMultiClassRegionColoringEnabled).invoke2())
+                    {
+                        VPL_SIGNAL(SigEnableMultiClassRegionColoring).invoke(true);
+                    }
+
                     // Remove duplicities
                     m_lineOptimizer.Optimize( volumePoints, buffer );
                     // Send data
@@ -167,6 +192,8 @@ bool CISEventHandler::handle(const osgGA::GUIEventAdapter &ea, osgGA::GUIActionA
 
             m_nPointsReported = 0;
 
+            VPL_SIGNAL(SigDrawingInProgress).invoke(false);
+
             return rv;
 
         case osgGA::GUIEventAdapter::FRAME:
@@ -187,6 +214,8 @@ bool CISEventHandler::handle(const osgGA::GUIEventAdapter &ea, osgGA::GUIActionA
                         m_nPointsReported = points->size()-1;
                         if (!VPL_SIGNAL(SigIsRegionColoringEnabled).invoke2())
                             VPL_SIGNAL( SigEnableRegionColoring ).invoke( true );
+                        if (!VPL_SIGNAL(SigIsMultiClassRegionColoringEnabled).invoke2())
+                            VPL_SIGNAL(SigEnableMultiClassRegionColoring).invoke(true);
                         // Remove duplicities
                         m_lineOptimizer.Optimize( volumePoints, buffer );
                         // Send data
@@ -275,6 +304,7 @@ void CISEventHandler::OnMouseRelease(const osgGA::CMousePoint &point, bool bUseP
     }
 
     VPL_SIGNAL( SigEnableRegionColoring ).invoke( true );
+    VPL_SIGNAL(SigEnableMultiClassRegionColoring).invoke(true);
 
     // Remove duplicities
     points->clear();
@@ -378,7 +408,6 @@ CISSceneYZEH::CISSceneYZEH( OSGCanvas * canvas, scene::CSceneOSG * scene )
     // Enable drawing
     SetDraw();
 }
-
 
 /******************************************************************************
     CLASS CISScene3DEH - event handler for 3D scene
@@ -596,7 +625,7 @@ void CISWindowEH::OnMouseDrag(const osgGA::CMousePoint &point)
     switch (m_handlingMode)
     {
     case data::CDrawingOptions::DRAW_LASO:
-        m_line->AddPoint(point.m_point);
+        m_line->AddPoint(pointScene);
         m_pointsWindow->push_back(pointWindow);
         arr->asVector()[0] = pointScene;
         break;
@@ -613,8 +642,8 @@ void CISWindowEH::OnMouseDrag(const osgGA::CMousePoint &point)
 			m_pointsScene->push_back(originScene);
 			m_pointsScene->push_back(pointScene);
             m_line->clear();
-            m_line->getLineVertices()->push_back(originScene);
-            m_line->getLineVertices()->push_back(pointScene);
+            m_line->AddPoint(originScene);
+            m_line->AddPoint(pointScene);
             m_line->getLineVertices()->dirty();
             break;
         }

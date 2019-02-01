@@ -62,17 +62,6 @@ void CPlaneUpdateSelection::setSignal(tSignal *pSignal)
     m_pSignal = pSignal;
 }
 
-
-//====================================================================================================================
-void CPlaneUpdateSelection::fixLastPosition( float fPosition )
-{
-    f_LastPosition = fPosition;
-    if( p_ConstraintLink.get() )
-    {
-        p_ConstraintLink->fixPosition( fPosition );
-    }
-}
-
 //====================================================================================================================
 void CPlaneUpdateSelection::manualTranslation( const osg::Matrix & m )
 {
@@ -143,6 +132,17 @@ const osg::Matrix& CPlaneXYUpdateSelection::getTranslationToPosition( int iPosit
 }
 
 //====================================================================================================================
+void CPlaneXYUpdateSelection::fixLastPosition(float fPosition)
+{
+    f_LastPosition = fPosition;
+
+    if (p_ConstraintLink.get())
+    {
+        p_ConstraintLink->fixPosition(fPosition);
+    }
+}
+
+//====================================================================================================================
 int	CPlaneXYUpdateSelection::translateByMatrix( const osg::Matrix & m, bool bModifyMatrix )
 {
 	osg::Vec3 t = m.getTrans();
@@ -188,6 +188,17 @@ const osg::Matrix& CPlaneXZUpdateSelection::getTranslationToPosition( int iPosit
 	static osg::Matrix m;
 	m.makeTranslate(osg::Vec3(0.0, f_Position, 0.0f));
     return m;
+}
+
+//====================================================================================================================
+void CPlaneXZUpdateSelection::fixLastPosition(float fPosition)
+{
+    f_LastPosition = fPosition;
+
+    if (p_ConstraintLink.get())
+    {
+        p_ConstraintLink->fixPosition(fPosition);
+    }
 }
 
 //====================================================================================================================
@@ -238,6 +249,17 @@ const osg::Matrix& CPlaneYZUpdateSelection::getTranslationToPosition( int iPosit
 }
 
 //====================================================================================================================
+void CPlaneYZUpdateSelection::fixLastPosition(float fPosition)
+{
+    f_LastPosition = fPosition;
+
+    if (p_ConstraintLink.get())
+    {
+        p_ConstraintLink->fixPosition(fPosition);
+    }
+}
+
+//====================================================================================================================
 int	CPlaneYZUpdateSelection::translateByMatrix( const osg::Matrix & m, bool bModifyMatrix  )
 {
 	osg::Vec3 t = m.getTrans();
@@ -256,6 +278,75 @@ int	CPlaneYZUpdateSelection::translateByMatrix( const osg::Matrix & m, bool bMod
     return int(f_Position * float(i_VoxelDepth));
 }
 
+//====================================================================================================================
+//====================================================================================================================
+CPlaneARBUpdateSelection::CPlaneARBUpdateSelection()
+    : m_planeNormal(0.0, 0.0, 1.0)
+{
+}
+
+void CPlaneARBUpdateSelection::setPlaneNormal(const osg::Vec3& normal)
+{
+    m_planeNormal = normal;
+}
+
+//====================================================================================================================
+const osg::Matrix& CPlaneARBUpdateSelection::getTranslationToPosition(int iPosition)
+{
+    vpl::math::limit(iPosition, 0, i_VoxelDepth - 1);
+
+    if (i_VoxelDepth <= 1)
+    {
+        f_Position = 0.0f - f_LastPosition;
+    }
+    else
+    {
+        f_Position = 1 / float(2 * i_VoxelDepth) +                // offset to middle of voxel
+            iPosition / float(i_VoxelDepth) -      // position as float (1/i_VoxelDepth is taken by half voxels)
+            f_LastPosition;                        // remove effect of last position
+    }
+
+    static osg::Matrix m;
+    m.makeTranslate(osg::Vec3(0.0, 0.0, f_Position));
+    return m;
+}
+
+//====================================================================================================================
+void CPlaneARBUpdateSelection::fixLastPosition(float fPosition)
+{
+    fPosition = VPL_SIGNAL(SigGetSliceARBDoublePos).invoke2();
+
+    f_LastPosition = fPosition;
+    f_Position = fPosition;
+}
+
+//====================================================================================================================
+int	CPlaneARBUpdateSelection::translateByMatrix(const osg::Matrix & m, bool bModifyMatrix)
+{
+    osg::Vec3 t = m.getTrans();
+
+    osg::Vec3 transDir = osg::Vec3(0.0, 0.0, 0.0) + (m_planeNormal * t[2]);
+    osg::Vec3 transDirNormalized = transDir;
+    transDirNormalized.normalize();
+
+    double x = m_planeNormal * transDirNormalized;
+
+    double l = (x < 0) ? -transDir.length() : transDir.length();
+
+    f_Position = f_LastPosition + (l * 0.003);
+    // NOTE: magic numbers, when the range of motion of arb slice is changed, these numbers must be changed to
+    vpl::math::limit(f_Position, 0.0f, 1.0f);
+
+    //if (bModifyMatrix)
+    /*{
+        osg::Matrix m2;
+        t = transDirNormalized * f_Position;
+        m2.makeTranslate(t);
+        this->setMatrix(m2);
+    }*/
+
+    return int(f_Position * float(i_VoxelDepth));
+}
 
 
 bool CPlaneUpdateSelection::CPlaneUpdateDC::receive( const osgManipulator::TranslateInLineCommand &command )

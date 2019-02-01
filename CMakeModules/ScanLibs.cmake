@@ -181,12 +181,13 @@ function(scan_libs)
   
     endif()
     
-    
+
+    option( BUILD_USE_LIBRARIES_FROM_MANIFEST "This will try to use specific libraries from the dependency_manifest.txt. Makes sense mostly when trying to rebuild some older version of the SW." OFF)
+
     
     #this is without effect when the value is overwritten by the user.
     set(BUILD_PATH_TO_PREBUILT_LIBS "X:/msvc${toolset_number}/${architecture}" CACHE PATH "This is autodetected as X:/msvcX/architecture from selected generator and its (or user given) toolset.")
-    
-
+    set(BUILD_PATH_TO_EXTRA_PREBUILT_LIBS "" CACHE PATH "For folder with private/obsolete libs.")
 
     if(NOT EXISTS "${BUILD_PATH_TO_PREBUILT_LIBS}")
         message(WARNING "Path '${BUILD_PATH_TO_PREBUILT_LIBS}' does not exist!")
@@ -200,6 +201,7 @@ function(scan_libs)
 
     endif()
     
+
     #The deduced/given directory should exist or there is no point in continuing.
     if(NOT IS_DIRECTORY ${BUILD_PATH_TO_PREBUILT_LIBS})	
         #delete_previously_detected_libs()
@@ -208,14 +210,22 @@ function(scan_libs)
     
     
     #List all present library folders and make sure they are alphabetically sorted.
-    SUBDIRLIST(SUBDIRS ${BUILD_PATH_TO_PREBUILT_LIBS})
+    SUBDIRLIST(PATH_SUBDIRS "${BUILD_PATH_TO_PREBUILT_LIBS}")
+    set(ALL_SUBDIRS "${PATH_SUBDIRS}")
 
-    list(LENGTH SUBDIRS len)
+    #if the user provided alternative path, look there also..
+    if(EXISTS "${BUILD_PATH_TO_EXTRA_PREBUILT_LIBS}")
+        SUBDIRLIST(PATH_EXTRA_SUBDIRS "${BUILD_PATH_TO_EXTRA_PREBUILT_LIBS}")
+        list(APPEND ALL_SUBDIRS "${PATH_EXTRA_SUBDIRS}")
+    endif()
+
+
+    list(LENGTH PATH_SUBDIRS len)
     if(${len} LESS 1)
         message(FATAL_ERROR "${BUILD_PATH_TO_PREBUILT_LIBS} contains no valid folders.")
     endif()
     
-    list(SORT SUBDIRS)
+    list(SORT ALL_SUBDIRS)
 
 
     #this creates list of library versions from directory names
@@ -223,13 +233,24 @@ function(scan_libs)
     #Result is list of library names and their property strings.
     set(library_names "")
     set(current_libname "")
+    set(invalid_library_list "")
 
-    foreach(dirname ${SUBDIRS})
+    foreach(dirname ${ALL_SUBDIRS})
 
         #extract first part to use as variable name of this lib
         string(REPLACE " " ";" list_dirname ${dirname})
         list(GET list_dirname 0 tmp_libname)
     
+        unset(library_name_found)
+        #every library folder has to have its name defined in AddLibMacros, in all_library_names list and have its ADD_LIB macro
+        list(FIND all_library_names ${tmp_libname} library_name_found)
+
+        #skip that library.. Otherwise it would show in configuration for every project
+        if(${library_name_found} LESS "0")
+            list(APPEND invalid_library_list "${tmp_libname}")
+            continue()
+        endif()
+
         #while the name is the same, add directory as a choice for current library.
         if(tmp_libname STREQUAL current_libname)
         
@@ -248,22 +269,41 @@ function(scan_libs)
         #message(${dirname})
     endforeach()
 
+    set(invalid_library_list ${invalid_library_list} PARENT_SCOPE)
+
+    #go through libraries in manifest and try to match them to what we have.. if present set them by default, if not..
+    if(EXISTS "${CMAKE_SOURCE_DIR}/applications/${BUILD_PROJECT_NAME}/dependency_manifest.txt" AND ${BUILD_USE_LIBRARIES_FROM_MANIFEST})
+
+        file(STRINGS "${CMAKE_SOURCE_DIR}/applications/${BUILD_PROJECT_NAME}/dependency_manifest.txt" lines)
+
+        #each line contains name of the folder the library was in.
+        #problem: experimental and other keywords.. what if it changed? but the lib stays the same?...
+        foreach(line ${lines})
+
+            #get library name
+            string(FIND "${line}" " " _index)
+            string(SUBSTRING "${line}" 0 ${_index} library_name)
+
+            list(APPEND backup_names LIBRARY_${library_name})
+            list(APPEND backup_values ${line})
+
+        endforeach()
+
+    else()
+
+        set(backup_names ${previously_detected_libs})
     
-    
-    
-    set(backup_names ${previously_detected_libs})
-    
-    foreach(libname ${previously_detected_libs})
-        list(APPEND backup_values ${${libname}})
-    endforeach()
+        foreach(libname ${previously_detected_libs})
+            list(APPEND backup_values ${${libname}})
+        endforeach()
+
+    endif()
 
     #message("backup names ${backup_names}")
     #message("backup values ${backup_values}")
 
     delete_previously_detected_libs()
-
-    
-    
+   
     message(STATUS "Found folders for libraries '${library_names}'")
 
     #make sure the property strings of given lib variable are sorted and select the last one, with
@@ -273,7 +313,7 @@ function(scan_libs)
         #message("${library}")
         #message("${${library}_property_string}")
 
-        #special version of sort which correctly pust version 1.3 before version 1.11
+        #special version of sort which correctly puts version 1.3 before version 1.11
         version_sort("${library}_property_string")
         
         
@@ -287,7 +327,7 @@ function(scan_libs)
             list(GET backup_values ${index} previous_value)
                  
             #check if the previously selected value is experimental
-            string(FIND ${previous_value} "experimental" result)
+            string(FIND "${previous_value}" "experimental" result)
 
             if(${result} GREATER "-1")
                 set(previous_value_is_experimental TRUE)
@@ -369,7 +409,7 @@ function(scan_libs)
         
         elseif(NOT "${previous_value}" STREQUAL "")
         
-            if("${previous_value_version}" VERSION_LESS "${new_regular_value_version}")      ## experimental - newer regular
+            if("${previous_value_version}" VERSION_LESS_EQUAL "${new_regular_value_version}")      ## experimental - newer regular
                 set(newer_libraries_alert TRUE PARENT_SCOPE)
             
                 list(APPEND newer_libraries_list "experimental ${library}")
@@ -409,8 +449,6 @@ function(scan_libs)
 
     #Set variables for all the detected libs
     foreach(library ${library_names})
-    #	include_directories("${BUILD_PATH_TO_PREBUILT_LIBS}${library}/include")
-    #	link_directories("${BUILD_PATH_TO_PREBUILT_LIBS}${library}/lib")
 
         ## Names are not always capitalized but CMake convention uses capitalized names
         # save some trouble and set both variants..
@@ -419,12 +457,24 @@ function(scan_libs)
         string(TOUPPER ${library} capitalized_name)
         set(${capitalized_name}_FOUND TRUE CACHE INTERNAL "")
 
-        set(${library}_INCLUDE_DIRS "${BUILD_PATH_TO_PREBUILT_LIBS}/${LIBRARY_${library}}/include" CACHE INTERNAL "")
-        set(${library}_LIBRARY_DIRS "${BUILD_PATH_TO_PREBUILT_LIBS}/${LIBRARY_${library}}/lib" CACHE INTERNAL "")
-        set(${library}_BINARY_DIRS  "${BUILD_PATH_TO_PREBUILT_LIBS}/${LIBRARY_${library}}/bin" CACHE INTERNAL "")
+
+
+        #look into library property to see selected version..
+        #try to find the version either in PATH_SUBDIRS or PATH_EXTRA_SUBDIRS and set the path accordingly..
+
+        if("${LIBRARY_${library}}" IN_LIST PATH_SUBDIRS)            
+            set(PATH_TO_LIB "${BUILD_PATH_TO_PREBUILT_LIBS}")
+
+        else()
+            set(PATH_TO_LIB "${BUILD_PATH_TO_EXTRA_PREBUILT_LIBS}")
+        endif()
+
+        set(${library}_INCLUDE_DIRS "${PATH_TO_LIB}/${LIBRARY_${library}}/include" CACHE INTERNAL "")
+        set(${library}_LIBRARY_DIRS "${PATH_TO_LIB}/${LIBRARY_${library}}/lib" CACHE INTERNAL "")
+        set(${library}_BINARY_DIRS  "${PATH_TO_LIB}/${LIBRARY_${library}}/bin" CACHE INTERNAL "")
         
-        set(${library}_PATH "${BUILD_PATH_TO_PREBUILT_LIBS}/${LIBRARY_${library}}" CACHE INTERNAL "")
-        
+        set(${library}_PATH "${PATH_TO_LIB}/${LIBRARY_${library}}" CACHE INTERNAL "")
+
         #message("${${library}_INCLUDE_DIRS}")
     
         #unused or dynamic versions of lib files can be put into, for example, 'Unused' folder

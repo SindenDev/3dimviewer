@@ -40,6 +40,11 @@ std::string glFramebufferStatusString(GLenum value);
 //! Creates sensible error message to put to log
 std::string glGetErrors(std::string functionName);
 
-bool glDebugCallbackReady();
+bool isDebugContextEnabled();
+bool isDebugMessageCallbackAvailable();
+
+bool glGetErrorEnabled();
+
+#define tridimGlR(name, glExp) glExp; { if(glGetErrorEnabled()){std::string errorString = glGetErrors(name); if (!errorString.empty()) VPL_LOG_ERROR(errorString);} }
 
 #endif

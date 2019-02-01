@@ -41,12 +41,16 @@ target_include_directories(${TRIDIM_CURRENT_TARGET} PRIVATE ${CMAKE_SOURCE_DIR}/
 
 target_include_directories(${TRIDIM_CURRENT_TARGET} PRIVATE ${CMAKE_SOURCE_DIR}/${OSS_SUBFOLDER}include/3dim/core)
 
+#Signals.h
+target_include_directories(${TRIDIM_CURRENT_TARGET} PRIVATE  "${CMAKE_SOURCE_DIR}/${OSS_SUBFOLDER}applications/${BUILD_PROJECT_NAME}/include" )
+
 #-------------------------------------------------------------------------------
 # Find required 3rd party libraries
 
 ADD_LIB_OPENMESH()
 ADD_LIB_QT()
 ADD_LIB_VPL()
+ADD_LIB_TINYXML()
 ADD_LIB_GLAD()
 ADD_LIB_DCMTK()
 ADD_LIB_OSG()
@@ -63,15 +67,15 @@ ADD_LIB_OPENGL()
 set( TRIDIM_INCLUDE_DIR "${TRIDIM_ROOT_DIR}/include/3dim")
 set( TRIDIM_SOURCE_DIR  "${TRIDIM_ROOT_DIR}/src")
 
-ADD_PLUGIN_HEADER_DIRECTORY( ${TRIDIM_THIS_PLUGIN_PATH}${TRIDIM_THIS_PLUGIN_INCLUDE} )
-ADD_PLUGIN_SOURCE_DIRECTORY( ${TRIDIM_THIS_PLUGIN_PATH}${TRIDIM_THIS_PLUGIN_SRC} )
+ADD_HEADER_DIRECTORY( ${TRIDIM_THIS_PLUGIN_PATH}${TRIDIM_THIS_PLUGIN_INCLUDE} )
+ADD_SOURCE_DIRECTORY( ${TRIDIM_THIS_PLUGIN_PATH}${TRIDIM_THIS_PLUGIN_SRC} )
 
 #-------------------------------------------------------------------------------
 # Some qt-related stuff
 
-ADD_PLUGIN_UI_DIRECTORY( ${TRIDIM_THIS_PLUGIN_PATH} )
-ADD_PLUGIN_RC_FILE( ${TRIDIM_THIS_PLUGIN_PATH}/notesplugin.qrc )
-ADD_PLUGIN_TRANSLATION_FILE( ${TRIDIM_THIS_PLUGIN_PATH}/translations/notesplugin-cs_cz.ts )
+ADD_UI_DIRECTORY( ${TRIDIM_THIS_PLUGIN_PATH} )
+ADD_RC_FILE( ${TRIDIM_THIS_PLUGIN_PATH}/notesplugin.qrc )
+ADD_TRANSLATION_FILE( ${TRIDIM_THIS_PLUGIN_PATH}/translations/notesplugin-cs_cz.ts )
 
 # !!! when UPDATE_TRANSLATIONS is on then ts files are generated
 # from source files and rebuild erases them completely !!!
@@ -83,8 +87,8 @@ ADD_PLUGIN_TRANSLATION_FILE( ${TRIDIM_THIS_PLUGIN_PATH}/translations/notesplugin
 SOURCE_GROUP( "Header Files" REGULAR_EXPRESSION "^dummyrule$" )
 SOURCE_GROUP( "Source Files" REGULAR_EXPRESSION "^dummyrule$" )
 
-ADD_SOURCE_GROUPS( ${TRIDIM_PLUGIN_HEADERS}
-                   ${TRIDIM_PLUGIN_SOURCES}
+ADD_SOURCE_GROUPS( ${${TRIDIM_CURRENT_TARGET}_HEADERS}
+                   ${${TRIDIM_CURRENT_TARGET}_SOURCES}
                    )
 
 
@@ -108,13 +112,13 @@ ADD_3DIM_LIB_TARGET( ${TRIDIM_GEOMETRY_LIB} )
 # process headers by MOC and generate list of resulting source files
 # Somehow moc has trouble locating included files (doesn't share include directories with project)
 # so we have to give it include path at which it will succeed. The relevant file is PluginInterface.h
-#QT5_WRAP_CPP( TRIDIM_PLUGIN_MOC_SOURCES ${TRIDIM_PLUGIN_HEADERS} OPTIONS -I ${CMAKE_SOURCE_DIR}/${OSS_SUBFOLDER}include/3dim/)
+#QT5_WRAP_CPP( ${TRIDIM_CURRENT_TARGET}_MOC_SOURCES ${${TRIDIM_CURRENT_TARGET}_HEADERS} OPTIONS -I ${CMAKE_SOURCE_DIR}/${OSS_SUBFOLDER}include/3dim/)
 
 # UI files are processed to headers and sources
-#QT5_WRAP_UI( TRIDIM_PLUGIN_UI_SOURCES ${TRIDIM_PLUGIN_UI_FILES} )
+#QT5_WRAP_UI( ${TRIDIM_CURRENT_TARGET}_UI_SOURCES ${${TRIDIM_CURRENT_TARGET}_UI_FILES} )
     
 # same applies to resources
-QT5_ADD_RESOURCES( TRIDIM_PLUGIN_RC_SOURCES ${TRIDIM_PLUGIN_RC_FILES} )
+QT5_ADD_RESOURCES( ${TRIDIM_CURRENT_TARGET}_RC_SOURCES ${${TRIDIM_CURRENT_TARGET}_RC_FILES} )
     
 #-------------------------------------------------------------------------------
 # setup translations
@@ -122,16 +126,16 @@ QT5_ADD_RESOURCES( TRIDIM_PLUGIN_RC_SOURCES ${TRIDIM_PLUGIN_RC_FILES} )
 # http://doc-snapshot.qt-project.org/5.0/qtdoc/cmake-manual.html
     
 # files to translate
-set( FILES_TO_TRANSLATE ${TRIDIM_PLUGIN_SOURCES} ${TRIDIM_PLUGIN_UI_FILES} )
+set( FILES_TO_TRANSLATE ${${TRIDIM_CURRENT_TARGET}_SOURCES} ${${TRIDIM_CURRENT_TARGET}_UI_FILES} )
 
 # !!! when BUILD_UPDATE_TRANSLATIONS is on then ts files are generated
 # !!! from source files and rebuild erases them completely
 set( QM_FILES "" )
 if( BUILD_UPDATE_TRANSLATIONS )
-    message(WARNING " creating translations ${TRIDIM_PLUGIN_TRANSLATION_FILES}")
-    qt5_create_translation( QM_FILES ${FILES_TO_TRANSLATE} ${TRIDIM_PLUGIN_TRANSLATION_FILES} )
+    message(WARNING " creating translations ${${TRIDIM_CURRENT_TARGET}_TRANSLATION_FILES}")
+    qt5_create_translation( QM_FILES ${FILES_TO_TRANSLATE} ${${TRIDIM_CURRENT_TARGET}_TRANSLATION_FILES} )
 else()
-    qt5_add_translation( QM_FILES ${TRIDIM_PLUGIN_TRANSLATION_FILES} )
+    qt5_add_translation( QM_FILES ${${TRIDIM_CURRENT_TARGET}_TRANSLATION_FILES} )
 endif()
 
 # add defition saying that this is a plugin
@@ -144,12 +148,12 @@ INCLUDE_DIRECTORIES( ${CMAKE_CURRENT_BINARY_DIR} )
 
 
 target_sources(${TRIDIM_CURRENT_TARGET} PRIVATE 
-                ${TRIDIM_PLUGIN_SOURCES} 
-                ${TRIDIM_PLUGIN_HEADERS} 
-                #${TRIDIM_PLUGIN_UI_SOURCES} 
-                ${TRIDIM_PLUGIN_RC_SOURCES}
+                ${${TRIDIM_CURRENT_TARGET}_SOURCES} 
+                ${${TRIDIM_CURRENT_TARGET}_HEADERS} 
+                ${${TRIDIM_CURRENT_TARGET}_UI_FILES} 
+                ${${TRIDIM_CURRENT_TARGET}_RC_SOURCES}
                 ${QM_FILES} 
-                #${TRIDIM_PLUGIN_MOC_SOURCES} 
+                #${${TRIDIM_CURRENT_TARGET}_MOC_SOURCES} 
                 )
  
 set_target_properties( ${TRIDIM_CURRENT_TARGET} PROPERTIES
@@ -159,7 +163,7 @@ set_target_properties( ${TRIDIM_CURRENT_TARGET} PROPERTIES
                         LIBRARY_OUTPUT_DIRECTORY_DEBUG "${CMAKE_BINARY_DIR}/${BUILD_PROJECT_NAME}/pluginsd/"
                         LIBRARY_OUTPUT_DIRECTORY_RELEASE "${CMAKE_BINARY_DIR}/${BUILD_PROJECT_NAME}/plugins/"
                         LIBRARY_OUTPUT_DIRECTORY_RELWITHDEBINFO "${CMAKE_BINARY_DIR}/${BUILD_PROJECT_NAME}/plugins/"
-                        PROJECT_LABEL ${TRIDIM_PLUGIN_PROJECT_NAME}
+                        PROJECT_LABEL plugin${TRIDIM_CURRENT_TARGET}
                         DEBUG_POSTFIX d
                         LINK_FLAGS "${TRIDIM_LINK_FLAGS}"
                         )

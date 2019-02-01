@@ -19,8 +19,8 @@ CDemoPlugin::CDemoPlugin() : QObject(), PluginInterface()
     m_pToolBar = NULL;
     m_pPanel = NULL;
     m_colorComboBox = NULL;
-	setProperty("Icon", ":/icons/icons/demoplugin.png");
-	setProperty("PanelIcon", ":/icons/icons/demoplugin_dock.png");
+	setProperty("Icon", ":/svg/svg/demoplugin.svg");
+	setProperty("PanelIcon", ":/svg/svg/demoplugin_dock.svg");
 }
 
 CDemoPlugin::~CDemoPlugin()
@@ -34,14 +34,14 @@ void  CDemoPlugin::createActions()
 {
     if (!m_actionPickValue)
     {
-        m_actionPickValue = new QAction(QIcon(":/icons/icons/1.png"),tr("Pick Value"),NULL);
+        m_actionPickValue = new QAction(QIcon(":/svg/svg/1.svg"),tr("Pick Value"),NULL);
 		m_actionPickValue->setObjectName("actionPickValue");
         m_actionPickValue->setStatusTip(tr("Click the button and then select any point the volume data."));
         QObject::connect(m_actionPickValue, SIGNAL(triggered()), this, SLOT(onActionPickValue()) );
     }
     if (!m_actionStroke)
     {
-        m_actionStroke = new QAction(QIcon(":/icons/icons/2.png"),tr("Brush Drawing Mode"),NULL);
+        m_actionStroke = new QAction(QIcon(":/svg/svg/2.svg"),tr("Brush Drawing Mode"),NULL);
 		m_actionStroke->setObjectName("actionStroke");
         m_actionStroke->setStatusTip(tr("Click the button, then press Shift and start drawing using mouse."));
         m_actionStroke->setCheckable(true);
@@ -49,7 +49,7 @@ void  CDemoPlugin::createActions()
     }
     if (!m_actionPolygon)
     {
-        m_actionPolygon = new QAction(QIcon(":/icons/icons/3.png"),tr("Polygon Drawing Mode"),NULL);
+        m_actionPolygon = new QAction(QIcon(":/svg/svg/3.svg"),tr("Polygon Drawing Mode"),NULL);
 		m_actionPolygon->setObjectName("actionPolygon");
         m_actionPolygon->setStatusTip(tr("Click the button, then press Shift and start drawing using mouse."));
         m_actionPolygon->setCheckable(true);
@@ -57,7 +57,7 @@ void  CDemoPlugin::createActions()
     }
     if (!m_actionShowRegions)
     {
-        m_actionShowRegions = new QAction(QIcon(":/icons/icons/4.png"),tr("Show Regions"),NULL);
+        m_actionShowRegions = new QAction(QIcon(":/svg/svg/4.svg"),tr("Show Regions"),NULL);
 		m_actionShowRegions->setObjectName("actionShowRegions");
         m_actionShowRegions->setStatusTip(tr("Show Regions"));
         m_actionShowRegions->setCheckable(true);

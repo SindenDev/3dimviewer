@@ -24,11 +24,17 @@
 #include <base/Macros.h>
 #include <data/CDensityData.h>
 #include <data/CRegionData.h>
+#include <data/CMultiClassRegionData.h>
 #include <data/CCustomData.h>
 #include <data/CSavedEntries.h>
 #include <data/CRegionDataCalculator.h>
 #include <data/Notes.h>
-
+#ifdef ENABLE_PYTHON
+#include <qtpython/interpret.h>
+#endif
+#ifdef ENABLE_DEEPLEARNING
+#include <coremedi_viewer/data/CAnnotatedAnatomicalLandmarkGroup.h>
+#endif
 //=============================================================================
 data::CAppExamination::CAppExamination() : CExamination()
 {
@@ -48,13 +54,23 @@ void data::CAppExamination::init()
 
 	//STORABLE_FACTORY.registerObject( SavedEntries::Id, SavedEntries::Type::create);
 	STORABLE_FACTORY.registerObject( CustomData::Id, CustomData::Type::create );
-	STORABLE_FACTORY.registerObject(RegionDataCalculator::Id, RegionDataCalculator::Type::create, CEntryDeps().insert(RegionData::Id));
+	STORABLE_FACTORY.registerObject(RegionDataCalculator::Id, RegionDataCalculator::Type::create, CEntryDeps().insert(MultiClassRegionData::Id));
     STORABLE_FACTORY.registerObject(NoteData::Id, NoteData::Type::create);
-
+#ifdef ENABLE_PYTHON
+    STORABLE_FACTORY.registerObject(InterpretData::Id, InterpretData::Type::create);
+#endif
+#ifdef ENABLE_DEEPLEARNING
+    STORABLE_FACTORY.registerObject(AnnotatedAnatomicalLandmarkGroup::Id,
+        AnnotatedAnatomicalLandmarkGroup::Type::create,
+        CEntryDeps().insert(PatientData::Id));
+#endif
     // Enforce object creation
 	//APP_STORAGE.getEntry(SavedEntries::Id);
 	APP_STORAGE.getEntry(CustomData::Id);
 	APP_STORAGE.getEntry(RegionDataCalculator::Id);
+#ifdef ENABLE_DEEPLEARNING
+    APP_STORAGE.getEntry(AnnotatedAnatomicalLandmarkGroup::Id);
+#endif
 
 	// Set entries to save
 	setSaved();
@@ -85,6 +101,8 @@ void data::CAppExamination::setSaved(void)
     entries->addId( data::Storage::RegionData::Id );
 
 	// Custom data
-	entries->addId( data::Storage::CustomData::Id);    
+	entries->addId( data::Storage::CustomData::Id);   
+
+    entries->addId(data::Storage::MultiClassRegionData::Id);
 }
 

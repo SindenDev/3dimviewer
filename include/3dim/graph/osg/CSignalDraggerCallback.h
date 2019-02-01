@@ -49,12 +49,7 @@ public:
 public:
 	//! Constructor
 	CSignalDraggerCallback( osg::MatrixTransform * transform, int handleCommandMask = HANDLE_ALL ) 
-        : DraggerTransformCallback(transform, handleCommandMask )
-		, m_invoke( true )
-        , m_scaleMT(transform)
-        , m_transMT(transform)
-        , m_rotMT(transform)
-        , m_finishSignalEnabled(false)
+        : CSignalDraggerCallback(transform, transform, transform, handleCommandMask)
 	{}
 
     //! Constructor used to apply different commands on different transforms

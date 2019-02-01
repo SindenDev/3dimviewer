@@ -17,11 +17,11 @@
    <item>
     <widget class="QPushButton" name="pushButtonBuyPlugins">
      <property name="text">
-      <string>Try Advanced Segmentation Plugins</string>
+      <string>Our Image Analysis Solutions</string>
      </property>
      <property name="icon">
-      <iconset resource="../resources.qrc">
-       <normaloff>:/icons/resources/autosegicon.png</normaloff>:/icons/resources/autosegicon.png</iconset>
+      <iconset>
+       <normaloff>:/svg/svg/autosegicon.svg</normaloff>:/svg/svg/autosegicon.svg</iconset>
      </property>
     </widget>
    </item>

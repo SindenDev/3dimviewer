@@ -73,7 +73,7 @@ class CSeriesSelectionDialog : public QDialog
     
 public:
     //! Constructor
-    explicit CSeriesSelectionDialog(QWidget *parent = 0, Qt::WindowFlags f=0);
+    explicit CSeriesSelectionDialog(QWidget *parent = 0, Qt::WindowFlags f = 0);
 
     //! Destructor
     ~CSeriesSelectionDialog();
@@ -88,6 +88,8 @@ public:
     void getSubsampling(double &subsamplingX, double &subsamplingY, double &subsamplingZ) const;
 
 	bool eventFilter(QObject *obj, QEvent *event);
+
+    void hidePreview();
 
 protected:
     //! Pointer to the series data.

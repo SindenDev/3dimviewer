@@ -11,6 +11,7 @@
 #include <qtplugin/PluginInterface.h>
 
 #include <controls/ccolorcombobox.h>
+#include <controls/ccollapsiblegroupbox.h>
 
 namespace Ui {
 class CDemoPluginPanel;
@@ -96,6 +97,9 @@ private slots:
     void on_pushButtonAuxData_clicked();
 
     void on_pushButtonPatientData_clicked();
+
+    void packGroupBox(bool checked);
+    void packGroupBox(QGroupBox* pWidget, bool checked);
 
 private:
     Ui::CDemoPluginPanel *ui;

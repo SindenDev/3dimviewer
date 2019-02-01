@@ -112,7 +112,7 @@ private:
     void loadExtendedTags(sExtendedTags& tags);
 
 #ifdef WIN32 // Windows need nonunicode paths to be in ACP
-	static std::string     wcs2ACP(const std::wstring &filename);
+	static std::string     wcs2ACP(const std::wstring &filename, bool bDoNotUseShortName = false);
 #endif
 
     //! Creates absolute path from dir and filename

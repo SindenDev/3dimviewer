@@ -24,41 +24,23 @@
 #define CTriMesh_H
 
 ///////////////////////////////////////////////////////////////////////////////
-// include files
-#include <vector>
-
 #include <osg/MatrixTransform>
 #include <osg/Geode>
-#include <osg/Geometry>
-#include <osg/PrimitiveSet>
-#include <osg/StateSet>
-#include <osg/Shape>
-#include <osg/Vec4>
+#include <osg/Texture2D>
+#include <VPL/Image/Image.h>
 
-#include <osg/CPseudoMaterial.h>
-#include <geometry/base/CMesh.h>
+namespace geometry
+{
+    class CMesh;
+}
 
 namespace osg
 {
-	class CTriMeshDrawCallback : public osg::Drawable::DrawCallback
-	{
-	protected:
-		osg::ref_ptr<osg::Drawable> m_drawable;
+    class CPseudoMaterial;
 
-	public:
-		CTriMeshDrawCallback(osg::Drawable *drawable)
-			: m_drawable(drawable)
-		{ }
-
-		~CTriMeshDrawCallback()
-		{ }
-		virtual void drawImplementation(osg::RenderInfo &ri, const osg::Drawable *d) const;
-	};
-	
-	///////////////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////////////
     //! OSG geode representing triangular surface mesh.
-
-	class CTriMesh : public osg::MatrixTransform
+    class CTriMesh : public osg::MatrixTransform
     {
     public:
         enum ENormalsUsage
@@ -73,91 +55,75 @@ namespace osg
             osg::Vec3 normal;
         };
 
-        //! Vertex handles vector
-        typedef std::vector<std::pair<long, SPositionNormal> > tIdPosVec;
-
     public:
         //! Default constructor.
         CTriMesh();
 
         //! Initialization of the OSG geode based on a given surface mesh.
-        void createMesh(geometry::CMesh *mesh, bool createNormals = true);
+        void createMesh(geometry::CMesh& mesh, const std::map<std::string, vpl::img::CRGBAImage::tSmartPtr>& textures, bool createNormals = true);
 
         //! Changes surface color.
-        void setColor(float r, float g, float b, float a = 1.0f);
+        void setColor(const osg::Vec4& value);
 
         void useVertexColors(bool value = true, bool force = false);
 
-        void updateVertexColors(osg::Vec4Array *vertexColors);
+        void updateVertexColors(const geometry::CMesh& mesh, float alpha);
 
         //! Switches between face/vertex normals
         void useNormals(ENormalsUsage normalsUsage);
 
         //! Update only part of model
-        void updatePartOfMesh(geometry::CMesh *mesh, const tIdPosVec &ip, bool createNormals = true);
+        void updatePartOfMesh(const std::vector<std::pair<long, SPositionNormal>>& ip);
 
         //! Sets use of multiple materials at once
         void setUseMultipleMaterials(bool value);
 
-        //! Sets and applies (if multiple materials are enabled) material with specified id, -1 is default material
-        void setMaterial(osg::CPseudoMaterial *material, int id = -1);
-
-        //! Gets number of materials
-        int getNumMaterials();
-
         //! Returns material with specified id, -1 is default material
-        osg::CPseudoMaterial *getMaterialById(int id = -1);
+        osg::CPseudoMaterial* getMaterial(int id = -1);
 
-        //! Returns material at specified index, -1 is default material
-        osg::CPseudoMaterial *getMaterialByIndex(int index = -1);
+        //! Sets and applies (if multiple materials are enabled) material with specified id, -1 is default material
+        void setMaterial(osg::CPseudoMaterial* material, int id = -1);
 
-        //! Build kd tree
+        const std::map<int, osg::ref_ptr<osg::CPseudoMaterial>>& getMaterials() const;
+
         void buildKDTree();
 
-        osg::Geode *getMeshGeode()
-        {
-            return pGeode.get();
-        }
-
-		void setVisitorsSubTree(osg::MatrixTransform *visitorsSubTree = NULL);
-
-    protected:
-        //! Applies materials
         void applyMaterials();
 
+        osg::Geode* getMeshGeode();
+
     protected:
-        // OSG things...
-        osg::ref_ptr<osg::Geode> pGeode;
-        std::vector<osg::ref_ptr<osg::Geometry> > pGeometries;
-        std::map<int, int> m_geometryIndexToMaterialIndex;
-        std::vector<osg::ref_ptr<osg::Geometry> > pGeometriesVisitors;
-        std::vector<osg::ref_ptr<osg::DrawElementsUInt> > pPrimitiveSets;
-        std::map<int, osg::ref_ptr<osg::CPseudoMaterial> > pMaterials;
-        osg::ref_ptr<osg::CPseudoMaterial> pDefaultMaterial;
-        osg::ref_ptr<osg::CPseudoMaterial> pDefaultMaterialBackup;
-        bool bUseMultipleMaterials;
-        osg::ref_ptr<osg::Vec3Array> pVertices;
-        osg::ref_ptr<osg::Vec3Array> pNoNormals;
-        osg::ref_ptr<osg::Vec3Array> pNormals;
-        osg::ref_ptr<osg::Vec4Array> pColors;
-        osg::ref_ptr<osg::Vec4Array> pVertexColors;
-        osg::ref_ptr<osg::Vec4Array> pVertexGroupIndices;
-        osg::ref_ptr<osg::Vec4Array> pVertexGroupWeights;
-        osg::ref_ptr<osg::StateSet> pStateSet;
-        osg::ref_ptr<osg::MatrixTransform> pVisitorsSubTree;
+        void dirtyGeometry();
+
+    protected:
+        osg::ref_ptr<osg::Geode> m_geode;
+
+        std::map<int, osg::ref_ptr<osg::Geometry>> m_geometries;
+        std::map<int, osg::ref_ptr<osg::DrawElementsUInt>> m_primitiveSets;
+        std::map<int, osg::ref_ptr<osg::CPseudoMaterial>> m_materials;
+
+        osg::ref_ptr<osg::CPseudoMaterial> m_defaultMaterial;
+        osg::ref_ptr<osg::CPseudoMaterial> m_defaultMaterialBackup;
+
+        bool m_useMultipleMaterials;
+
+        osg::ref_ptr<osg::Vec3Array> m_vertices;
+        osg::ref_ptr<osg::Vec2Array> m_texCoords;
+        osg::ref_ptr<osg::Vec3Array> m_noNormals;
+        osg::ref_ptr<osg::Vec3Array> m_normals;
+        osg::ref_ptr<osg::Vec4Array> m_colors;
+        osg::ref_ptr<osg::Vec4Array> m_vertexColors;
+        osg::ref_ptr<osg::Vec4Array> m_vertexGroupIndices;
+        osg::ref_ptr<osg::Vec4Array> m_vertexGroupWeights;
+
+        std::map<std::string, osg::ref_ptr<osg::Texture2D>> m_textureMap;
 
         //! Is KD-tree build?
-        bool m_bKDTreeUsed;
+        bool m_kdtreeUsed;
 
         //! Is vertex coloring used?
-        bool m_bUseVertexColors;
+        bool m_useVertexColors;
     };
-
-    // Creates OSG geometry from loaded OpenMesh data structure
-    osg::Geometry *convertOpenMesh2OSGGeometry(geometry::CMesh *mesh, bool vertexNormals);
-
-    // Creates OSG geometry from loaded OpenMesh data structure
-    osg::Geometry *convertOpenMesh2OSGGeometry(geometry::CMesh *mesh, const osg::Vec4 &color);
 
 }// namespace osg
 

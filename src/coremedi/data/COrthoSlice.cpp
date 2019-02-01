@@ -28,6 +28,7 @@
 #include <coremedi/app/Signals.h>
 #include <data/CActiveDataSet.h>
 #include <data/CRegionData.h>
+#include <data/CMultiClassRegionData.h>
 #include <data/CVolumeOfInterestData.h>
 
 namespace data
@@ -57,6 +58,11 @@ void COrthoSlice::init()
 
 void COrthoSliceXY::update(const CChangedEntries& Changes)
 {
+    if (!m_updateEnabled)
+    {
+        return;
+    }
+
     // Get the density data
     int datasetId = VPL_SIGNAL(SigGetActiveDataSet).invoke2();
     if (datasetId == CUSTOM_DATA)
@@ -149,20 +155,21 @@ void COrthoSliceXY::update(const CChangedEntries& Changes)
         // Get the segmented data
         CObjectPtr<CRegionData> spRegionVolume( APP_STORAGE.getEntry(Storage::RegionData::Id) );
 
-        if( spRegionVolume->isColoringEnabled()
-            && spRegionVolume->getXSize() == XSize 
-            && spRegionVolume->getYSize() == YSize )
+        if (spRegionVolume->hasData())
         {
-            m_RegionData.resize(XSize, YSize);
-            if( !spRegionVolume->getPlaneXY(m_Position, m_RegionData) )
+            if (spRegionVolume->getXSize() == XSize && spRegionVolume->getYSize() == YSize)
             {
-                return;
+                m_RegionData.resize(XSize, YSize);
+                if (!spRegionVolume->getPlaneXY(m_Position, m_RegionData))
+                {
+                    return;
+                }
             }
-        }
-        else
-        {
-            if (m_RegionData.width()!=0 || m_RegionData.height()!=0)
-                m_RegionData.resize(0, 0);
+            else
+            {
+                if (m_RegionData.width() != 0 || m_RegionData.height() != 0)
+                    m_RegionData.resize(0, 0);
+            }
         }
 
         // Unlock the region data
@@ -172,6 +179,38 @@ void COrthoSliceXY::update(const CChangedEntries& Changes)
     {
         if (m_RegionData.width()!=0 || m_RegionData.height()!=0)
             m_RegionData.resize(0, 0);
+    }
+
+    // Check if region coloring is enabled
+    if (APP_STORAGE.isEntryValid(Storage::MultiClassRegionData::Id) && VPL_SIGNAL(SigIsMultiClassRegionColoringEnabled).invoke2())
+    {
+        // Get the segmented data
+        CObjectPtr<CMultiClassRegionData> spRegionVolume(APP_STORAGE.getEntry(Storage::MultiClassRegionData::Id));
+
+        if (spRegionVolume->hasData())
+        {
+            if (spRegionVolume->getXSize() == XSize && spRegionVolume->getYSize() == YSize)
+            {
+                m_multiClassRegionData.resize(XSize, YSize);
+                if (!spRegionVolume->getPlaneXY(m_Position, m_multiClassRegionData))
+                {
+                    return;
+                }
+            }
+            else
+            {
+                if (m_multiClassRegionData.width() != 0 || m_multiClassRegionData.height() != 0)
+                    m_multiClassRegionData.resize(0, 0);
+            }
+        }
+
+        // Unlock the region data
+        spRegionVolume.release();
+    }
+    else
+    {
+        if (m_multiClassRegionData.width() != 0 || m_multiClassRegionData.height() != 0)
+            m_multiClassRegionData.resize(0, 0);
     }
 
     CSlicePropertyContainer::tPropertyList propertyList = m_properties.propertyList();
@@ -204,6 +243,7 @@ void COrthoSliceXY::updateMIP(const CDensityData& Volume)
     // Resize the density image
     m_DensityData.resize(Volume.getXSize(), Volume.getYSize());
     m_RegionData.resize(0, 0);
+    m_multiClassRegionData.resize(0, 0);
 
     // MIP
     for( vpl::tSize j = 0; j < Volume.getYSize(); ++j )
@@ -248,6 +288,7 @@ void COrthoSliceXY::updateRTG(const CDensityData& Volume)
     // Resize the density image
     m_DensityData.resize(Volume.getXSize(), Volume.getYSize());
     m_RegionData.resize(0, 0);
+    m_multiClassRegionData.resize(0, 0);
 
     // RTG
 #pragma omp parallel for
@@ -297,6 +338,11 @@ void COrthoSliceXY::updateRTG(const CDensityData& Volume)
 
 void COrthoSliceXZ::update(const CChangedEntries& Changes)
 {
+    if (!m_updateEnabled)
+    {
+        return;
+    }
+
     // Get the density data
     int datasetId = VPL_SIGNAL(SigGetActiveDataSet).invoke2();
     if (datasetId == CUSTOM_DATA)
@@ -389,9 +435,7 @@ void COrthoSliceXZ::update(const CChangedEntries& Changes)
         // Get the segmented data
         CObjectPtr<CRegionData> spRegionVolume( APP_STORAGE.getEntry(Storage::RegionData::Id) );
 
-        if( spRegionVolume->isColoringEnabled()
-            && spRegionVolume->getXSize() == XSize 
-            && spRegionVolume->getZSize() == ZSize )
+        if(spRegionVolume->getXSize() == XSize && spRegionVolume->getZSize() == ZSize)
         {
             m_RegionData.resize(XSize, ZSize);
             if( !spRegionVolume->getPlaneXZ(m_Position, m_RegionData) )
@@ -412,6 +456,38 @@ void COrthoSliceXZ::update(const CChangedEntries& Changes)
     {
         if (m_RegionData.width()!=0 || m_RegionData.height()!=0)
             m_RegionData.resize(0, 0);
+    }
+
+    // Check if region coloring is enabled
+    if (APP_STORAGE.isEntryValid(Storage::MultiClassRegionData::Id) && VPL_SIGNAL(SigIsMultiClassRegionColoringEnabled).invoke2())
+    {
+        // Get the segmented data
+        CObjectPtr<CMultiClassRegionData> spRegionVolume(APP_STORAGE.getEntry(Storage::MultiClassRegionData::Id));
+
+        if (spRegionVolume->hasData())
+        {
+            if (spRegionVolume->getXSize() == XSize && spRegionVolume->getZSize() == ZSize)
+            {
+                m_multiClassRegionData.resize(XSize, ZSize);
+                if (!spRegionVolume->getPlaneXZ(m_Position, m_multiClassRegionData))
+                {
+                    return;
+                }
+            }
+            else
+            {
+                if (m_multiClassRegionData.width() != 0 || m_multiClassRegionData.height() != 0)
+                    m_multiClassRegionData.resize(0, 0);
+            }
+        }
+
+        // Unlock the region data
+        spRegionVolume.release();
+    }
+    else
+    {
+        if (m_multiClassRegionData.width() != 0 || m_multiClassRegionData.height() != 0)
+            m_multiClassRegionData.resize(0, 0);
     }
 
     CSlicePropertyContainer::tPropertyList propertyList = m_properties.propertyList();
@@ -444,6 +520,7 @@ void COrthoSliceXZ::updateMIP(const CDensityData& Volume)
     // Resize the density image
     m_DensityData.resize(Volume.getXSize(), Volume.getZSize());
     m_RegionData.resize(0, 0);
+    m_multiClassRegionData.resize(0, 0);
 
     // MIP
     for( vpl::tSize j = 0; j < Volume.getZSize(); ++j )
@@ -488,6 +565,7 @@ void COrthoSliceXZ::updateRTG(const CDensityData& Volume)
     // Resize the density image
     m_DensityData.resize(Volume.getXSize(), Volume.getZSize());
     m_RegionData.resize(0, 0);
+    m_multiClassRegionData.resize(0, 0);
 
     // RTG
     // - Use "density window" to fill the RGB image
@@ -538,6 +616,11 @@ void COrthoSliceXZ::updateRTG(const CDensityData& Volume)
 
 void COrthoSliceYZ::update(const CChangedEntries& Changes)
 {
+    if (!m_updateEnabled)
+    {
+        return;
+    }
+
     // Get the density data
     int datasetId = VPL_SIGNAL(SigGetActiveDataSet).invoke2();
     if (datasetId == CUSTOM_DATA)
@@ -631,9 +714,7 @@ void COrthoSliceYZ::update(const CChangedEntries& Changes)
         CObjectPtr<CRegionData> spRegionVolume( APP_STORAGE.getEntry(Storage::RegionData::Id) );
 
         // Check if region coloring is enabled
-        if( spRegionVolume->isColoringEnabled()
-            && spRegionVolume->getYSize() == YSize
-            && spRegionVolume->getZSize() == ZSize )
+        if(spRegionVolume->getYSize() == YSize && spRegionVolume->getZSize() == ZSize )
         {
             m_RegionData.resize(YSize, ZSize);
             if( !spRegionVolume->getPlaneYZ(m_Position, m_RegionData) )
@@ -654,6 +735,38 @@ void COrthoSliceYZ::update(const CChangedEntries& Changes)
     {
         if (m_RegionData.width()!=0 || m_RegionData.height()!=0)
             m_RegionData.resize(0, 0);
+    }
+
+    // Check if region coloring is enabled
+    if (APP_STORAGE.isEntryValid(Storage::MultiClassRegionData::Id) && VPL_SIGNAL(SigIsMultiClassRegionColoringEnabled).invoke2())
+    {
+        // Get the segmented data
+        CObjectPtr<CMultiClassRegionData> spRegionVolume(APP_STORAGE.getEntry(Storage::MultiClassRegionData::Id));
+
+        if (spRegionVolume->hasData())
+        {
+            if (spRegionVolume->getYSize() == YSize && spRegionVolume->getZSize() == ZSize)
+            {
+                m_multiClassRegionData.resize(YSize, ZSize);
+                if (!spRegionVolume->getPlaneYZ(m_Position, m_multiClassRegionData))
+                {
+                    return;
+                }
+            }
+            else
+            {
+                if (m_multiClassRegionData.width() != 0 || m_multiClassRegionData.height() != 0)
+                    m_multiClassRegionData.resize(0, 0);
+            }
+        }
+
+        // Unlock the region data
+        spRegionVolume.release();
+    }
+    else
+    {
+        if (m_multiClassRegionData.width() != 0 || m_multiClassRegionData.height() != 0)
+            m_multiClassRegionData.resize(0, 0);
     }
 
     CSlicePropertyContainer::tPropertyList propertyList = m_properties.propertyList();
@@ -686,6 +799,7 @@ void COrthoSliceYZ::updateMIP(const CDensityData& Volume)
     // Resize the density image
     m_DensityData.resize(Volume.getYSize(), Volume.getZSize());
     m_RegionData.resize(0, 0);
+    m_multiClassRegionData.resize(0, 0);
 
     // MIP
     for( vpl::tSize j = 0; j < Volume.getZSize(); ++j )
@@ -730,6 +844,7 @@ void COrthoSliceYZ::updateRTG(const CDensityData& Volume)
     // Resize the density image
     m_DensityData.resize(Volume.getYSize(), Volume.getZSize());
     m_RegionData.resize(0, 0);
+    m_multiClassRegionData.resize(0, 0);
 
     // RTG
     // - Use "density window" to fill the RGB image

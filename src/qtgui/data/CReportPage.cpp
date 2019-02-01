@@ -55,7 +55,6 @@ CReportPage::CReportPage()
     , m_floatingContent(false)
     , m_scalingEnabled(true)
 {
-    m_content.clear();
 }
 
 CReportPage::CReportPage(SReportPageSettings settings)
@@ -71,15 +70,10 @@ CReportPage::CReportPage(SReportPageSettings settings)
     m_pageHeightPixelsPerMM = settings.pageHeightPixelsPerMM;
     m_pageWidthPixelsPerMM = settings.pageWidthPixelsPerMM;
 
-    m_content.clear();
 }
 
 CReportPage::~CReportPage()
 {
-    for (int i = 0; i < m_content.size(); ++i)
-    {
-        free(m_content.at(i));        
-    }
 }
 
 int CReportPage::addRectangle(double width, double height)
@@ -115,8 +109,7 @@ int CReportPage::addRectangle(double width, double height)
     contentSettings.font = m_font;
     contentSettings.scalingEnabled = m_scalingEnabled;
 
-    //CReportPageContent content(contentSettings);
-    m_content.push_back(new CReportPageContent(contentSettings));
+    m_content.emplace_back(new CReportPageContent(contentSettings));
 
     //return index to content
     return (m_content.size() - 1);
@@ -172,8 +165,7 @@ int CReportPage::addRectangle(double width, double height, double x, double y, e
     settings.font = m_font;
     settings.scalingEnabled = m_scalingEnabled;
 
-    //CReportPageContent content(contentSettings);
-    m_content.push_back(new CReportPageContent(settings));
+    m_content.emplace_back(new CReportPageContent(settings));
 
     //return index to content
     return (m_content.size() - 1);
@@ -213,8 +205,7 @@ int CReportPage::addRectangle(QSize size)
     settings.font = m_font;
     settings.scalingEnabled = m_scalingEnabled;
 
-    //CReportPageContent content(contentSettings);
-    m_content.push_back(new CReportPageContent(settings));
+    m_content.emplace_back(new CReportPageContent(settings));
 
     //return index to content
     return (m_content.size() - 1);
@@ -263,8 +254,7 @@ int CReportPage::addRectangle(QSize size, double x, double y, eRectangleAlignmen
     settings.font = m_font;
     settings.scalingEnabled = m_scalingEnabled;
 
-    //CReportPageContent content(contentSettings);
-    m_content.push_back(new CReportPageContent(settings));
+    m_content.emplace_back(new CReportPageContent(settings));
 
     //return index to content
     return (m_content.size() - 1);
@@ -288,8 +278,7 @@ int CReportPage::addRectangle(QRect rect)
     contentSettings.font = m_font;
     contentSettings.scalingEnabled = m_scalingEnabled;
 
-    //CReportPageContent content(contentSettings);
-    m_content.push_back(new CReportPageContent (contentSettings));
+    m_content.emplace_back(new CReportPageContent(contentSettings));
 
     //return index to content
     return (m_content.size() - 1);
@@ -426,9 +415,6 @@ bool CReportPage::insertImage(int index, QImage img, SContentSettings settings)
             break;
         }
 
-        ////image with caption does not fit into page
-        //if (captionRect.bottom() > m_pageRect.bottom())
-        //	return false;
     }
 
     SReportPageContentSettings contentSettings;
@@ -552,7 +538,7 @@ bool CReportPage::addText(QString text, SContentSettings settings, bool fromBott
     contentSettings.overlay = settings.overlay;
 
     //CReportPageContent content(contentSettings);
-    m_content.push_back(new CReportPageContent(contentSettings));
+    m_content.emplace_back(new CReportPageContent(contentSettings));
 
     return true;
 }
@@ -722,8 +708,7 @@ bool CReportPage::addImage(QImage img, SContentSettings settings, bool fromBotto
     contentSettings.captionPos = settings.captionPos;
     contentSettings.aspectRatioMode = settings.aspectRatioMode;
 
-    //CReportPageContent content(contentSettings);
-    m_content.push_back(new CReportPageContent(contentSettings));
+    m_content.emplace_back(new CReportPageContent(contentSettings));
 
     return true;
 }
@@ -758,6 +743,30 @@ bool CReportPage::addImagePhysical(QImage img, Qt::AspectRatioMode aspectRatioMo
     return addImage(scaledImg, settings);
 }
 
+bool CReportPage::addImageGrid(CImageGrid& grid)
+{
+    //Check if grid fits into this page
+    //Image grid manages it's content layout separatly, so just check if it fits in currently available space
+    //This should be usually the case, bacause Image Grid is created with all the remaining space on current page,
+    //but of the programmer created Image Grid and the some other content anf tries to add the grid AFTERWARDS, it is possible
+    //that it doesn't fit the page anymore
+
+    QRect rect = getLargestFreeRectangle();
+
+    //no free space was found
+    if (rect.isEmpty())
+        return false;
+
+    QRect gridRect = grid.getContentRect();
+
+    bool canFit = (rect.bottom() >= gridRect.bottom() && rect.right() >= gridRect.right() &&
+                   rect.top() <= gridRect.top() && rect.left() <= gridRect.left());
+
+    m_content.emplace_back(new CImageGrid(grid));   
+
+    return true;
+}
+
 bool CReportPage::addTable(CReportTable table, SContentSettings settings, bool fromBottom)
 {
 
@@ -789,7 +798,6 @@ bool CReportPage::addTable(CReportTable table, SContentSettings settings, bool f
     {
         overallSize.setWidth(m_pageSize.width());
     }
-
 
     //rectangle with all free space
     QRect rect = findFreeSpace(overallSize);
@@ -836,8 +844,7 @@ bool CReportPage::addTable(CReportTable table, SContentSettings settings, bool f
     contentSettings.scalingEnabled = m_scalingEnabled;
     contentSettings.overlay = settings.overlay;
 
-    //CReportPageContent content(contentSettings);
-    m_content.push_back(new CReportPageContent(contentSettings));
+    m_content.emplace_back(new CReportPageContent(contentSettings));
 
     return true;
 }
@@ -928,8 +935,7 @@ bool CReportPage::addHTML(QString html, SContentSettings settings, bool fromBott
     contentSettings.scalingEnabled = m_scalingEnabled;
     contentSettings.overlay = settings.overlay;
 
-    //CReportPageContent content(contentSettings);
-    m_content.push_back(new CReportPageContent (contentSettings));
+    m_content.emplace_back(new CReportPageContent(contentSettings));
 
     return true;
 }
@@ -1200,13 +1206,12 @@ int CReportPage::getContentCount()
     return m_content.size();
 }
 
-CReportPageContent * CReportPage::getContent(int index)
-{
-    if (index >= m_content.size() || index < 0)
-        return nullptr;
-
-    return (m_content.at(index));
-}
+//CReportPageContent& CReportPage::getContent(int index)
+//{
+//    assert(index >= m_content.size() || index < 0);
+//
+//    return m_content->at(index);
+//}
 
 QVector<QRect> CReportPage::getFreeSpace()
 {
@@ -1231,7 +1236,7 @@ QVector<QRect> CReportPage::getFreeSpace()
     return freeSpace.rects();
 }
 
-QRect CReportPage::getBiggestFreeRectangle()
+QRect CReportPage::getLargestFreeRectangle()
 {
     //get remaining free space
     QVector<QRect> freeSpaces = getFreeSpace();
@@ -1317,7 +1322,7 @@ QSize CReportPage::getOverallSizeNeeded(QImage image, SContentSettings settings)
     return overallSize;
 }
 
-CImageGrid* CReportPage::createImageGrid(int rows, int cols)
+CImageGrid CReportPage::createImageGrid(int rows, int cols)
 {
     SReportPageSettings settings;
     settings.pageRect = m_pageRect;
@@ -1325,14 +1330,10 @@ CImageGrid* CReportPage::createImageGrid(int rows, int cols)
     settings.contentMarginBottom = m_contentMarginBottom;
     settings.contentMarginRight = m_contentMarginRight;
 
-    CImageGrid* ptr = new CImageGrid(rows, cols, getBiggestFreeRectangle(), settings);
-    m_content.push_back(ptr);
-
-    return ptr;
-
+    return CImageGrid(rows, cols, getLargestFreeRectangle(), settings);
 }
 
-void CReportPage::print(QPainter *painter)
+void CReportPage::print(QPainter& painter)
 {
     for (int i = 0; i < m_content.size(); ++i)
     {

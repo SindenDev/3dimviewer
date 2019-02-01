@@ -69,6 +69,15 @@ CDicomLoader::~CDicomLoader()
 {
 }
 
+std::string getenvSafe(const char* var)
+{
+    std::string res;
+    char* v = getenv(var);
+    if (nullptr != v)
+        res = v;
+    return res;
+}
+
 //==============================================================================================
 CSeries * CDicomLoader::preLoadDirectory( const vpl::sys::tString & path )
 {
@@ -78,6 +87,12 @@ CSeries * CDicomLoader::preLoadDirectory( const vpl::sys::tString & path )
 
     vpl::sys::CFileBrowserU::SFileAttr files;
     vpl::sys::CFileBrowserU browser;
+
+    // get system dir
+    static std::string sysDir = getenvSafe("SystemRoot");
+    vpl::sys::tString systemDir = vpl::sys::tStringConv::fromUtf8(sysDir);
+    vpl::sys::tString systemDirFw(systemDir);
+    std::replace(systemDirFw.begin(), systemDirFw.end(), vplT('\\'), vplT('/'));
 
     // Remember the current working directory
     vpl::sys::tString oldDir = browser.getDirectory();
@@ -94,9 +109,21 @@ CSeries * CDicomLoader::preLoadDirectory( const vpl::sys::tString & path )
     bool bCanceled = false;
     while( !directories.empty() && !bCanceled )
     {
+        if (!this->progress())
+        {
+            bCanceled = true;
+            break;
+        }
+
         // Get directory from the queue
         vpl::sys::tString current = directories.front();
         directories.pop_front();
+
+        // skip system dir
+        if (0 == current.compare(systemDir) || 0 == current.compare(systemDirFw))
+        {
+            continue;
+        }
 
         // Change the directory
         vpl::sys::CFileBrowserU browserX; // use new instance of browser, because CFileBrowserU doesn't work ok for multiple findFirst calls (handle leak)
@@ -128,7 +155,10 @@ CSeries * CDicomLoader::preLoadDirectory( const vpl::sys::tString & path )
             {
                 if( files.m_sName != StrDot && files.m_sName != StrDotDot )
                 {
-                    directories.push_back( current + CharSlash + files.m_sName );
+                    if (!current.empty() && current[current.size()-1] == CharSlash)
+                        directories.push_back(current + files.m_sName);
+                    else
+                        directories.push_back( current + CharSlash + files.m_sName );
                 }
             }
             else

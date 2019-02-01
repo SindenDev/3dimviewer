@@ -813,6 +813,9 @@ void   CSysInfo::getOperatingSystemInfo()
         case Q_MV_OSX(10, 13):
             operatingSystemString = "Mac OS X 10.13 High Sierra";
             break;
+        case Q_MV_OSX(10, 14):
+            operatingSystemString = "Mac OS X 10.14 Mojave";
+            break;
         case QSysInfo::MV_Unknown :
             operatingSystemString = "An unknown and currently unsupported platform";
             break;
@@ -900,7 +903,7 @@ void   CSysInfo::getGraphicsCardInfo()
 				for( UINT index = 0; ; ++index )
 				{
 					IDXGIAdapter* pAdapter = nullptr;
-					HRESULT hr = pDXGIFactory->EnumAdapters( index, &pAdapter );
+					hr = pDXGIFactory->EnumAdapters( index, &pAdapter );
 					if( FAILED( hr ) ) // DXGIERR_NOT_FOUND is expected when the end of the list is hit
 						break;
 
@@ -1443,6 +1446,24 @@ void CSysInfo::logLoadedModules()
         CloseHandle( hProcess );
     }
 #endif // WIN32
+#ifdef __APPLE__
+    kern_return_t error;
+    struct task_dyld_info dyld_info;
+    mach_msg_type_number_t count = TASK_DYLD_INFO_COUNT;
+    error = task_info(mach_task_self(), TASK_DYLD_INFO, (task_info_t)&dyld_info, &count);
+    if (error == KERN_SUCCESS)
+    {
+        if (0 != dyld_info.all_image_info_addr)
+        {
+            const struct dyld_all_image_infos* all_image_infos = (const struct dyld_all_image_infos*)dyld_info.all_image_info_addr;
+            const struct dyld_image_info* image_infos = all_image_infos->infoArray;
+            for (int i = 0; i<all_image_infos->infoArrayCount; i++)
+            {
+                VPL_LOG_INFO(image_infos[i].imageFilePath << " " << std::hex << image_infos[i].imageLoadAddress);
+            }
+        }
+    }
+#endif
 }
 
 

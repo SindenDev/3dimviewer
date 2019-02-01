@@ -355,7 +355,6 @@ protected:
     int m_SliceId;
 };
 
-
 } // namespace scene
 
 #endif // CDraggableSlice_H

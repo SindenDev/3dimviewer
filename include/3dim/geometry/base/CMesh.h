@@ -248,7 +248,7 @@ public:
 
     //! Smart pointer type.
     //! - Declares type tSmartPtr.
-    // VPL_SHAREDPTR(CMesh);   !!! incompatible with EIGEN_MAKE_ALIGNED_OPERATOR_NEW !!!
+    VPL_SHAREDPTR(CMesh);  // incompatible with EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
     friend class CMeshCutter;
 
@@ -314,6 +314,9 @@ public:
     static bool cutByZPlane(geometry::CMesh *source, osg::Vec3Array *vertices, osg::DrawElementsUInt *indices, float planePosition);
     static bool cutByPlane(geometry::CMesh *source, osg::Vec3Array *vertices, osg::DrawElementsUInt *indices, osg::Plane plane, osg::Matrix worldMatrix);
 
+    //! Will merge this mesh with the one given
+    void merge(geometry::CMesh &mesh, bool swapSourceMeshFaceOrientation, const osg::Matrix &transformMatrix = osg::Matrix::identity());
+
     //! Cutting OSG geometry by planes
     static bool cutByPlane(osg::Geometry *source, osg::Vec3Array *vertices, osg::DrawElementsUInt *indices, osg::Plane plane, osg::Matrix worldMatrix);
 
@@ -357,6 +360,17 @@ public:
         Writer.endWrite(*this);
     }
 
+    //! Helper structure for vertice info serialization
+#pragma pack(push)
+#pragma pack(1)
+    struct sVerticeInfo
+    {
+        float           point[3];
+        unsigned char   color[3];
+        float           tex[2];
+    };
+#pragma pack(pop)
+
     /*!
      * \fn  void serializeNested(vpl::mod::CChannelSerializer<S> &Writer)
      *
@@ -367,7 +381,7 @@ public:
     template <class S>
     void serializeNested(vpl::mod::CChannelSerializer<S> &Writer)
     {
-        WRITEINT32(3); // version
+        WRITEINT32(4); // version
 
         // add property containing vertex indices
         OpenMesh::VPropHandleT<vpl::sys::tUInt32> vProp_bufferIndex;
@@ -387,14 +401,20 @@ public:
             typename geometry::CMesh::VertexHandle vertex = vit.handle();
             typename geometry::CMesh::Point point = this->point(vertex);
             this->property<vpl::sys::tUInt32>(vProp_bufferIndex, vertex) = vIndex;
-            Writer.write(point[0]);
-            Writer.write(point[1]);
-            Writer.write(point[2]);
-
             typename geometry::CMesh::Color color = this->color(vertex);
-            Writer.write(color[0]);
-            Writer.write(color[1]);
-            Writer.write(color[2]);
+            typename geometry::CMesh::TexCoord2D texCoord = this->texcoord2D(vertex);
+
+            // save all info in single write because vpl is slow doing multiple small writes
+            sVerticeInfo inf = {};
+            inf.point[0] = point[0];
+            inf.point[1] = point[1];
+            inf.point[2] = point[2];
+            inf.color[0] = color[0];
+            inf.color[1] = color[1];
+            inf.color[2] = color[2];
+            inf.tex[0] = texCoord[0];
+            inf.tex[1] = texCoord[1];
+            Writer.write((unsigned char*)&inf, sizeof(inf));
 
             vIndex++;
         }
@@ -403,10 +423,13 @@ public:
         for (geometry::CMesh::FaceIter fit = this->faces_begin(); fit != this->faces_end(); ++fit)
         {
             geometry::CMesh::FaceHandle face = fit.handle();
+            vpl::sys::tUInt32 arr[3] = {}; unsigned int idxarr = 0;
             for (geometry::CMesh::FaceVertexIter fvit = this->fv_begin(face); fvit != this->fv_end(face); ++fvit)
             {
-                Writer.write(this->property<vpl::sys::tUInt32>(vProp_bufferIndex, fvit.handle()));
+                arr[idxarr] = this->property<vpl::sys::tUInt32>(vProp_bufferIndex, fvit.handle());
+                idxarr++;
             }
+            Writer.write(arr, 3); // use a single write call for improved performance
         }
 
         int counter(0);
@@ -496,24 +519,46 @@ public:
         std::vector<geometry::CMesh::VertexHandle> vertexHandles;
         for (unsigned int v = 0; v < vertexCount; ++v)
         {
-            geometry::CMesh::Point::value_type data[3];
-            Reader.read(data, 3);
-            vertexHandles.push_back(this->add_vertex(geometry::CMesh::Point(data)));
-
-            if (version > 2)
+            if (version > 3) // optimized read code for the latest project version
             {
-                geometry::CMesh::Color::value_type colorData[3];
-                Reader.read(colorData, 3);
-                this->set_color(vertexHandles.back(), geometry::CMesh::Color(colorData));
+                // replace multiple reads by a single read for improved performance
+                sVerticeInfo inf = {};
+                Reader.read((unsigned char*)&inf, sizeof(inf));
+                const geometry::CMesh::VertexHandle vh = this->add_vertex(geometry::CMesh::Point(inf.point));                
+                this->set_color(vh, geometry::CMesh::Color(inf.color));
+                this->set_texcoord2D(vh, geometry::CMesh::TexCoord2D(inf.tex));
+                vertexHandles.push_back(vh);
+            }
+            else
+            {
+                geometry::CMesh::Point::value_type data[3];
+                Reader.read(data, 3);
+                vertexHandles.push_back(this->add_vertex(geometry::CMesh::Point(data)));
+                if (version > 2)
+                {
+                    geometry::CMesh::Color::value_type colorData[3];
+                    Reader.read(colorData, 3);
+                    this->set_color(vertexHandles.back(), geometry::CMesh::Color(colorData));
+                }
+                if (version > 3)
+                {
+                    geometry::CMesh::TexCoord2D::value_type texCoordData[2];
+                    Reader.read(texCoordData, 2);
+                    this->set_texcoord2D(vertexHandles.back(), geometry::CMesh::TexCoord2D(texCoordData));
+                }
             }
         }
 
         // read faces
+        const size_t nVertexHandles = vertexHandles.size();
         for (unsigned int f = 0; f < faceCount; ++f)
         {
-            vpl::sys::tUInt32 data[3];
+            vpl::sys::tUInt32 data[3] = {};
             Reader.read(data, 3);
-            this->add_face(vertexHandles[data[0]], vertexHandles[data[1]], vertexHandles[data[2]]);
+            if (data[0]<nVertexHandles &&
+                data[1]<nVertexHandles &&
+                data[2]<nVertexHandles)
+                this->add_face(vertexHandles[data[0]], vertexHandles[data[1]], vertexHandles[data[2]]);
         }
 
         if (version > 1)
@@ -617,6 +662,15 @@ public:
 
     //! calculates average vertex of model
     bool calc_average_vertex(geometry::CMesh::Point &average);
+
+    //! hopefully safer variants of normal calculation
+    void safe_update_normals();
+    void safe_update_face_normals();
+    void safe_update_halfedge_normals(const double _feature_angle = 0.8);
+    void safe_update_vertex_normals();
+
+    //! calculates if two triangles intersects
+    bool guigueDevillersTriTriTest(CMesh::FaceHandle f1, CMesh::FaceHandle f2);
 
 	//! Transform mesh vertices
 	void translate(float x, float y, float z);
@@ -727,15 +781,74 @@ private:
         writer.template write<double>(value);
     }
 
+#pragma pack(push)
+#pragma pack(1)
+    struct sVerticeGroupEntry
+    {
+        vpl::sys::tInt32    index;
+        float               weight;
+    };
+#pragma pack(pop)
+
     template <class S>
     void serializePropertyValue(vpl::mod::CChannelSerializer<S> &writer, const geometry::CMesh::CVertexGroups &value)
     {
+        // replace multiple writes by a single call to improve write performance
+        sVerticeGroupEntry arrSave[MAX_GROUPS_PER_VERTEX];
         for (int i = 0; i < MAX_GROUPS_PER_VERTEX; ++i)
         {
-            writer.write((vpl::sys::tInt32)value.indices[i]);
-            writer.template write<float>(value.weights[i]);
+            arrSave[i].index = static_cast<vpl::sys::tInt32>(value.indices[i]);
+            arrSave[i].weight = value.weights[i];
         }
+        writer.write((unsigned char*)arrSave, MAX_GROUPS_PER_VERTEX * sizeof(sVerticeGroupEntry));
     }
+
+    template <class S, typename T>
+    void serializePropertyValues(vpl::mod::CChannelSerializer<S> &writer, const T *value, const int count)
+    {
+#ifdef _DEBUG
+        VPL_LOG_INFO("serializePropertyValues(...) not implemented for " << typeid(T).name() << ", falling back to slow method");
+#endif
+        for (int i = 0; i < count; i++)
+            serializePropertyValue(writer, value[i]);
+    }
+
+    template <class S>
+    void serializePropertyValues(vpl::mod::CChannelSerializer<S> &writer, const geometry::CMesh::CVertexGroups *values, const int cnt)
+    {
+        // replace multiple writes by a single call to improve write performance
+        std::unique_ptr<sVerticeGroupEntry []> buffer(new sVerticeGroupEntry[MAX_GROUPS_PER_VERTEX * cnt]);
+        sVerticeGroupEntry *helper = buffer.get();
+        for (int v = 0; v < cnt; v++)
+        {
+            for (int i = 0; i < MAX_GROUPS_PER_VERTEX; ++i)
+            {
+                helper->index = static_cast<vpl::sys::tInt32>(values[v].indices[i]);
+                helper->weight = values[v].weights[i];
+                helper++;
+            }
+        }
+        writer.write((unsigned char*)buffer.get(), MAX_GROUPS_PER_VERTEX * cnt * sizeof(sVerticeGroupEntry));
+    }
+
+    template <class S>
+    void serializePropertyValues(vpl::mod::CChannelSerializer<S> &writer, const vpl::sys::tInt32 *values, const int cnt)
+    {
+        writer.template write< vpl::sys::tInt32>(values, cnt);
+    }
+
+    template <class S>
+    void serializePropertyValues(vpl::mod::CChannelSerializer<S> &writer, const float *values, const int cnt)
+    {
+        writer.template write<float>(values, cnt);
+    }
+
+    template <class S>
+    void serializePropertyValues(vpl::mod::CChannelSerializer<S> &writer, const double *values, const int cnt)
+    {
+        writer.template write<double>(values, cnt);
+    }
+
 
     template <class S, typename T>
     void deserializePropertyValue(vpl::mod::CChannelSerializer<S> &reader, T &value)
@@ -767,14 +880,61 @@ private:
     template <class S>
     void deserializePropertyValue(vpl::mod::CChannelSerializer<S> &reader, geometry::CMesh::CVertexGroups &value)
     {
+        // replace multiple read by a single call to improve read performance
+        sVerticeGroupEntry arrSave[MAX_GROUPS_PER_VERTEX] = {};
+        reader.read((unsigned char*)arrSave, MAX_GROUPS_PER_VERTEX * sizeof(sVerticeGroupEntry));
         for (int i = 0; i < MAX_GROUPS_PER_VERTEX; ++i)
         {
-            vpl::sys::tInt32 v;
-            reader.read(v);
-            value.indices[i] = v;
-
-            reader.template read<float>(value.weights[i]);
+            value.indices[i] = arrSave[i].index;
+            value.weights[i] = arrSave[i].weight;
         }
+    }
+
+    template <class S, typename T>
+    void deserializePropertyValues(vpl::mod::CChannelSerializer<S> &reader, T *value, const int count)
+    {
+#ifdef _DEBUG
+        VPL_LOG_INFO("deserializePropertyValues(...) not implemented for " << typeid(T).name() << ", falling back to slow method");
+#endif
+        for (int i = 0; i < count; i++)
+            deserializePropertyValue(reader, value[i]);
+    }
+
+    template <class S>
+    void deserializePropertyValues(vpl::mod::CChannelSerializer<S> &reader, vpl::sys::tInt32 *values, const int count)
+    {
+        reader.read(values, count);
+    }
+
+    template <class S>
+    void deserializePropertyValues(vpl::mod::CChannelSerializer<S> &reader, float *values, const int count)
+    {
+        reader.template read<float>(values, count);
+    }
+
+    template <class S>
+    void deserializePropertyValues(vpl::mod::CChannelSerializer<S> &reader, double *values, const int count)
+    {
+        reader.template read<double>(values, count);
+    }
+
+    template <class S>
+    void deserializePropertyValues(vpl::mod::CChannelSerializer<S> &reader, geometry::CMesh::CVertexGroups *values, const int cnt)
+    {
+        // replace multiple writes by a single call to improve write performance
+        std::unique_ptr<sVerticeGroupEntry[]> buffer(new sVerticeGroupEntry[MAX_GROUPS_PER_VERTEX * cnt]);        
+        reader.read((unsigned char*)buffer.get(), MAX_GROUPS_PER_VERTEX * cnt * sizeof(sVerticeGroupEntry));
+        sVerticeGroupEntry *helper = buffer.get();
+        for (int v = 0; v < cnt; v++)
+        {
+            for (int i = 0; i < MAX_GROUPS_PER_VERTEX; ++i)
+            {
+                values[v].indices[i] = helper->index;
+                values[v].weights[i] = helper->weight;
+                helper++;
+            }
+        }
+        
     }
 
     template <class S, typename T>
@@ -783,11 +943,16 @@ private:
         OpenMesh::EPropHandleT<T> propertyHandle;
         get_property_handle(propertyHandle, name);
 
-        for (geometry::CMesh::EdgeIter it = edges_begin(); it != edges_end(); ++it)
+        const int nEdges = this->n_edges();
+        std::unique_ptr<T []> buffer(new T[nEdges]);
+        T* bufPtr = buffer.get();
+        int i = 0;
+        for (geometry::CMesh::EdgeIter it = edges_begin(); it != edges_end(); ++it, ++i)
         {
-            T &value = property(propertyHandle, *it);
-            serializePropertyValue(writer, value);
+            bufPtr[i] = property(propertyHandle, *it);
         }
+        assert(i == nEdges);
+        serializePropertyValues(writer, bufPtr, nEdges);
     }
 
     template <class S, typename T>
@@ -796,11 +961,16 @@ private:
         OpenMesh::FPropHandleT<T> propertyHandle;
         get_property_handle(propertyHandle, name);
 
-        for (geometry::CMesh::FaceIter it = faces_begin(); it != faces_end(); ++it)
+        const int nFaces = this->n_faces();
+        std::unique_ptr<T []> buffer(new T[nFaces]);
+        T* bufPtr = buffer.get();
+        int i = 0;
+        for (geometry::CMesh::FaceIter it = faces_begin(); it != faces_end(); ++it, ++i)
         {
-            T &value = property(propertyHandle, *it);
-            serializePropertyValue(writer, value);
+            bufPtr[i] = property(propertyHandle, *it);            
         }
+        assert(i == nFaces);
+        serializePropertyValues(writer, bufPtr, nFaces);        
     }
 
     template <class S, typename T>
@@ -809,11 +979,16 @@ private:
         OpenMesh::HPropHandleT<T> propertyHandle;
         get_property_handle(propertyHandle, name);
 
-        for (geometry::CMesh::HalfedgeIter it = halfedges_begin(); it != halfedges_end(); ++it)
+        const int nHalfEdges = this->n_halfedges();
+        std::unique_ptr<T []> buffer(new T[nHalfEdges]);
+        T* bufPtr = buffer.get();
+        int i = 0;
+        for (geometry::CMesh::HalfedgeIter it = halfedges_begin(); it != halfedges_end(); ++it, ++i)
         {
-            T &value = property(propertyHandle, *it);
-            serializePropertyValue(writer, value);
+            bufPtr[i] = property(propertyHandle, *it);
         }
+        assert(i == nHalfEdges);
+        serializePropertyValues(writer, bufPtr, nHalfEdges);
     }
 
     template <class S, typename T>
@@ -822,11 +997,16 @@ private:
         OpenMesh::VPropHandleT<T> propertyHandle;
         get_property_handle(propertyHandle, name);
 
-        for (geometry::CMesh::VertexIter it = vertices_begin(); it != vertices_end(); ++it)
+        const int nVertices = this->n_vertices();
+        std::unique_ptr<T []> buffer(new T[nVertices]);
+        T* bufPtr = buffer.get();
+        int i = 0;
+        for (geometry::CMesh::VertexIter it = vertices_begin(); it != vertices_end(); ++it, ++i)
         {
-            T &value = property(propertyHandle, *it);
-            serializePropertyValue(writer, value);
+            bufPtr[i] = property(propertyHandle, *it);
         }
+        assert(i == nVertices);
+        serializePropertyValues(writer, bufPtr, nVertices);
     }
 
     template <class S, typename T>
@@ -835,11 +1015,16 @@ private:
         OpenMesh::EPropHandleT<T> propertyHandle;
         add_property(propertyHandle, name);
 
-        for (geometry::CMesh::EdgeIter it = edges_begin(); it != edges_end(); ++it)
+        const int nEdges = this->n_edges();
+        std::unique_ptr<T[]> buffer(new T[nEdges]);
+        T* bufPtr = buffer.get();
+        deserializePropertyValues(reader, bufPtr, nEdges);
+        int i = 0;
+        for (geometry::CMesh::EdgeIter it = edges_begin(); it != edges_end(); ++it, ++i)
         {
-            T &value = property(propertyHandle, *it);
-            deserializePropertyValue(reader, value);
+            property(propertyHandle, *it) = bufPtr[i];
         }
+        assert(i == nEdges);
     }
 
     template <class S, typename T>
@@ -848,11 +1033,16 @@ private:
         OpenMesh::FPropHandleT<T> propertyHandle;
         add_property(propertyHandle, name);
 
-        for (geometry::CMesh::FaceIter it = faces_begin(); it != faces_end(); ++it)
+        const int nFaces = this->n_faces();
+        std::unique_ptr<T[]> buffer(new T[nFaces]);
+        T* bufPtr = buffer.get();
+        deserializePropertyValues(reader, bufPtr, nFaces);
+        int i = 0;
+        for (geometry::CMesh::FaceIter it = faces_begin(); it != faces_end(); ++it, ++i)
         {
-            T &value = property(propertyHandle, *it);
-            deserializePropertyValue(reader, value);
+            property(propertyHandle, *it) = bufPtr[i];
         }
+        assert(i == nFaces);
     }
 
     template <class S, typename T>
@@ -861,11 +1051,16 @@ private:
         OpenMesh::HPropHandleT<T> propertyHandle;
         add_property(propertyHandle, name);
 
-        for (geometry::CMesh::HalfedgeIter it = halfedges_begin(); it != halfedges_end(); ++it)
+        const int nHalfEdges = this->n_halfedges();
+        std::unique_ptr<T[]> buffer(new T[nHalfEdges]);
+        T* bufPtr = buffer.get();
+        deserializePropertyValues(reader, bufPtr, nHalfEdges);
+        int i = 0;
+        for (geometry::CMesh::HalfedgeIter it = halfedges_begin(); it != halfedges_end(); ++it, ++i)
         {
-            T &value = property(propertyHandle, *it);
-            deserializePropertyValue(reader, value);
+            property(propertyHandle, *it) = bufPtr[i];
         }
+        assert(i == nHalfEdges);
     }
 
     template <class S, typename T>
@@ -874,11 +1069,16 @@ private:
         OpenMesh::VPropHandleT<T> propertyHandle;
         add_property(propertyHandle, name);
 
-        for (geometry::CMesh::VertexIter it = vertices_begin(); it != vertices_end(); ++it)
+        const int nVertices = this->n_vertices();
+        std::unique_ptr<T[]> buffer(new T[nVertices]);
+        T* bufPtr = buffer.get();
+        deserializePropertyValues(reader, bufPtr, nVertices);
+        int i = 0;
+        for (geometry::CMesh::VertexIter it = vertices_begin(); it != vertices_end(); ++it, ++i)
         {
-            T &value = property(propertyHandle, *it);
-            deserializePropertyValue(reader, value);
+            property(propertyHandle, *it) = bufPtr[i];
         }
+        assert(i == nVertices);
     }
 
     template <class S, typename T>
@@ -1008,12 +1208,9 @@ private:
 
         setSerializedProperty(name, propertyType, valueType);
     }
-
-public:
-    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 }; // class CMesh
 
-// typedef CMesh::tSmartPtr CMeshPtr;  !!! incompatible with EIGEN_MAKE_ALIGNED_OPERATOR_NEW !!!
+// typedef CMesh::tSmartPtr CMeshPtr; 
 
 ////////////////////////////////////////////////////////////
 /*!
@@ -1074,18 +1271,43 @@ public:
     //std::vector<CMeshOctreeNode *> getIntersectedNodes(osg::Plane plane);
     const std::vector<CMeshOctreeNode *>& getIntersectedNodes(osg::Plane plane);
     const std::vector<CMeshOctreeNode *>& getIntersectedNodes(osg::BoundingBox boundingBox);
+    const std::vector<CMeshOctreeNode *>& getIntersectedNodes(const osg::BoundingSphere& boundingSphere);
     const std::vector<CMeshOctreeNode *>& getNearPoints(const osg::Vec3 &point, double maximal_distance);
-    size_t getNearPointsHandles(const osg::Vec3 &point, double maximal_distance, std::vector<geometry::CMesh::VertexHandle> &handles, geometry::CMesh *mesh);
+    geometry::CMesh::VertexHandle getClosestPointHandle(const osg::Vec3 &point, double maximal_distance, const geometry::CMesh &mesh);
 
+    /**
+     * Gets closest face handle to the given point
+     *
+     * \param   point               The point.
+     * \param   maximal_distance    The maximal searched distance.
+     * \param   mesh                The tested mesh.
+     *
+     * \return  The closest face handle.
+     */
+
+    geometry::CMesh::FaceHandle getClosestFaceHandle(const osg::Vec3 &point, double maximal_distance, const geometry::CMesh &mesh);
 private:
     void intersect(CMeshOctreeNode &node, osg::Plane plane);
     void intersect(CMeshOctreeNode &node, osg::BoundingBox boundingBox);
+    void intersect(CMeshOctreeNode &node, const osg::BoundingSphere& boundingSphere);
     void initializeNode(CMeshOctreeNode &node, osg::BoundingBox boundingBox);
     void fillFaceLists(geometry::CMesh *mesh);
     void fillVertexLists(geometry::CMesh *mesh);
-    bool assignFace(CMeshOctreeNode &node, int level, geometry::CMesh::FaceHandle face, osg::BoundingBox faceBoundingBox);
+    bool assignFace(CMeshOctreeNode &node, int level, geometry::CMesh::FaceHandle face, const osg::BoundingBox& faceBoundingBox);
     bool assignVertex(CMeshOctreeNode &node, int level, geometry::CMesh::VertexHandle vertex, osg::Vec3 coordinates);
     static int calculateNodeCount(int numOfLevels);
+
+    /**
+     *  \brief  Bounding box - Bounding sphere intersection test.
+     *          Source: https://github.com/erich666/GraphicsGems/blob/master/gems/BoxSphere.c,
+     *          for more intersection tests see: http://www.realtimerendering.com/intersections.html#I335
+     *
+     * \param   boundingBox       Input bounding box.
+     * \param   boundingSphere    Input bounding sphere.
+     *
+     * \return  True if boundingBox and boundingSphere colide, False otherwise.
+     */
+    static bool sphereBoundingBoxIntersection(const osg::BoundingBox& boundingBox, const osg::BoundingSphere& boundingSphere);
 };
 
 } // namespace data

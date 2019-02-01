@@ -28,6 +28,7 @@
 
 namespace osg
 {
+    // Line width via geometry shader, non-public base class
     class CThickLineMaterial : public osg::Referenced
     {
     protected:
@@ -66,6 +67,7 @@ namespace osg
         ShaderMode m_mode;
     };
 
+    // Apply to GL_LINES
     class CMaterialLines : public CThickLineMaterial
     {
     public:
@@ -75,18 +77,21 @@ namespace osg
         CMaterialLines(osg::Camera* camera, float thickness, LineMode mode);
     };
 
+    // Apply to GL_LINE_STRIP_ADJACENCY
     class CMaterialLineStrip : public CThickLineMaterial
     {
     public:
         CMaterialLineStrip(osg::Camera* camera, float thickness);
     };
 
+    // Apply to GL_LINES, dotted pattern
     class CMaterialLinesDotted : public CMaterialLines
     {
     public:
         CMaterialLinesDotted(osg::Camera* camera, float thickness);
     };
 
+    // Apply to GL_LINES, dashed pattern
     class CMaterialLinesDashed : public CMaterialLines
     {
     public:

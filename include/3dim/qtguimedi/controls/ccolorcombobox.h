@@ -24,6 +24,7 @@
 #define CColorComboBox_H
 
 #include <data/CRegionColoring.h>
+#include <data/CMultiClassRegionColoring.h>
 
 #include <QComboBox>
 #include <QColor>
@@ -36,6 +37,11 @@ class CColorComboBox : public data::CGeneralObjectObserver<CColorComboBox>
 protected:
     QComboBox *m_pCombo;
     bool m_bSyncActive;
+    bool m_bShowNewRegionItem;
+    bool m_bNewRegionItemAdded;
+    bool m_bShowEmptyItem;
+    bool m_bEmptyItemAdded;
+    int m_activeRegion;
 
     std::vector<int> m_mapping;
 
@@ -49,16 +55,35 @@ public:
 
     //! implementation of usual index change handler
     void usualIndexChangedHandler(data::CDataStorage *pDataStorage, int index);
+    void usualIndexChangedHandlerMultiClass(data::CDataStorage *pDataStorage, int index);
 
     //! sync active region index on change
     void setSyncActiveRegion(bool bSyncActive);
 
     //! Redraw data
-    void objectChanged(data::CStorageEntry *pData, const data::CChangedEntries &changes) { sigRegionColoringChanged(pData,changes); }
+    void objectChanged(data::CStorageEntry *pData, const data::CChangedEntries &changes)
+    {
+        if (pData->getId() == data::Storage::MultiClassRegionColoring::Id)
+        {
+            sigMultiClassRegionColoringChanged(pData, changes);
+            return;
+        }
+
+        sigRegionColoringChanged(pData,changes);
+    }
+
+    void setNewRegionItemVisible(bool visible);
+    void setEmptyItemVisible(bool visible);
+
     void sigRegionColoringChanged(data::CStorageEntry *pData, const data::CChangedEntries &changes);
+    void sigMultiClassRegionColoringChanged(data::CStorageEntry *pData, const data::CChangedEntries &changes);
     void updateFromColoring(data::CRegionColoring *);
+    void updateFromMultiClassColoring(data::CMultiClassRegionColoring *);
 
     int getRegionNumber(int index);
+
+    bool isNewRegionItemSelected();
+    bool isEmptyItemSelected();
 };
 
 #endif

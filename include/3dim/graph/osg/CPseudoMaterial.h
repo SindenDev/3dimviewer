@@ -24,6 +24,7 @@
 #define CPseudoMaterial_H
 
 #include <osg/StateSet>
+#include <osg/Texture2D>
 
 namespace osg
 {
@@ -36,9 +37,6 @@ namespace osg
     public:
         CDirectionalLightSource();
         CDirectionalLightSource(osg::Vec3 color, osg::Vec3 direction);
-        CDirectionalLightSource(const CDirectionalLightSource &other);
-        ~CDirectionalLightSource();
-        CDirectionalLightSource &operator=(const CDirectionalLightSource &other);
 
     public:
         osg::Vec3 &color();
@@ -55,9 +53,6 @@ namespace osg
     public:
         CPointLightSource();
         CPointLightSource(osg::Vec3 color, osg::Vec3 position, double attenuation);
-        CPointLightSource(const CPointLightSource &other);
-        ~CPointLightSource();
-        CPointLightSource &operator=(const CPointLightSource &other);
 
     public:
         osg::Vec3 &color();
@@ -78,9 +73,6 @@ namespace osg
     public:
         CSpotLightSource();
         CSpotLightSource(osg::Vec3 color, osg::Vec3 position, osg::Vec3 direction, double attenuation, double focus, double angle);
-        CSpotLightSource(const CSpotLightSource &other);
-        ~CSpotLightSource();
-        CSpotLightSource &operator=(const CSpotLightSource &other);
 
     public:
         osg::Vec3 &color();
@@ -109,27 +101,21 @@ namespace osg
 
     public:
         CAttribute(int location, std::string name, EAttributeType type);
-        ~CAttribute();
         static std::string getTypename(EAttributeType type);
     };
 
-    class CPseudoMaterial : public osg::StateSet::Callback
+    class CPseudoMaterial : public osg::Referenced
     {
     protected:
-        std::set<osg::ref_ptr<osg::Object> > m_objects;
-
         std::vector<osg::ref_ptr<osg::Uniform> > m_uniforms;
         std::vector<osg::ref_ptr<osg::Uniform> > m_internalUniforms;
         std::vector<osg::CAttribute> m_attributes;
 
         std::vector<osg::CDirectionalLightSource> m_directionalLightSources;
-        int m_directionalLightSourceCount;
         std::vector<osg::CPointLightSource> m_pointLightSources;
-        int m_pointLightSourceCount;
         std::vector<osg::CSpotLightSource> m_spotLightSources;
-        int m_spotLightSourceCount;
 
-        osg::ref_ptr<osg::Uniform> m_uniDummy;
+        std::map<std::string, osg::ref_ptr<osg::Texture2D>> m_textures;
 
         osg::ref_ptr<osg::Uniform> m_uniDirectionalLightSourceColor;
         osg::ref_ptr<osg::Uniform> m_uniDirectionalLightSourceDirection;
@@ -143,6 +129,8 @@ namespace osg
         osg::ref_ptr<osg::Uniform> m_uniSpotLightSourceFocus;
         osg::ref_ptr<osg::Uniform> m_uniSpotLightSourceAngle;
 
+        std::vector<osg::ref_ptr<osg::Uniform> > m_uniTextures;
+
         osg::ref_ptr<osg::Uniform> m_uniAlpha;
         osg::ref_ptr<osg::Uniform> m_uniDiffuse;
         osg::ref_ptr<osg::Uniform> m_uniEmission;
@@ -155,32 +143,32 @@ namespace osg
         osg::ref_ptr<osg::Shader> m_fragShader;
         osg::ref_ptr<osg::Program> m_program;
 
-        bool m_twoSided;
+        const bool m_twoSided;
         bool m_flatShading;
         bool m_useVertexColors;
+
         bool m_dirty;
 
     public:
         CPseudoMaterial(bool twoSided = false, bool flatShading = false, bool useVertexColors = true);
-        ~CPseudoMaterial();
 
-        osg::Uniform *uniform(std::string name);
+        static void revert(osg::Node* node);
 
-        void setFlatShading(bool flatShading);
-        void setUseVertexColors(bool useVertexColors);
-        std::vector<osg::CDirectionalLightSource> &directionalLightSources();
-        std::vector<osg::CPointLightSource> &pointLightSources();
-        std::vector<osg::CSpotLightSource> &spotLightSources();
-        void fourLightSetup();
-        void singleLightSetup();
-        void updateLightUniforms();
-        void makeDirty();
+        osg::Uniform* uniform(const std::string& name);
 
-        void copyInternals(CPseudoMaterial *other);
+        void copyInternals(CPseudoMaterial* other);
+
+        void setTextures(const std::map<std::string, osg::ref_ptr<osg::Texture2D>>& textures);
+
+        void setFlatShading(bool value);
+        void setUseVertexColors(bool value);
+
+        virtual void apply(osg::Node* node, StateAttribute::GLModeValue value = osg::StateAttribute::ON | osg::StateAttribute::OVERRIDE);
+
+        void applySingleLightSetup();
+        void applyFourLightSetup();
 
     protected:
-        void removeUniform(osg::Uniform *uniform);
-
         virtual std::string programName() { return "// CPseudoMaterial"; }
 
         virtual std::string vertVersion();
@@ -209,14 +197,17 @@ namespace osg
         virtual std::string spotLightsSrc();
         virtual std::string lightingSrc();
 
-    public:
-        virtual void apply(osg::Object *object, StateAttribute::GLModeValue value = osg::StateAttribute::ON | osg::StateAttribute::OVERRIDE);
+        std::vector<osg::CDirectionalLightSource> &directionalLightSources();
+        std::vector<osg::CPointLightSource> &pointLightSources();
+        std::vector<osg::CSpotLightSource> &spotLightSources();
 
-        //! you really should know what you're doing if you try to call this
-        void revert(osg::Object *object);
+        void fourLightSetup();
+        void singleLightSetup();
+        void updateLightUniforms();
 
-    public:
-        virtual void operator()(StateSet *stateSet, NodeVisitor *nodeVisitor);
+        void setupShaders();
+
+        void recompileShaders();
     };
 
     class CPseudoMaterial_Rim : public CPseudoMaterial
@@ -228,7 +219,6 @@ namespace osg
 
     public:
         CPseudoMaterial_Rim();
-        ~CPseudoMaterial_Rim();
 
     protected:
         virtual std::string programName() { return "// CPseudoMaterial_Rim"; }
@@ -242,7 +232,6 @@ namespace osg
 
     public:
         CPseudoMaterial_Skinned(int maxBones, bool twoSided = false);
-        ~CPseudoMaterial_Skinned();
 
     protected:
         virtual std::string programName() { return "// CPseudoMaterial_Skinned"; }
@@ -258,7 +247,6 @@ namespace osg
 
     public:
         CPseudoMaterial_Skinned_Rim(int maxBones, bool twoSided = false);
-        ~CPseudoMaterial_Skinned_Rim();
 
     protected:
         virtual std::string programName() { return "// CPseudoMaterial_Skinned_Rim"; }

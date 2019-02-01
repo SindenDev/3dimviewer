@@ -48,8 +48,6 @@ namespace geometry
         void invalidate() { m_valid = false; }
         geometry::Vec2 getMin() const { return m_min; }
         geometry::Vec2 getMax() const { return m_max; }
-
-		EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     };	
 }
 

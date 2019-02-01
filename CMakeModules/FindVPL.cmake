@@ -164,14 +164,12 @@ if( VPL_INCLUDE_DIR )
     set( VPL_LIBRARIES
          optimized libvplImageIO${VPL_LIBRARY_SUFFIX}.a
          optimized libvplImage${VPL_LIBRARY_SUFFIX}.a
-         optimized libvplTinyXML${VPL_LIBRARY_SUFFIX}.a
          optimized libvplModule${VPL_LIBRARY_SUFFIX}.a
          optimized libvplSystem${VPL_LIBRARY_SUFFIX}.a
          optimized libvplMath${VPL_LIBRARY_SUFFIX}.a
          optimized libvplBase${VPL_LIBRARY_SUFFIX}.a
          debug libvplImageIO${VPL_LIBRARY_SUFFIX}d.a
          debug libvplImage${VPL_LIBRARY_SUFFIX}d.a
-         debug libvplTinyXML${VPL_LIBRARY_SUFFIX}d.a
          debug libvplModule${VPL_LIBRARY_SUFFIX}d.a
          debug libvplSystem${VPL_LIBRARY_SUFFIX}d.a
          debug libvplMath${VPL_LIBRARY_SUFFIX}d.a
@@ -179,11 +177,11 @@ if( VPL_INCLUDE_DIR )
     set( VPL_FOUND "TRUE" )
   else()
     if( VPL_Image_LIBRARY )
-      set( VPL_LIBRARIES vplImageIO${VPL_LIBRARY_SUFFIX} vplImage${VPL_LIBRARY_SUFFIX} vplModule${VPL_LIBRARY_SUFFIX} vplSystem${VPL_LIBRARY_SUFFIX} vplMath${VPL_LIBRARY_SUFFIX} vplBase${VPL_LIBRARY_SUFFIX} vplTinyXML${VPL_LIBRARY_SUFFIX} )
+      set( VPL_LIBRARIES vplImageIO${VPL_LIBRARY_SUFFIX} vplImage${VPL_LIBRARY_SUFFIX} vplModule${VPL_LIBRARY_SUFFIX} vplSystem${VPL_LIBRARY_SUFFIX} vplMath${VPL_LIBRARY_SUFFIX} vplBase${VPL_LIBRARY_SUFFIX} )
       set( VPL_FOUND "TRUE" )
     else()
       if( VPL_Imaged_LIBRARY )
-        set( VPL_LIBRARIES vplImageIO${VPL_LIBRARY_SUFFIX}d vplImage${VPL_LIBRARY_SUFFIX}d vplModule${VPL_LIBRARY_SUFFIX}d vplSystemd vplMath${VPL_LIBRARY_SUFFIX}d vplBase${VPL_LIBRARY_SUFFIX}d vplTinyXML${VPL_LIBRARY_SUFFIX}d )
+        set( VPL_LIBRARIES vplImageIO${VPL_LIBRARY_SUFFIX}d vplImage${VPL_LIBRARY_SUFFIX}d vplModule${VPL_LIBRARY_SUFFIX}d vplSystemd vplMath${VPL_LIBRARY_SUFFIX}d vplBase${VPL_LIBRARY_SUFFIX}d )
         set( VPL_FOUND "TRUE" )
       endif()
     endif()

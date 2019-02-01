@@ -23,7 +23,7 @@
      <x>0</x>
      <y>0</y>
      <width>671</width>
-     <height>38</height>
+     <height>21</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuArchive">
@@ -45,6 +45,7 @@
     <addaction name="actionSave_DICOM_Series"/>
     <addaction name="actionSave_Volumetric_Data"/>
     <addaction name="actionSave_STL_Model"/>
+    <addaction name="actionSave_STL_Model_in_DICOM_Coordinates"/>
     <addaction name="separator"/>
     <addaction name="actionPrint"/>
     <addaction name="actionShow_Data_Properties"/>
@@ -83,6 +84,7 @@
      <addaction name="actionAxial_View"/>
      <addaction name="actionCoronal_View"/>
      <addaction name="actionSagittal_View"/>
+     <addaction name="actionArbitrary_View"/>
      <addaction name="actionVolume_Rendering_View"/>
     </widget>
     <widget class="QMenu" name="menuToolbars">
@@ -118,6 +120,7 @@
      <addaction name="actionAxial_Slice"/>
      <addaction name="actionCoronal_Slice"/>
      <addaction name="actionSagittal_Slice"/>
+     <addaction name="actionArbitrary_Slice"/>
     </widget>
     <widget class="QMenu" name="menuWorkspaces">
      <property name="title">
@@ -126,6 +129,7 @@
      <addaction name="actionWorkspace3DView"/>
      <addaction name="actionWorkspaceTabs"/>
      <addaction name="actionWorkspaceGrid"/>
+     <addaction name="actionWorkspaceSlices"/>
     </widget>
     <widget class="QMenu" name="menuModel">
      <property name="title">
@@ -142,11 +146,22 @@
      <addaction name="actionViewSharpen"/>
      <addaction name="actionViewEqualize"/>
     </widget>
+    <widget class="QMenu" name="menuFloating_Window">
+     <property name="title">
+      <string>Floating Window</string>
+     </property>
+     <addaction name="actionFloating3D"/>
+     <addaction name="actionFloatingAxial"/>
+     <addaction name="actionFloatingCoronal"/>
+     <addaction name="actionFloatingSagittal"/>
+     <addaction name="actionFloatingArbitrary"/>
+    </widget>
     <addaction name="menuControl_Panels"/>
     <addaction name="menuViews"/>
     <addaction name="menuToolbars"/>
     <addaction name="menu3D_Scene"/>
     <addaction name="menuWorkspaces"/>
+    <addaction name="menuFloating_Window"/>
     <addaction name="menuModel"/>
     <addaction name="menuData"/>
     <addaction name="separator"/>
@@ -276,7 +291,7 @@
   <action name="actionLoad_Patient_Dicom_data">
    <property name="icon">
     <iconset resource="../resources.qrc">
-     <normaloff>:/icons/folder_open_up.png</normaloff>:/icons/folder_open_up.png</iconset>
+     <normaloff>:/svg/svg/folder_open_up.svg</normaloff>:/svg/svg/folder_open_up.svg</iconset>
    </property>
    <property name="text">
     <string>Import Patient DICOM Data...</string>
@@ -294,7 +309,7 @@
   <action name="actionLoad_Patient_VLM_Data">
    <property name="icon">
     <iconset resource="../resources.qrc">
-     <normaloff>:/icons/folder_open_arrow.png</normaloff>:/icons/folder_open_arrow.png</iconset>
+     <normaloff>:/svg/svg/folder_open_arrow.svg</normaloff>:/svg/svg/folder_open_arrow.svg</iconset>
    </property>
    <property name="text">
     <string>Load Patient VLM Data...</string>
@@ -312,7 +327,7 @@
   <action name="actionSave_Volumetric_Data">
    <property name="icon">
     <iconset resource="../resources.qrc">
-     <normaloff>:/icons/disk.png</normaloff>:/icons/disk.png</iconset>
+     <normaloff>:/svg/svg/disk.svg</normaloff>:/svg/svg/disk.svg</iconset>
    </property>
    <property name="text">
     <string>Save Volumetric VLM Data...</string>
@@ -330,7 +345,7 @@
   <action name="actionExit">
    <property name="icon">
     <iconset resource="../resources.qrc">
-     <normaloff>:/icons/delete.png</normaloff>:/icons/delete.png</iconset>
+     <normaloff>:/svg/svg/delete.svg</normaloff>:/svg/svg/delete.svg</iconset>
    </property>
    <property name="text">
     <string>Exit</string>
@@ -348,7 +363,7 @@
   <action name="actionPrint">
    <property name="icon">
     <iconset resource="../resources.qrc">
-     <normaloff>:/icons/printer_menu.png</normaloff>:/icons/printer_menu.png</iconset>
+     <normaloff>:/svg/svg/printer.svg</normaloff>:/svg/svg/printer.svg</iconset>
    </property>
    <property name="text">
     <string>Print...</string>
@@ -363,7 +378,7 @@
   <action name="actionUndo">
    <property name="icon">
     <iconset resource="../resources.qrc">
-     <normaloff>:/icons/arrow_undo.png</normaloff>:/icons/arrow_undo.png</iconset>
+     <normaloff>:/svg/svg/arrow_undo.svg</normaloff>:/svg/svg/arrow_undo.svg</iconset>
    </property>
    <property name="text">
     <string>Undo</string>
@@ -381,7 +396,7 @@
   <action name="actionRedo">
    <property name="icon">
     <iconset resource="../resources.qrc">
-     <normaloff>:/icons/arrow_redo.png</normaloff>:/icons/arrow_redo.png</iconset>
+     <normaloff>:/svg/svg/arrow_redo.svg</normaloff>:/svg/svg/arrow_redo.svg</iconset>
    </property>
    <property name="text">
     <string>Redo</string>
@@ -402,7 +417,7 @@
    </property>
    <property name="icon">
     <iconset resource="../resources.qrc">
-     <normaloff>:/icons/3d_window2.png</normaloff>:/icons/3d_window2.png</iconset>
+     <normaloff>:/svg/svg/3d_window2.svg</normaloff>:/svg/svg/3d_window2.svg</iconset>
    </property>
    <property name="text">
     <string>3D View</string>
@@ -420,7 +435,7 @@
    </property>
    <property name="icon">
     <iconset resource="../resources.qrc">
-     <normaloff>:/icons/xy_ortho_window2.png</normaloff>:/icons/xy_ortho_window2.png</iconset>
+     <normaloff>:/svg/svg/xy_ortho_window2_menu.svg</normaloff>:/svg/svg/xy_ortho_window2_menu.svg</iconset>
    </property>
    <property name="text">
     <string>Axial View</string>
@@ -438,7 +453,7 @@
    </property>
    <property name="icon">
     <iconset resource="../resources.qrc">
-     <normaloff>:/icons/xz_ortho_window2.png</normaloff>:/icons/xz_ortho_window2.png</iconset>
+     <normaloff>:/svg/svg/xz_ortho_window2.svg</normaloff>:/svg/svg/xz_ortho_window2.svg</iconset>
    </property>
    <property name="text">
     <string>Coronal View</string>
@@ -456,7 +471,7 @@
    </property>
    <property name="icon">
     <iconset resource="../resources.qrc">
-     <normaloff>:/icons/yz_ortho_window2.png</normaloff>:/icons/yz_ortho_window2.png</iconset>
+     <normaloff>:/svg/svg/yz_ortho_window2.svg</normaloff>:/svg/svg/yz_ortho_window2.svg</iconset>
    </property>
    <property name="text">
     <string>Sagittal View</string>
@@ -492,7 +507,7 @@
    </property>
    <property name="icon">
     <iconset resource="../resources.qrc">
-     <normaloff>:/icons/normal_slice.png</normaloff>:/icons/normal_slice.png</iconset>
+     <normaloff>:/svg/svg/normal_slice.svg</normaloff>:/svg/svg/normal_slice.svg</iconset>
    </property>
    <property name="text">
     <string>Normal Slice</string>
@@ -507,7 +522,7 @@
    </property>
    <property name="icon">
     <iconset resource="../resources.qrc">
-     <normaloff>:/icons/volume_rendering_window2.png</normaloff>:/icons/volume_rendering_window2.png</iconset>
+     <normaloff>:/svg/svg/volume_rendering_window2.svg</normaloff>:/svg/svg/volume_rendering_window2.svg</iconset>
    </property>
    <property name="text">
     <string>Volume Rendering View</string>
@@ -553,7 +568,7 @@
    </property>
    <property name="icon">
     <iconset resource="../resources.qrc">
-     <normaloff>:/icons/density_window.png</normaloff>:/icons/density_window.png</iconset>
+     <normaloff>:/svg/svg/density_window.svg</normaloff>:/svg/svg/density_window.svg</iconset>
    </property>
    <property name="text">
     <string>Brightness / Contrast Panel</string>
@@ -574,10 +589,10 @@
    </property>
    <property name="icon">
     <iconset resource="../resources.qrc">
-     <normaloff>:/icons/ortho_slices_window.png</normaloff>:/icons/ortho_slices_window.png</iconset>
+     <normaloff>:/svg/svg/ortho_slices_window.svg</normaloff>:/svg/svg/ortho_slices_window.svg</iconset>
    </property>
    <property name="text">
-    <string>Ortho Slices Panel</string>
+    <string>2D Slices Panel</string>
    </property>
    <property name="toolTip">
     <string>Shows/Hides the ortho slices panel.</string>
@@ -595,7 +610,7 @@
    </property>
    <property name="icon">
     <iconset resource="../resources.qrc">
-     <normaloff>:/icons/trackball.png</normaloff>:/icons/trackball.png</iconset>
+     <normaloff>:/svg/svg/trackball.svg</normaloff>:/svg/svg/trackball.svg</iconset>
    </property>
    <property name="text">
     <string>Trackball Mode</string>
@@ -613,7 +628,7 @@
    </property>
    <property name="icon">
     <iconset resource="../resources.qrc">
-     <normaloff>:/icons/slice_move.png</normaloff>:/icons/slice_move.png</iconset>
+     <normaloff>:/svg/svg/slice_move.svg</normaloff>:/svg/svg/slice_move.svg</iconset>
    </property>
    <property name="text">
     <string>Object Manipulation</string>
@@ -631,7 +646,7 @@
    </property>
    <property name="icon">
     <iconset resource="../resources.qrc">
-     <normaloff>:/icons/density_window2.png</normaloff>:/icons/density_window2.png</iconset>
+     <normaloff>:/svg/svg/density_window2.svg</normaloff>:/svg/svg/density_window2.svg</iconset>
    </property>
    <property name="text">
     <string>Brightness / Contrast Adjusting</string>
@@ -660,7 +675,7 @@
    </property>
    <property name="icon">
     <iconset resource="../resources.qrc">
-     <normaloff>:/icons/show_xy_slice3.png</normaloff>:/icons/show_xy_slice3.png</iconset>
+     <normaloff>:/svg/svg/show_xy_slice3.svg</normaloff>:/svg/svg/show_xy_slice3.svg</iconset>
    </property>
    <property name="text">
     <string>Axial Slice</string>
@@ -678,7 +693,7 @@
    </property>
    <property name="icon">
     <iconset resource="../resources.qrc">
-     <normaloff>:/icons/show_xz_slice3.png</normaloff>:/icons/show_xz_slice3.png</iconset>
+     <normaloff>:/svg/svg/show_xz_slice3.svg</normaloff>:/svg/svg/show_xz_slice3.svg</iconset>
    </property>
    <property name="text">
     <string>Coronal Slice</string>
@@ -696,7 +711,7 @@
    </property>
    <property name="icon">
     <iconset resource="../resources.qrc">
-     <normaloff>:/icons/show_yz_slice3.png</normaloff>:/icons/show_yz_slice3.png</iconset>
+     <normaloff>:/svg/svg/show_yz_slice3.svg</normaloff>:/svg/svg/show_yz_slice3.svg</iconset>
    </property>
    <property name="text">
     <string>Sagittal Slice</string>
@@ -714,7 +729,7 @@
    </property>
    <property name="icon">
     <iconset resource="../resources.qrc">
-     <normaloff>:/icons/segmentation_window.png</normaloff>:/icons/segmentation_window.png</iconset>
+     <normaloff>:/svg/svg/segmentation_window.svg</normaloff>:/svg/svg/segmentation_window.svg</iconset>
    </property>
    <property name="text">
     <string>Quick Tissue Model Creation Panel</string>
@@ -791,7 +806,7 @@
    </property>
    <property name="icon">
     <iconset resource="../resources.qrc">
-     <normaloff>:/icons/volume_rendering_window2.png</normaloff>:/icons/volume_rendering_window2.png</iconset>
+     <normaloff>:/svg/svg/volume_rendering_window2.svg</normaloff>:/svg/svg/volume_rendering_window2.svg</iconset>
    </property>
    <property name="text">
     <string>Volume Rendering Panel</string>
@@ -809,7 +824,7 @@
   <action name="actionPreferences">
    <property name="icon">
     <iconset resource="../resources.qrc">
-     <normaloff>:/icons/cog.png</normaloff>:/icons/cog.png</iconset>
+     <normaloff>:/svg/svg/cog.svg</normaloff>:/svg/svg/cog.svg</iconset>
    </property>
    <property name="text">
     <string>Preferences...</string>
@@ -824,7 +839,7 @@
   <action name="actionShow_Data_Properties">
    <property name="icon">
     <iconset resource="../resources.qrc">
-     <normaloff>:/icons/page.png</normaloff>:/icons/page.png</iconset>
+     <normaloff>:/svg/svg/page.svg</normaloff>:/svg/svg/page.svg</iconset>
    </property>
    <property name="text">
     <string>Show Data Properties...</string>
@@ -839,16 +854,16 @@
   <action name="actionLoad_STL_Model">
    <property name="icon">
     <iconset resource="../resources.qrc">
-     <normaloff>:/icons/show_bone_model.png</normaloff>:/icons/show_bone_model.png</iconset>
+     <normaloff>:/svg/svg/show_bone_model_menu.svg</normaloff>:/svg/svg/show_bone_model_menu.svg</iconset>
    </property>
    <property name="text">
-    <string>Load STL Model...</string>
+    <string>Load Polygonal Model...</string>
    </property>
    <property name="toolTip">
-    <string>Loads surface model from a specified STL file.</string>
+    <string>Loads surface model from a specified file.</string>
    </property>
    <property name="statusTip">
-    <string>Loads surface model from a specified STL file.</string>
+    <string>Loads surface model from a specified file.</string>
    </property>
   </action>
   <action name="actionAbout">
@@ -968,7 +983,7 @@
    </property>
    <property name="icon">
     <iconset resource="../resources.qrc">
-     <normaloff>:/icons/magnifier.png</normaloff>:/icons/magnifier.png</iconset>
+     <normaloff>:/svg/svg/magnifier.svg</normaloff>:/svg/svg/magnifier.svg</iconset>
    </property>
    <property name="text">
     <string>Scale Scene</string>
@@ -1015,13 +1030,13 @@
   </action>
   <action name="actionSave_STL_Model">
    <property name="text">
-    <string>Save STL Model...</string>
+    <string>Save Polygonal Model...</string>
    </property>
    <property name="toolTip">
-    <string>Saves generated model to a specified STL file.</string>
+    <string>Saves generated model to a specified file.</string>
    </property>
    <property name="statusTip">
-    <string>Saves generated model to a specified STL file.</string>
+    <string>Saves generated model to a specified file.</string>
    </property>
   </action>
   <action name="actionSend_Data">
@@ -1041,7 +1056,7 @@
    </property>
    <property name="icon">
     <iconset resource="../resources.qrc">
-     <normaloff>:/icons/measure_density.png</normaloff>:/icons/measure_density.png</iconset>
+     <normaloff>:/svg/svg/measure_density.svg</normaloff>:/svg/svg/measure_density.svg</iconset>
    </property>
    <property name="text">
     <string>Measure Density Value [Hu]</string>
@@ -1059,7 +1074,7 @@
    </property>
    <property name="icon">
     <iconset resource="../resources.qrc">
-     <normaloff>:/icons/measure_distance.png</normaloff>:/icons/measure_distance.png</iconset>
+     <normaloff>:/svg/svg/measure_distance.svg</normaloff>:/svg/svg/measure_distance.svg</iconset>
    </property>
    <property name="text">
     <string>Measure Distance [mm]</string>
@@ -1074,7 +1089,7 @@
   <action name="actionClear_Measurements">
    <property name="icon">
     <iconset resource="../resources.qrc">
-     <normaloff>:/icons/delete.png</normaloff>:/icons/delete.png</iconset>
+     <normaloff>:/svg/svg/delete.svg</normaloff>:/svg/svg/delete.svg</iconset>
    </property>
    <property name="text">
     <string>Clear Measurements</string>
@@ -1092,7 +1107,7 @@
    </property>
    <property name="icon">
     <iconset resource="../resources.qrc">
-     <normaloff>:/icons/show_volume_rendering.png</normaloff>:/icons/show_volume_rendering.png</iconset>
+     <normaloff>:/svg/svg/show_volume_rendering.svg</normaloff>:/svg/svg/show_volume_rendering.svg</iconset>
    </property>
    <property name="text">
     <string>Volume Rendering</string>
@@ -1118,7 +1133,7 @@
   <action name="actionImport_DICOM_Data_from_ZIP_archive">
    <property name="icon">
     <iconset resource="../resources.qrc">
-     <normaloff>:/icons/folder_open_up_menu.png</normaloff>:/icons/folder_open_up_menu.png</iconset>
+     <normaloff>:/svg/svg/folder_open_up_menu.svg</normaloff>:/svg/svg/folder_open_up_menu.svg</iconset>
    </property>
    <property name="text">
     <string>Import DICOM Data from ZIP...</string>
@@ -1130,7 +1145,7 @@
    </property>
    <property name="icon">
     <iconset resource="../resources.qrc">
-     <normaloff>:/icons/resources/models.png</normaloff>:/icons/resources/models.png</iconset>
+     <normaloff>:/svg/svg/models.svg</normaloff>:/svg/svg/models.svg</iconset>
    </property>
    <property name="text">
     <string>Models List</string>
@@ -1282,7 +1297,7 @@
    </property>
    <property name="icon">
     <iconset resource="../resources.qrc">
-     <normaloff>:/icons/show_bone_model.png</normaloff>:/icons/show_bone_model.png</iconset>
+     <normaloff>:/svg/svg/show_bone_model_menu.svg</normaloff>:/svg/svg/show_bone_model_menu.svg</iconset>
    </property>
    <property name="text">
     <string>Show Surface Model</string>
@@ -1315,6 +1330,103 @@
    </property>
    <property name="statusTip">
     <string>Arrange all panels in tabs</string>
+   </property>
+  </action>
+  <action name="actionSave_STL_Model_in_DICOM_Coordinates">
+   <property name="text">
+    <string>Save Polygonal Model in DICOM Coordinates...</string>
+   </property>
+  </action>
+  <action name="actionWorkspaceFloating">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Floating</string>
+   </property>
+  </action>
+  <action name="actionFloating3D">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>3D</string>
+   </property>
+  </action>
+  <action name="actionFloatingAxial">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Axial</string>
+   </property>
+  </action>
+  <action name="actionFloatingCoronal">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Coronal</string>
+   </property>
+  </action>
+  <action name="actionFloatingSagittal">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Sagital</string>
+   </property>
+  </action>
+  <action name="actionWorkspaceSlices">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>2D Slices</string>
+   </property>
+  </action>
+  <action name="actionFloatingArbitrary">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Arbitrary</string>
+   </property>
+  </action>
+  <action name="actionArbitrary_Slice">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="icon">
+    <iconset resource="../resources.qrc">
+     <normaloff>:/svg/svg/iconarb.svg</normaloff>:/svg/svg/iconarb.svg</iconset>
+   </property>
+   <property name="text">
+    <string>Arbitrary Slice</string>
+   </property>
+   <property name="iconText">
+    <string>Shows/Hides the arbitrary slice in the 3D scene.</string>
+   </property>
+   <property name="toolTip">
+    <string>Shows/Hides the arbitrary slice in the 3D scene.</string>
+   </property>
+  </action>
+  <action name="actionArbitrary_View">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="icon">
+    <iconset resource="../resources.qrc">
+     <normaloff>:/svg/svg/arb_window.svg</normaloff>:/svg/svg/arb_window.svg</iconset>
+   </property>
+   <property name="text">
+    <string>Arbitrary View</string>
+   </property>
+   <property name="toolTip">
+    <string>Shows/Hides the arbitrary plane view.</string>
+   </property>
+   <property name="statusTip">
+    <string>Shows/Hides the arbitrary plane view.</string>
    </property>
   </action>
  </widget>

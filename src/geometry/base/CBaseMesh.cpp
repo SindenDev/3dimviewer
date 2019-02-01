@@ -157,7 +157,7 @@ int CBaseMesh::componentCount()
     return nComponents;
 }
 
-bool CBaseMesh::isClosed()
+bool CBaseMesh::isClosed() const
 {
     CBaseMesh::ConstEdgeIter e_it, e_end = edges_end();
     for (e_it = edges_begin(); e_it != e_end; ++e_it)
@@ -171,7 +171,7 @@ bool CBaseMesh::isClosed()
     return true;
 }
 
-bool CBaseMesh::isTwoManifold()
+bool CBaseMesh::isTwoManifold() const
 {
     // check whether is 2-manifold
     CBaseMesh::ConstVertexIter ve_it = vertices_end();
@@ -183,12 +183,12 @@ bool CBaseMesh::isTwoManifold()
     return true;
 }
 
-double CBaseMesh::meshVolume()
+double CBaseMesh::meshVolume() const
 {
     double volume = 0;
-    FaceIter f_end = faces_end();
+    ConstFaceIter f_end = faces_end();
     std::vector<FaceHandle> facesList;
-    for (FaceIter f_it = faces_begin(); f_it != faces_end(); ++f_it)
+    for (ConstFaceIter f_it = faces_begin(); f_it != faces_end(); ++f_it)
         facesList.push_back(f_it.handle());
 
     const int nFaces = facesList.size();
@@ -197,7 +197,7 @@ double CBaseMesh::meshVolume()
     {
         FaceHandle f_it = facesList[i];
         std::vector<CBaseMesh::Point> pts;                    
-        for (CBaseMesh::FaceVertexIter fvit = fv_begin(f_it); fvit != fv_end(f_it); ++fvit)
+        for (CBaseMesh::ConstFaceVertexIter fvit = cfv_begin(f_it); fvit != cfv_end(f_it); ++fvit)
             pts.push_back(point(fvit.handle()));
         double v = (1.0/6)*(
                     - pts[2][0]*pts[1][1]*pts[0][2] 

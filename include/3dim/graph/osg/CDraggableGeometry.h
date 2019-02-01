@@ -61,13 +61,13 @@ public:
 
 public:
 	//! Constructor. Set position and direction.
-	CDraggableGeometry(const osg::Matrix & placement, const long & id, bool isVisible = true);
+	CDraggableGeometry(const osg::Matrix & placement, const long & id, bool isVisible = true, bool scaleDraggers = false);
 
 	//! Destructor.
 	virtual ~CDraggableGeometry();
 
 	//! Add dragger
-	void addDragger(osgManipulator::Dragger * dragger, bool bScaleDragger = true, bool bPositioned = false, bool bManaged = true );
+	void addDragger(osgManipulator::Dragger * dragger, bool bManaged = true );
 
     //! Add dragger as is. This dragger is not stored in the geometry composite dragger. Use this routine for pivot draggers for example.
     void addSpecialDragger(osgManipulator::Dragger *dragger);
@@ -83,6 +83,9 @@ public:
 
 	//! Remove geometry
 	void removeGeometry(Node * node);
+
+    //! Remove all draggers
+    void removeAllDraggers();
 
 	//! Recalculate dragger scales
 	virtual void rescaleDraggers(float scale = 1.0);
@@ -101,6 +104,23 @@ public:
 	{
 		return m_isVisible;
 	}
+
+    //! moves both dragger to given position
+    virtual void setGeometryPosition(osg::Vec3 position);
+
+    virtual void setDraggerPosition(osg::Vec3 position);
+
+    //! consider moving these into some common base..
+    virtual void setGeometryRotation(osg::Quat rotation);
+
+    virtual void setDraggerRotation(osg::Quat rotation);
+
+    //! \fn virtual void setScale(const osg::Vec3 &s);
+    //!
+    //! \brief  Set scaling
+    //!
+    //! \param  s   The scale.
+    virtual void setScale(const osg::Vec3 &s);
 
 	//! Set internal draggers matrix
 	void setDraggersMatrix( const osg::Matrix & matrix );
@@ -161,16 +181,13 @@ public:
     class CMyCompositeDragger : public osgManipulator::CompositeDragger
     {
     protected:
-        CDraggableGeometry* m_pDG;
+        osg::observer_ptr<CDraggableGeometry> m_dg;
     public:
         //! Constructor
-        CMyCompositeDragger(CDraggableGeometry* pDG) { m_pDG=pDG; /*this->_selfUpdater = 0;*/  }
-
-        //! Destructor
-        virtual ~CMyCompositeDragger() {}
+        CMyCompositeDragger(CDraggableGeometry* dg, int handleCommandMask);
 
         //! Get pointer to draggable geometry which holds this dragger
-        CDraggableGeometry* getDraggableGeometry() const { return m_pDG; }
+        CDraggableGeometry* getDraggableGeometry() const { return m_dg.get(); }
     };
 
 protected:
@@ -184,7 +201,7 @@ protected:
 	void buildTree( const osg::Matrix & initialMatrix );
 
 protected:
-	//! Draggers switch
+	//! Draggers switch - used to set draggers on/off
 	ref_ptr<Switch> m_draggersSwitch;
 
 	//! Geometry selection
@@ -199,9 +216,6 @@ protected:
     //! Geometry scale transform
     ref_ptr<MatrixTransform> m_geometryScaleTransform;
 
-	//! Draggers switch - used to set draggers on/off
-	ref_ptr<Switch> m_draggerSwitch;
-
 	//! Composite dragger used to tie all included draggers together
 	ref_ptr<CMyCompositeDragger> m_compositeDragger;
 
@@ -211,11 +225,10 @@ protected:
 	//! Is this geometry visible?
 	bool m_isVisible;
 
-	//! Should I delete user data?
-	bool m_deleteUserData;
-
     //! Should I show draggers?
     bool m_draggersVisible;
+
+    bool m_scaleDraggers;
 
 	//! Initial dragger matrix
 	osg::Matrix m_draggerInitialMatrix;

@@ -28,7 +28,7 @@
 #include <geometry/base/functions.h>
 #include <cmath>
 // Debugging 
-//#include <bluedent/osg/dbout.h> // this dependency is not allowed
+// #include <osg/dbout.h> // this dependency is not allowed
 #include <VPL/System/Stopwatch.h>
 
 // Eigen vectors computation
@@ -48,6 +48,7 @@ namespace geometry
 CMeshOctreeNode::CMeshOctreeNode()
 {
     faceCount = 0;
+    vertexCount = 0;
     for (int i = 0; i < 8; i++)
     {
         nodes[i] = -1;
@@ -65,6 +66,7 @@ CMeshOctreeNode::CMeshOctreeNode(const CMeshOctreeNode &node)
     boundingBox = node.boundingBox;
     faceCount = node.faceCount;
     faces = node.faces;
+    vertexCount = node.vertexCount;
 }
 
 //
@@ -97,6 +99,7 @@ CMeshOctreeNode::~CMeshOctreeNode()
  */
 CMeshOctree::CMeshOctree()
     : m_initialized(false)
+    , m_nextIndex(1)
 { }
 
 //
@@ -176,6 +179,13 @@ const std::vector<CMeshOctreeNode *>& CMeshOctree::getIntersectedNodes(osg::Boun
     return m_intersectedNodes;
 }
 
+const std::vector<CMeshOctreeNode*>& CMeshOctree::getIntersectedNodes(const osg::BoundingSphere& boundingSphere)
+{
+    m_intersectedNodes.clear();
+    intersect(m_nodes[0], boundingSphere);
+    return m_intersectedNodes;
+}
+
 //
 void CMeshOctree::intersect(CMeshOctreeNode &node, osg::Plane plane)
 {
@@ -238,6 +248,36 @@ void CMeshOctree::intersect(CMeshOctreeNode &node, osg::BoundingBox boundingBox)
     }
 }
 
+void CMeshOctree::intersect(CMeshOctreeNode & node, const osg::BoundingSphere& boundingSphere)
+{
+    // skip if node is not intersected by a plane
+    if (!sphereBoundingBoxIntersection(node.boundingBox,boundingSphere))
+    {
+        return;
+    }
+
+    // skip if node is intersected but has no faces
+    if ((node.faceCount == 0) && (node.vertexCount == 0))
+    {
+        return;
+    }
+
+    // add node if it has assigned faces in it's own container
+    if ((node.faces.size() > 0) || (node.vertices.size() > 0))
+    {
+        m_intersectedNodes.push_back(&node);
+    }
+
+    // add children if node is not leaf
+    if (node.nodes[0] != -1)
+    {
+        for (int i = 0; i < 8; ++i)
+        {
+            intersect(m_nodes[node.nodes[i]], boundingSphere);
+        }
+    }
+}
+
 //
 CMeshOctree::~CMeshOctree()
 { }
@@ -254,18 +294,18 @@ void CMeshOctree::initializeNode(CMeshOctreeNode &node, osg::BoundingBox boundin
         return;
     }
 
-    osg::Vec3 start = osg::Vec3(boundingBox.xMin(), boundingBox.yMin(), boundingBox.zMin());
-    osg::Vec3 half = boundingBox.center() - start;
-
     for (int z = 0; z < 2; z++)
     {
         for (int y = 0; y < 2; y++)
         {
             for (int x = 0; x < 2; x++)
             {
-                osg::Vec3 min = osg::Vec3(start.x() + x * half.x(), start.y() + y * half.y(), start.z() + z * half.z());
-                osg::Vec3 max = osg::Vec3(start.x() + (x + 1) * half.x(), start.y() + (y + 1) * half.y(), start.z() + (z + 1) * half.z());
-                initializeNode(m_nodes[node.nodes[z * 4 + y * 2 + x]], osg::BoundingBox(min, max));
+                osg::Vec3 center = boundingBox.center();
+                osg::Vec3 corner = boundingBox.corner(z * 4 + y * 2 + x);
+                osg::BoundingBox bb;
+                bb.expandBy(center);
+                bb.expandBy(corner);
+                initializeNode(m_nodes[node.nodes[z * 4 + y * 2 + x]], bb);
             }
         }
     }
@@ -274,19 +314,17 @@ void CMeshOctree::initializeNode(CMeshOctreeNode &node, osg::BoundingBox boundin
 //
 void CMeshOctree::fillFaceLists(geometry::CMesh *mesh)
 {
-    for (geometry::CMesh::FaceIter fit = mesh->faces_begin(); fit != mesh->faces_end(); ++fit)
+    for (geometry::CMesh::FaceIter fit = mesh->faces_sbegin(); fit != mesh->faces_end(); ++fit)
     {
-        geometry::CMesh::FaceHandle face = fit.handle();
-        if (!face.is_valid() || mesh->status(face).deleted())
-        {
+        geometry::CMesh::FaceHandle face = fit;
+        if (!face.is_valid())
             continue;
-        }
 
         osg::BoundingBox faceBoundingBox;
         for (geometry::CMesh::FaceVertexIter fvit = mesh->fv_begin(face); fvit != mesh->fv_end(face); ++fvit)
         {
             geometry::CMesh::Point point = mesh->point(fvit.handle());
-            faceBoundingBox.expandBy(osg::Vec3(point[0], point[1], point[2]));
+            faceBoundingBox.expandBy(point[0], point[1], point[2]);
         }
 
         assignFace(m_nodes[0], 0, face, faceBoundingBox);
@@ -305,7 +343,7 @@ void CMeshOctree::fillVertexLists(geometry::CMesh *mesh)
 }
 
 //
-bool CMeshOctree::assignFace(CMeshOctreeNode &node, int level, geometry::CMesh::FaceHandle face, osg::BoundingBox faceBoundingBox)
+bool CMeshOctree::assignFace(CMeshOctreeNode &node, int level, geometry::CMesh::FaceHandle face, const osg::BoundingBox& faceBoundingBox)
 {
     // test if triangle is entirely inside node's bounding box
     bool contains = false;
@@ -388,6 +426,33 @@ int CMeshOctree::calculateNodeCount(int numOfLevels)
     return (static_cast<int>(pow(8.0f, numOfLevels)) - 1) / (8 - 1);
 }
 
+bool CMeshOctree::sphereBoundingBoxIntersection(const osg::BoundingBox & boundingBox, const osg::BoundingSphere & boundingSphere)
+{
+    //Source: https://github.com/erich666/GraphicsGems/blob/master/gems/BoxSphere.c : Solid Box - Solid Sphere
+
+    double dmin = 0;
+    for (int i = 0; i < 3; i++)
+    {
+        if (boundingSphere._center[i] < boundingBox._min[i])
+        {
+            double d = (boundingSphere._center[i] - boundingBox._min[i]);
+            dmin += d * d;
+        }
+        else if (boundingSphere._center[i] > boundingBox._max[i])
+        {
+            double d = (boundingSphere._center[i] - boundingBox._max[i]);
+            dmin += d * d;
+        }
+    }
+
+    if (dmin <= (boundingSphere._radius * boundingSphere._radius))
+    {
+        return true;
+    }
+
+    return false;
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //!\brief   Gets a near points to the given point.
 //!
@@ -398,64 +463,106 @@ int CMeshOctree::calculateNodeCount(int numOfLevels)
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 const std::vector<CMeshOctreeNode *>& CMeshOctree::getNearPoints(const osg::Vec3 &point, double maximal_distance)
 {
-	osg::Vec3 hdist(maximal_distance/2.0, maximal_distance/2.0, maximal_distance/2.0);
-	osg::BoundingBox bb(point-hdist, point+hdist);
+    //Original WRONG version using bounding box to find intersected nodes. If you want to use bounding boxes,
+    //at least remove the division by 2.0!! By dividing by 2.0 you won't get nodes in maximal_distance from given point,
+    //but only in half the maximal_distance!
+#if 0
+    osg::Vec3 hdist(maximal_distance / 2.0, maximal_distance / 2.0, maximal_distance / 2.0);
+    osg::BoundingBox bb(point - hdist, point + hdist);
 
-	return getIntersectedNodes(bb);
+    return getIntersectedNodes(bb);
+#else
+    //New version using bounding spehere to get intersected nodes.
+    osg::BoundingSphere boundingSphere(point, maximal_distance);
+    return getIntersectedNodes(boundingSphere);
+#endif // 0
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
-//!\brief   Gets a near points handles.
-//!
-//!\param   point               The point.
-//!\param   maximal_distance    The maximal distance.
-//!\param [in,out]  handles     The handles.
-//!\param [in,out]  mesh        If non-null, the mesh.
-//!
-//!\return  The nearest point handle index in the output vector.
-////////////////////////////////////////////////////////////////////////////////////////////////////
-size_t CMeshOctree::getNearPointsHandles(const osg::Vec3 &point, double maximal_distance, std::vector<geometry::CMesh::VertexHandle> &handles, geometry::CMesh *mesh)
+/**
+ * Gets the closest point handle
+ *
+ * \param   point               The point.
+ * \param   maximal_distance    The maximal distance searched.
+ * \param   mesh                The mesh.
+ *
+ * \return  The closest point handle.
+ */
+
+geometry::CMesh::VertexHandle CMeshOctree::getClosestPointHandle(const osg::Vec3& point, double maximal_distance,
+    const geometry::CMesh& mesh)
 {
-	handles.clear();
+    CMesh::VertexHandle returned_handle(CMesh::InvalidVertexHandle);
+    double current_nearest_distance(std::numeric_limits<double>::max());
 
-	const std::vector<CMeshOctreeNode *> &nodes(getNearPoints(point, maximal_distance));
 
-	double distsq(maximal_distance*maximal_distance);
+    const std::vector<CMeshOctreeNode *> &nodes(getNearPoints(point, maximal_distance));
 
-	size_t nearest_id(0);
-	double dist_nearestsq(std::numeric_limits<double>::max());
+    double dist_nearestsq(std::numeric_limits<double>::max());
 
-	// For all returned nodes
-	std::vector<CMeshOctreeNode *>::const_iterator itn(nodes.begin()), itnEnd(nodes.end());
-	size_t counter(0);
-	for(; itn != itnEnd; ++itn, ++counter)
-	{
-		// For all node points
-		std::vector<geometry::CMesh::VertexHandle>::const_iterator itvh((*itn)->vertices.begin()), itvhEnd((*itn)->vertices.end());
-		for(; itvh != itvhEnd; ++itvh)
-		{
-			// Get point coordinates
-			geometry::CMesh::Point mp = mesh->point(*itvh);
+    // For all returned nodes
+    auto itn(nodes.begin()), itnEnd(nodes.end());
+    size_t counter(0);
+    for (; itn != itnEnd; ++itn, ++counter)
+    {
+        // For all node points
+        std::vector<geometry::CMesh::VertexHandle>::const_iterator itvh((*itn)->vertices.begin()), itvhEnd((*itn)->vertices.end());
+        for (; itvh != itvhEnd; ++itvh)
+        {
+            // Get point coordinates
+            const geometry::CMesh::Point mp = mesh.point(*itvh);
 
-			// Check distance
-			double dx(point[0]-mp[0]), dy(point[1]-mp[1]), dz(point[2]-mp[2]);
-			double dsq(dx*dx + dy*dy + dz*dz);
-			if(dsq < distsq)
-				handles.push_back(*itvh);
+            // Check distance
+            double dx(point[0] - mp[0]), dy(point[1] - mp[1]), dz(point[2] - mp[2]);
+            double dsq(dx*dx + dy * dy + dz * dz);
+            if (dsq < current_nearest_distance)
+            {
+                current_nearest_distance = dsq;
+                returned_handle = *itvh;
+            }
 
-			// Compare current nearest point with current point distance
-			if(dsq < dist_nearestsq)
-			{
-				// Store id and squared distance
-				nearest_id = counter;
-				dist_nearestsq = dsq;
-			}
-		}
-	}
+        }
+    }
 
-	return counter;
+    return returned_handle;
 }
 
+/**
+    * Gets closest face handle to the given point
+    *
+    * \param   point               The point.
+    * \param   maximal_distance    The maximal searched distance.
+    * \param   mesh                The tested mesh.
+    *
+    * \return  The closest face handle.
+    */
+
+geometry::CMesh::FaceHandle CMeshOctree::getClosestFaceHandle(const osg::Vec3 &point, double maximal_distance, const geometry::CMesh &mesh)
+{
+    geometry::CMesh::VertexHandle nearestPointHandle(getClosestPointHandle(point, maximal_distance, mesh));
+
+    if (!mesh.is_valid_handle(nearestPointHandle))
+        return geometry::CMesh::InvalidFaceHandle;
+
+    // Circulate point and find face with the centroid closest to our point
+    double closest_distance(std::numeric_limits<double>::max());
+    CMesh::FaceHandle closest_handle(CMesh::InvalidFaceHandle);
+    CMesh::Point om_point(geometry::convert3<CMesh::Point, osg::Vec3>(point));
+
+    for (CMesh::CVFIter vfit = mesh.cvf_begin(nearestPointHandle); vfit.is_valid(); ++vfit)
+    {
+        CMesh::Point centroid;
+        mesh.calc_face_centroid(vfit.handle(), centroid);
+
+        double distance((om_point - centroid).sqrnorm());
+        if (distance < closest_distance)
+        {
+            closest_distance = distance;
+            closest_handle = vfit.handle();
+        }
+    }
+
+    return closest_handle;
+}
 
 ////////////////////////////////////////////////////////////
 /*!
@@ -465,6 +572,9 @@ CMeshCutter::CMeshCutter()
 {
     m_initialized = false;
     m_initializedOrtho = false;
+    m_vertices = nullptr;
+    m_indices = nullptr;
+    m_planePosition = 0;
 }
 
 bool CMeshCutter::initialize(osg::Vec3Array *vertices, osg::DrawElementsUInt *indices, osg::Plane plane, osg::Matrix worldMatrix)
@@ -510,7 +620,6 @@ CMeshCutter::~CMeshCutter()
 { }
 
 //
-//void CMeshCutter::calculateDistancesX(geometry::CMesh *source, std::vector<CMeshOctreeNode *> *intersectedNodes)
 void CMeshCutter::calculateDistancesX(geometry::CMesh *source, const std::vector<CMeshOctreeNode *> *intersectedNodes)
 {
     OpenMesh::VPropHandleT<float> vProp_distance;
@@ -518,7 +627,7 @@ void CMeshCutter::calculateDistancesX(geometry::CMesh *source, const std::vector
 
     if (intersectedNodes == NULL)
     {
-        for (geometry::CMesh::VertexIter vit = source->vertices_begin(); vit != source->vertices_end(); ++vit)
+        for (geometry::CMesh::VertexIter vit = source->vertices_sbegin(); vit != source->vertices_end(); ++vit)
         {
             geometry::CMesh::Point point = source->point(vit.handle());
             source->property(vProp_distance, vit) = m_planePosition - point[0];
@@ -530,10 +639,19 @@ void CMeshCutter::calculateDistancesX(geometry::CMesh *source, const std::vector
         {
             for (unsigned int f = 0; f < (*intersectedNodes)[i]->faces.size(); ++f)
             {
-//                geometry::CMesh::FaceHandle face = (*intersectedNodes)[i]->faces[f];
                 const geometry::CMesh::FaceHandle face = (*intersectedNodes)[i]->faces[f];
+                if (source->status(face).deleted())
+                {
+                    continue;
+                }
+
                 for (geometry::CMesh::FaceVertexIter fvit = source->fv_begin(face); fvit != source->fv_end(face); ++fvit)
                 {
+                    if (source->status(*fvit).deleted())
+                    {
+                        continue;
+                    }
+
                     geometry::CMesh::Point point = source->point(fvit.handle());
                     source->property(vProp_distance, fvit) = m_planePosition - point[0];
                 }
@@ -543,7 +661,6 @@ void CMeshCutter::calculateDistancesX(geometry::CMesh *source, const std::vector
 }
 
 //
-//void CMeshCutter::calculateDistancesY(geometry::CMesh *source, std::vector<CMeshOctreeNode *> *intersectedNodes)
 void CMeshCutter::calculateDistancesY(geometry::CMesh *source, const std::vector<CMeshOctreeNode *> *intersectedNodes)
 {
     OpenMesh::VPropHandleT<float> vProp_distance;
@@ -551,7 +668,7 @@ void CMeshCutter::calculateDistancesY(geometry::CMesh *source, const std::vector
     
     if (intersectedNodes == NULL)
     {
-        for (geometry::CMesh::VertexIter vit = source->vertices_begin(); vit != source->vertices_end(); ++vit)
+        for (geometry::CMesh::VertexIter vit = source->vertices_sbegin(); vit != source->vertices_end(); ++vit)
         {
             geometry::CMesh::Point point = source->point(vit.handle());
             source->property(vProp_distance, vit) = m_planePosition - point[1];
@@ -563,10 +680,19 @@ void CMeshCutter::calculateDistancesY(geometry::CMesh *source, const std::vector
         {
             for (unsigned int f = 0; f < (*intersectedNodes)[i]->faces.size(); ++f)
             {
-//                geometry::CMesh::FaceHandle face = (*intersectedNodes)[i]->faces[f];
                 const geometry::CMesh::FaceHandle face = (*intersectedNodes)[i]->faces[f];
+                if (source->status(face).deleted())
+                {
+                    continue;
+                }
+
                 for (geometry::CMesh::FaceVertexIter fvit = source->fv_begin(face); fvit != source->fv_end(face); ++fvit)
                 {
+                    if (source->status(*fvit).deleted())
+                    {
+                        continue;
+                    }
+
                     geometry::CMesh::Point point = source->point(fvit.handle());
                     source->property(vProp_distance, fvit) = m_planePosition - point[1];
                 }
@@ -576,7 +702,6 @@ void CMeshCutter::calculateDistancesY(geometry::CMesh *source, const std::vector
 }
 
 //
-//void CMeshCutter::calculateDistancesZ(geometry::CMesh *source, std::vector<CMeshOctreeNode *> *intersectedNodes)
 void CMeshCutter::calculateDistancesZ(geometry::CMesh *source, const std::vector<CMeshOctreeNode *> *intersectedNodes)
 {
     OpenMesh::VPropHandleT<float> vProp_distance;
@@ -584,7 +709,7 @@ void CMeshCutter::calculateDistancesZ(geometry::CMesh *source, const std::vector
     
     if (intersectedNodes == NULL)
     {
-        for (geometry::CMesh::VertexIter vit = source->vertices_begin(); vit != source->vertices_end(); ++vit)
+        for (geometry::CMesh::VertexIter vit = source->vertices_sbegin(); vit != source->vertices_end(); ++vit)
         {
             geometry::CMesh::Point point = source->point(vit.handle());
             source->property(vProp_distance, vit) = m_planePosition - point[2];
@@ -596,12 +721,22 @@ void CMeshCutter::calculateDistancesZ(geometry::CMesh *source, const std::vector
         {
             for (unsigned int f = 0; f < (*intersectedNodes)[i]->faces.size(); ++f)
             {
-//                geometry::CMesh::FaceHandle face = (*intersectedNodes)[i]->faces[f];
                 const geometry::CMesh::FaceHandle face = (*intersectedNodes)[i]->faces[f];
-                for (geometry::CMesh::FaceVertexIter fvit = source->fv_begin(face); fvit != source->fv_end(face); ++fvit)
+                if (source->status(face).deleted())
                 {
-                    geometry::CMesh::Point point = source->point(fvit.handle());
-                    source->property(vProp_distance, fvit) = m_planePosition - point[2];
+                    continue;
+                }
+
+                for (geometry::CMesh::ConstFaceVertexCWIter fvit = source->cfv_cwbegin(face); fvit != source->cfv_cwend(face); ++fvit)
+                {
+                    const geometry::CMesh::VertexHandle vh = *fvit;
+                    if (source->status(vh).deleted())
+                    {
+                        continue;
+                    }
+
+                    geometry::CMesh::Point point = source->point(vh);
+                    source->property(vProp_distance, vh) = m_planePosition - point[2];
                 }
             }
         }
@@ -609,7 +744,6 @@ void CMeshCutter::calculateDistancesZ(geometry::CMesh *source, const std::vector
 }
 
 //
-//void CMeshCutter::calculateDistances(geometry::CMesh *source, std::vector<CMeshOctreeNode *> *intersectedNodes)
 void CMeshCutter::calculateDistances(geometry::CMesh *source, const std::vector<CMeshOctreeNode *> *intersectedNodes)
 {
     OpenMesh::VPropHandleT<float> vProp_distance;
@@ -617,7 +751,7 @@ void CMeshCutter::calculateDistances(geometry::CMesh *source, const std::vector<
     
     if (intersectedNodes == NULL)
     {
-		for (geometry::CMesh::VertexIter vit = source->vertices_begin(); vit != source->vertices_end(); ++vit)
+		for (geometry::CMesh::VertexIter vit = source->vertices_sbegin(); vit != source->vertices_end(); ++vit)
 		{
 			geometry::CMesh::Point point = source->point(vit.handle());
 			source->property(vProp_distance, vit) = m_transformedPlane.distance(osg::Vec3(point[0], point[1], point[2]));
@@ -625,18 +759,29 @@ void CMeshCutter::calculateDistances(geometry::CMesh *source, const std::vector<
     }
     else
     {
-#pragma omp parallel for
         for (int i = 0; i < (int)intersectedNodes->size(); ++i)
         {
-            for (unsigned int f = 0; f < (*intersectedNodes)[i]->faces.size(); ++f)
+            const long nFaces = (*intersectedNodes)[i]->faces.size();
+#pragma omp parallel for
+            for (long f = 0; f < nFaces; ++f)
             {
-//                geometry::CMesh::FaceHandle face = (*intersectedNodes)[i]->faces[f];
                 const geometry::CMesh::FaceHandle face = (*intersectedNodes)[i]->faces[f];
-                for (geometry::CMesh::FaceVertexIter fvit = source->fv_begin(face); fvit != source->fv_end(face); ++fvit)
+                if (source->status(face).deleted())
                 {
-                    geometry::CMesh::Point point = source->point(fvit.handle());
-					if (0==source->property(vProp_distance, fvit))
-						source->property(vProp_distance, fvit) = m_transformedPlane.distance(osg::Vec3(point[0], point[1], point[2]));
+                    continue;
+                }
+                for (geometry::CMesh::ConstFaceVertexCWIter fvit = source->cfv_cwbegin(face); fvit != source->cfv_cwend(face); ++fvit)
+                {
+                    if (source->status(*fvit).deleted())
+                    {
+                        continue;
+                    }        
+                    float& prop = source->property(vProp_distance, *fvit);
+                    if (0 == prop)
+                    {
+                        const geometry::CMesh::Point& point = source->point(*fvit);
+                        prop = m_transformedPlane.distance(osg::Vec3(point[0], point[1], point[2]));
+                    }
                 }
             }
         }
@@ -915,29 +1060,33 @@ void CMeshCutter::performCut(geometry::CMesh *source, const std::vector<CMeshOct
 
 #ifdef _OPENMP        
 
-        // limit to 8 threads
+        // limit to 16 threads
         int nThreads=omp_get_max_threads( ); 
-        if (nThreads>8)
-            nThreads=8;
+        if (nThreads>16)
+            nThreads=16;
         
-        std::vector<std::vector<osg::Vec3> > vLists[8]; // list of lists for every thread
+        std::vector<std::vector<osg::Vec3> > vLists[16]; // list of lists for every thread
                 
-        #pragma omp parallel for schedule(dynamic) num_threads(nThreads)
+        
 #endif
         for( int i = 0; i < int(intersectedNodes->size()); ++i )
         {
-            for( int f = 0; f < int((*intersectedNodes)[i]->faces.size()); ++f)
+            const int nNodeFaces = (int)((*intersectedNodes)[i]->faces.size());
+#ifdef _OPENMP        
+            #pragma omp parallel for schedule(dynamic) num_threads(nThreads)
+#endif
+            for( int f = 0; f < nNodeFaces; ++f)
             {
                 geometry::CMesh::FaceHandle face = (*intersectedNodes)[i]->faces[f];
                 int nVertices = 0;
                 osg::Vec3 vertices[3];
                 float distances[3] = {};
 
-                for (geometry::CMesh::FaceVertexIter fvit = source->fv_begin(face); fvit != source->fv_end(face); ++fvit)
+                for (geometry::CMesh::ConstFaceVertexCWIter fvit = source->cfv_cwbegin(face); fvit != source->cfv_cwend(face); ++fvit)
                 {
-                    geometry::CMesh::Point vertex = source->point(fvit.handle());
+                    geometry::CMesh::Point vertex = source->point(*fvit);
                     vertices[nVertices] = osg::Vec3(vertex[0], vertex[1], vertex[2]);
-                    distances[nVertices] = source->property(vProp_distance, fvit.handle());
+                    distances[nVertices] = source->property(vProp_distance, *fvit);
                     nVertices++;
                 }
 
@@ -1410,6 +1559,46 @@ void CMesh::getVerticesInRange(std::vector<geometry::CMesh::VertexHandle> &verti
     }
 }
 
+void CMesh::merge(geometry::CMesh &mesh, bool swapSourceMeshFaceOrientation, const osg::Matrix &transformMatrix)
+{
+    if (mesh.n_vertices() == 0)
+    {
+        return;
+    }
+
+    // copy vertices and store (handle => new_handle) mapping
+    std::map<geometry::CMesh::VertexHandle, geometry::CMesh::VertexHandle> vertexHandleMap;
+    for (geometry::CMesh::VertexIter vit = mesh.vertices_begin(); vit != mesh.vertices_end(); ++vit)
+    {
+        geometry::CMesh::Point point = mesh.point(vit.handle());
+        osg::Vec3 vertex(point[0], point[1], point[2]);
+        vertex = vertex * transformMatrix;
+        vertexHandleMap[vit.handle()] = add_vertex(geometry::CMesh::Point(vertex[0], vertex[1], vertex[2]));
+    }
+
+    // copy faces using handle map
+    for (geometry::CMesh::FaceIter fit = mesh.faces_begin(); fit != mesh.faces_end(); ++fit)
+    {
+        geometry::CMesh::FaceHandle faceHandle = fit.handle();
+        std::vector<geometry::CMesh::VertexHandle> vertexHandles;
+        for (geometry::CMesh::FaceVertexIter fvit = mesh.fv_begin(faceHandle); fvit != mesh.fv_end(faceHandle); ++fvit)
+        {
+            vertexHandles.push_back(vertexHandleMap[fvit.handle()]);
+        }
+
+        assert(vertexHandles.size() == 3);
+
+        if (swapSourceMeshFaceOrientation)
+        {
+            add_face(vertexHandles[0], vertexHandles[2], vertexHandles[1]);
+        }
+        else
+        {
+            add_face(vertexHandles[0], vertexHandles[1], vertexHandles[2]);
+        }
+    }
+}
+
 //! calculates quality of face
 double CMesh::quality(geometry::CMesh::FaceHandle fh)
 {
@@ -1680,13 +1869,8 @@ bool CMesh::calc_bounding_box(geometry::CMesh::Point &min, geometry::CMesh::Poin
 {
     bool first = true;
 
-    for (CMesh::VertexIter vit = this->vertices_begin(); vit != this->vertices_end(); ++vit)
+    for (CMesh::VertexIter vit = this->vertices_sbegin(); vit != this->vertices_end(); ++vit)
     {
-        if (this->status(vit.handle()).deleted())
-        {
-            continue;
-        }
-
         CMesh::Point point = this->point(vit.handle());
         if (geometry::isnan(geometry::convert3<geometry::Vec3, geometry::CMesh::Point>(point)))
         {
@@ -1721,7 +1905,7 @@ bool CMesh::calc_average_vertex(geometry::CMesh::Point &average)
     }
 
     average = geometry::CMesh::Point(0.0, 0.0, 0.0);
-    for (CMesh::VertexIter vit = this->vertices_begin(); vit != this->vertices_end(); ++vit)
+    for (CMesh::VertexIter vit = this->vertices_sbegin(); vit != this->vertices_end(); ++vit)
     {
         average += this->point(vit.handle()) * (1.0 / this->n_vertices());
     }
@@ -1739,7 +1923,7 @@ bool CMesh::calc_average_vertex(geometry::CMesh::Point &average)
 void CMesh::translate( float x, float y, float z )
 {
     CMesh::VertexIter v_it, v_end(vertices_end());
-    for (v_it=vertices_begin(); v_it!=v_end; ++v_it)
+    for (v_it=vertices_sbegin(); v_it!=v_end; ++v_it)
     {
         Point p(point(v_it));
         p[0] += x; p[1] += y; p[2] += z;
@@ -1755,7 +1939,7 @@ void CMesh::translate( float x, float y, float z )
 void CMesh::transform( const Matrix &tm )
 {
     CMesh::VertexIter v_it, v_end(vertices_end());
-    for (v_it=vertices_begin(); v_it!=v_end; ++v_it)
+    for (v_it=vertices_sbegin(); v_it!=v_end; ++v_it)
     {
         // Transform to osg
         Vec3 tpoint(convert3<Vec3, CMesh::Point>(this->point(v_it.handle())));
@@ -1765,6 +1949,9 @@ void CMesh::transform( const Matrix &tm )
 
         set_point(v_it, convert3<CMesh::Point, Vec3>(tpoint));
     }
+
+    // Normals should be updated. If normals are not requested yet this does nothing.
+    update_normals();
 }
 
 /**
@@ -1947,6 +2134,389 @@ bool CMesh::calc_obb_from_cm(Matrix3x3 &cm, Matrix &tm, Vec3 &extent)
 	extent = (maxim-minim)*geometry::Scalar(0.5);
 
 	return true;
+}
+
+int ccw_tri_tri_intersection_2d(OpenMesh::Vec2f p1, OpenMesh::Vec2f q1, OpenMesh::Vec2f r1,
+    OpenMesh::Vec2f p2, OpenMesh::Vec2f q2, OpenMesh::Vec2f r2);
+
+int tri_tri_overlap_test_3d(CMesh::Point p1, CMesh::Point q1, CMesh::Point r1,
+    CMesh::Point p2, CMesh::Point q2, CMesh::Point r2);
+
+int tri_tri_overlap_test_2d(OpenMesh::Vec2f p1, OpenMesh::Vec2f q1, OpenMesh::Vec2f r1,
+    OpenMesh::Vec2f p2, OpenMesh::Vec2f q2, OpenMesh::Vec2f r2);
+
+int coplanar_tri_tri3d(CMesh::Point  p1, CMesh::Point  q1, CMesh::Point  r1,
+    CMesh::Point  p2, CMesh::Point  q2, CMesh::Point  r2,
+    CMesh::Normal  N1, CMesh::Normal  N2);
+
+#define ORIENT_2D(a, b, c) ((a[0] - c[0]) * (b[1] - c[1]) - (a[1] - c[1]) * (b[0] - c[0]))
+
+#define CHECK_MIN_MAX(p1,q1,r1,p2,q2,r2) \
+{ \
+    v1 = p2 -q1; \
+    v2 = p1 -q1; \
+    N1 = OpenMesh::cross(v1,v2); \
+    v1 = q2 -q1; \
+    if (OpenMesh::dot(v1,N1) > 0.0f) \
+    { \
+        return 0; \
+    } \
+    v1 = p2 - p1; \
+    v2 = r1 - p1; \
+    N1 = OpenMesh::cross(v1,v2); \
+    v1 = r2 - p1; \
+    if (OpenMesh::dot(v1,N1) > 0.0f) \
+    { \
+        return 0; \
+    } \
+    else \
+    { \
+        return 1; \
+    } \
+}
+
+#define TRI_TRI_3D(p1,q1,r1,p2,q2,r2,dp2,dq2,dr2) \
+{ \
+    if (dp2 > 0.0f) \
+    { \
+        if (dq2 > 0.0f) CHECK_MIN_MAX(p1, r1, q1, r2, p2, q2) \
+        else if (dr2 > 0.0f) CHECK_MIN_MAX(p1, r1, q1, q2, r2, p2) \
+        else CHECK_MIN_MAX(p1, q1, r1, p2, q2, r2) \
+    } \
+    else if (dp2 < 0.0f) \
+    { \
+        if (dq2 < 0.0f) CHECK_MIN_MAX(p1, q1, r1, r2, p2, q2) \
+        else if (dr2 < 0.0f) CHECK_MIN_MAX(p1, q1, r1, q2, r2, p2) \
+        else CHECK_MIN_MAX(p1, r1, q1, p2, q2, r2) \
+    } \
+    else \
+    { \
+        if (dq2 < 0.0f) \
+        { \
+            if (dr2 >= 0.0f) CHECK_MIN_MAX(p1, r1, q1, q2, r2, p2) \
+            else CHECK_MIN_MAX(p1, q1, r1, p2, q2, r2) \
+        } \
+        else if (dq2 > 0.0f) \
+        { \
+            if (dr2 > 0.0f) CHECK_MIN_MAX(p1, r1, q1, p2, q2, r2) \
+            else CHECK_MIN_MAX(p1, q1, r1, q2, r2, p2) \
+        } \
+        else \
+        { \
+            if (dr2 > 0.0f) CHECK_MIN_MAX(p1, q1, r1, r2, p2, q2) \
+            else if (dr2 < 0.0f) CHECK_MIN_MAX(p1, r1, q1, r2, p2, q2) \
+            else return coplanar_tri_tri3d(p1, q1, r1, p2, q2, r2, N1, N2); \
+        } \
+    } \
+}
+
+#define INTERSECTION_TEST_VERTEX(P1, Q1, R1, P2, Q2, R2) {\
+  if (ORIENT_2D(R2,P2,Q1) >= 0.0f)\
+    if (ORIENT_2D(R2,Q2,Q1) <= 0.0f)\
+      if (ORIENT_2D(P1,P2,Q1) > 0.0f) {\
+  if (ORIENT_2D(P1,Q2,Q1) <= 0.0f) return 1; \
+  else return 0;} else {\
+  if (ORIENT_2D(P1,P2,R1) >= 0.0f)\
+    if (ORIENT_2D(Q1,R1,P2) >= 0.0f) return 1; \
+    else return 0;\
+  else return 0;}\
+    else \
+      if (ORIENT_2D(P1,Q2,Q1) <= 0.0f)\
+  if (ORIENT_2D(R2,Q2,R1) <= 0.0f)\
+    if (ORIENT_2D(Q1,R1,Q2) >= 0.0f) return 1; \
+    else return 0;\
+  else return 0;\
+      else return 0;\
+  else\
+    if (ORIENT_2D(R2,P2,R1) >= 0.0f) \
+      if (ORIENT_2D(Q1,R1,R2) >= 0.0f)\
+  if (ORIENT_2D(P1,P2,R1) >= 0.0f) return 1;\
+  else return 0;\
+      else \
+  if (ORIENT_2D(Q1,R1,Q2) >= 0.0f) {\
+    if (ORIENT_2D(R2,R1,Q2) >= 0.0f) return 1; \
+    else return 0; }\
+  else return 0; \
+    else  return 0; \
+ };
+
+#define INTERSECTION_TEST_EDGE(P1, Q1, R1, P2, Q2, R2) { \
+  if (ORIENT_2D(R2,P2,Q1) >= 0.0f) {\
+    if (ORIENT_2D(P1,P2,Q1) >= 0.0f) { \
+        if (ORIENT_2D(P1,Q1,R2) >= 0.0f) return 1; \
+        else return 0;} else { \
+      if (ORIENT_2D(Q1,R1,P2) >= 0.0f){ \
+  if (ORIENT_2D(R1,P1,P2) >= 0.0f) return 1; else return 0;} \
+      else return 0; } \
+  } else {\
+    if (ORIENT_2D(R2,P2,R1) >= 0.0f) {\
+      if (ORIENT_2D(P1,P2,R1) >= 0.0f) {\
+  if (ORIENT_2D(P1,R1,R2) >= 0.0f) return 1;  \
+  else {\
+    if (ORIENT_2D(Q1,R1,R2) >= 0.0f) return 1; else return 0;}}\
+      else  return 0; }\
+    else return 0; }}
+
+int tri_tri_overlap_test_2d(OpenMesh::Vec2f p1, OpenMesh::Vec2f q1, OpenMesh::Vec2f r1,
+                            OpenMesh::Vec2f p2, OpenMesh::Vec2f q2, OpenMesh::Vec2f r2)
+{
+    if (ORIENT_2D(p1, q1, r1) < 0.0f)
+        if (ORIENT_2D(p2, q2, r2) < 0.0f)
+            return ccw_tri_tri_intersection_2d(p1, r1, q1, p2, r2, q2);
+        else
+            return ccw_tri_tri_intersection_2d(p1, r1, q1, p2, q2, r2);
+    else
+        if (ORIENT_2D(p2, q2, r2) < 0.0f)
+            return ccw_tri_tri_intersection_2d(p1, q1, r1, p2, r2, q2);
+        else
+            return ccw_tri_tri_intersection_2d(p1, q1, r1, p2, q2, r2);
+
+}
+
+int coplanar_tri_tri3d(CMesh::Point  p1, CMesh::Point  q1, CMesh::Point  r1,
+                       CMesh::Point  p2, CMesh::Point  q2, CMesh::Point  r2,
+                       CMesh::Normal  N1, CMesh::Normal  N2)
+{
+
+    OpenMesh::Vec2f P1, Q1, R1;
+    OpenMesh::Vec2f P2, Q2, R2;
+
+    CMesh::Scalar n_x, n_y, n_z;
+
+    n_x = ((N1[0]<0) ? -N1[0] : N1[0]);
+    n_y = ((N1[1]<0) ? -N1[1] : N1[1]);
+    n_z = ((N1[2]<0) ? -N1[2] : N1[2]);
+
+
+    /* Projection of the triangles in 3D onto 2D such that the area of
+    the projection is maximized. */
+
+
+    if ((n_x > n_z) && (n_x >= n_y)) {
+        // Project onto plane YZ
+
+        P1[0] = q1[2]; P1[1] = q1[1];
+        Q1[0] = p1[2]; Q1[1] = p1[1];
+        R1[0] = r1[2]; R1[1] = r1[1];
+
+        P2[0] = q2[2]; P2[1] = q2[1];
+        Q2[0] = p2[2]; Q2[1] = p2[1];
+        R2[0] = r2[2]; R2[1] = r2[1];
+
+    }
+    else if ((n_y > n_z) && (n_y >= n_x)) {
+        // Project onto plane XZ
+
+        P1[0] = q1[0]; P1[1] = q1[2];
+        Q1[0] = p1[0]; Q1[1] = p1[2];
+        R1[0] = r1[0]; R1[1] = r1[2];
+
+        P2[0] = q2[0]; P2[1] = q2[2];
+        Q2[0] = p2[0]; Q2[1] = p2[2];
+        R2[0] = r2[0]; R2[1] = r2[2];
+
+    }
+    else {
+        // Project onto plane XY
+
+        P1[0] = p1[0]; P1[1] = p1[1];
+        Q1[0] = q1[0]; Q1[1] = q1[1];
+        R1[0] = r1[0]; R1[1] = r1[1];
+
+        P2[0] = p2[0]; P2[1] = p2[1];
+        Q2[0] = q2[0]; Q2[1] = q2[1];
+        R2[0] = r2[0]; R2[1] = r2[1];
+    }
+
+    return tri_tri_overlap_test_2d(P1, Q1, R1, P2, Q2, R2);
+}
+
+/*
+*
+*  Three-dimensional Triangle-Triangle Overlap Test
+*
+*/
+int tri_tri_overlap_test_3d(CMesh::Point p1, CMesh::Point q1, CMesh::Point r1,
+                            CMesh::Point p2, CMesh::Point q2, CMesh::Point r2)
+{
+    CMesh::Scalar dp1, dq1, dr1, dp2, dq2, dr2;
+    OpenMesh::Vec3f v1, v2;
+    CMesh::Normal N1, N2;
+
+    /* Compute distance signs  of p1, q1 and r1 to the plane of
+    triangle(p2,q2,r2) */
+
+    v1 = p2 - r2;
+    v2 = q2 - r2;
+    N2 = OpenMesh::cross(v1, v2);
+
+    v1 = p1 - r2;
+    dp1 = OpenMesh::dot(v1, N2);
+
+    v1 = q1 - r2;
+    dq1 = OpenMesh::dot(v1, N2);
+
+    v1 = r1 - r2;
+    dr1 = OpenMesh::dot(v1, N2);
+
+    if (((dp1 * dq1) > 0.0f) && ((dp1 * dr1) > 0.0f))  return 0;
+
+    /* Compute distance signs  of p2, q2 and r2 to the plane of
+    triangle(p1,q1,r1) */
+
+
+    v1 = q1 - p1;
+    v2 = r1 - p1;
+    N1 = OpenMesh::cross(v1, v2);
+
+    v1 = p2 - r1;
+    dp2 = OpenMesh::dot(v1, N1);
+    v1 = q2 - r1;
+    dq2 = OpenMesh::dot(v1, N1);
+    v1 = r2 - r1;
+    dr2 = OpenMesh::dot(v1, N1);
+
+    if (((dp2 * dq2) > 0.0f) && ((dp2 * dr2) > 0.0f)) return 0;
+
+    /* Permutation in a canonical form of T1's vertices */
+
+
+    if (dp1 > 0.0f) {
+        if (dq1 > 0.0f) TRI_TRI_3D(r1, p1, q1, p2, r2, q2, dp2, dr2, dq2)
+        else if (dr1 > 0.0f) TRI_TRI_3D(q1, r1, p1, p2, r2, q2, dp2, dr2, dq2)
+        else TRI_TRI_3D(p1, q1, r1, p2, q2, r2, dp2, dq2, dr2)
+    }
+    else if (dp1 < 0.0f) {
+        if (dq1 < 0.0f) TRI_TRI_3D(r1, p1, q1, p2, q2, r2, dp2, dq2, dr2)
+        else if (dr1 < 0.0f) TRI_TRI_3D(q1, r1, p1, p2, q2, r2, dp2, dq2, dr2)
+        else TRI_TRI_3D(p1, q1, r1, p2, r2, q2, dp2, dr2, dq2)
+    }
+    else {
+        if (dq1 < 0.0f) {
+            if (dr1 >= 0.0f) TRI_TRI_3D(q1, r1, p1, p2, r2, q2, dp2, dr2, dq2)
+            else TRI_TRI_3D(p1, q1, r1, p2, q2, r2, dp2, dq2, dr2)
+        }
+        else if (dq1 > 0.0f) {
+            if (dr1 > 0.0f) TRI_TRI_3D(p1, q1, r1, p2, r2, q2, dp2, dr2, dq2)
+            else TRI_TRI_3D(q1, r1, p1, p2, q2, r2, dp2, dq2, dr2)
+        }
+        else {
+            if (dr1 > 0.0f) TRI_TRI_3D(r1, p1, q1, p2, q2, r2, dp2, dq2, dr2)
+            else if (dr1 < 0.0f) TRI_TRI_3D(r1, p1, q1, p2, r2, q2, dp2, dr2, dq2)
+            else return coplanar_tri_tri3d(p1, q1, r1, p2, q2, r2, N1, N2);
+        }
+    }
+}
+
+int ccw_tri_tri_intersection_2d(OpenMesh::Vec2f p1, OpenMesh::Vec2f q1, OpenMesh::Vec2f r1,
+    OpenMesh::Vec2f p2, OpenMesh::Vec2f q2, OpenMesh::Vec2f r2)
+{
+    if (ORIENT_2D(p2, q2, p1) >= 0.0f)
+    {
+        if (ORIENT_2D(q2, r2, p1) >= 0.0f)
+        {
+            if (ORIENT_2D(r2, p2, p1) >= 0.0f) return 1;
+            else INTERSECTION_TEST_EDGE(p1, q1, r1, p2, q2, r2)
+        }
+        else
+        {
+            if (ORIENT_2D(r2, p2, p1) >= 0.0f)
+                INTERSECTION_TEST_EDGE(p1, q1, r1, r2, p2, q2)
+            else INTERSECTION_TEST_VERTEX(p1, q1, r1, p2, q2, r2)
+        }
+    }
+    else
+    {
+        if (ORIENT_2D(q2, r2, p1) >= 0.0f)
+        {
+            if (ORIENT_2D(r2, p2, p1) >= 0.0f)
+                INTERSECTION_TEST_EDGE(p1, q1, r1, q2, r2, p2)
+            else  INTERSECTION_TEST_VERTEX(p1, q1, r1, q2, r2, p2)
+        }
+        else INTERSECTION_TEST_VERTEX(p1, q1, r1, r2, p2, q2)
+    }
+}
+
+bool CMesh::guigueDevillersTriTriTest(CMesh::FaceHandle f1, CMesh::FaceHandle f2)
+{
+    CMesh::FaceVertexIter fv_it1(this->cfv_iter(f1));
+    CMesh::Point p0 = this->point(*fv_it1);
+    ++fv_it1;
+    CMesh::Point p1 = this->point(*fv_it1);
+    ++fv_it1;
+    CMesh::Point p2 = this->point(*fv_it1);
+    CMesh::Normal n1 = this->normal(f1);
+
+    CMesh::FaceVertexIter fv_it2(this->cfv_iter(f2));
+    CMesh::Point q0 = this->point(*fv_it2);
+    ++fv_it2;
+    CMesh::Point q1 = this->point(*fv_it2);
+    ++fv_it2;
+    CMesh::Point q2 = this->point(*fv_it2);
+    CMesh::Normal n2 = this->normal(f2);
+
+    return (tri_tri_overlap_test_3d(p0, p1, p2, q0, q1, q2) == 1);
+}
+
+void CMesh::safe_update_normals()
+{
+    // Face normals are required to compute the vertex and the halfedge normals
+    if (has_face_normals())
+    {
+        safe_update_face_normals();
+
+        if (has_vertex_normals())
+        {
+            safe_update_vertex_normals();
+        }
+
+        if (has_halfedge_normals())
+        {
+            safe_update_halfedge_normals();
+        }
+    }
+}
+
+void CMesh::safe_update_face_normals()
+{
+    FaceIter f_it(faces_sbegin()), f_end(faces_end());
+
+    for (; f_it != f_end; ++f_it)
+    {
+        if (this->status(*f_it).deleted())
+        {
+            continue;
+        }
+        this->set_normal(*f_it, calc_face_normal(*f_it));
+    }
+}
+
+void CMesh::safe_update_halfedge_normals(const double _feature_angle)
+{
+    HalfedgeIter h_it(halfedges_begin()), h_end(halfedges_end());
+
+    for (; h_it != h_end; ++h_it)
+    {
+        if (this->status(*h_it).deleted())
+        {
+            continue;
+        }
+        this->set_normal(*h_it, calc_halfedge_normal(*h_it, _feature_angle));
+    }
+}
+
+void CMesh::safe_update_vertex_normals()
+{
+    VertexIter  v_it(vertices_begin()), v_end(vertices_end());
+
+    for (; v_it != v_end; ++v_it)
+    {
+        if (this->status(*v_it).deleted())
+        {
+            continue;
+        }
+        this->set_normal(*v_it, calc_vertex_normal(*v_it));
+    }
 }
 
 } // namespace data

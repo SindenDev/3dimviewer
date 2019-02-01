@@ -32,28 +32,6 @@
 #include "data/CReportPage.h"
 #endif
 
-//struct SImageInfo
-//{
-//    QImage img;
-//    
-//    double maxScale;
-//    double minScale;
-//    SContentSettings settings;
-//
-//    QSize contentSize;
-//    QSize contentSizeMax;
-//    QSize contentSizeMin;
-//
-//    QSize overallSize;
-//    QSize overallSizeMax;
-//    QSize overallSizeMin;
-//
-//    QRect contentRect;
-//
-//
-//    CReportPageContent content;
-//};
-
 struct SImageInfo
 {
     QImage img;
@@ -75,6 +53,7 @@ typedef QVector<QVector<SImageInfo>> tRow;
 class CImageGrid : public CReportPageContent
 {
     friend class CReportPage;
+    friend class CReportGenerator;
 
 public:
 
@@ -86,6 +65,7 @@ public:
 
     /** Copy constructor */
     CImageGrid(const CImageGrid &other)
+        :CReportPageContent(other)
     {
         m_colsCount = other.m_colsCount;
         m_rowsCount = other.m_rowsCount;
@@ -97,18 +77,14 @@ public:
         m_currentRow = other.m_currentRow;
         m_rect = other.m_rect;
         m_useMinimumHeight = other.m_useMinimumHeight;
+        m_rows = other.m_rows;
 
-        m_rows.resize(other.m_rows.size());
-        for (int i = 0; i < other.m_rows.size(); ++i)
-        {
-            m_rows[i] = other.m_rows[i];
-        }
     }
 
     /** Assignment operator */
-    CImageGrid& operator=(const CImageGrid& other)
+    CImageGrid& operator=(const CImageGrid& other)        
     {
-
+        CReportPageContent::operator=(other);
         m_colsCount      = other.m_colsCount;
         m_rowsCount      = other.m_rowsCount;
         m_pageRect       = other.m_pageRect;
@@ -119,16 +95,11 @@ public:
         m_currentRow     = other.m_currentRow;
         m_rect           = other.m_rect;
         m_useMinimumHeight = other.m_useMinimumHeight;
+        m_rows = other.m_rows;
 
-        m_rows.resize(other.m_rows.size());
-        for (int i = 0; i < other.m_rows.size(); ++i)
-        {
-            m_rows[i] = other.m_rows[i];
-        }
         return *this;
     }
 
-    void prepare();
     
     void setUseMinimumHeight(bool value);
     bool getUseMinimumHeight();
@@ -139,7 +110,8 @@ public:
     void getContentMargins(double* right, double* bottom);
 
 protected:
-    void print(QPainter *painter) override;
+    void prepare();
+    void print(QPainter& painter) override;
 
 private:
 

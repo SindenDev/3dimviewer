@@ -55,6 +55,7 @@ CModelsWidget::CModelsWidget(QWidget *parent /*= 0*/)
     : QWidget(parent)
     , ui(new Ui::ModelsWidget)
     , m_bMyChange(false)
+    , m_bIsEnabled(true)
 {
     ui->setupUi(this);
 
@@ -117,7 +118,10 @@ CModelsWidget::~CModelsWidget()
         CGeneralObjectObserver<CModelsWidget>::disconnect(APP_STORAGE.getEntry(data::Storage::ImportedModel::Id + i).get());
 }
 
-
+void CModelsWidget::setEnabled(bool enabled)
+{
+    m_bIsEnabled = enabled;
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //!\brief   Executes the new density data action.
@@ -146,6 +150,11 @@ void CModelsWidget::objectChanged(data::CStorageEntry *pEntry, const data::CChan
 //!\brief   Updates a table.
 void CModelsWidget::updateTable()
 {
+    if (!m_bIsEnabled)
+    {
+        return;
+    }
+
     ui->tableModels->blockSignals(true);
     ui->tableModels->setUpdatesEnabled(false);
 
@@ -159,7 +168,7 @@ void CModelsWidget::updateTable()
             int storage_id(i + data::Storage::ImportedModel::Id);
 
             // Get model
-            data::CObjectPtr<data::CModel> pModel(APP_STORAGE.getEntry(storage_id));
+            data::CObjectPtr<data::CModel> pModel(APP_STORAGE.getEntry(storage_id, data::Storage::NO_UPDATE));
 
             // Is model valid?
             if(!pModel->hasData())
@@ -203,7 +212,7 @@ void CModelsWidget::updateTable()
             // Remove button
             QPushButton* ti_remove = new QPushButton();
             ti_remove->setProperty("StorageID",storage_id);
-            ti_remove->setIcon(QIcon(":/icons/delete.png"));
+            ti_remove->setIcon(QIcon(":/svg/svg/delete.svg"));
             ti_remove->setFlat(true);
             ti_remove->setObjectName("DeleteButton");
 			ti_remove->setToolTip(tr("Remove model"));
@@ -212,7 +221,7 @@ void CModelsWidget::updateTable()
 			// Info button
 			QPushButton* ti_info= new QPushButton();
 			ti_info->setProperty("StorageID", storage_id);
-			ti_info->setIcon(QIcon(":/icons/information.png"));
+			ti_info->setIcon(QIcon(":/svg/svg/information.svg"));
 			ti_info->setFlat(true);
 			ti_info->setObjectName("InfoButton");
 			ti_info->setToolTip(tr("Show information about model"));
@@ -227,7 +236,7 @@ void CModelsWidget::updateTable()
             ui->tableModels->setCellWidget(row_id, COL_DELETE, ti_remove);
 			ui->tableModels->setCellWidget(row_id, COL_INFO, ti_info);
 
-			geometry::CMesh *pMesh = pModel->getMesh();
+			geometry::CMesh *pMesh = pModel->getMesh(false);
 
 			QString toolTip = tr("Triangles: ") + QString::number(pMesh->n_faces()) + tr(", Nodes: ") + QString::number(pMesh->n_vertices()) + tr(", Components: ") + QString::number(pMesh->componentCount());
 
@@ -508,7 +517,7 @@ void CModelsWidget::on_checkBoxIOApplyDICOM_clicked()
 
 void CModelsWidget::tableModelsContextMenu(QPoint p)
 {
-	QPoint pos = ui->tableModels->mapToGlobal(p);
+	QPoint pointPos = ui->tableModels->mapToGlobal(p);
 	QTableWidgetItem* pItem = ui->tableModels->itemAt(p);
 	if (NULL!=pItem)
 	{
@@ -526,7 +535,7 @@ void CModelsWidget::tableModelsContextMenu(QPoint p)
 		QMenu contextMenu;
 		QAction* moveAct = contextMenu.addAction(tr("Adjust Position..."));
 		QAction* centerAct = contextMenu.addAction(tr("Center Position"));
-		const QAction* win=contextMenu.exec(pos);
+		const QAction* win=contextMenu.exec(pointPos);
 		if (NULL==win)
 			return;
 		if (win==moveAct)
@@ -587,7 +596,7 @@ void CModelsWidget::tableModelsContextMenu(QPoint p)
 		{
 			data::CObjectPtr<data::CModel> spModel(APP_STORAGE.getEntry(storage_id));
 			osg::Matrix mx = spModel->getTransformationMatrix();
-			geometry::CMesh* pMesh=spModel->getMesh();
+			const geometry::CMesh* pMesh=spModel->getMesh();
 			if (NULL!=pMesh && pMesh->n_vertices() > 0)
 			{
                 std::vector<int> modelList;
@@ -628,7 +637,7 @@ void CModelsWidget::showModelInfo()
 
 	CInfoDialog info(NULL, tr("Model Information"));
 
-	geometry::CMesh *pMesh = spModel->getMesh();
+	geometry::CMesh *pMesh = spModel->getMesh(false);
 	data::CColor4f color = spModel->getColor();
 
 	info.addRow(tr("Name"), QString::fromStdString(spModel->getLabel()), QColor(color.getR() * 255, color.getG() * 255, color.getB() * 255));
@@ -641,10 +650,10 @@ void CModelsWidget::showModelInfo()
 
 void CModelsWidget::on_pushButtonBuyPlugins_clicked()
 {
-	QDesktopServices::openUrl(QUrl("http://www.3dim-laboratory.cz/software/plugins/"));
+	QDesktopServices::openUrl(QUrl("https://www.tescan3dim.com/solutions/3d-image-analysis/image-segementation-tools"));
 }
 
 void CModelsWidget::on_pushButtonSaveModel_clicked()
 {
-	VPL_SIGNAL(SigSaveModel).invoke2(getSelectedModelStorageId());
+	VPL_SIGNAL(SigSaveModelExt).invoke2(getSelectedModelStorageId(), false);
 }

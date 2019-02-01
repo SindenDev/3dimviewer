@@ -14,9 +14,13 @@
         <translation>Zmáčkněte tlačítko a kliknutím zadejte bod uvnitř dat.</translation>
     </message>
     <message>
-        <location filename="../cdemoplugin.cpp" line="44"/>
         <source>Stroke Drawing Mode</source>
-        <translation>Kreslení čáry</translation>
+        <translation type="vanished">Kreslení čáry</translation>
+    </message>
+    <message>
+        <location filename="../cdemoplugin.cpp" line="44"/>
+        <source>Brush Drawing Mode</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../cdemoplugin.cpp" line="46"/>
@@ -128,6 +132,26 @@
         <location filename="../cdemopluginpanel.ui" line="145"/>
         <source>Show Regions</source>
         <translation>Zobrazit regiony</translation>
+    </message>
+    <message>
+        <location filename="../cdemopluginpanel.ui" line="155"/>
+        <source>Aux Data</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../cdemopluginpanel.ui" line="161"/>
+        <source>Fill</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../cdemopluginpanel.ui" line="168"/>
+        <source>Aux</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../cdemopluginpanel.ui" line="175"/>
+        <source>Patient</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 </TS>

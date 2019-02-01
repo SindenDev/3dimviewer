@@ -33,6 +33,7 @@
 #include <QProxyStyle>
 #include <QCheckBox>
 #include <QSharedMemory>
+#include <QSplashScreen>
 
 #include <app/CProductInfo.h>
 #include <C3DimApplication.h>
@@ -149,6 +150,11 @@ int main(int argc, char *argv[])
 {
     Q_INIT_RESOURCE(resources); // param is filename of resource file
 
+#if (QT_VERSION >= QT_VERSION_CHECK(5, 9, 0)) // issue #1848 - EGL_EXT_device_query missing 
+    QCoreApplication::setAttribute(Qt::AA_UseDesktopOpenGL/*Qt::AA_UseOpenGLES*/);
+    QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts, true); // enabled as a workaround for QOpenGLWidget reparenting issues
+#endif
+
     QCoreApplication::setOrganizationName("3Dim Laboratory s.r.o.");
     QCoreApplication::setOrganizationDomain("3dim-laboratory.cz");
     QCoreApplication::setApplicationName("3DimViewer");
@@ -156,18 +162,15 @@ int main(int argc, char *argv[])
     {
         QSettings settings;
 
-        const bool bAntialiasing = settings.value("AntialiasingEnabled", DEFAULT_ANTIALIASING).toBool();
+        const bool antialiasing = settings.value("AntialiasingEnabled", DEFAULT_ANTIALIASING).toBool();
+        const bool logOpenglErrors = settings.value("LogOpenglErrors", QVariant(DEFAULT_LOG_OPENGL_ERRORS)).toBool();
 
         QSurfaceFormat format = QSurfaceFormat::defaultFormat();
         format.setRenderableType(QSurfaceFormat::OpenGL);
         format.setProfile(QSurfaceFormat::CoreProfile);
         format.setVersion(4, 3);
-        format.setOption(QSurfaceFormat::DeprecatedFunctions, false);
-
-        if (bAntialiasing)
-        {
-            format.setSamples(8);
-        }
+        format.setSamples(antialiasing ? 8 : 0);
+        format.setOption(QSurfaceFormat::DebugContext, logOpenglErrors);
 
         QSurfaceFormat::setDefaultFormat(format);
     }
@@ -225,6 +228,29 @@ int main(int argc, char *argv[])
     bool bLoggingEnabled = settings.value("LoggingEnabled", QVariant(true)).toBool();
     if( bLoggingEnabled )
     {
+        // backup previous log
+        {
+            QStringList paths = app.getLogPaths();
+            if (!paths.isEmpty())
+            {
+                QRegExp rexLog(".log$");
+                rexLog.setCaseSensitivity(Qt::CaseInsensitive);
+
+                foreach(QString path, paths)
+                {
+                    QString back(path);
+                    back.replace(rexLog, ".last");
+
+                    if (QFile::exists(back))
+                    {
+                        QFile::remove(back);
+                    }
+
+                    QFile::copy(path, back);
+                }
+            }
+        }
+
         // Is the current workdir writable? 
         QFile file(workDir + QString("/3DimViewer.log"));
         if( !file.open(QIODevice::WriteOnly | QIODevice::Text) )
@@ -277,7 +303,11 @@ int main(int argc, char *argv[])
         VPL_LOG_INFO("OpenMP enabled, #threads = " << iThreads << " (forced)");
     }
     else
+    {
+        if (iThreads<0) // if openmp disabled in vpl
+            iThreads = omp_get_max_threads();
         VPL_LOG_INFO("OpenMP enabled, #threads = " << iThreads);
+    }
 #endif // _OPENMP
 
     // Set error handlers
@@ -379,6 +409,16 @@ int main(int argc, char *argv[])
         }
     }
 
+    QPixmap pixmap(":svg/svg/splash.svg");
+    const double dpiFactor = C3DimApplication::getDpiFactor();
+    if (dpiFactor > 1)
+    {
+        QImage img = QIcon(":svg/svg/splash.svg").pixmap(QSize(pixmap.width()*dpiFactor, pixmap.height()*dpiFactor)).toImage();
+        pixmap = QPixmap::fromImage(img);
+    }    
+    QSplashScreen splash(pixmap);
+    splash.show();
+
     // check program arguments
     QStringList arguments = QCoreApplication::arguments();
 #ifdef _WIN32
@@ -451,6 +491,7 @@ int main(int argc, char *argv[])
     pSysInfo->init(); 
     if (!pSysInfo->isOpenGLOk())
     {
+        splash.hide();
 		settings.setValue("CrashSentinel",false);
         QMessageBox msgBox(QMessageBox::Critical,QCoreApplication::applicationName(),QObject::tr("Your hardware doesn't meet the minimum requirements. OpenGL 2.1 or higher is required. Please upgrade the driver of your video card."),QMessageBox::Ok);
         msgBox.exec();
@@ -476,7 +517,9 @@ int main(int argc, char *argv[])
 #ifdef _WIN32
         getRecentEventLogAppEntries();
 #endif
+        splash.hide();
 		app.showLog(QObject::tr("3DimViewer has detected that the previous run didn't finish correctly. Verify that you have the latest drivers for the video card."));
+        splash.show();
     }
 
     // check configuration and show warning if below recommended
@@ -486,10 +529,11 @@ int main(int argc, char *argv[])
         quint64 ram = pSysInfo->getTotalRam();
         quint64 vram = pSysInfo->getAdapterRam();
         quint64 textSize = pSysInfo->m_max3DTextureSize;
-        if ((vram>0 && vram<512*1024*1024) ||   // VRAM less then 512MB
-            (ram>0 && ram<896*1024*1024) ||     // RAM below 1GB (well, 896MB)
+        if ((vram>0 && vram<=1024*1024*(quint64)1024) ||   // VRAM less then or equal to 1GB
+            (ram>0 && ram<2944*1024*(quint64)1024) ||     // RAM below 3GB
             (textSize<512))                     // 3D texture size at least 512
         {
+            splash.hide();
             QMessageBox msgBox(QMessageBox::Information,QCoreApplication::applicationName(),QObject::tr("Your hardware doesn't meet the recommended configuration. You may experience reduced performance or the application won't run at all."),QMessageBox::Ok);
             QCheckBox *pCB = new QCheckBox(QObject::tr("Don't show again"));
             pCB->blockSignals(true); // this will ensure that the checkbox won't close the dialog
@@ -497,6 +541,7 @@ int main(int argc, char *argv[])
             msgBox.exec();
             if (Qt::Checked==pCB->checkState())
                 settings.setValue("HWConfigurationWarning",false);
+            splash.show();
         }
     }
 	int res = 0;
@@ -505,6 +550,7 @@ int main(int argc, char *argv[])
 		{
 			MainWindow w(NULL,&plugins);
 			w.show();   
+            splash.finish(&w);
 			res = app.exec();
 		}
 		// we can't deallocate plugins until MainWindow is deleted but we have to unload them before storage objects destruction

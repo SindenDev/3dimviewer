@@ -118,12 +118,18 @@
    </item>
    <item>
     <widget class="QPushButton" name="pushButtonDensity">
+     <property name="toolTip">
+      <string>Activates the density measurement mode.</string>
+     </property>
+     <property name="statusTip">
+      <string>Activates the density measurement mode.</string>
+     </property>
      <property name="text">
       <string>Measure Density Value [Hu]</string>
      </property>
      <property name="icon">
       <iconset resource="gauge.qrc">
-       <normaloff>:/icons/measure_density.png</normaloff>:/icons/measure_density.png</iconset>
+       <normaloff>:/svg/svg/measure_density.svg</normaloff>:/svg/svg/measure_density.svg</iconset>
      </property>
      <property name="checkable">
       <bool>true</bool>
@@ -132,12 +138,18 @@
    </item>
    <item>
     <widget class="QPushButton" name="pushButtonDistance">
+     <property name="toolTip">
+      <string>Activates the distance measurement mode.</string>
+     </property>
+     <property name="statusTip">
+      <string>Activates the distance measurement mode.</string>
+     </property>
      <property name="text">
       <string>Measure Distance [mm]</string>
      </property>
      <property name="icon">
       <iconset resource="gauge.qrc">
-       <normaloff>:/icons/measure_distance.png</normaloff>:/icons/measure_distance.png</iconset>
+       <normaloff>:/svg/svg/measure_distance.svg</normaloff>:/svg/svg/measure_distance.svg</iconset>
      </property>
      <property name="checkable">
       <bool>true</bool>
@@ -146,12 +158,15 @@
    </item>
    <item>
     <widget class="QPushButton" name="pushButtonClear">
+     <property name="toolTip">
+      <string>Clears all measurements.</string>
+     </property>
      <property name="text">
       <string>Clear Measurements</string>
      </property>
      <property name="icon">
       <iconset resource="gauge.qrc">
-       <normaloff>:/icons/delete.png</normaloff>:/icons/delete.png</iconset>
+       <normaloff>:/svg/svg/delete.svg</normaloff>:/svg/svg/delete.svg</iconset>
      </property>
     </widget>
    </item>

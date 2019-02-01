@@ -17,7 +17,16 @@
    <property name="spacing">
     <number>0</number>
    </property>
-   <property name="margin">
+   <property name="leftMargin">
+    <number>2</number>
+   </property>
+   <property name="topMargin">
+    <number>2</number>
+   </property>
+   <property name="rightMargin">
+    <number>2</number>
+   </property>
+   <property name="bottomMargin">
     <number>2</number>
    </property>
    <item>
@@ -166,15 +175,9 @@ p, li { white-space: pre-wrap; }
           </property>
           <property name="icon">
            <iconset resource="notesplugin.qrc">
-            <normaloff>:/icons/icons/tool_brush.png</normaloff>:/icons/icons/tool_brush.png</iconset>
+            <normaloff>:/svg/svg/tool_brush.svg</normaloff>:/svg/svg/tool_brush.svg</iconset>
           </property>
           <property name="checkable">
-           <bool>true</bool>
-          </property>
-          <property name="checked">
-           <bool>true</bool>
-          </property>
-          <property name="autoExclusive">
            <bool>true</bool>
           </property>
          </widget>
@@ -186,12 +189,9 @@ p, li { white-space: pre-wrap; }
           </property>
           <property name="icon">
            <iconset resource="notesplugin.qrc">
-            <normaloff>:/icons/icons/arrow.png</normaloff>:/icons/icons/arrow.png</iconset>
+            <normaloff>:/svg/svg/arrow.svg</normaloff>:/svg/svg/arrow.svg</iconset>
           </property>
           <property name="checkable">
-           <bool>true</bool>
-          </property>
-          <property name="autoExclusive">
            <bool>true</bool>
           </property>
          </widget>
@@ -203,12 +203,9 @@ p, li { white-space: pre-wrap; }
           </property>
           <property name="icon">
            <iconset resource="notesplugin.qrc">
-            <normaloff>:/icons/icons/tool_eraser.png</normaloff>:/icons/icons/tool_eraser.png</iconset>
+            <normaloff>:/svg/svg/tool_eraser.svg</normaloff>:/svg/svg/tool_eraser.svg</iconset>
           </property>
           <property name="checkable">
-           <bool>true</bool>
-          </property>
-          <property name="autoExclusive">
            <bool>true</bool>
           </property>
          </widget>

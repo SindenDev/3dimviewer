@@ -19,6 +19,7 @@ supported by Apple.
 #endif
 
 #include "render/cvolumerendererwindow.h"
+#include <render/glErrorReporting.h>
 
 //#include <VPL/Base/Logging.h>
 
@@ -38,16 +39,14 @@ supported by Apple.
 #include <QApplication>
 #include <QThread>
 #include <QDebug>
-#if (QT_VERSION >= QT_VERSION_CHECK(5, 6, 0))
-  #include <QDesktopWidget>
-  #include <QScreen>
-#endif
+#include <QDesktopWidget>
+#include <QScreen>
+#include <QOpenGLContext>
 
 #include <osgQt/QtOsg.h>
 
-#ifndef __APPLE__
-#define OPENGL_DEBUG
-#endif
+//#define DEBUG_CONTEXT_SWITCH
+
 ///////////////////////////////////////////////////////////////////////////////
 // state which is able to save default frame buffer, because osg doesn't restore it ok
 // see http://forum.openscenegraph.org/viewtopic.php?t=15097
@@ -75,12 +74,7 @@ protected:
 
 void UnBindFboPostDrawCallback::operator () (osg::RenderInfo& renderInfo) const
 {
-    osg::GLExtensions* ext = renderInfo.getState()->get<osg::GLExtensions>();
-
-    if (NULL != ext)
-    {
-        ext->glBindFramebuffer(GL_FRAMEBUFFER_EXT, ((StateEx*)(renderInfo.getState()))->getDefaultFbo());
-    }
+    tridimGlR("glBindFramebuffer", glBindFramebuffer(GL_FRAMEBUFFER, ((StateEx*)(renderInfo.getState()))->getDefaultFbo()));
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -88,7 +82,7 @@ void UnBindFboPostDrawCallback::operator () (osg::RenderInfo& renderInfo) const
 
 int getDpiFactor(QGLOSGWidget* pWidget)
 {
-#if (QT_VERSION >= QT_VERSION_CHECK(5, 6, 0)) // enable hi dpi support
+    // enable hi dpi support
     // https://vicrucann.github.io/tutorials/osg-qt-high-dpi/
     if (QApplication::testAttribute(Qt::AA_EnableHighDpiScaling))
     {
@@ -104,7 +98,6 @@ int getDpiFactor(QGLOSGWidget* pWidget)
             return ratio;
         }
     }
-#endif
     return 1;
 }
 
@@ -210,9 +203,6 @@ static QtKeyboardMap s_QtKeyboardMap;
 // modifications based on http://forum.openscenegraph.org/viewtopic.php?t=15097
 // and on http://polar.inria.fr/downloadfaq/download/
 
-#if (QT_VERSION >= QT_VERSION_CHECK(5, 0, 0)) // needed for QOpenGLWidget
-#include <QOpenGLContext>
-
 // Custom FrameBufferObject set via camera default stateset, restores fbo to the one used by QOpenGLWidget when necessary
 class CExtraFBO : public osg::FrameBufferObject
 {
@@ -225,19 +215,16 @@ public:
     {
         if (getAttachmentMap().empty())
         {
-            osg::GLExtensions* ext = state.get<osg::GLExtensions>();
-            if (NULL != ext)
-                ext->glBindFramebuffer(GL_FRAMEBUFFER_EXT, ((StateEx*)(&state))->getDefaultFbo());
+            tridimGlR("glBindFramebuffer", glBindFramebuffer(GL_FRAMEBUFFER, ((StateEx*)(&state))->getDefaultFbo()));
         }
     }
 };
 
-#endif // QT_VERSION
 
 ///////////////////////////////////////////////////////////////////////////////
 // Graphics window for single threaded use
 
-QtOSGGraphicsWindow::QtOSGGraphicsWindow(Traits *traits, BASEGLWidget *widget) :
+QtOSGGraphicsWindow::QtOSGGraphicsWindow(Traits *traits, QOpenGLWidget *widget) :
     osgViewer::GraphicsWindowEmbedded(traits)
 {
     m_glCanvas = widget;
@@ -259,11 +246,7 @@ void QtOSGGraphicsWindow::init()
         setState( new StateEx);
         getState()->setGraphicsContext(this);
 
-#if OSG_VERSION_GREATER_OR_EQUAL(3,1,10)
 		if (_traits.valid() && _traits->sharedContext.get())
-#else
-        if (_traits.valid() && _traits->sharedContext)
-#endif
         {
             getState()->setContextID( _traits->sharedContext->getState()->getContextID() );
             incrementContextIDUsageCount( getState()->getContextID() );
@@ -272,6 +255,8 @@ void QtOSGGraphicsWindow::init()
         {
             getState()->setContextID( osg::GraphicsContext::createNewContextID() );
         }
+
+        getEventQueue()->syncWindowRectangleWithGraphicsContext();
     }
 }
 
@@ -295,29 +280,19 @@ void QtOSGGraphicsWindow::closeImplementation()
 {
 }
 
-//#define DEBUG_CONTEXT_SWITCH
-
 bool QtOSGGraphicsWindow::makeCurrentImplementation() 
 { 
 #ifdef DEBUG_CONTEXT_SWITCH
     if (dynamic_cast<CVolumeRendererWindow *>(m_glCanvas) != NULL)
         qDebug() << "makeCurrent " << QThread::currentThreadId() << " " << wglGetCurrentContext();
 #endif
-#if (QT_VERSION >= QT_VERSION_CHECK(5, 0, 0))
     if (m_glCanvas->context()!=QOpenGLContext::currentContext())
     {
         m_glCanvas->makeCurrent();
         m_bContextX = true;
         qDebug() << "QtOSGGraphicsWindow::makeCurrentImplementation: fixing bad context";
     }
-#else
-    if (m_glCanvas->context()!=QGLContext::currentContext())
-    {
-        m_glCanvas->makeCurrent();
-        m_bContextX = true;
-        qDebug() << "QtOSGGraphicsWindow::makeCurrentImplementation: fixing bad context";
-    }
-#endif
+
     return true; 
 }
 
@@ -327,13 +302,9 @@ bool QtOSGGraphicsWindow::releaseContextImplementation()
     if (dynamic_cast<CVolumeRendererWindow *>(m_glCanvas) != NULL)
         qDebug() << "doneCurrent " << QThread::currentThreadId();
 #endif
-#if (QT_VERSION >= QT_VERSION_CHECK(5, 0, 0))
     if (m_bContextX)
         m_glCanvas->doneCurrent();
-#else
-    if (m_bContextX)
-        m_glCanvas->doneCurrent();
-#endif
+
     m_bContextX = false;
     return true; 
 }
@@ -357,7 +328,7 @@ void QtOSGGraphicsWindow::raiseWindow()
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 // Graphics window for multithreaded opengl with known issues on AMD cards
 
-QtOSGGraphicsWindowMT::QtOSGGraphicsWindowMT(Traits *traits, BASEGLWidget *widget) :
+QtOSGGraphicsWindowMT::QtOSGGraphicsWindowMT(Traits *traits, QOpenGLWidget *widget) :
 	osgViewer::GraphicsWindowEmbedded(traits)
 {
     m_glCanvas = widget;
@@ -377,11 +348,7 @@ void QtOSGGraphicsWindowMT::init()
         setState( new StateEx );
         getState()->setGraphicsContext(this);
 
-#if OSG_VERSION_GREATER_OR_EQUAL(3,1,10)
 		if (_traits.valid() && _traits->sharedContext.get())
-#else
-        if (_traits.valid() && _traits->sharedContext)
-#endif
         {
             getState()->setContextID( _traits->sharedContext->getState()->getContextID() );
             incrementContextIDUsageCount( getState()->getContextID() );
@@ -417,22 +384,6 @@ bool QtOSGGraphicsWindowMT::makeCurrentImplementation()
 
 void QtOSGGraphicsWindowMT::swapBuffersImplementation()
 {
-#if (QT_VERSION >= QT_VERSION_CHECK(5, 0, 0))
-/*    QGLWidget* pQt4GlWidget = dynamic_cast<QGLWidget*>(m_glCanvas);
-    if (pQt4GlWidget && pQt4GlWidget->doubleBuffer())
-    {
-#ifndef __APPLE__
-        pQt4GlWidget->swapBuffers();
-#endif
-    }*/
-#else
-    if (m_glCanvas && m_glCanvas->doubleBuffer())
-    {
-  #ifndef __APPLE__
-        m_glCanvas->swapBuffers();
-  #endif
-    }
-#endif
 }
 
 bool QtOSGGraphicsWindowMT::releaseContextImplementation()
@@ -495,28 +446,16 @@ void QtOSGViewer::setUpThreading()
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 // Qt-OSG GLWidget implementation
 
-QGLOSGWidget::QGLOSGWidget(QWidget *parent) :
-    BASEGLWidget(parent)
-    //BASEGLWidget(QGLFormat(true ? QGL::SampleBuffers : (QGL::FormatOptions)0), parent)
+QGLOSGWidget::QGLOSGWidget(QWidget *parent) : QGLOSGWidget(parent, osg::Vec4(0.0, 0.0, 0.0, 0.0))
 {
-    m_lastRenderingTime = 0;
-    m_bAntialiasing = false;
-    m_bInitialized = false;
-    osg::Vec4 color( 0,0,0,0 );
-    init(parent,color);
+
 }
 
-QGLOSGWidget::QGLOSGWidget(QWidget *parent, const osg::Vec4 &bgColor, bool bAntialiasing):
-#if (QT_VERSION >= QT_VERSION_CHECK(5, 0, 0))
-    //BASEGLWidget(QGLFormat(bAntialiasing ? QGL::SampleBuffers : (QGL::FormatOptions)0), parent)
-    BASEGLWidget(parent) // for QOpenGLWidget
-#else
-    BASEGLWidget(QGLFormat(bAntialiasing?QGL::SampleBuffers:(QGL::FormatOptions)0),parent)
-#endif
+QGLOSGWidget::QGLOSGWidget(QWidget *parent, const osg::Vec4& bgColor)
+    : QOpenGLWidget(parent)
+    , m_lastRenderingTime(0)
+    , m_bInitialized(false)
 {
-    m_lastRenderingTime = 0;
-    m_bAntialiasing = bAntialiasing;
-    m_bInitialized = false;
     init(parent,bgColor);
 }
 
@@ -524,7 +463,7 @@ void QGLOSGWidget::init(QWidget *parent, const osg::Vec4 &bgColor)
 {    
     QSize size(100,100);
     // creating graphics window object for scene OpenGL display
-    osg::ref_ptr<osg::GraphicsContext::Traits> traits = new osg::GraphicsContext::Traits(osg::DisplaySettings::instance().get());
+    osg::ref_ptr<osg::GraphicsContext::Traits> traits = new osg::GraphicsContext::Traits(osg::DisplaySettings::instance());
     traits->width = size.width();
     traits->height = size.height();
     traits->doubleBuffer = true;
@@ -536,6 +475,7 @@ void QGLOSGWidget::init(QWidget *parent, const osg::Vec4 &bgColor)
     // creating osgViewer::Viewer object for scene manipulation controling
     m_view = new QtOSGViewer;
     m_view->setRunFrameScheme(osgViewer::ViewerBase::ON_DEMAND);
+    //m_view->setReleaseContextAtEndOfFrameHint(false); // doesn't work with screenshots - causes driver crash
 
     // setting necessary viewer attributes
     m_view->getCamera()->setClearColor( osg::Vec4(0.2, 0.2, 0.6, 1.0) );
@@ -572,26 +512,38 @@ void QGLOSGWidget::init(QWidget *parent, const osg::Vec4 &bgColor)
 
     QSurfaceFormat format = QSurfaceFormat::defaultFormat();
 
-    if (m_bAntialiasing)
+    int samples = osg::DisplaySettings::instance()->getNumMultiSamples();
+    bool debugContext = osg::DisplaySettings::instance()->getGLContextFlags() & GL_CONTEXT_FLAG_DEBUG_BIT;
+
+    format.setSamples(samples);
+    format.setOption(QSurfaceFormat::DebugContext, debugContext);
+
+    setFormat(format);
+
+    if (samples > 0)
     {
         m_view->getCamera()->getOrCreateStateSet()->setMode(GL_MULTISAMPLE, osg::StateAttribute::ON);
     }
 
-#ifdef OPENGL_DEBUG
-    format.setOption(QSurfaceFormat::DebugContext);
-
+    if (debugContext)
+    {
 #ifdef _WIN32
-    osg::setNotifyHandler(new osg::WinDebugNotifyHandler());
+        osg::setNotifyHandler(new osg::WinDebugNotifyHandler());
 #endif
-
-    osg::setNotifyLevel(osg::WARN);
-#endif
-
-    setFormat(format);
+        osg::setNotifyLevel(osg::WARN);
+    }
 }
 
 QGLOSGWidget::~QGLOSGWidget()
 {
+    VPL_LOG_INFO("Destructing GL widget " << this->objectName().toStdString());
+    // disconnect this signal now because it would be called later on a half deleted object
+    if (nullptr!= context())
+        disconnect(context(), &QOpenGLContext::aboutToBeDestroyed, this, &QGLOSGWidget::contextCleanup);
+
+    // disabled as it has problems with context on mac, examine later
+    //if (m_graphic_window.get())
+    //    m_graphic_window->close();
 }
 
 void APIENTRY openglCallbackFunction(GLenum source,
@@ -602,111 +554,110 @@ void APIENTRY openglCallbackFunction(GLenum source,
     const GLchar* message,
     const void* userParam)
 {
-    static std::set<GLuint> errorDb;
+    std::stringstream sstream;
 
-    if (errorDb.find(id) != errorDb.end())
-    {
-        return;
-    }
-
-    errorDb.insert(id);
-
-    std::stringstream ss;
-
-    ss << "OpenGL DEBUG: ";
+    sstream << "OpenGL DEBUG: ";
 
     switch (type)
     {
     case GL_DEBUG_TYPE_ERROR:
-        ss << "ERROR";
+        sstream << "ERROR";
         break;
     case GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR:
-        ss << "DEPRECATED_BEHAVIOR";
+        sstream << "DEPRECATED_BEHAVIOR";
         break;
     case GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR:
-        ss << "UNDEFINED_BEHAVIOR";
+        sstream << "UNDEFINED_BEHAVIOR";
         break;
     case GL_DEBUG_TYPE_PORTABILITY:
-        ss << "PORTABILITY";
+        sstream << "PORTABILITY";
         break;
     case GL_DEBUG_TYPE_PERFORMANCE:
-        ss << "PERFORMANCE";
+        sstream << "PERFORMANCE";
         break;
     case GL_DEBUG_TYPE_MARKER:
-        ss << "MARKER";
+        sstream << "MARKER";
         break;
     case GL_DEBUG_TYPE_PUSH_GROUP:
-        ss << "PUSH_GROUP";
+        sstream << "PUSH_GROUP";
         break;
     case GL_DEBUG_TYPE_POP_GROUP:
-        ss << "POP_GROUP";
+        sstream << "POP_GROUP";
         break;
     case GL_DEBUG_TYPE_OTHER:
-        ss << "OTHER";
+        sstream << "OTHER";
         break;
     }
 
-    ss << " " << "id: " << id << " " << "severity ";
+    sstream << " " << "id: " << id << " " << "severity ";
 
     switch (severity)
     {
     case GL_DEBUG_SEVERITY_LOW:
-        ss << "LOW";
+        sstream << "LOW";
         break;
     case GL_DEBUG_SEVERITY_MEDIUM:
-        ss << "MEDIUM";
+        sstream << "MEDIUM";
         break;
     case GL_DEBUG_SEVERITY_HIGH:
-        ss << "HIGH";
+        sstream << "HIGH";
         break;
     case GL_DEBUG_SEVERITY_NOTIFICATION:
-        ss << "NOTIFICATION";
+        sstream << "NOTIFICATION";
         break;
     }
 
-    ss << ": " << message;
+    sstream << ": " << message;
 
-    auto outputStr = ss.str();
-    if (severity != GL_DEBUG_SEVERITY_NOTIFICATION)
-    {
-        VPL_LOG_ERROR(outputStr);
+    const auto outputStr = sstream.str();   
 
 #ifdef _WIN32
-        OutputDebugStringA((ss.str() + '\n').c_str());
+    OutputDebugStringA((sstream.str() + '\n').c_str());
 #endif
-    }
-    else
-    {
-        VPL_LOG_INFO(outputStr);
 
-#ifdef _WIN32
-        OutputDebugStringA((ss.str() + '\n').c_str());
-#endif
-    }
+    VPL_LOG_INFO(outputStr);
 }
 
 void QGLOSGWidget::initializeGL()
 {
-    m_bInitialized = true;
-
-    if (!gladLoadGL())
+    Q_ASSERT(!m_bInitialized); // reinitialization can occur when reparenting opengl window - see QOpenGLWidget documentation
+    if (!m_bInitialized)
     {
-        m_bInitialized = false;
-    }
+        VPL_LOG_INFO("Initializing GL window " << this->objectName().toStdString());
+        m_bInitialized = true;
 
-#ifdef OPENGL_DEBUG
-    if (glDebugMessageCallback)
+        if (!gladLoadGL())
+        {
+            m_bInitialized = false;
+        }
+
+        if (isDebugMessageCallbackAvailable() && isDebugContextEnabled())
+        {
+            glEnable(GL_DEBUG_OUTPUT);
+            glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
+#ifndef __APPLE__
+            glDebugMessageCallback(openglCallbackFunction, nullptr);
+
+            glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, nullptr, GL_TRUE);
+            glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DEBUG_SEVERITY_NOTIFICATION, 0, nullptr, GL_FALSE);
+#endif
+        }
+    }
+    else
     {
-        glEnable(GL_DEBUG_OUTPUT);
-        glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
-
-        glDebugMessageCallback(openglCallbackFunction, nullptr);
-
-        GLuint unusedIds = 0;
-        glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, &unusedIds, true);
+        VPL_LOG_INFO("initializeGL called for second time, application is about to crash soon " << this->objectName().toStdString());
     }
-#endif // OPENGL_DEBUG
+    // context() and QOpenGLContext::currentContext() are equivalent when called from initializeGL or paintGL
+    if (nullptr!= context())
+        connect(context(), &QOpenGLContext::aboutToBeDestroyed, this, &QGLOSGWidget::contextCleanup);
+}
 
+void QGLOSGWidget::contextCleanup()
+{
+    VPL_LOG_INFO("Context about to be destroyed " << this->objectName().toStdString());
+    makeCurrent();
+    // todo: perform cleanup
+    doneCurrent();
 }
 
 void QGLOSGWidget::resizeGL(int width, int height)
@@ -731,25 +682,36 @@ void QGLOSGWidget::frame()
         return;
     if (m_view.valid())
     {
+        if (property("DrawingFrame").toBool())
+        {
+            qDebug() << "Draw call within draw - skipping";
+            return;
+        }
+        setProperty("DrawingFrame", true);
         makeCurrent();
-#if (QT_VERSION >= QT_VERSION_CHECK(5, 0, 0))
+
         static_cast<StateEx *>(m_graphic_window->getState())->setDefaultFbo(defaultFramebufferObject());
-#endif
+
         glClear(m_view->getCamera()->getClearMask());
         m_view->frame();
         doneCurrent();
+        setProperty("DrawingFrame", false);
     }
 }
 
 void QGLOSGWidget::paintGL()
 {
-    if (m_view.valid()
-            /*&& m_view->checkNeedToDoFrame()*/ // this doesn't work properly with canvases in volume crop
-            )
+    if (m_view.valid())
     {
-#if (QT_VERSION >= QT_VERSION_CHECK(5, 0, 0))
+        if (property("DrawingFrame").toBool())
+        {
+            qDebug() << "Draw call within draw - skipping";
+            return;
+        }
+        setProperty("DrawingFrame", true);
+
         static_cast<StateEx *>(m_graphic_window->getState())->setDefaultFbo(defaultFramebufferObject());        
-#endif
+
         glClear(m_view->getCamera()->getClearMask());
         m_view->frame();
         // get statistics
@@ -763,29 +725,19 @@ void QGLOSGWidget::paintGL()
         else if (frame>2)
             pStats->getAttribute(frame-2,"GPU draw time taken",value);
         m_lastRenderingTime = value*1000;
+
+        setProperty("DrawingFrame", false);
     }
 }
 
 void QGLOSGWidget::glDraw()
 {
-#if (QT_VERSION >= QT_VERSION_CHECK(5, 0, 0))
-    /*QGLWidget* pQt4GlWidget = dynamic_cast<QGLWidget*>(this);
-    if (NULL != pQt4GlWidget)
-        QGLWidget::glDraw();*/
-#else
-    BASEGLWidget::glDraw();
-#endif
+
 }
 
 void QGLOSGWidget::glInit()
 {
-#if (QT_VERSION >= QT_VERSION_CHECK(5, 0, 0))
-    /*QGLWidget* pQt4GlWidget = dynamic_cast<QGLWidget*>(this);
-    if (NULL != pQt4GlWidget)
-        QGLWidget::glInit();*/
-#else
-    BASEGLWidget::glInit();
-#endif
+
 }
 
 void QGLOSGWidget::setScene(osg::Node * scene)
@@ -918,6 +870,10 @@ void QGLOSGWidget::wheelEvent ( QWheelEvent * event )
                                                                 : osgGA::GUIEventAdapter::SCROLL_DOWN;
     this->getEventQueue()->mouseScroll( motion );
     Refresh(false);*/
+    int d = event->delta();
+    if (0==d)
+        return;
+    
 	getEventQueue()->mouseScroll(
         event->orientation() == Qt::Vertical ?
             (event->delta()>0 ? osgGA::GUIEventAdapter::SCROLL_UP : osgGA::GUIEventAdapter::SCROLL_DOWN) :
@@ -935,7 +891,7 @@ osgGA::EventQueue* QGLOSGWidget::getEventQueue() const
 
 void QGLOSGWidget::paintEvent( QPaintEvent* event )
 {
-    BASEGLWidget::paintEvent(event);
+    QOpenGLWidget::paintEvent(event);
 }
 
 void QGLOSGWidget::onHome()
@@ -1031,23 +987,34 @@ void QGLOSGWidget::mouseMoveEvent ( QMouseEvent * event )
 
 void QGLOSGWidget::enterEvent ( QEvent * event )
 {
-    BASEGLWidget::enterEvent(event);
+    QOpenGLWidget::enterEvent(event);
     if (!hasFocus())
         setFocus(Qt::MouseFocusReason);
     // call refresh so the osg items can receive the information too
-    Refresh(false);
+        Refresh(false);
 }
 
 void QGLOSGWidget::leaveEvent ( QEvent * event )
 {
-    BASEGLWidget::leaveEvent(event);
+    QOpenGLWidget::leaveEvent(event);
     // call refresh so the osg items can receive the information too
-    Refresh(false);
+        Refresh(false);
 }
 
 bool QGLOSGWidget::event(QEvent *event)
 {
-    bool handled = BASEGLWidget::event(event);
+    // VPL_LOG_INFO("context " << context() << " event " << event->type() << " initialized " << m_bInitialized << " " << this->objectName().toStdString());
+    if (QEvent::Paint == event->type() && property("BlockPaint").toBool())
+    {
+        VPL_LOG_INFO("Blocking paint " << objectName().toStdString());
+        return false;
+    }
+    if (QEvent::Paint == event->type() && property("SilentBlockPaint").toBool())
+    {
+        return false;
+    }
+
+    bool handled = QOpenGLWidget::event(event);
 
     // This ensures that the OSG widget is always going to be repainted after the
     // user performed some interaction. Doing this in the event handler ensures
@@ -1082,9 +1049,7 @@ void QGLOSGWidget::enableMultiThreaded()
         m_view->getCamera()->setGraphicsContext(m_graphic_window.get());
     }
     m_view->setThreadingModel(osgViewer::Viewer::CullDrawThreadPerContext);
-#if OSG_VERSION_LESS_THAN(3,5,0)
-    m_view->setThreadSafeReferenceCounting(true); // sets the default but doesn't enable it for the object (static function)
-#endif
+
     m_view->setThreadSafeRefUnref(true); // enables thread safety for the object
     m_view->setEndBarrierPosition(osgViewer::ViewerBase::AfterSwapBuffers);
 }

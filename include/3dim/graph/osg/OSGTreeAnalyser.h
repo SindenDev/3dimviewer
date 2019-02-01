@@ -15,6 +15,7 @@
 #include <memory>
 #include <iomanip>
 #include <sstream>
+#include <unordered_set>
 
 namespace osg {
     class Billboard;
@@ -78,6 +79,7 @@ namespace osg {
 
         //stringyfied properties of object..
         std::vector<std::string> properties;
+
     };
 
     /*
@@ -166,7 +168,8 @@ namespace osg {
 
         std::vector<osg::nodeWrapper> nodes;
 
-        std::stack<int> parent_stack;
+        //holds parent id and address in string form of node which is used to check for cycles..
+        std::stack<std::pair<int, std::string>> parent_stack;
         std::stack<std::string> tag_stack;
 
         //base value is 2 because the first two elements are not taken into consideration during traversal..

@@ -3,9 +3,16 @@
 - 3DimViewer
 - A lightweight 3D DICOM viewer.
 -
-- Copyright (c) 2008-2015 by 3Dim Laboratory s.r.o.
+- Copyright (c) 2008-2019 by TESCAN 3DIM s.r.o.
 -
 ================================================================================
+3DimViewer Version 4.1 (2019/02/01): 
+  - Arbitrary slice for data visualization at custom angle
+  - Modern look (new icons)
+  - Customizable layouts - content of views can be set manually
+  - Floating windows - views can be opened in new window
+  - Bugfixes
+
 3DimViewer Version 3.0 (2016/06/16): 
   - Modified models list, added models info
   - Easier model creation in Quick Tissue Segmentation Panel

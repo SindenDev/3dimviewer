@@ -196,7 +196,7 @@ osgManipulator::Dragger * scene::CDraggerEventHandler::getDragger( osg::Node::No
      //           continue;
 
 		    // try to downcast node to dragger. if possible, dragger found
-          osg::NodePath::const_iterator node;
+            osg::NodePath::const_iterator node;
 		    osg::NodePath::const_iterator first_node = hit->nodePath.begin(); // m_Pointer._hitList.front().first.begin();
 		    osg::NodePath::const_iterator last_node  = hit->nodePath.end(); //m_Pointer._hitList.front().first.end();	
 		    //intersection list = nodepath, intersection list

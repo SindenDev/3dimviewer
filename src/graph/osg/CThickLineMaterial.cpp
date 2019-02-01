@@ -23,6 +23,7 @@
 #include <osg/CThickLineMaterial.h>
 #include <osg/SimpleShader.h>
 #include <osg/Camera>
+#include <osg/Version>
 
 
 const char geomShaderLineStripAdjacencySrc[] =
@@ -357,17 +358,24 @@ void main(void)\n\
     drawSegment(points, colors, zValues);\n\
 }";
 
-class ViewportCallback : public osg::Uniform::Callback
+class ViewportCallback : public osg::UniformCallback
 {
 public:
     ViewportCallback(osg::Camera* camera) : m_camera(camera)
     {
     }
 
-    virtual void operator()(osg::Uniform* uniform, osg::NodeVisitor* /*nv*/)
+#if OSG_MIN_VERSION_REQUIRED(3, 7, 0)
+    virtual void operator()(osg::UniformBase* uniform, osg::NodeVisitor* /*nv*/) override
+    {
+        static_cast<osg::Uniform*>(uniform)->set(osg::Vec2f(m_camera->getViewport()->width(), m_camera->getViewport()->height()));
+    }
+#else
+    virtual void operator()(osg::Uniform* uniform, osg::NodeVisitor* /*nv*/) override
     {
         uniform->set(osg::Vec2f(m_camera->getViewport()->width(), m_camera->getViewport()->height()));
     }
+#endif
 
 private:
     osg::Camera* m_camera;

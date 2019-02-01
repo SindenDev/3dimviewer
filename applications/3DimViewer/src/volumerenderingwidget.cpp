@@ -49,6 +49,7 @@ CVolumeRenderingWidget::CVolumeRenderingWidget(QWidget *parent) :
 
     VPL_SIGNAL(SigVRDataRemapChange).connect(this, &CVolumeRenderingWidget::vrDataRemapChange);
 	VPL_SIGNAL(SigManSeg3DChanged).connect(this, &CVolumeRenderingWidget::setCustomVR);
+    VPL_SIGNAL(SigUpdateVR).connect(this, &CVolumeRenderingWidget::setVRMode);
 
     // load settings
     QSettings settings;
@@ -260,6 +261,8 @@ void CVolumeRenderingWidget::on_radioButtonCustom_toggled(bool checked)
         ui->sliderSurfSharpness->setEnabled(false);
         ui->sliderSurfTolerance->setEnabled(false);
         ui->sliderCuttingPlane->setEnabled(false);
+
+        VPL_SIGNAL(SigVRChanged).invoke();
     }
 }
 void CVolumeRenderingWidget::on_radioButtonSurface_toggled(bool checked)

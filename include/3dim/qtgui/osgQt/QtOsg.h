@@ -38,14 +38,7 @@
 
 #include <qglobal.h>
 #include <QInputEvent>
-
-#if (QT_VERSION >= QT_VERSION_CHECK(5, 0, 0))
-    #include <QOpenGLWidget>    
-    #define BASEGLWidget     QOpenGLWidget          
-#else
-    #include <QGLWidget>
-    #define BASEGLWidget      QGLWidget      
-#endif
+#include <QOpenGLWidget>    
 
 
 // camera post draw callback to correctly restore fbo (osg restores to zero)
@@ -63,17 +56,17 @@ class QtOSGGraphicsWindow
         , public vpl::base::CLockableObject<QtOSGGraphicsWindow>
 {
 protected:
-    BASEGLWidget *m_glCanvas;
+    QOpenGLWidget *m_glCanvas;
     bool          m_bContextX; // when context was made current by this class
 public:
     //! Constructor
-    QtOSGGraphicsWindow(GraphicsContext::Traits* traits, BASEGLWidget *widget);
+    QtOSGGraphicsWindow(GraphicsContext::Traits* traits, QOpenGLWidget *widget);
     //! Destructor
     ~QtOSGGraphicsWindow();
     //! Initialization method
     void init();
     //! Canvas access method
-    BASEGLWidget *getCanvas() const { return m_glCanvas; }
+    QOpenGLWidget *getCanvas() const { return m_glCanvas; }
 
     // for single threaded rendering in qt these are just dummy implementations assuming that context is *always* current and valid
     virtual bool valid() const;
@@ -94,16 +87,16 @@ class QtOSGGraphicsWindowMT
     , public vpl::base::CLockableObject<QtOSGGraphicsWindowMT>
 {
 protected:
-    BASEGLWidget *m_glCanvas;
+    QOpenGLWidget *m_glCanvas;
 public:
     //! Constructor
-    QtOSGGraphicsWindowMT(osg::GraphicsContext::Traits* traits, BASEGLWidget *widget);
+    QtOSGGraphicsWindowMT(osg::GraphicsContext::Traits* traits, QOpenGLWidget *widget);
     //! Destructor
     ~QtOSGGraphicsWindowMT();
     //! initialization method
     void init();
     //! Canvas access method
-    BASEGLWidget *getCanvas() const { return m_glCanvas; }
+    QOpenGLWidget *getCanvas() const { return m_glCanvas; }
     //! Overrides
     virtual bool valid() const;
     virtual bool makeCurrentImplementation();
@@ -126,7 +119,7 @@ public:
 
 //! Qt-OSG adaptation layer
 class QGLOSGWidget
-    : public BASEGLWidget
+    : public QOpenGLWidget
     , public vpl::base::CLockableObject<QGLOSGWidget>
 {
     Q_OBJECT
@@ -134,8 +127,8 @@ public:
     // Mutual access.
     typedef vpl::base::CLockableObject<QGLOSGWidget>::CLock tLock;
     // Default constructor
-    explicit QGLOSGWidget(QWidget *parent = NULL);
-    explicit QGLOSGWidget(QWidget *parent, const osg::Vec4& bgColor, bool bAntialiasing);
+    explicit QGLOSGWidget(QWidget* parent = nullptr);
+    explicit QGLOSGWidget(QWidget* parent, const osg::Vec4& bgColor);
     // Destructor.
     virtual ~QGLOSGWidget();
 protected:
@@ -145,8 +138,6 @@ protected:
     osg::ref_ptr<osgViewer::GraphicsWindow>                 m_graphic_window;
     //! Last rendering time in msecs
     int                 m_lastRenderingTime;
-    //! Use antialiasing
-    bool                m_bAntialiasing;
     //! Initialized flag
     bool                m_bInitialized;
     //! Background color backup
@@ -234,6 +225,9 @@ public:
     virtual void        enterEvent ( QEvent * event ) ;
     virtual void        leaveEvent ( QEvent * event ) ;
 	virtual bool		event(QEvent *event);
+protected slots:
+    //! called when QOpenGLContext is about to be destroyed
+    void contextCleanup();
 };
 
 

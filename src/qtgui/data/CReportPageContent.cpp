@@ -182,16 +182,16 @@ void CReportPageContent::setContent(SReportPageContentSettings settings)
     m_aspectRatioMode = settings.aspectRatioMode;
 }
 
-void CReportPageContent::print(QPainter * painter)
+void CReportPageContent::print(QPainter& painter)
 {
-    painter->save();
-    painter->setFont(m_font);
+    painter.save();
+    painter.setFont(m_font);
 
-    QPen tmpPen = painter->pen();
+    QPen tmpPen = painter.pen();
     tmpPen.setColor(m_color);
-    painter->setPen(tmpPen);
+    painter.setPen(tmpPen);
 
-    /*painter->drawRect(m_rect);*/
+    /*painter.drawRect(m_rect);*/
     switch (m_contentType)
     {
     case ECT_UNUSED:
@@ -211,7 +211,7 @@ void CReportPageContent::print(QPainter * painter)
         break;
     }
 
-    painter->restore();
+    painter.restore();
 
 }
 
@@ -277,10 +277,10 @@ QFont CReportPageContent::getFont()
     return m_font;
 }
 
-void CReportPageContent::printHTMLText(QPainter *painter)
+void CReportPageContent::printHTMLText(QPainter& painter)
 {
 
-    QFont painterFont(painter->font());
+    QFont painterFont(painter.font());
     QTextDocument td;
     td.setDefaultFont(painterFont);
     td.setPageSize(m_contentRect.size());
@@ -288,7 +288,7 @@ void CReportPageContent::printHTMLText(QPainter *painter)
     td.setHtml(m_HTML);
 
     //translate to desired location
-    painter->translate(m_contentRect.topLeft());
+    painter.translate(m_contentRect.topLeft());
 
     //content does not fit in desired rectangle -> need to scale down
     while (m_scalingEnabled && (td.documentLayout()->documentSize().height() > m_contentRect.height() || td.documentLayout()->documentSize().width() > m_contentRect.width()))
@@ -311,14 +311,14 @@ void CReportPageContent::printHTMLText(QPainter *painter)
     context.palette.setColor(QPalette::Text, m_color);
 
     //no need for scaling -> print directly
-    td.documentLayout()->draw(painter, context);
-    painter->resetTransform();
+    td.documentLayout()->draw(&painter, context);
+    painter.resetTransform();
 }
 
-void CReportPageContent::printPlainText(QPainter * painter)
+void CReportPageContent::printPlainText(QPainter& painter)
 {
 
-    QFont painterFont(painter->font());
+    QFont painterFont(painter.font());
     QTextDocument td;
     td.setDefaultFont(painterFont);
     td.setPageSize(m_contentRect.size());
@@ -342,32 +342,15 @@ void CReportPageContent::printPlainText(QPainter * painter)
     }
 
     //set scaled font
-    painter->setFont(painterFont);
+    painter.setFont(painterFont);
     //draw text
-    painter->drawText(m_contentRect, m_text, m_textOptions);
+    painter.drawText(m_contentRect, m_text, m_textOptions);
 
-    /*QPen p = painter->pen();
-
-    p.setColor(Qt::red);
-    painter->setPen(p);
-    painter->drawRect(m_overallRect);
-
-    p.setColor(Qt::blue);
-    painter->setPen(p);
-    painter->drawRect(m_contentRect);
-
-    p.setColor(Qt::green);
-    painter->setPen(p);
-    painter->drawRect(m_imageRect);
-
-    p.setColor(Qt::black);
-    painter->setPen(p);
-    painter->drawRect(m_captionRect);*/
 }
 
-void CReportPageContent::printImage(QPainter * painter)
+void CReportPageContent::printImage(QPainter& painter)
 {
-    painter->resetTransform();
+    painter.resetTransform();
 
     //scale image based on aspect ratio mode
     QImage scaledImage = m_img.scaled(m_imageRect.size(), m_aspectRatioMode);
@@ -380,33 +363,14 @@ void CReportPageContent::printImage(QPainter * painter)
     int scale = (int)(qMin(scaleX, scaleY) * 100);
 
     //draw image
-    painter->drawImage(scaledImageRect, scaledImage);
-
-
-    //QPen p = painter->pen();
-    //
-    //p.setColor(Qt::red);
-    //painter->setPen(p);
-    //painter->drawRect(m_overallRect);
-    //
-    //p.setColor(Qt::blue);
-    //painter->setPen(p);
-    //painter->drawRect(m_contentRect);
-    //
-    //p.setColor(Qt::green);
-    //painter->setPen(p);
-    //painter->drawRect(m_imageRect);
-
-    //p.setColor(Qt::black);
-    //painter->setPen(p);
-    //painter->drawRect(m_captionRect);
+    painter.drawImage(scaledImageRect, scaledImage);
 
     //caption
     if (!m_caption.isEmpty())
     {
         QString caption = m_caption;
         caption.replace(QString("%scaleFactor"), QString::number(scale) + QString("%"));
-        painter->drawText(m_captionRect, caption, m_textOptions);
+        painter.drawText(m_captionRect, caption, m_textOptions);
     }
 
 }

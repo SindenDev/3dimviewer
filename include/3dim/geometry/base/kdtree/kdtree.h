@@ -68,8 +68,8 @@ namespace geometry
         bool hasData() const { return m_indexing != 0 && m_indexing->size() > 0; }
 
     protected:
-        //! Model pointer
-        CMesh* m_mesh;
+        //! Model pointer - holds private copy used by indexing only
+        vpl::base::CScopedPtr<geometry::CMesh> m_mesh;
 
         //! Mesh vertices 
         CMeshIndexingPtr m_indexing;

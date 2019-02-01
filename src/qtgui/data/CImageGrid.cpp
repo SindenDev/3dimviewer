@@ -46,8 +46,6 @@ CImageGrid::CImageGrid(int rows, int cols, QRect rect, SReportPageSettings pageS
     m_marginRight = pageSettings.contentMarginRight;
     m_overallRect = rect;
     m_freeSpace = m_overallRect.size();
-
-    m_rows.resize(0);
 }
 
 
@@ -107,17 +105,17 @@ bool CImageGrid::addImage(QImage img, double maxScale, double minScale, SContent
         m_rows.resize(1);
     
     //can fit in current row
-    QVector<SImageInfo> *row = &m_rows.last();
-        
+    auto& row = m_rows.last();
+
     QSize rowSizeMin; 
     rowSizeMin.setHeight(0);
     rowSizeMin.setWidth(0);
     
-    for (int i = 0; i < row->size(); ++i)
+    for (int i = 0; i < row.size(); ++i)
     {
-        rowSizeMin.setWidth(rowSizeMin.width() + row->at(i).overallSizeMin.width());
-        if (row->at(i).overallSizeMin.height() > rowSizeMin.height())
-            rowSizeMin.setHeight(row->at(i).overallSizeMin.height());
+        rowSizeMin.setWidth(rowSizeMin.width() + row.at(i).overallSizeMin.width());
+        if (row.at(i).overallSizeMin.height() > rowSizeMin.height())
+            rowSizeMin.setHeight(row.at(i).overallSizeMin.height());
     }
     
     QSize newSize = rowSizeMin;
@@ -152,11 +150,11 @@ bool CImageGrid::addImage(QImage img, double maxScale, double minScale, SContent
         imageInfo.minScale = minScale;
         imageInfo.overallSize = overallSize;
 
-        row->push_back(imageInfo);    
+        row.push_back(imageInfo);    
     }
 
     //add new row if needed
-    if (row->size() >= m_colsCount && m_colsCount != -1)
+    if (row.size() >= m_colsCount && m_colsCount != -1)
     {
         m_freeSpace.setHeight(m_freeSpace.height() - rowSizeMin.height());
         m_rows.push_back(QVector<SImageInfo>());
@@ -169,16 +167,16 @@ void CImageGrid::newRow()
 {
     if (!m_rows.empty())
     {
-        QVector<SImageInfo> *row = &m_rows.last();
+        auto& row = m_rows.last();
         QSize rowSizeMin;
         rowSizeMin.setHeight(0);
         rowSizeMin.setWidth(0);
 
-        for (int i = 0; i < row->size(); ++i)
+        for (int i = 0; i < row.size(); ++i)
         {
-            rowSizeMin.setWidth(rowSizeMin.width() + row->at(i).overallSizeMin.width());
-            if (row->at(i).overallSizeMin.height() > rowSizeMin.height())
-                rowSizeMin.setHeight(row->at(i).overallSizeMin.height());
+            rowSizeMin.setWidth(rowSizeMin.width() + row.at(i).overallSizeMin.width());
+            if (row.at(i).overallSizeMin.height() > rowSizeMin.height())
+                rowSizeMin.setHeight(row.at(i).overallSizeMin.height());
         }
 
         m_freeSpace.setHeight(m_freeSpace.height() - rowSizeMin.height());
@@ -188,17 +186,15 @@ void CImageGrid::newRow()
 }
 
 
-void CImageGrid::print(QPainter * painter)
+void CImageGrid::print(QPainter& painter)
 {
     prepare();
     //painter->drawRect(m_overallRect);
     for (int i = 0; i < m_rows.size(); ++i)
     {
-        QVector<SImageInfo> row = m_rows.at(i);
-
-        for (int j = 0; j < row.size(); ++j)
+        for (int j = 0; j < m_rows[i].size(); ++j)
         {
-            row.operator[](j).content.print(painter);
+            m_rows[i][j].content.print(painter);
         }
     }
 }
@@ -209,18 +205,16 @@ void CImageGrid::prepare()
     int availableHeight = m_overallRect.height();
     int contentHeight = 0;
     for (int i = 0; i < m_rows.size(); ++i)
-    {
-        QVector<SImageInfo> *row = &m_rows[i];
-    
+    {    
         int biggestRowHeight = 0;
         int biggestRowImageHeight = 0;
     
-        for (int j = 0; j < row->size(); ++j)
+        for (int j = 0; j < m_rows[i].size(); ++j)
         {
-            if (row->at(j).overallSize.height() > biggestRowHeight)
+            if (m_rows[i][j].overallSize.height() > biggestRowHeight)
             {
-                biggestRowHeight = row->at(j).overallSize.height();
-                biggestRowImageHeight = row->at(j).img.size().height();
+                biggestRowHeight = m_rows[i][j].overallSize.height();
+                biggestRowImageHeight = m_rows[i][j].img.size().height();
     
             }
         }
@@ -236,15 +230,13 @@ void CImageGrid::prepare()
     int nextTop = m_overallRect.top();
     for (int i = 0; i < m_rows.size(); ++i)
     {
-        QVector<SImageInfo> *row = &m_rows[i];
-    
         int rowOverallWidth = 0;
         int rowImageWidth = 0;
     
-        for (int j = 0; j < row->size(); ++j)
+        for (int j = 0; j < m_rows[i].size(); ++j)
         {
-            rowOverallWidth += row->at(j).overallSize.width();
-            rowImageWidth += row->at(j).img.size().width();
+            rowOverallWidth += m_rows[i][j].overallSize.width();
+            rowImageWidth += m_rows[i][j].img.size().width();
         }
     
         int fixedRowWidth = rowOverallWidth - rowImageWidth;
@@ -258,19 +250,19 @@ void CImageGrid::prepare()
         //create content
         int nextLeft = m_overallRect.left();
         int biggestHeight = 0;
-        for (int j = 0; j < row->size(); ++j)
+        for (int j = 0; j < m_rows[i].size(); ++j)
         {
             double scaleFactor;
 
-            if (commonScaleFactor > row->at(j).maxScale)
-                scaleFactor = row->at(j).maxScale;
-            else if (commonScaleFactor < row->at(j).minScale)
-                scaleFactor = row->at(j).minScale;
+            if (commonScaleFactor > m_rows[i][j].maxScale)
+                scaleFactor = m_rows[i][j].maxScale;
+            else if (commonScaleFactor < m_rows[i][j].minScale)
+                scaleFactor = m_rows[i][j].minScale;
             else
                 scaleFactor = commonScaleFactor;
 
-            SContentSettings settings = row->at(j).settings;
-            QSize imageSize = row->at(j).img.size();
+            SContentSettings settings = m_rows[i][j].settings;
+            QSize imageSize = m_rows[i][j].img.size();
             imageSize.scale(imageSize * scaleFactor, settings.aspectRatioMode);
 
             QSize contentSize = imageSize;
@@ -373,7 +365,7 @@ void CImageGrid::prepare()
             contentSettings.marginRight = m_marginRight;
 
             contentSettings.contentType = ECT_IMG;
-            contentSettings.img = row->at(j).img;
+            contentSettings.img = m_rows[i][j].img;
             contentSettings.imageScale = settings.scaleFactor;
             contentSettings.centered = settings.centered;
             contentSettings.stretchImage = settings.stretch;
@@ -388,7 +380,7 @@ void CImageGrid::prepare()
             contentSettings.captionInsideImage = settings.captionInsideImage;
             contentSettings.captionPos = settings.captionPos;
 
-            row->operator[](j).content = CReportPageContent(contentSettings);
+            m_rows[i][j].content = CReportPageContent(contentSettings);
 
             nextLeft += overallSize.width();
             
@@ -406,25 +398,24 @@ void CImageGrid::prepare()
 
     for (int i = 0; i < m_rows.size(); ++i)
     {
-        QVector<SImageInfo> *row = &m_rows[i];
         int biggestHeight = 0;
         int rowWidth = 0;
 
-        for (int j = 0; j < row->size(); ++j)
+        for (int j = 0; j < m_rows[i].size(); ++j)
         {
-            //heightRemaining += row->at(j).content.m_overallRect.height();
-            int contentHeight = row->at(j).content.m_overallRect.height();;
+            //heightRemaining += row.at(j).content.m_overallRect.height();
+            int contentHeight = m_rows[i][j].content.m_overallRect.height();;
 
             if (contentHeight > biggestHeight)
                 biggestHeight = contentHeight;
 
-            rowWidth += row->at(j).content.m_overallRect.width();
+            rowWidth += m_rows[i][j].content.m_overallRect.width();
 
         }
 
         int rowWidthRemaining = qMax(m_overallRect.width() - rowWidth, 0);        
         //why +1? so that the offset remains after last content and it looks centered
-        widthOffsets[i] = rowWidthRemaining / (row->size() + 1);
+        widthOffsets[i] = rowWidthRemaining / (m_rows[i].size() + 1);
 
         overallHeight += biggestHeight;
     }
@@ -441,14 +432,12 @@ void CImageGrid::prepare()
 
     for (int i = 0; i < m_rows.size(); ++i)
     {
-        QVector<SImageInfo> *row = &m_rows[i];
-
-        for (int j = 0; j < row->size(); ++j)
+        for (int j = 0; j < m_rows[i].size(); ++j)
         {
             //why (i+1)*heightOffset ? because 1.row (i = 0) is moved by heightOffset, so the 2.row needs to move 
             //as much as the 1.row and the again heightOffset, so that between this rows there is heightOffset space => (i+1)*heightOffset 
-            row->operator[](j).content.moveTop((i+1)*heightOffset);
-            row->operator[](j).content.moveLeft((j + 1)*widthOffsets.at(i));
+            m_rows[i][j].content.moveTop((i+1)*heightOffset);
+            m_rows[i][j].content.moveLeft((j + 1)*widthOffsets.at(i));
 
         }
     }

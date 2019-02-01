@@ -28,6 +28,8 @@ if( MSVC )
   #  # C4006 - aldready defined in xxx.obj Second definition ignored
   #  #set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /wd4006" )
     
+    option(WARNINGS-SUPPRESS_C4456_declaration_hides_previous_local_declaration "declaration hides previous local declaration" OFF)
+    
     option(WARNINGS-SUPPRESS_C4127_conditional_expression_is_constant "conditional expression is constant" ON)
     option(WARNINGS-SUPPRESS_C4505_unreferenced_local_function_has_been_removed "unreferenced local function has been removed (impossible to deactive selectively)" ON)
     option(WARNINGS-SUPPRESS_C4714_function_marked_as___forceinline_not_inlined "marked as __forceinline not inlined (I failed to deactivate it selectively)
@@ -56,6 +58,7 @@ if( MSVC )
 # 4701    potentially uninitialized local variable used
 # 4715    not all control paths return a value
 # 4716    function must return a value
+# 4239    nonstandard extension used
   #target_compile_options(${TRIDIM_CURRENT_TARGET} PRIVATE /wd4005 /wd4099 /wd4481 /wd4189 /wd4996 /we4552 /we4701 /we4715 /we4716 ) 
 
     option(WARNINGS-SUPPRESS_C4005_macro_redefinition "'identifier': macro redefinition" ON)
@@ -69,6 +72,9 @@ if( MSVC )
     option(WARNINGS-AS-ERRORS_C4701_potentially_uninitialized_local_variable_used "potentially uninitialized local variable used" ON)
     option(WARNINGS-AS-ERRORS_C4715_not_all_control_paths_return_a_value "not all control paths return a value" ON)
     option(WARNINGS-AS-ERRORS_C4716_function_must_return_a_value "function must return a value" ON)
+    option(WARNINGS-AS-ERRORS_C4239_nonstandard_extension_used "nonstandard extension used" ON)
+    option(WARNINGS-AS-ERRORS_C4172_returning_address_of_local_variable_or_temporary "returning address of local variable or temporary" ON)
+    option(WARNINGS-AS-ERRORS_C4390_empty_controlled_statement_found "empty controlled statement found" ON)
 
     
      set(ALL_SUPRESS_WARNINGS
@@ -86,6 +92,7 @@ if( MSVC )
         WARNINGS-SUPPRESS_C4481_nonstandard_extension_used_overrides_specifier
         WARNINGS-SUPPRESS_C4189_local_variable_is_initialized_but_not_referenced
         WARNINGS-SUPPRESS_C4996_This_function_or_variable_may_be_unsafe
+        WARNINGS-SUPPRESS_C4456_declaration_hides_previous_local_declaration
     )
     
     set(ALL_ESCALATE_WARNINGS
@@ -93,6 +100,9 @@ if( MSVC )
         WARNINGS-AS-ERRORS_C4701_potentially_uninitialized_local_variable_used
         WARNINGS-AS-ERRORS_C4715_not_all_control_paths_return_a_value
         WARNINGS-AS-ERRORS_C4716_function_must_return_a_value
+        WARNINGS-AS-ERRORS_C4239_nonstandard_extension_used
+        WARNINGS-AS-ERRORS_C4172_returning_address_of_local_variable_or_temporary
+        WARNINGS-AS-ERRORS_C4390_empty_controlled_statement_found
     )
     
     #Apply the selected modifications

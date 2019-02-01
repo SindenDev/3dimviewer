@@ -315,7 +315,7 @@ private slots:
     void on_deleteLinePushButton_toggled();
 
 private:
-    std::auto_ptr<Ui::CNotesPluginPanel> ui;
+    std::unique_ptr<Ui::CNotesPluginPanel> ui;
 
 	//! Timer to automatically save the typed text after change
     QTimer m_keystrokeSaveTimer;

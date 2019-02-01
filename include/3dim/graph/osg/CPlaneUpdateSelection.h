@@ -27,7 +27,7 @@
 #include <osgManipulator/Command>
 
 #include <VPL/Module/Signal.h>
-//#include <coremedi/app/Signals.h>
+#include <coremedi/app/Signals.h>
 #include <iostream>
 
 #include "CPlaneConstraint.h"
@@ -119,7 +119,7 @@ public:
     void manualTranslation( const osg::Matrix & m );
 
     //! When motion is over, store relative last position.
-    void fixLastPosition( float fPosition );
+    virtual void fixLastPosition( float fPosition) = 0;
 
     //! Returns matrix that will move slice to specified position.
     virtual const osg::Matrix& getTranslationToPosition( int iPosition ) = 0;
@@ -146,10 +146,13 @@ public:
     CPlaneXYUpdateSelection();
 
     //! Returns matrix that will move slice to specified position.
-    virtual const osg::Matrix& getTranslationToPosition( int iPosition );
+    virtual const osg::Matrix& getTranslationToPosition( int iPosition ) override;
 
     //! Moves slice to a new position specified by translation matrix.
-    virtual int translateByMatrix( const osg::Matrix & m, bool bModifyMatrix = false );
+    virtual int translateByMatrix( const osg::Matrix & m, bool bModifyMatrix = false ) override;
+
+    //! When motion is over, store relative last position.
+    virtual void fixLastPosition(float fPosition) override;
 };
 
 
@@ -163,10 +166,13 @@ public:
     CPlaneXZUpdateSelection();
 
     //! Returns matrix that will move slice to specified position.
-    virtual const osg::Matrix& getTranslationToPosition( int iPosition );
+    virtual const osg::Matrix& getTranslationToPosition( int iPosition ) override;
 
     //! Moves slice to a new position specified by translation matrix.
-    virtual int translateByMatrix( const osg::Matrix & m, bool bModifyMatrix = false );
+    virtual int translateByMatrix( const osg::Matrix & m, bool bModifyMatrix = false ) override;
+
+    //! When motion is over, store relative last position.
+    virtual void fixLastPosition(float fPosition) override;
 };
 
 
@@ -180,10 +186,39 @@ public:
     CPlaneYZUpdateSelection();
 
     //! Returns matrix that will move slice to specified position.
-    virtual const osg::Matrix& getTranslationToPosition( int iPosition );
+    virtual const osg::Matrix& getTranslationToPosition( int iPosition ) override;
 
     //! Moves slice to a new position specified by translation matrix.
-    virtual int translateByMatrix( const osg::Matrix & m, bool bModifyMatrix = false );
+    virtual int translateByMatrix( const osg::Matrix & m, bool bModifyMatrix = false ) override;
+
+    //! When motion is over, store relative last position.
+    virtual void fixLastPosition(float fPosition) override;
+};
+
+
+///////////////////////////////////////////////////////////////////////////////
+//! OSG selection designed for orthogonal slices stored in the data storage.
+
+class CPlaneARBUpdateSelection : public CPlaneUpdateSelection
+{
+public:
+    //! Constructor
+    CPlaneARBUpdateSelection();
+
+    //! Returns matrix that will move slice to specified position.
+    virtual const osg::Matrix& getTranslationToPosition(int iPosition) override;
+
+    //! Moves slice to a new position specified by translation matrix.
+    virtual int translateByMatrix(const osg::Matrix & m, bool bModifyMatrix = false) override;
+
+    //! When motion is over, store relative last position.
+    virtual void fixLastPosition(float fPosition) override;
+
+    void setPlaneNormal(const osg::Vec3& normal);
+
+protected:
+
+    osg::Vec3 m_planeNormal;
 };
 
 

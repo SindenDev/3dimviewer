@@ -24,9 +24,9 @@
 // include files
 
 #include <data/CRegionDataCalculator.h>
-#include <data/CRegionData.h>
+#include <data/CMultiClassRegionData.h>
 #include <data/CDensityData.h>
-#include <data/CRegionColoring.h>
+#include <data/CMultiClassRegionColoring.h>
 
 #ifdef _OPENMP
 #    include <omp.h>
@@ -62,8 +62,8 @@ bool CRegionDataCalculator::checkDependency(CStorageEntry *pParent)
 
 void CRegionDataCalculator::update(const CChangedEntries& Changes)
 {
-	CObjectPtr< CRegionColoring > spColoring(APP_STORAGE.getEntry(Storage::RegionColoring::Id));
-	CObjectPtr< CRegionData > rVolume(APP_STORAGE.getEntry(Storage::RegionData::Id));
+	CObjectPtr< CMultiClassRegionColoring > spColoring(APP_STORAGE.getEntry(Storage::MultiClassRegionColoring::Id));
+	CObjectPtr< CMultiClassRegionData > rVolume(APP_STORAGE.getEntry(Storage::MultiClassRegionData::Id));
 	CObjectPtr< CDensityData> spVolume(APP_STORAGE.getEntry(Storage::PatientData::Id));
 
 	const vpl::tSize xSize = rVolume->getXSize();
@@ -117,7 +117,7 @@ void CRegionDataCalculator::update(const CChangedEntries& Changes)
 
 	std::vector<double> sumSqrt(maxId + 1, 0);
 
-	vpl::img::tPixel16 val;
+	data::CMultiClassRegionData::tVoxel val;
 
 	for (int z = 0; z < zSize; ++z)
 	{
@@ -130,55 +130,67 @@ void CRegionDataCalculator::update(const CChangedEntries& Changes)
 			{
 				val = rVolume->at(index);
 
-				if (val > 0 && val < maxId + 1)
-				{
-					++(m_voxelsCnt[val]);
+                if (val > 0)
+                {
+                    vpl::img::tDensityPixel density = spVolume->at(indexDV);
+                    double sgrtDensity = density * density;
 
-					vpl::img::tDensityPixel density = spVolume->at(indexDV);
+                    int pos = 0;
 
-					sumSqrt[val] += density * density;
+                    while (pos <= maxId)
+                    {
+                        if (val & 1)
+                        {
+                            ++(m_voxelsCnt[pos]);
 
-					m_sumDensity[val] += density;
+                            sumSqrt[pos] += sgrtDensity;
 
-					if (density < m_minDensity[val])
-					{
-						m_minDensity[val] = density;
-					}
+                            m_sumDensity[pos] += density;
 
-					if (density > m_maxDensity[val])
-					{
-						m_maxDensity[val] = density;
-					}
+                            if (density < m_minDensity[pos])
+                            {
+                                m_minDensity[pos] = density;
+                            }
 
-					if (x < m_minXCoord[val])
-					{
-						m_minXCoord[val] = x;
-					}
+                            if (density > m_maxDensity[pos])
+                            {
+                                m_maxDensity[pos] = density;
+                            }
 
-					if (y < m_minYCoord[val])
-					{
-						m_minYCoord[val] = y;
-					}
+                            if (x < m_minXCoord[pos])
+                            {
+                                m_minXCoord[pos] = x;
+                            }
 
-					if (z < m_minZCoord[val])
-					{
-						m_minZCoord[val] = z;
-					}
+                            if (y < m_minYCoord[pos])
+                            {
+                                m_minYCoord[pos] = y;
+                            }
 
-					if (x > m_maxXCoord[val])
-					{
-						m_maxXCoord[val] = x;
-					}
+                            if (z < m_minZCoord[pos])
+                            {
+                                m_minZCoord[pos] = z;
+                            }
 
-					if (y > m_maxYCoord[val])
-					{
-						m_maxYCoord[val] = y;
-					}
+                            if (x > m_maxXCoord[pos])
+                            {
+                                m_maxXCoord[pos] = x;
+                            }
 
-					if (z > m_maxZCoord[val])
-					{
-						m_maxZCoord[val] = z;
-					}
+                            if (y > m_maxYCoord[pos])
+                            {
+                                m_maxYCoord[pos] = y;
+                            }
+
+                            if (z > m_maxZCoord[pos])
+                            {
+                                m_maxZCoord[pos] = z;
+                            }
+                        }
+
+                        val >>= 1;
+                        ++pos;
+                    }
 				}
 			}
 		}

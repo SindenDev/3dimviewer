@@ -198,6 +198,15 @@ public:
 
     //! Returns size of gizmo
     double getSize();
+
+    //! Get geometry node access
+    osg::Geometry *getGeometryNode() { return p_Geometry; }
+
+protected:
+    //! Set rendering properties (modify state set) of the visible geometry
+    virtual void setGeometryRenderingProperties(osg::Geometry *geometry);
+
+
 };
 
 

@@ -27,6 +27,7 @@
 
 #include <OpenMesh/Tools/Decimater/ModQuadricT.hh>
 #include <OpenMesh/Tools/Decimater/ModAspectRatioT.hh>
+#include <OpenMesh/Tools/Decimater/ModHausdorffT.hh>
 #include <OpenMesh/Tools/Decimater/ModNormalFlippingT.hh>
 #include <OpenMesh/Tools/Decimater/ModNormalDeviationT.hh>
 #include <OpenMesh/Tools/Decimater/ModEdgeLengthT.hh>
@@ -36,7 +37,7 @@
 ////////////////////////////////////////////////////////////
 //
 
-bool CDecimator::Reduce(geometry::CMesh &mesh, int final_vert_number, int final_tri_number)
+bool CDecimator::Reduce(geometry::CMesh &mesh, int final_vert_number, int final_tri_number, float maxHausdorffDist /*= -1.0*/)
 {
 #if (OM_VERSION<0x020300)
     OpenMesh::Decimater::DecimaterT<geometry::CMesh> decimater(mesh);
@@ -51,6 +52,13 @@ bool CDecimator::Reduce(geometry::CMesh &mesh, int final_vert_number, int final_
     decimater.add(modHandle2);
     decimater.add(modHandle3);
     decimater.add(progressModuleHandle);
+
+    if (maxHausdorffDist > 0.0)
+    {
+        OpenMesh::Decimater::ModHausdorffT<geometry::CMesh>::Handle modHandleH;
+        decimater.add(modHandleH);
+        decimater.module(modHandleH).set_tolerance(maxHausdorffDist);
+    }
 
     decimater.initialize();
 
@@ -87,6 +95,13 @@ bool CDecimator::Reduce(geometry::CMesh &mesh, int final_vert_number, int final_
     //decimater.add(modHandle4);
     decimater.add(progressModuleHandle);	
 	
+    if (maxHausdorffDist > 0.0)
+    {
+        OpenMesh::Decimater::ModHausdorffT<geometry::CMesh>::Handle modHandleH;
+        decimater.add(modHandleH);
+        decimater.module(modHandleH).set_tolerance(maxHausdorffDist);
+    }
+
     decimater.initialize();
 
 	CDecimatorProgressModule<geometry::CMesh> & meh = decimater.module(progressModuleHandle);

@@ -6,4 +6,11 @@
         <file alias="delete.png">icons/delete.png</file>
         <file>icons/gaugeplugin_dock.png</file>
     </qresource>
+	<qresource prefix="/svg">
+		<file>svg/gaugeplugin.svg</file>
+		<file>svg/measure_density.svg</file>
+		<file>svg/measure_distance.svg</file>
+		<file>svg/delete.svg</file>
+		<file>svg/gaugeplugin_dock.svg</file>
+	</qresource>
 </RCC>

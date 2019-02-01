@@ -225,7 +225,7 @@ public:
 
     //! Backward conversion of coordinates - from the shifted scene to the voxel space.
     int fromSceneX(double x) const { return int( ( x - getSceneShiftX() ) * m_dInvDX); }
-        int fromSceneY(double y) const { return int( ( y - getSceneShiftY() ) * m_dInvDY); }
+    int fromSceneY(double y) const { return int( ( y - getSceneShiftY() ) * m_dInvDY); }
     int fromSceneZ(double z) const { return int( ( z - getSceneShiftZ() ) * m_dInvDZ); }
 
     //! Backward conversion of coordinates in double - from the shifted scene to the voxel space.

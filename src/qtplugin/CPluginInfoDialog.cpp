@@ -72,7 +72,8 @@ CPluginInfoDialog::CPluginInfoDialog(CPluginManager* pPluginManager, QWidget *pa
      resize(settings.value("size",size()).toSize());
      settings.endGroup();
 
-     findPlugins(pPluginManager->getPluginsPath(), *(pPluginManager->getPluginsList()));
+     if (nullptr!= pPluginManager)
+        findPlugins(pPluginManager->getPluginsPath(), *(pPluginManager->getPluginsList()));
  }
 
  CPluginInfoDialog::~CPluginInfoDialog()

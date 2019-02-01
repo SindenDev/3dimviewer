@@ -60,7 +60,10 @@ namespace geometry
         const geometry::Vec3 &getPoint(size_t id) const { return m_points[id]; }
 
         //! Get data item
-        const tData &getData(size_t id){ return m_data[id]; }
+        const tData &getData(size_t id) const { return m_data[id]; }
+
+        //! Get data item - non const version
+        tData &getData(size_t id) { return m_data[id]; }
 
         //! Get stored points
         const Vec3Array &getPoints() const { return m_points; }
@@ -69,15 +72,23 @@ namespace geometry
         bool hasData() const { return m_points.size() > 0; }
 
         size_t size() const { return m_points.size(); }
+
+        /**
+         * Calculates the bounding box
+         *
+         * \param [in,out]  min The bounding box minimum.
+         * \param [in,out]  max The bounding box maximum.
+         *
+         * \return  True if it succeeds, false if it fails.
+         */
+        bool calcBoundingBox(geometry::Vec3 &min, geometry::Vec3 &max) const;
+
     protected:
         //! Stored points
         geometry::Vec3Array m_points;
 
         //! Stored data
         tDataVec m_data;
-
-    public:
-        EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     }; // CPointCloudAdaptor
 
     /**
@@ -112,6 +123,8 @@ namespace geometry
             tIndexVec indexes;
             tDistanceVec distances;
         };
+
+        bool calcBoundingBox(geometry::Vec3 &min, geometry::Vec3 &max) const;
 
     protected:
         //! Point cloud adaptor type
@@ -156,7 +169,7 @@ namespace geometry
         int getPointsInsideRadius(const geometry::Vec3 &point, double radius, SIndexDistancePairs &result, size_t max_returned_points) const
         {
             if (!hasData())
-                return false;
+                return 0;
             
             // Do search
             return(m_tree.radiusSearch(point, radius, result.distances, result.indexes, max_returned_points));
@@ -168,12 +181,16 @@ namespace geometry
         //! Get data on given index
         const tData &getData(size_t idx) const { return m_pc->getData(idx); }
 
+        //! Get data on given index - non const version
+        tData &getData(size_t idx) { return m_pc->getData(idx); }
+
         //! Size of tree - number of stored points
         size_t size() const { return(m_pc != nullptr ? m_pc->size() : 0); }
 
         //! Get number of points stored in the cloud (points here can be before tree initialization).
         size_t getNumPointsInCloud() const { return m_pc != nullptr ? m_pc->size() : 0; }
 
+        const Vec3Array &getPointsPositions() const { return m_pc->getPoints(); }
     protected:
         //! Delete all previous data
         void clear();
@@ -184,9 +201,6 @@ namespace geometry
 
         //! KD tree
         CFlannTree m_tree;
-
-    public:
-        EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     };
 
 /************************************************************************/
@@ -241,11 +255,59 @@ namespace geometry
         m_data.push_back(d);
     }
 
+    template <typename tData>
+
+    /**
+     * Calculates the bounding box of the point cloud. If cannot calculate it, inputs are not changed and false is returned.
+     *
+     * \tparam  tData   Type of the data.
+     * \param [in,out]  min The minimum.
+     * \param [in,out]  max The maximum.
+     *
+     * \return  True if it succeeds, false if it fails.
+     */
+
+    bool CPointlCloudAdaptor<tData>::calcBoundingBox(geometry::Vec3& min, geometry::Vec3& max) const
+    {
+        if (m_points.empty())
+            return false;
+
+        const geometry::Vec3::tElement infinity(std::numeric_limits<geometry::Vec3::tElement>::max());
+        geometry::Vec3 _min(infinity, infinity, infinity);
+        geometry::Vec3 _max(-_min);
+
+        for(auto point : m_points)
+        {
+            for(int i = 0; i < 3; ++i)
+            {
+                if (point[i] > _max[i])
+                    _max[i] = point[i];
+
+                if (point[i] < _min[i])
+                    _min[i] = point[i];
+            }
+        }
+
+        if(_max[0] >= _min[0] && _max[1] >= _min[1] && _max[2] >= _min[2])
+        {
+            max = _max;
+            min = _min;
+            return true;
+        }
+        
+        return false;
+    }
 
 
     /************************************************************************/
     /* CLASS CKDTreePointNormalCloud                                        */
     /************************************************************************/
+
+    template <typename tData>
+    bool CKDTreePointCloud<tData>::calcBoundingBox(geometry::Vec3& min, geometry::Vec3& max) const
+    {
+        return m_pc->calcBoundingBox(min, max);
+    }
 
     /**
     * \fn  geometry::CKDTreePointNormalCloud::CKDTreePointNormalCloud()

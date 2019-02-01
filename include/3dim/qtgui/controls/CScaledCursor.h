@@ -43,6 +43,9 @@ public:
 	//! Set pen width
 	void setPenSize(int size);
 
+    void setMinSize(size_t min_size);
+    void setMaxSize(size_t max_size);
+
 protected:
     //! Render cursor pixmap
     void render(size_t pixmap_size);
@@ -62,6 +65,51 @@ protected:
 
 	//! Pen width
 	int m_pen_size;
+};
+
+class CScaledCursorDoubleCircle
+{
+public:
+    //! Constructor
+    CScaledCursorDoubleCircle(size_t min_size = 8, size_t max_size = 128);
+
+    //! Destructor
+    ~CScaledCursorDoubleCircle();
+
+    //! Resize cursor
+    void resize(float new_size_outer, float new_size_inner);
+
+    //! Get current cursor
+    QCursor *getCursor()
+    {
+        return m_cursor;
+    }
+
+    //! Set pen width
+    void setPenSize(int sizeOuter, int sizeInner);
+
+    void setMinSize(size_t min_size);
+    void setMaxSize(size_t max_size);
+
+protected:
+    //! Render cursor pixmap
+    void render(size_t pixmap_size, size_t size_outer, size_t size_inner);
+
+protected:
+    //! Cursor
+    QCursor *m_cursor;
+
+    //! Minimal cursor size
+    size_t m_min_size;
+
+    //! Maximal cursor size
+    size_t m_max_size;
+
+    //! Cursor color
+    QColor m_color;
+
+    //! Pen width
+    int m_pen_size_outer, m_pen_size_inner;
 };
 
 // CScaledCursor_H_included

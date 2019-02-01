@@ -25,6 +25,7 @@
 
 #include <VPL/Base/BasePtr.h>
 #include <VPL/Base/SharedPtr.h>
+#include <VPL/Image/Image.h>
 
 #include <data/CSerializableData.h>
 #include <data/CSerializableOSG.h>
@@ -85,55 +86,36 @@ namespace data
             POSITION_CHANGED = 1 << 4,
             SELECTION_CHANGED = 1 << 5,
             COLORING_CHANGED = 1 << 6,
-			VISIBILITY_CHANGED = 1 << 7,
-			LABEL_CHANGED = 1 << 8,
-			PROPERTY_CHANGED = 1 << 9,
+            VISIBILITY_CHANGED = 1 << 7,
+            LABEL_CHANGED = 1 << 8,
+            PROPERTY_CHANGED = 1 << 9,
             ARMATURE_CHANGED = 1 << 10,
             ACTIONS_CHANGED = 1 << 11,
-            ORTHO_TOOTH_ADDED = 1 << 12,
-            VERTEX_COLORING_CHANGED = 1 << 13
+            VERTEX_COLORING_CHANGED = 1 << 12,
+            TEXTURES_CHANGED = 1 << 13,
         };
+
+        //! Integer on integer map type.
+        typedef std::map<int, int> IntIntMap;
 
     public:
         //! Default constructor.
-        CModel()
-            : m_bVisibility(false)
-            , m_Color(1.0f, 1.0f, 1.0f, 1.0f)
-            , m_bSelected(false)
-            , m_bUseVertexColors(false)
-			, m_regionId(-1)
-			, m_bLinkedWithRegion(true)
-            , m_bMirrored(false)
-            , m_locked(false)
-            , m_bExamined(false)
-            , m_mesh_dirty(true)
-        { }
+        CModel();
 
         //! Default copy constructor
         CModel(const CModel&);
         
         //! Destructor.
-        ~CModel()
-        { }
+        ~CModel();
 
-        //! Returns the model geometry.
-        geometry::CMesh *getMesh()
-        {
-            return m_spModel.get();
-        }
+        //! Returns the model geometry, invalidate kd tree when you know that you are going to change the mesh
+        geometry::CMesh *getMesh(bool bInvalidateKdTree);
 
         //! Const version of the previous method
-        const geometry::CMesh *getMesh() const
-        {
-            return m_spModel.get();
-        }
+        const geometry::CMesh *getMesh() const;
 
         //! Returns the model geometry and clears Destroy flag in smart pointer
-        geometry::CMesh *releaseMesh()
-        {
-            return m_spModel.release();
-            m_mesh_dirty = true;
-        }
+        geometry::CMesh *releaseMesh();
 
         //! Fills given mesh with mesh deformed by current armature. It should keep properties and just apply matrices given by armature if requested.
         void getDeformedMesh(geometry::CMesh &mesh, bool keepProperties = false);
@@ -145,211 +127,111 @@ namespace data
 
         //! Sets the model geometry.
         //! - Deletes a given object automatically.
-        void setMesh(geometry::CMesh *model)
-        {
-            m_spModel = model;
-            m_mesh_dirty = true;
-        }
+        void setMesh(geometry::CMesh *model);
 
         //! This strictly MUST be called after any mesh change excluding setMesh method call (it updates dirty flag internally).
-        void setMeshDirty() { m_mesh_dirty = true; }
+        void setMeshDirty();
 
         //! Returns true if the model is visible.
-        bool isVisible() const
-        {
-            return m_bVisibility;
-        }
+        bool isVisible() const;
 
         //! Turns on visibility of the model.
-        void show()
-        {
-            m_bVisibility = true;
-        }
+        void show();
 
         //! Turns off visibility of the model.
-        void hide()
-        {
-            m_bVisibility = false;
-        }
+        void hide();
 
         //! Turns on/off visibility of the model. 
-        void setVisibility(bool visible)
-        {
-            m_bVisibility = visible;
-        }
+        void setVisibility(bool visible);
 
         //! Turns on/off visibility of the model. 
-        void setUseVertexColors(bool value)
-        {
-            m_bUseVertexColors = value;
-        }
+        void setUseVertexColors(bool value);
 
-        bool getUseVertexColors() const
-        {
-            return m_bUseVertexColors;
-        }
+        bool getUseVertexColors() const;
 
         //! (De)selects model
-        void select(bool value = true)
-        {
-            m_bSelected = value;
-        }
+        void select(bool value = true);
 
-        void deselect()
-        {
-            select(false);
-        }
+        void deselect();
 
         //! Returns true if model is selected
-        bool isSelected() const
-        {
-            return m_bSelected;
-        }
+        bool isSelected() const;
 
         //! Returns the model color.
-        void getColor(float& r, float& g, float& b, float& a) const
-        {
-            m_Color.getColor(r, g, b, a);
-        }
+        void getColor(float& r, float& g, float& b, float& a) const;
 
         //! Returns the model color.
-        const CColor4f& getColor() const
-        {
-            return m_Color;
-        }
+        const CColor4f& getColor() const;
 
         //! Sets the model color.
-        void setColor(float r, float g, float b, float a = 1.0f)
-        {
-            m_Color.setColor(r, g, b, a);
-        }
+        void setColor(float r, float g, float b, float a = 1.0f);
 
         //! Sets the model color.
-        void setColor(const CColor4f& Color)
-        {
-            m_Color.setColor(Color);
-        }
+        void setColor(const CColor4f &Color);
 
-		//! Sets the region id.
-		void setRegionId(int id)
-		{
-			m_regionId = id;
-		}
+        //! Returns the model color.
+        const geometry::Vec3 &getEmission() const;
 
-		//! Returns the region id.
-		int getRegionId()
-		{
-			return m_regionId;
-		}
+        //! Sets the model color.
+        void setEmission(const geometry::Vec3 &emission);
 
-		//! Sets if model mirrors region data.
-		void setLinkedWithRegion(bool linked)
-		{
-			m_bLinkedWithRegion = linked;
-		}
+        //! Sets the region id.
+        void setRegionId(int id);
 
-		//! Returns true if model mirrors region data.
-		bool isLinkedWithRegion()
-		{
-			return m_bLinkedWithRegion;
-		}
+        //! Returns the region id.
+        int getRegionId();
+
+        //! Sets if model mirrors region data.
+        void setLinkedWithRegion(bool linked);
+
+        //! Returns true if model mirrors region data.
+        bool isLinkedWithRegion();
 
         //! Returns voluntary transformation matrix - !!! Remember that model visualizers are anchored to center
-        const osg::Matrix& getTransformationMatrix() const
-		{
-			return m_transformationMatrix;
-		}
+        const osg::Matrix &getTransformationMatrix() const;
 
         //! Sets transformation matrix for the model
-        void setTransformationMatrix(const osg::Matrix& matrix)
-		{
-			m_transformationMatrix = matrix;
-		}
+        void setTransformationMatrix(const osg::Matrix &matrix);
 
         //! Get model name
-        const std::string& getLabel() const
-        {
-            return m_label;
-        }
+        const std::string &getLabel() const;
 
         //! Set model name
-        void setLabel(const std::string &label) { m_label = label; }
+        void setLabel(const std::string &label);
 
-        void setReserved(bool value = true) { m_reserved = value; };
-        bool getReserved() { return m_reserved; };
+        void setReserved(bool value = true);
+
+        bool getReserved();
 
         //! Get model property
-        std::string getProperty(const std::string &prop) const
-        {
-            auto it = m_properties.find(prop);
-            if (it != m_properties.end())
-            {
-                return it->second;
-            }
-            return "";
-        }
+        std::string getProperty(const std::string &prop) const;
 
-		//! Get floating point model property
-		double getFloatProperty(const std::string &prop) const
-		{
-			std::string val = getProperty(prop);
-			return strtod(val.c_str(),NULL);
-		}
+        //! Get floating point model property
+        double getFloatProperty(const std::string &prop) const;
 
-		//! Get int model property
-		long getIntProperty(const std::string &prop) const
-		{
-			std::string val = getProperty(prop);
-			return strtol(val.c_str(),NULL,10);
-		}
+        //! Get int model property
+        long getIntProperty(const std::string &prop) const;
 
         //! Set model property
-        void setProperty(const std::string &prop, const std::string &value)
-        {
-            m_properties[prop] = value;
-        }
+        void setProperty(const std::string &prop, const std::string &value);
 
         //! Set int property
-        void setIntProperty(const std::string &prop, int value) 
-		{ 
-			std::stringstream ss;
-			ss << value;
-			m_properties[prop] = ss.str(); 
-		}
+        void setIntProperty(const std::string &prop, int value);
 
         //! Set floating point property
-        void setFloatProperty(const std::string &prop, double value) 
-		{ 
-			std::stringstream ss;
-			ss << value;
-			m_properties[prop] = ss.str(); 
-		}
+        void setFloatProperty(const std::string &prop, double value);
 
         //! Clear all properties
-        void clearAllProperties()
-        {
-            m_properties.clear();
-        }
+        void clearAllProperties();
 
-		//! Copy all properties
-		void copyAllProperties( const data::CModel & model )
-		{
-			m_properties = model.m_properties;
-		}
+        //! Copy all properties
+        void copyAllProperties(const data::CModel &model);
 
-		//! Direct access to all properties
-		const std::map<std::string, std::string> & getAllProperties() const
-        {
-            return m_properties;
-        }
+        //! Direct access to all properties
+        const std::map<std::string, std::string> & getAllProperties() const;
 
         //! Clear the model.
-        void clear()
-        {
-            m_spModel = new geometry::CMesh;
-            m_spArmature = new geometry::CArmature;
-            m_mesh_dirty = true;
-        }
+        void clear();
 
         //! Regenerates the object state according to any changes in the data storage.
         void update(const CChangedEntries& Changes);
@@ -364,67 +246,56 @@ namespace data
         }
 
         //! Returns true if changes of a given parent entry may affect this object.
-        bool checkDependency(CStorageEntry * VPL_UNUSED(pParent)) { return true; }
+        bool checkDependency(CStorageEntry * VPL_UNUSED(pParent))
+        {
+            return true;
+        }
 
         //! Compute areas oriented up and down
         void getUpDownSurfaceAreas(float &up_area, float &down_area);
 
-        geometry::CArmature *getArmature()
-        {
-            return m_spArmature.get();
-        }
+        geometry::CArmature *getArmature();
 
-        void setArmature(geometry::CArmature *armature)
-        {
-            m_spArmature = armature;
-        }
+        void setArmature(geometry::CArmature *armature);
 
         //! Copy model
         CModel &operator=(const CModel &model);
 
- 
-        /**
-         * \fn  geometry::Matrix computeSurfaceAlignedPositionMatrix(const geometry::Vec3 &world_coordinates_point);
+        /*!
+         * \fn  osg::Matrix calculateSurfaceAlignedPositionMatrix(const osg::Vec3 &world_coordinates_point, float surface_offset = 0.0f, const geometry::Matrix additional_to_model_to_world = geometry::Matrix::identity());
          *
-         * \brief   Calculates the surface aligned position matrix - this matrix orients y axis in the closest face normal, 
-         *          z axis directs to the same way as world coordinate system z-axis as possible and x axis is orthogonal
-         *          to the both of them
+         * \brief   Calculates the surface aligned position matrix - this matrix orients y axis in the
+         *          closest face normal, z axis directs to the same way as world coordinate system z-axis
+         *          as possible and x axis is orthogonal to the both of them
          *
-         * \param   world_coordinates_point The point in the world coordinates.
-		 * \param   surface_offset The wanted orthogonal distance of the returned position from the mesh surface.
+         * \param   world_coordinates_point         The point in the world coordinates.
+         * \param   surface_offset                  (Optional) The wanted orthogonal distance of the
+         *                                          returned position from the mesh surface.
+         * \param   additional_to_model_to_world    (Optional) The additional matrix to the model to world transform.
          *
          * \return  The calculated surface aligned position matrix in the world coordinate system.
          */
-        osg::Matrix calculateSurfaceAlignedPositionMatrix(const osg::Vec3 &world_coordinates_point, float surface_offset = 0.0f);
 
-        void buildNames(geometry::CBone *bone, int &name, std::map<geometry::CBone *, int> &names)
-        {
-            names[bone] = name++;
-            const std::vector<geometry::CBone *> &children = bone->getChildren();
-            for (int i = 0; i < children.size(); ++i)
-            {
-                buildNames(children[i], name, names);
-            }
-        }
+        osg::Matrix calculateSurfaceAlignedPositionMatrix(const osg::Vec3 &world_coordinates_point, float surface_offset = 0.0f, const osg::Matrix &additional_to_model_to_world = osg::Matrix::identity());
 
-		/*!
-		 * \fn	osg::Vec3 calculateAverageVertexNormal(CMesh::FHandle vertex_handle);
-		 *
-		 * \brief	Calculates the average normal (composite normal of the given vertex and all neighbor vertices).
-		 *
-		 * \param	vertex_handle	Handle of the vertex.
-		 *
-		 * \return	The calculated average face normal.
-		 */
+        void buildNames(geometry::CBone *bone, int &name, std::map<geometry::CBone *, int> &names);
 
-		osg::Vec3 calculateAverageVertexNormal(geometry::CMesh::VHandle vertex_handle);
+        /*!
+         * \fn  osg::Vec3 calculateAverageVertexNormal(CMesh::FHandle vertex_handle);
+         *
+         * \brief   Calculates the average normal (composite normal of the given vertex and all neighbor vertices).
+         *
+         * \param   vertex_handle   Handle of the vertex.
+         *
+         * \return  The calculated average face normal.
+         */
+        osg::Vec3 calculateAverageVertexNormal(geometry::CMesh::VHandle vertex_handle);
 
         /**
         * \struct  SClosestData
         *
         * \brief   This structure stores information of the point-model questions closest structures.
         */
-
         struct SClosestData
         {
             SClosestData() : distance(-1.0), precise_distance(-1.0) {}
@@ -472,17 +343,9 @@ namespace data
          *
          * \return  The nearest model point. If no point found, returns std::numeric_limits<double>::max().
          */
-        double getNearestModelPoint(const geometry::Vec3 &point, SClosestData &data, bool add_scene_shift_to_matrix, bool bPrecise = true);
+        double getNearestModelPoint(const geometry::Vec3 &point, SClosestData &data, bool add_scene_shift_to_matrix, bool bPrecise = true, bool localCoordsOnly = false);
 
-        void buildInverseNames(geometry::CBone *bone, int &name, std::map<int, geometry::CBone *> &names)
-        {
-            names[name++] = bone;
-            const std::vector<geometry::CBone *> &children = bone->getChildren();
-            for (int i = 0; i < children.size(); ++i)
-            {
-                buildInverseNames(children[i], name, names);
-            }
-        }
+        void buildInverseNames(geometry::CBone *bone, int &name, std::map<int, geometry::CBone *> &names);
 
         //! Serialize actions
         template<class tpSerializer>
@@ -555,9 +418,40 @@ namespace data
             serializeActions(Writer, armature->getActions(), boneNames);
         }
 
+        //! Serialize armature
+        template<class tpSerializer>
+        void serializeTextures(vpl::mod::CChannelSerializer<tpSerializer> &Writer)
+        {
+            int count = m_textures.size();
+            Writer.write((vpl::sys::tInt32)count);
+
+            for (auto it = m_textures.begin(); it != m_textures.end(); ++it)
+            {
+                Writer.write(it->first);
+                serializeTexture(Writer, it->second);
+            }
+        }
+
+        //! Serialize texture
+        template<class tpSerializer>
+        void serializeTexture(vpl::mod::CChannelSerializer<tpSerializer> &Writer, vpl::img::CRGBAImage::tSmartPtr texture)
+        {
+            vpl::tSize width = texture->width();
+            Writer.write((vpl::sys::tInt32)width);
+            vpl::tSize height = texture->height();
+            Writer.write((vpl::sys::tInt32)height);
+
+            for (int y = 0; y < height; ++y)
+            {
+                for (int x = 0; x < width; ++x)
+                {
+                    Writer.write(texture->at(x, y).getRGBA());
+                }
+            }
+        }
+
         //! Copy model without const for pair
         CModel &operator=(CModel &model);
-
 
         //! Serialize
         template<class tpSerializer>
@@ -565,12 +459,13 @@ namespace data
         {
             Writer.beginWrite(*this);
 
-            WRITEINT32(11); // version
+            WRITEINT32(13); // version
 
             Writer.write((vpl::sys::tInt32)m_bVisibility);
             Writer.write((vpl::sys::tInt32)m_bSelected);
             Writer.write((vpl::sys::tInt32)m_bUseVertexColors);
             m_Color.serialize(Writer);
+            CSerializableData<geometry::Vec3>::serialize(&m_emission, Writer);
             Writer.write(m_label);
             CSerializableData< osg::Matrix >::serialize(&m_transformationMatrix, Writer);
             Writer.write((vpl::sys::tInt32)m_properties.size());
@@ -581,15 +476,15 @@ namespace data
                 Writer.write(it->second);
             }
 
-			Writer.write((vpl::sys::tInt32)m_regionId);
-			Writer.write((vpl::sys::tInt32)m_bLinkedWithRegion);
+            Writer.write((vpl::sys::tInt32)m_regionId);
+            Writer.write((vpl::sys::tInt32)m_bLinkedWithRegion);
 
             Writer.write((vpl::sys::tInt32)(m_spArmature.get() != NULL));
             serializeArmature(Writer, m_spArmature.get());
 
-			//STUFF FOR TRAUMATECH
-			CSerializableData< osg::Matrix >::serialize(&m_transformationMatrixBeforeReposition, Writer);
-			CSerializableData< osg::Matrix >::serialize(&m_transformationMatrixAfterReposition, Writer);
+            //STUFF FOR TRAUMATECH
+            CSerializableData< osg::Matrix >::serialize(&m_transformationMatrixBeforeReposition, Writer);
+            CSerializableData< osg::Matrix >::serialize(&m_transformationMatrixAfterReposition, Writer);
 
             Writer.write((vpl::sys::tInt32)m_bMirrored);
             Writer.write((vpl::sys::tInt32)m_locked);
@@ -597,6 +492,8 @@ namespace data
 
             bool isCreatedAbutment = this->getProperty("createdAbutment").compare("true") == 0;
             Writer.write((vpl::sys::tInt32)isCreatedAbutment);
+
+            serializeTextures(Writer);
 
             Writer.endWrite(*this);
 
@@ -664,6 +561,49 @@ namespace data
             }
         }
 
+        //! Deserialize textures
+        template<class tpSerializer>
+        void deserializeTextures(vpl::mod::CChannelSerializer<tpSerializer> &Reader)
+        {
+            vpl::sys::tInt32 count = 0;
+            Reader.read(count);
+
+            for (int i = 0; i < count; ++i)
+            {
+                deserializeTexture(Reader);
+            }
+        }
+
+        //! Deserialize textures
+        template<class tpSerializer>
+        void deserializeTexture(vpl::mod::CChannelSerializer<tpSerializer> &Reader)
+        {
+            std::string name;
+            Reader.read(name);
+
+            vpl::img::CRGBAImage::tSmartPtr texture = new vpl::img::CRGBAImage();
+
+            vpl::sys::tInt32 width = 0;
+            Reader.read(width);
+
+            vpl::sys::tInt32 height = 0;
+            Reader.read(height);
+
+            texture->resize(width, height, 0);
+
+            for (int y = 0; y < height; ++y)
+            {
+                for (int x = 0; x < width; ++x)
+                {
+                    vpl::sys::tUInt32 pixel = 0;
+                    Reader.read(pixel);
+                    texture->set(x, y, pixel);
+                }
+            }
+
+            m_textures.insert(std::pair<std::string, vpl::img::CRGBAImage::tSmartPtr>(name, texture));
+        }
+
         //! Deserialize armature
         template<class tpSerializer>
         geometry::CArmature *deserializeArmature(vpl::mod::CChannelSerializer<tpSerializer> & Reader)
@@ -708,6 +648,12 @@ namespace data
             }
 
             m_Color.deserialize(Reader);
+
+            if (version >= 13)
+            {
+                CSerializableData<geometry::Vec3>::deserialize(&m_emission, Reader);
+            }
+            
             Reader.read(m_label);
             CSerializableData< osg::Matrix >::deserialize(&m_transformationMatrix, Reader);
             if (version>1)
@@ -723,14 +669,14 @@ namespace data
                 }
             }
 
-			if (version > 4)
-			{
-				vpl::sys::tInt32 regionId = -1;
-				Reader.read(regionId); m_regionId = regionId;
+            if (version > 4)
+            {
+                vpl::sys::tInt32 regionId = -1;
+                Reader.read(regionId); m_regionId = regionId;
 
-				vpl::sys::tInt32 bLinked = 0;
-				Reader.read(bLinked); m_bLinkedWithRegion = bLinked != 0;
-			}
+                vpl::sys::tInt32 bLinked = 0;
+                Reader.read(bLinked); m_bLinkedWithRegion = bLinked != 0;
+            }
 
             if (version > 5)
             {
@@ -740,12 +686,12 @@ namespace data
                 m_spArmature = (bArmature != 0 ? deserializeArmature(Reader) : NULL);
             }
 
-			//STUFF FOR TRAUMATECH
-			if (version > 6)
-			{
-				CSerializableData< osg::Matrix >::deserialize(&m_transformationMatrixBeforeReposition, Reader);
-				CSerializableData< osg::Matrix >::deserialize(&m_transformationMatrixAfterReposition, Reader);
-			}
+            //STUFF FOR TRAUMATECH
+            if (version > 6)
+            {
+                CSerializableData< osg::Matrix >::deserialize(&m_transformationMatrixBeforeReposition, Reader);
+                CSerializableData< osg::Matrix >::deserialize(&m_transformationMatrixAfterReposition, Reader);
+            }
 
             if (version > 7)
             {
@@ -774,66 +720,47 @@ namespace data
                     this->setProperty("createdAbutment", "true");
             }
 
+            if (version > 11)
+            {
+                deserializeTextures(Reader);
+            }
+
             Reader.endRead(*this);
 
             m_mesh_dirty = true;
             m_spModel->deserialize(Reader);
         }
 
-		//STUFF FOR TRAUMATECH
-		//! Returns transformation matrix before reposition
-		const osg::Matrix& getTransformationMatrixBeforeReposition()
-		{
-			return m_transformationMatrixBeforeReposition;
-		}
+        //STUFF FOR TRAUMATECH
+        //! Returns transformation matrix before reposition
+        const osg::Matrix& getTransformationMatrixBeforeReposition();
 
-		//! Sets transformation matrix before reposition
-		void setTransformationMatrixBeforeReposition(const osg::Matrix& matrix)
-		{
-			m_transformationMatrixBeforeReposition = matrix;
-		}
+        //! Sets transformation matrix before reposition
+        void setTransformationMatrixBeforeReposition(const osg::Matrix& matrix);
 
-		//! Returns transformation matrix after reposition
-		const osg::Matrix& getTransformationMatrixAfterReposition()
-		{
-			return m_transformationMatrixAfterReposition;
-		}
+        //! Returns transformation matrix after reposition
+        const osg::Matrix& getTransformationMatrixAfterReposition();
 
-		//! Sets transformation matrix after reposition
-		void setTransformationMatrixAfterReposition(const osg::Matrix& matrix)
-		{
-			m_transformationMatrixAfterReposition = matrix;
-		}
+        //! Sets transformation matrix after reposition
+        void setTransformationMatrixAfterReposition(const osg::Matrix& matrix);
 
-        bool isMirrored()
-        {
-            return m_bMirrored;
-        }
+        bool isMirrored();
 
-        void setMirrored(bool mirrored)
-        {
-            m_bMirrored = mirrored;
-        }
+        void setMirrored(bool mirrored);
 
-        bool isExamined()
-        {
-            return m_bExamined;
-        }
+        bool isExamined();
 
-        void setExamined(bool examined)
-        {
-            m_bExamined = examined;
-        }
+        void setExamined(bool examined);
 
-        bool isLocked() const
-        {
-            return m_locked;
-        }
+        bool isLocked() const;
 
-        void setLocked(bool locked)
-        {
-            m_locked = locked;
-        }
+        void setLocked(bool locked);
+
+        void setTextures(const std::map<std::string, vpl::img::CRGBAImage::tSmartPtr> &textures);
+
+        const std::map<std::string, vpl::img::CRGBAImage::tSmartPtr> &getTextures() const;
+
+        const bool hasTextures() const;
 
     private:
         //! Update KD tree - this is called on demand when somebody wants to use nearest/radius point serch methods and m_mesh_dirty flag is set to true...
@@ -849,6 +776,9 @@ namespace data
         //! Armature
         vpl::base::CScopedPtr<geometry::CArmature> m_spArmature;
 
+        //! Labeling to armature segment mapping
+        IntIntMap m_segToBone;
+
         //! Model visibility.
         bool m_bVisibility;
 
@@ -858,14 +788,16 @@ namespace data
         //! Model visibility.
         bool m_bUseVertexColors;
 
-		//! Id of region from which the model was created.
-		int m_regionId;
+        //! Id of region from which the model was created.
+        int m_regionId;
 
-		//! If model mirrors region data.
-		bool m_bLinkedWithRegion;
+        //! If model mirrors region data.
+        bool m_bLinkedWithRegion;
 
         //! Model color (RGBA components).
         CColor4f m_Color;
+
+        geometry::Vec3 m_emission;
 
         //! Model transformation matrix
         osg::Matrix m_transformationMatrix;
@@ -878,12 +810,12 @@ namespace data
         //! Named model properties
         std::map<std::string, std::string> m_properties;
 
-		//STUFF FOR TRAUMATECH
-		//! Model transformation matrix before reposition
-		osg::Matrix m_transformationMatrixBeforeReposition;
+        //STUFF FOR TRAUMATECH
+        //! Model transformation matrix before reposition
+        osg::Matrix m_transformationMatrixBeforeReposition;
 
-		//! Model transformation matrix after reposition
-		osg::Matrix m_transformationMatrixAfterReposition;
+        //! Model transformation matrix after reposition
+        osg::Matrix m_transformationMatrixAfterReposition;
 
         //! True if bone is mirrored
         bool m_bMirrored;
@@ -898,8 +830,9 @@ namespace data
 
         //! Should be kd tree updated (is mesh "dirty")?
         bool m_mesh_dirty;
-    };
 
+        std::map<std::string, vpl::img::CRGBAImage::tSmartPtr> m_textures;
+    };
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////
     //! Serialization wrapper. 

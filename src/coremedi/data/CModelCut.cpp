@@ -95,7 +95,7 @@ void CModelCutSliceXY::update(const CChangedEntries &changedEntries)
 
     m_color = spModel->getColor();
 
-    geometry::CMesh *mesh = spModel->getMesh();
+    geometry::CMesh *mesh = spModel->getMesh(false);
     float planePosition = (spSlice->getPosition() + 0.5) * dZ;
 
     if (1 == changedEntries.getSize() && changedEntries.hasChanged(m_modelId))
@@ -148,7 +148,7 @@ void CModelCutSliceXZ::update(const CChangedEntries &changedEntries)
 
     m_color = spModel->getColor();
 
-    geometry::CMesh *mesh = spModel->getMesh();
+    geometry::CMesh *mesh = spModel->getMesh(false);
     float planePosition = (spSlice->getPosition() + 0.5) * dY;
 
     if (1 == changedEntries.getSize() && changedEntries.hasChanged(m_modelId))
@@ -201,7 +201,7 @@ void CModelCutSliceYZ::update(const CChangedEntries &changedEntries)
 
     m_color = spModel->getColor();
 
-    geometry::CMesh *mesh = spModel->getMesh();
+    geometry::CMesh *mesh = spModel->getMesh(false);
     float planePosition = (spSlice->getPosition() + 0.5) * dX;
 
     if (1 == changedEntries.getSize() && changedEntries.hasChanged(m_modelId))

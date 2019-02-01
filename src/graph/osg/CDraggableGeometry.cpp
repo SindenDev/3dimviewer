@@ -32,11 +32,11 @@
 
 ///////////////////////////////////////////////////////////////////////////////
 // Constructor
-osg::CDraggableGeometry::CDraggableGeometry(const osg::Matrix & placement, const long & id, bool isVisible /*= true*/)
+osg::CDraggableGeometry::CDraggableGeometry(const osg::Matrix & placement, const long & id, bool isVisible /*= true*/, bool scaleDraggers/* = false*/)
 	: m_id(id)
 	, m_isVisible(isVisible)
-	, m_deleteUserData(false)
     , m_draggersVisible( true )
+    , m_scaleDraggers(scaleDraggers)
 {
     std::stringstream ss;
     ss << "CDraggableGeometry " << id;
@@ -49,10 +49,12 @@ osg::CDraggableGeometry::CDraggableGeometry(const osg::Matrix & placement, const
 // Destructor
 osg::CDraggableGeometry::~CDraggableGeometry()
 {
-/*
-	if(m_deleteUserData && (m_userDataPtr != NULL))
-		delete m_userDataPtr;
-*/
+    // because dragger event handler can contain reference to compositeDragger, fix its state in destructor
+    if (nullptr != m_compositeDragger.get())
+    {
+        if (nullptr!= m_geometryCallback.get())
+            m_compositeDragger->removeDraggerCallback(m_geometryCallback);
+    }
 }
 
 
@@ -60,7 +62,7 @@ osg::CDraggableGeometry::~CDraggableGeometry()
 // Add geometry
 void osg::CDraggableGeometry::addGeometry(osg::Node *node)
 {
-	if(node == NULL)
+	if(node == nullptr)
 		return;
 
 	m_geometrySwitch->addChild(node);
@@ -73,7 +75,7 @@ void osg::CDraggableGeometry::addGeometry(osg::Node *node)
 // Remove geometry
 void osg::CDraggableGeometry::removeGeometry(Node * node)
 {
-	if(node == NULL)
+	if(node == nullptr)
 		return;
 
 	if(m_geometrySwitch->containsNode(node))
@@ -84,33 +86,33 @@ void osg::CDraggableGeometry::removeGeometry(Node * node)
 
 }
 
+void osg::CDraggableGeometry::removeAllDraggers()
+{
+    m_compositeDragger->removeChildren(0, m_compositeDragger->getNumChildren());
+    while(m_compositeDragger->getNumDraggers() > 0)
+        m_compositeDragger->removeDragger(m_compositeDragger->getDragger(0));
+}
+
 //////////////////////////////////////////////////////////////////////////
 // Add dragger
-void osg::CDraggableGeometry::addDragger(osgManipulator::Dragger * dragger, bool bScaleDragger, bool bPositioned /*= false*/, bool bManaged /*= true*/)
+void osg::CDraggableGeometry::addDragger(osgManipulator::Dragger * dragger, bool bManaged /*= true*/)
 {
-	if(dragger == NULL)
-		return;
+    if (dragger == nullptr)
+        return;
 
-	// Add dragger to the scene
-	m_compositeDragger->addChild(dragger);
+    // Add dragger to the scene
+    m_compositeDragger->addChild(dragger);
 
-    if( bManaged )
+    if (bManaged)
     {
         // Add dragger to the composite dragger
         m_compositeDragger->addDragger(dragger);
 
         dragger->setParentDragger(m_compositeDragger);
-
     }
 
-	// Scale dragger
-	if(bScaleDragger){
-		float scale = 1.0; // m_geometrySwitch->getBound().radius() * 3.0; 
-		dragger->setMatrix(osg::Matrix::scale(scale, scale, scale));//*osg::Matrix::translate(m_geometrySwitch->getBound().center()));
-	}
-
-	// recalculate bounding boxes
-	computeBoundingBoxes();
+    // recalculate bounding boxes
+    computeBoundingBoxes();
 }
 
 void osg::CDraggableGeometry::addSpecialDragger(osgManipulator::Dragger *dragger)
@@ -170,6 +172,7 @@ void osg::CDraggableGeometry::removeDragger(osgManipulator::Dragger * dragger)
 	{
 		m_draggersSwitch->removeChild(dragger);
 		m_compositeDragger->removeDragger(dragger);
+        m_compositeDragger->removeChild(dragger);
 		dragger->setParentDragger(dragger);
 	}
 
@@ -191,26 +194,28 @@ void osg::CDraggableGeometry::sigDispatchMatrix(const osg::Matrix & matrix, long
 // Relocate draggable geometry to the other position - by matrix
 void osg::CDraggableGeometry::relocate(const osg::Matrix & m)
 {
+
 	// set new geometry position
-	//m_geometrySelection->setMatrix(m_geometryInitialMatrix*m);
 	m_geometryMatrixTransform->setMatrix(m);
 	
-	osg::Matrix tmatrix = m_draggerInitialMatrix * m_geometryInitialMatrix.inverse(m_geometryInitialMatrix);
 	// set new dragger position
 	setDraggersMatrix( m );
-	
+
 }
 
 //////////////////////////////////////////////////////////////////////////
 // Show/Hide node
 void osg::CDraggableGeometry::show(bool isVisible /* = true */)
 {
-		if(isVisible)
-			setAllChildrenOn();
-		else
-			setAllChildrenOff();
+    if (isVisible)
+        setAllChildrenOn();
+    else
+        setAllChildrenOff();
 
-		m_isVisible = isVisible;
+    m_isVisible = isVisible;
+
+    // Modify draggers visibility too...
+    showDraggers(m_draggersVisible);
 }  
 
 //////////////////////////////////////////////////////////////////////////
@@ -300,8 +305,12 @@ void osg::CDraggableGeometry::buildTree( const osg::Matrix & initialMatrix )
 	m_geometryMatrixTransform = new MatrixTransform;
     m_geometryScaleTransform = new MatrixTransform;
 
+    m_geometryMatrixTransform->setName("m_geometryMatrixTransform");
+    m_geometryScaleTransform->setName("m_geometryScaleTransform");
+
 	// Create geometries switch
 	m_geometrySwitch = new Switch;
+    m_geometrySwitch->setName("m_geometrySwitch");
 
 	// add switch as a child to the matrix transform
 	m_geometryMatrixTransform->addChild( m_geometryScaleTransform );
@@ -312,14 +321,19 @@ void osg::CDraggableGeometry::buildTree( const osg::Matrix & initialMatrix )
 
 	// Create draggers branch
 	m_draggersSwitch = new Switch;
-    m_compositeDragger = new CMyCompositeDragger(this);
+    m_draggersSwitch->setName("m_draggersSwitch");
 
+    int mask = m_scaleDraggers ? tDGCallback::HANDLE_ALL : tDGCallback::HANDLE_ALL ^ tDGCallback::HANDLE_SCALED_1D ^ tDGCallback::HANDLE_SCALED_2D ^ tDGCallback::HANDLE_SCALED_UNIFORM;
+
+    m_compositeDragger = new CMyCompositeDragger(this, mask);
+    m_compositeDragger->setName("m_compositeDragger");
 	m_draggersSwitch->addChild( m_compositeDragger );
 
 	addChild( m_draggersSwitch );
 
 	// Connect geometry and draggers
 	m_geometryCallback = new tDGCallback( m_geometryMatrixTransform, m_geometryMatrixTransform, m_geometryScaleTransform );
+    m_geometryCallback->setName("m_geometryCallback");
 	m_compositeDragger->addDraggerCallback( m_geometryCallback );
 
 	// Set position
@@ -337,6 +351,91 @@ void osg::CDraggableGeometry::buildTree( const osg::Matrix & initialMatrix )
 
 }
 
+void osg::CDraggableGeometry::setGeometryPosition(osg::Vec3 position) 
+{
+
+    osg::Vec3 translation, scale;
+    osg::Quat rotation, so;
+    m_geometryMatrixTransform->getMatrix().decompose(translation, rotation, scale, so);
+
+    osg::Matrix resultMatrix, translateMatrix, rotateMatrix;
+
+    translateMatrix.makeTranslate(position); //this one does it
+    rotateMatrix.makeRotate(rotation);
+
+    //put all back again
+    resultMatrix = rotateMatrix * translateMatrix;
+
+    m_geometryMatrixTransform->setMatrix(resultMatrix);
+    //m_compositeDragger->setMatrix(translateMatrix);
+}
+
+
+void osg::CDraggableGeometry::setDraggerPosition(osg::Vec3 position)
+{
+
+    osg::Vec3 translation, scale;
+    osg::Quat rotation, so;
+    m_compositeDragger->getMatrix().decompose(translation, rotation, scale, so);
+
+    osg::Matrix resultMatrix, translateMatrix, rotateMatrix;
+
+    translateMatrix.makeTranslate(position); //this one does it
+    rotateMatrix.makeRotate(rotation);
+
+    //put all back again
+    resultMatrix = rotateMatrix * translateMatrix;
+
+    //m_geometryMatrixTransform->setMatrix(resultMatrix);
+     m_compositeDragger->setMatrix(resultMatrix);
+}
+
+void osg::CDraggableGeometry::setGeometryRotation(osg::Quat rotation) 
+{
+
+    osg::Vec3 translation, scale;
+    osg::Quat rotations, so;
+    m_geometryMatrixTransform->getMatrix().decompose(translation, rotations, scale, so);
+
+    osg::Matrix resultMatrix, translateMatrix, rotateMatrix;
+
+    translateMatrix.makeTranslate(translation);
+    rotateMatrix.makeRotate(rotation); //this one does it
+
+    //put all back again
+    resultMatrix = rotateMatrix * translateMatrix;
+
+    m_geometryMatrixTransform->setMatrix(resultMatrix);
+    //m_compositeDragger->setMatrix(resultMatrix); //dont rotate draggers..
+}
+
+void osg::CDraggableGeometry::setDraggerRotation(osg::Quat rotation)
+{
+
+    //leaves translation as is and adds to it rotation
+
+    osg::Vec3 translation, scale;
+    osg::Quat rotations, so;
+    m_compositeDragger->getMatrix().decompose(translation, rotations, scale, so);
+
+    osg::Matrix resultMatrix, translateMatrix, rotateMatrix;
+
+    translateMatrix.makeTranslate(translation);
+    rotateMatrix.makeRotate(rotation); //this one does it
+
+    //put all back again
+    resultMatrix = rotateMatrix * translateMatrix;
+
+    //m_geometryMatrixTransform->setMatrix(resultMatrix);
+    m_compositeDragger->setMatrix(resultMatrix); 
+}
+
+
+void osg::CDraggableGeometry::setScale(const osg::Vec3 & s)
+{
+    m_geometryScaleTransform->setMatrix(osg::Matrix::scale(s));
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //!\brief	Sets the draggers matrix. 
 //!
@@ -346,4 +445,10 @@ void osg::CDraggableGeometry::setDraggersMatrix( const osg::Matrix & matrix )
 {
 	// Simply set the matrix
 	m_compositeDragger->setMatrix( matrix );
+}
+
+osg::CDraggableGeometry::CMyCompositeDragger::CMyCompositeDragger(CDraggableGeometry * dg, int handleCommandMask)
+    : m_dg(dg)
+{
+    _selfUpdater = new osgManipulator::DraggerTransformCallback(this, handleCommandMask);
 }

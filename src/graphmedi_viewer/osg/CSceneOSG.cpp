@@ -22,10 +22,19 @@
 
 #include <base/Defs.h>
 #include <osg/CSceneOSG.h>
+#include <osg/LineWidth>
 #include <data/CSceneManipulatorDummy.h>
 #include <data/CSceneWidgetParameters.h>
 #include <render/PSVRosg.h>
 #include <render/PSVRrenderer.h>
+#include <Signals.h>
+#include <graph/osg/NodeMasks.h>
+#include <geometry/base/functions.h>
+#include <data/CArbitrarySlice.h>
+#include <osg/CTranslateOtherLineDragger.h>
+#include <osg/CGeometryGenerator.h>
+#include <data/CMultiClassRegionColoring.h>
+
 
 //#include <osgManipulator/Translate2DDragger>
 
@@ -46,6 +55,17 @@ scene::CSceneBase::CSceneBase(OSGCanvas * pCanvas)
 
     // Connect to the clear all gizmos signal
     m_ClearAllGizmosConnection = VPL_SIGNAL(SigClearAllGizmos).connect(this, &scene::CSceneOSG::clearGizmos);
+    m_ClearMeasurementsConnection = VPL_SIGNAL(SigRemoveMeasurements).connect(this, &scene::CSceneOSG::clearGizmos);
+
+    // Create landmark annotations group
+    m_landmarkAnnotationsGroup = new osg::COnOffNode;
+    m_landmarkAnnotationsGroup->show();
+    p_AnchorAndCenterGroup->addChild(m_landmarkAnnotationsGroup.get());
+
+    // Connect to landmark annotation signals
+    m_ClearLandmarkAnnotation = VPL_SIGNAL(SigClearLandmarkAnnotationDrawable).connect(this, &scene::CSceneOSG::clearLandmarkAnnotation);
+    m_ClearAllLandmarkAnnotations = VPL_SIGNAL(SigClearAllLandmarkAnnotationDrawables).connect(this, &scene::CSceneOSG::clearAllLandmarkAnnotations);
+    m_SetLandmarkAnnotationVisibility = VPL_SIGNAL(SigSetLandmarkAnnotationDrawablesVisibility).connect(this, &scene::CSceneOSG::setLandmarkAnnotationsVisibility);
 
     scene::CGeneralObjectObserverOSG<CSceneBase>::connect(APP_STORAGE.getEntry(data::Storage::SceneManipulatorDummy::Id).get());
 
@@ -54,12 +74,17 @@ scene::CSceneBase::CSceneBase(OSGCanvas * pCanvas)
 
     // add event handlers
     p_DraggerEventHandler = new CDraggerEventHandler(pCanvas);
+    unsigned int mask = MASK_ORTHO_2D_DRAGGER;
+    p_DraggerEventHandler->setVisitorMask(mask);
+    p_DraggerEventHandler->setMaskingMode(scene::CDraggerEventHandler::EMode::MODE_MASKED_FIRST);
     m_pCanvas->addEventHandler(p_DraggerEventHandler.get());
 
     p_DensityWindowEventHandler = new CDensityWindowEventHandler();
     m_pCanvas->addEventHandler(p_DensityWindowEventHandler.get());
 
     p_CommandEventHandler = new CCommandEventHandler();
+    mask = MASK_REGION_PREVIEW;
+    p_CommandEventHandler->setVisitorMask(~mask);
     m_pCanvas->addEventHandler(p_CommandEventHandler.get());
 
     // set manipulator geometry
@@ -76,6 +101,7 @@ scene::CSceneBase::CSceneBase(OSGCanvas * pCanvas)
 
     // Set the update callback
     scene::CGeneralObjectObserverOSG<CSceneBase>::connect(APP_STORAGE.getEntry(data::Storage::ActiveDataSet::Id).get());
+    scene::CGeneralObjectObserverOSG<CSceneBase>::connect(APP_STORAGE.getEntry(data::Storage::ArbitrarySlice::Id).get());
     this->setupObserver(this);
 }
 
@@ -85,7 +111,12 @@ scene::CSceneBase::~CSceneBase()
     // disconnect signals
     this->freeObserver(this);
     scene::CGeneralObjectObserverOSG<CSceneBase>::disconnect(APP_STORAGE.getEntry(data::Storage::ActiveDataSet::Id).get());
+    scene::CGeneralObjectObserverOSG<CSceneBase>::disconnect(APP_STORAGE.getEntry(data::Storage::ArbitrarySlice::Id).get());
     VPL_SIGNAL(SigClearAllGizmos).disconnect(m_ClearAllGizmosConnection);
+    VPL_SIGNAL(SigRemoveMeasurements).disconnect(m_ClearMeasurementsConnection);
+    VPL_SIGNAL(SigClearLandmarkAnnotationDrawable).disconnect(m_ClearLandmarkAnnotation);
+    VPL_SIGNAL(SigClearAllLandmarkAnnotationDrawables).disconnect(m_ClearAllLandmarkAnnotations);
+    VPL_SIGNAL(SigSetLandmarkAnnotationDrawablesVisibility).disconnect(m_SetLandmarkAnnotationVisibility);
     scene::CGeneralObjectObserverOSG<CSceneBase>::disconnect(APP_STORAGE.getEntry(data::Storage::SceneManipulatorDummy::Id).get());
 }
 
@@ -129,10 +160,13 @@ scene::CSceneOSG::CSceneOSG(OSGCanvas *pCanvas, bool xyOrtho, bool xzOrtho, bool
     , m_bXYOrtho(xyOrtho)
     , m_bXZOrtho(xzOrtho)
     , m_bYZOrtho(yzOrtho)
+    , m_arbSliceVisibility(true)
 {
     // Get widgets color
     data::CObjectPtr<data::CSceneWidgetParameters> ptrCOptions(APP_STORAGE.getEntry(data::Storage::SceneWidgetsParameters::Id));
     m_widgetsColor = ptrCOptions->getMarkersColor();
+
+    m_conSliceMoved = VPL_SIGNAL(SigOrthoSliceMoved).connect(this, &CSceneOSG::orthoSliceMoved);
 
     if (bCreateScene)
         createScene();
@@ -153,6 +187,9 @@ scene::CSceneOSG::~CSceneOSG()
         VPL_SIGNAL(SigSetPlaneYZVisibility).disconnect(m_conVis[4]);
     if (m_conVis[5].getSignalPtr())
         VPL_SIGNAL(SigSetPlaneYZVisibility).disconnect(m_conVis[5]);
+
+    if (m_conSliceMoved.getSignalPtr())
+        VPL_SIGNAL(SigOrthoSliceMoved).disconnect(m_conSliceMoved);
 }
 
 //====================================================================================================================
@@ -241,22 +278,19 @@ float scene::CSceneOSG::getThin() const
     return f_Thin;
 }
 
-//====================================================================================================================
-void scene::CSceneOSG::anchorToSliceXY(osg::Node * node)
+void scene::CSceneOSG::updateArbSliceGeometry()
 {
-    p_DraggableSlice[0]->anchorToSlice(node);
-}
+    if (!m_bXYOrtho && !m_bXZOrtho && !m_bYZOrtho)
+    {
+        return;
+    }
 
-//====================================================================================================================
-void scene::CSceneOSG::anchorToSliceXZ(osg::Node * node)
-{
-    p_DraggableSlice[1]->anchorToSlice(node);
-}
+    if (!m_arbSliceVisibility)
+    {
+        return;
+    }
 
-//====================================================================================================================
-void scene::CSceneOSG::anchorToSliceYZ(osg::Node * node)
-{
-    p_DraggableSlice[2]->anchorToSlice(node);
+    m_arbSlice2D->updateGeometry();
 }
 
 //====================================================================================================================
@@ -264,6 +298,11 @@ void scene::CSceneOSG::updateFromStorage()
 {
     std::set<int> changedEntries;
     getChangedEntries(changedEntries);
+
+    if (changedEntries.find(data::Storage::ArbitrarySlice::Id) != changedEntries.end() && (m_bXYOrtho || m_bXZOrtho || m_bYZOrtho))
+    {
+        updateArbSliceGeometry();
+    }
 
     // Get the active dataset
     data::CObjectPtr<data::CDensityData> spData(APP_STORAGE.getEntry(VPL_SIGNAL(SigGetActiveDataSet).invoke2()));
@@ -289,17 +328,18 @@ void scene::CSceneOSG::updateFromStorage()
             this->setupScene(*spData);
         }
         // invalidate gizmos on manipulator change
-        if (changedEntries.find(data::Storage::SceneManipulatorDummy::Id)!=changedEntries.end())
-            clearGizmos();
+        //if (changedEntries.find(data::Storage::SceneManipulatorDummy::Id)!=changedEntries.end())
+        //    clearGizmos();
     }
+
     m_pCanvas->Refresh(false);
 }
 
-//====================================================================================================================
-void scene::CSceneOSG::anchorToOrthoScene(osg::Node * node)
+void scene::CSceneOSG::orthoSliceMoved()
 {
-    p_OrthoAnchorAndCenterGroup->addChild(node);
+    updateArbSliceGeometry();
 }
+
 
 //====================================================================================================================
 scene::CSceneXY::CSceneXY(OSGCanvas * canvas)
@@ -319,6 +359,8 @@ scene::CSceneXY::CSceneXY(OSGCanvas * canvas)
     this->setMatrix(m_orthoTransformMatrix);
 
 	this->p_DraggableSlice[0]->dummyThin(true);
+
+    m_arbSlice2D->setSceneType(osg::CArbitrarySliceVisualizer2D::EST_XY);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -342,6 +384,8 @@ void scene::CSceneXY::sliceUpDown(int direction)
     position = std::max((vpl::tSize)0, std::min(position, spVolume->getZSize() - 1));
 	if (oldPos!=position)
 		VPL_SIGNAL(SigSetSliceXY).invoke(position);
+
+    updateArbSliceGeometry();
 }
 
 //====================================================================================================================
@@ -364,6 +408,8 @@ scene::CSceneXZ::CSceneXZ(OSGCanvas * canvas)
     this->setMatrix(m_orthoTransformMatrix);
 
 	this->p_DraggableSlice[1]->dummyThin(true);
+
+    m_arbSlice2D->setSceneType(osg::CArbitrarySliceVisualizer2D::EST_XZ);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -387,6 +433,8 @@ void scene::CSceneXZ::sliceUpDown(int direction)
     position = std::max((vpl::tSize)0, std::min(position, spVolume->getYSize() - 1));
 	if (oldPos!=position)
 		VPL_SIGNAL(SigSetSliceXZ).invoke(position);
+
+    updateArbSliceGeometry();
 }
 
 //====================================================================================================================
@@ -409,6 +457,8 @@ scene::CSceneYZ::CSceneYZ(OSGCanvas * canvas)
     this->setMatrix(m_orthoTransformMatrix);
 
 	this->p_DraggableSlice[2]->dummyThin(true);
+
+    m_arbSlice2D->setSceneType(osg::CArbitrarySliceVisualizer2D::EST_YZ);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -432,6 +482,8 @@ void scene::CSceneYZ::sliceUpDown(int direction)
     position = std::max((vpl::tSize)0, std::min(position, spVolume->getXSize() - 1));
 	if (oldPos!=position)
 		VPL_SIGNAL(SigSetSliceYZ).invoke(position);
+
+    updateArbSliceGeometry();
 }
 
 //====================================================================================================================
@@ -579,7 +631,7 @@ void scene::CSceneOSG::createScene()
     p_DraggableSlice[0] = new CDraggableSliceXY(m_pCanvas, m_bXYOrtho, data::Storage::SliceXY::Id);
     p_DraggableSlice[1] = new CDraggableSliceXZ(m_pCanvas, m_bXZOrtho, data::Storage::SliceXZ::Id);
     p_DraggableSlice[2] = new CDraggableSliceYZ(m_pCanvas, m_bYZOrtho, data::Storage::SliceYZ::Id);
-
+    m_arbSlice2D = new osg::CArbitrarySliceVisualizer2D(m_pCanvas, data::Storage::ArbitrarySlice::Id);
 
     // Get and set colors of slices
     data::CObjectPtr< data::CSceneWidgetParameters > ptrOptions(APP_STORAGE.getEntry(data::Storage::SceneWidgetsParameters::Id));
@@ -612,6 +664,7 @@ void scene::CSceneOSG::createScene()
     p_onOffNode[0] = new osg::COnOffNode;
     p_onOffNode[1] = new osg::COnOffNode;
     p_onOffNode[2] = new osg::COnOffNode;
+    p_onOffNode[3] = new osg::COnOffNode;
 
     // Connect on/off nodes with signals - only for 3D view
     if (!(m_bXYOrtho || m_bYZOrtho || m_bXZOrtho))
@@ -630,6 +683,8 @@ void scene::CSceneOSG::createScene()
         p_onOffNode[1]->setOnOffState(m_bXZOrtho);
         p_onOffNode[2]->addChild(p_DraggableSlice[2].get(), true);
         p_onOffNode[2]->setOnOffState(m_bYZOrtho);
+        p_onOffNode[3]->addChild(m_arbSlice2D.get(), true);
+        p_onOffNode[3]->setOnOffState(false);
     }
     else
     {
@@ -640,11 +695,14 @@ void scene::CSceneOSG::createScene()
         p_onOffNode[1]->setOnOffState(true);
         p_onOffNode[2]->addChild(p_DraggableSlice[2].get(), true);
         p_onOffNode[2]->setOnOffState(true);
+        p_onOffNode[3]->addChild(m_arbSlice2D.get(), true);
+        p_onOffNode[3]->setOnOffState(true);
     }
 
     this->addChild(p_onOffNode[0].get());
     this->addChild(p_onOffNode[1].get());
     this->addChild(p_onOffNode[2].get());
+    this->addChild(p_onOffNode[3].get());
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -697,4 +755,196 @@ osg::Vec3 scene::CScene3DBase::getXZWorld()
 osg::Vec3 scene::CScene3DBase::getYZWorld()
 {
     return this->getSliceYZ()->getWorldPosition();
+}
+
+
+
+scene::CArbitrarySliceScene::CArbitrarySliceScene(OSGOrtho2DCanvas* canvas) :
+    CSceneBase(canvas)
+{
+    m_pImplantSlice = new osg::CArbitrarySliceGeometry();
+    osg::CMaterialLineStrip* material = new osg::CMaterialLineStrip(getCanvas()->getView()->getCamera(), 4.0);
+    m_pImplantSlice->setLineMaterial(material);
+
+    this->setName("ArbScene");
+
+    // move the scene a bit back so that everything is visible
+    this->setMatrix(osg::Matrix::scale(1.0f, 1.0f, 1.0f) * osg::Matrix::translate(osg::Vec3(0, 0, SCENE_SHIFT_AMMOUNT)));
+    this->m_unOrthoTransformMatrix = osg::Matrix::inverse(this->getMatrix());
+    this->m_orthoTransformMatrix = this->getMatrix();
+
+    //
+    tObserverType::connect(APP_STORAGE.getEntry(data::Storage::ArbitrarySlice::Id).get());
+    tObserverType::connect(APP_STORAGE.getEntry(data::Storage::MultiClassRegionColoring::Id).get());
+    tObserverType::connect(APP_STORAGE.getEntry(data::Storage::MultiClassRegionData::Id).get());
+    tObserverType::connect(APP_STORAGE.getEntry(data::Storage::DensityWindow::Id).get());
+
+    /////////////////
+    // Plane dragging 
+
+    m_selection = new scene::CPlaneARBUpdateSelection();
+
+    m_planeDragger = new osgManipulator::CTranslateOtherLineDragger(osg::Vec3(0.0, 0.0, 0.0), osg::Vec3(0.0, 0.0, 1.0), osg::Vec3(0.0, 0.0, 0.0), osg::Vec3(0.0, 1.0, 0.0));
+    m_planeDragger->setDraggerActive(true);
+
+    // Add plane to dragger
+    m_selection->addChild(m_pImplantSlice);
+    m_selection->setName("Plane selection");
+    m_selection->setSignal(&(VPL_SIGNAL(SigSetSliceARB)));
+
+    m_planeDragger->addChild(m_pImplantSlice);
+    m_planeDragger->setName("Arb slice dragger");
+
+    // Add plane dragger to scene
+    addChild(m_planeDragger.get());
+    addChild(m_selection.get());
+
+    m_planeDragger->addDraggerCallback(m_selection->getDraggerCommand());
+
+    // Get color from the storage
+    data::CObjectPtr< data::CSceneWidgetParameters > ptrOptions(APP_STORAGE.getEntry(data::Storage::SceneWidgetsParameters::Id));
+    if (ptrOptions.get() == 0)
+        return;
+
+    // Get this plane color
+    osg::Vec4 planeColor(1.0, 1.0, 0.0, 1.0);
+
+    this->m_pImplantSlice->setFrameColor(planeColor);
+
+    m_xySlice2D = new osg::COrthoSlicesVisualizer2D(m_pCanvas, data::Storage::SliceXY::Id, osg::COrthoSlicesVisualizer2D::ESceneType::EST_XY);
+    m_xzSlice2D = new osg::COrthoSlicesVisualizer2D(m_pCanvas, data::Storage::SliceXZ::Id, osg::COrthoSlicesVisualizer2D::ESceneType::EST_XZ);
+    m_yzSlice2D = new osg::COrthoSlicesVisualizer2D(m_pCanvas, data::Storage::SliceYZ::Id, osg::COrthoSlicesVisualizer2D::ESceneType::EST_YZ);
+
+    p_onOffNode[0] = new osg::COnOffNode;
+    p_onOffNode[1] = new osg::COnOffNode;
+    p_onOffNode[2] = new osg::COnOffNode;
+
+    p_onOffNode[0]->addChild(m_xySlice2D.get(), true);
+    p_onOffNode[0]->setOnOffState(true);
+    p_onOffNode[1]->addChild(m_xzSlice2D.get(), true);
+    p_onOffNode[1]->setOnOffState(true);
+    p_onOffNode[2]->addChild(m_yzSlice2D.get(), true);
+    p_onOffNode[2]->setOnOffState(true);
+
+    addChild(p_onOffNode[2].get());
+    addChild(p_onOffNode[1].get());
+    addChild(p_onOffNode[0].get());
+
+    m_pCanvas->centerAndScale();
+
+    m_conSliceMoved = VPL_SIGNAL(SigOrthoSliceMoved).connect(this, &CArbitrarySliceScene::orthoSliceMoved);
+}
+
+scene::CArbitrarySliceScene::~CArbitrarySliceScene()
+{
+    tObserverType::disconnect(APP_STORAGE.getEntry(data::Storage::ArbitrarySlice::Id).get());
+    tObserverType::disconnect(APP_STORAGE.getEntry(data::Storage::MultiClassRegionColoring::Id).get());
+    tObserverType::disconnect(APP_STORAGE.getEntry(data::Storage::MultiClassRegionData::Id).get());
+    tObserverType::disconnect(APP_STORAGE.getEntry(data::Storage::DensityWindow::Id).get());
+
+    if (m_conSliceMoved.getSignalPtr())
+    {
+        VPL_SIGNAL(SigOrthoSliceMoved).disconnect(m_conSliceMoved);
+    }
+}
+
+osg::CArbitrarySliceGeometry* scene::CArbitrarySliceScene::getSlice() const
+{
+    return m_pImplantSlice.get();
+}
+
+void scene::CArbitrarySliceScene::updateFromStorage()
+{
+    std::set<int> changedEntries;
+    getChangedEntries(changedEntries);
+
+    if (changedEntries.empty() || changedEntries.find(data::Storage::ArbitrarySlice::Id) != changedEntries.end())
+    {
+        updateFromStorageArbitrarySlice();
+    }
+
+    if (changedEntries.empty() || changedEntries.find(data::Storage::ActiveDataSet::Id) != changedEntries.end())
+    {
+        data::CObjectPtr<data::CDensityData> spData(APP_STORAGE.getEntry(VPL_SIGNAL(SigGetActiveDataSet).invoke2()));
+
+        // Update the scene
+        this->setupScene(*spData);
+    }
+
+    m_xySlice2D->updateGeometry();
+    m_xzSlice2D->updateGeometry();
+    m_yzSlice2D->updateGeometry();
+
+    m_pCanvas->Refresh(false);
+}
+
+void scene::CArbitrarySliceScene::setupScene(data::CDensityData & data)
+{
+    data::CObjectPtr< data::CArbitrarySlice > slice(APP_STORAGE.getEntry(data::Storage::ArbitrarySlice::Id));
+    m_selection->setVoxelDepth(slice->getPositionMax() - slice->getPositionMin(), slice->getSliceVoxelSize()[2]);
+    m_selection->setPlaneNormal(slice->getPlaneNormal());
+    m_pCanvas->centerAndScale();
+}
+
+void scene::CArbitrarySliceScene::updateFromStorageArbitrarySlice()
+{
+    data::CObjectPtr< data::CArbitrarySlice > slice(APP_STORAGE.getEntry(data::Storage::ArbitrarySlice::Id));
+
+    osg::Vec3 normal(slice->getPlaneNormal());
+    osg::Vec3 right(slice->getPlaneRight());
+    osg::Vec3 center(slice->getPlaneCenter());
+
+    m_selection->setVoxelDepth(slice->getPositionMax() - slice->getPositionMin(), slice->getSliceVoxelSize()[2]);
+    m_selection->setPlaneNormal(normal);
+
+    osg::Vec3 base_X, base_Y, base_Z;
+
+    base_X = normal ^ right;
+    base_Y = right;
+    base_Z = base_Y ^ base_X;
+
+    base_Z.normalize();
+    base_Y.normalize();
+    base_X.normalize();
+
+    osg::Matrix transformation(osg::Matrix(
+        base_X[0], base_X[1], base_X[2], 0,
+        base_Y[0], base_Y[1], base_Y[2], 0,
+        base_Z[0], base_Z[1], base_Z[2], 0,
+        center[0], center[1], center[2], 1
+    ));
+
+    // Set matrices
+    this->p_AnchorGroup->setMatrix(transformation);
+    this->p_AnchorAndCenterGroup->setMatrix(transformation);
+
+    m_pImplantSlice->update(*slice.get());
+}
+
+void scene::CArbitrarySliceScene::sliceUpDown(int direction)
+{
+    data::CObjectPtr<data::CArbitrarySlice> spSlice(APP_STORAGE.getEntry(data::Storage::ArbitrarySlice::Id));
+
+    vpl::tSize position = spSlice->getPosition();
+    vpl::tSize oldPos = position;
+    position += direction;
+
+    if (position < spSlice->getPositionMin() || position > spSlice->getPositionMax())
+    {
+        return;
+    }
+
+    if (oldPos != position)
+    {
+        VPL_SIGNAL(SigSetSliceARB).invoke(position);
+    }
+}
+
+void scene::CArbitrarySliceScene::orthoSliceMoved()
+{
+    m_xySlice2D->updateGeometry();
+    m_xzSlice2D->updateGeometry();
+    m_yzSlice2D->updateGeometry();
+
+    m_pCanvas->Refresh(false);
 }

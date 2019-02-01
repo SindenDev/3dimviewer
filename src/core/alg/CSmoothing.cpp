@@ -70,39 +70,37 @@ bool CSmoothing::Smooth(geometry::CMesh &mesh, int loops)
     OpenMesh::VPropHandleT<geometry::CMesh::Point>      new_positions_prop;
     mesh.add_property(new_positions_prop);
 
-    geometry::CMesh::VertexIter                         v_it, v_end(mesh.vertices_end());               // mesh vertex iterator and end iterator
-    geometry::CMesh::VertexVertexIter                   vv_it;                                          // vertex circulator                       
-    geometry::CMesh::Point                              vertex_vector;                                  // vector from actual (center) point to actual adjacent vertex    
-    geometry::CMesh::Point                              centr_point;                                    // position of actual (center) point
-
-    double                                              smooth_factor;                                  // used smoothing factor
+    geometry::CMesh::VertexIter                         v_end(mesh.vertices_end());               // mesh vertex iterator and end iterator        
     bool                                                result = true;
 
     // smoothing iterations cycle
     for (int i = 0; i < loops; ++i)
     {
         // set first Taubin smoothing parameter
-        smooth_factor = m_taubins_lambda;
+        double smooth_factor = m_taubins_lambda;
 
         // Taubin smoothing cycle
         for (int ts = 0; ts < 2; ++ts)
         {
             // mesh vertices cycle
-            for (v_it = mesh.vertices_begin(); v_it != v_end; ++v_it)
-            {      
+            const int nVertices = mesh.n_vertices();
+#pragma omp parallel for
+            for(int iv = 0; iv < nVertices; iv++)
+            { 
+                geometry::CMesh::VertexHandle v_it = mesh.vertex_handle(iv);
                 mesh.property(new_positions_prop, v_it).vectorize(0.0f);
                 // vertex normalisation weight, sum of adjacent vertices weight
                 double normalisation_weight = 0.0;
                 // position of actual (center) point
-                centr_point = mesh.point(v_it);
-      
+                const geometry::CMesh::Point centr_point = mesh.point(v_it);
+
                 // ring of vertices around actual vertex cycle
-                for (vv_it = mesh.vv_iter(v_it); vv_it; ++vv_it)
+                for (geometry::CMesh::VertexVertexIter vv_it = mesh.vv_iter(v_it); vv_it; ++vv_it)
                 {
                     // adjacent vertex vector calculation
-                    vertex_vector = mesh.point(vv_it) - centr_point;
+                     geometry::CMesh::Point vertex_vector = mesh.point(vv_it) - centr_point;
                     // squared distance of actual vertex and adjacent actual vertex
-                    double vertex_vector_length_2 = vertex_vector.sqrnorm(); 
+                    double vertex_vector_length_2 = vertex_vector.sqrnorm();
                     // distance weight calculation
                     double distance_weight = exp((vertex_vector_length_2) / (-2.0 * m_squared_smooth_factor));
                     if (distance_weight != distance_weight)
@@ -126,10 +124,12 @@ bool CSmoothing::Smooth(geometry::CMesh &mesh, int loops)
                 else
                     mesh.property(new_positions_prop, v_it) = centr_point;
             }
-    
+   
             // mesh vertices cycle to realise smoothing step
-            for (v_it = mesh.vertices_begin(); v_it != v_end; ++v_it)
+#pragma omp parallel for
+            for (int iv = 0; iv < nVertices; iv++)
             {
+                geometry::CMesh::VertexHandle v_it = mesh.vertex_handle(iv);
                 // boundary vertex test
                 if ( !mesh.is_boundary(v_it) )
                     // set new position for actual vertex

@@ -23,13 +23,21 @@
 #ifndef CSceneOSG_H
 #define CSceneOSG_H
 
-#include <osg/OSGCanvas.h>
+//#include <osg/OSGCanvas.h>
+//#include <osg/OrthoManipulator.h>
+//#include <osg/COnOffNode.h>
+#include <osg/OSGOrtho2DCanvas.h>
+
 #include <osg/CDraggableSlice.h>
 #include <osg/CDraggerEventHandler.h>
 #include <osg/CDensityWindowEventHandler.h>
 #include <osg/CCommandEventHandler.h>
-#include <osg/COnOffNode.h>
 #include <osg/NodeMasks.h>
+#include <osg/CActiveObjectBase.h>
+#include <osg/CDraggableGeometry.h>
+#include <osg/CArbitrarySliceGeometry.h>
+#include <osg/CArbitrarySliceVisualizer2D.h>
+#include <osg/COrthoSlicesVisualizer2D.h>
 
 #include <osg/CGeneralObjectObserverOSG.h>
 #include <data/CActiveDataSet.h>
@@ -43,12 +51,10 @@
 #include <widgets/Widgets.h>
 #include <widgets/CWidgetOverlayNode.h>
 
-#include "AppConfigure.h"
 #include <osg/CAppMode.h>
 ///////////////////////////////////////////////////////////////////////////////
 // forward declarations
 namespace PSVR { class PSVolumeRendering; }
-
 
 namespace scene
 {
@@ -59,6 +65,7 @@ namespace scene
 // Rendering order
 #define LAYER_SCENE 10
 #define LAYER_GIZMOS 30 //20
+#define LAYER_LANDMARK_ANNOTATIONS 25
 #define LAYER_VOLUME_RENDERING 20 //30
 #define LAYER_HUD 40
 #define LAYER_WIDGETS 50
@@ -96,6 +103,50 @@ public:
     void removeGizmo(osg::Node * gizmo)
     {
         m_gizmosGroup->removeChild(gizmo);
+        m_pCanvas->Refresh(false);
+    }
+
+    //! Add landmark annotation with a given id
+    void addLandmarkAnnotation(osg::COnOffNode * landmarkAnnotation, std::string landmarkId)
+    {
+        landmarkAnnotation->setNodeMask(MASK_LANDMARK_ANNOTATION);
+        m_landmarkAnnotationsGroup->addChild(landmarkAnnotation);
+        m_landmarkIdsToAnnotationNodes[landmarkId] = landmarkAnnotation;
+        m_pCanvas->Refresh(false);
+    }
+
+    //! Clear landmark annotation with a given id
+    void clearLandmarkAnnotation(std::string landmarkId)
+    {
+        auto it = m_landmarkIdsToAnnotationNodes.find(landmarkId);
+        if (it == m_landmarkIdsToAnnotationNodes.end())
+            return;
+
+        int childIndex = m_landmarkAnnotationsGroup->getChildIndex(it->second);
+        assert(childIndex != m_landmarkAnnotationsGroup->getNumChildren());
+        if (childIndex != m_landmarkAnnotationsGroup->getNumChildren())
+        {
+            bool childFound = m_landmarkAnnotationsGroup->removeChild(childIndex);
+            assert(childFound);
+            m_landmarkIdsToAnnotationNodes.erase(landmarkId);
+            m_pCanvas->Refresh(false);
+        }
+    }
+
+    //! Clear all landmark annotations
+    void clearAllLandmarkAnnotations()
+    {
+        if (m_landmarkAnnotationsGroup->getNumChildren() > 0)
+        {
+            m_landmarkIdsToAnnotationNodes.clear();
+            m_landmarkAnnotationsGroup->removeChildren(0, m_landmarkAnnotationsGroup->getNumChildren());
+            m_pCanvas->Refresh(false);
+        }
+    }
+
+    void setLandmarkAnnotationsVisibility(bool visible)
+    {
+        m_landmarkAnnotationsGroup->setOnOffState(visible);
         m_pCanvas->Refresh(false);
     }
 
@@ -137,9 +188,25 @@ protected:
 
     //! Connection to clear all gizmos signal
     vpl::mod::tSignalConnection		m_ClearAllGizmosConnection;
+    vpl::mod::tSignalConnection		m_ClearMeasurementsConnection;
+    
+    //! Clear landmark annotation with the specified id from scene signal connection
+    vpl::mod::tSignalConnection m_ClearLandmarkAnnotation;
+
+    //! Clear all landmark annotations from scene signal connection
+    vpl::mod::tSignalConnection	m_ClearAllLandmarkAnnotations;
+
+    //! Set landmark annotation visibility signal connection
+    vpl::mod::tSignalConnection	m_SetLandmarkAnnotationVisibility;
 
     //! Drawing gizmos node
     osg::ref_ptr< osg::COnOffNode > m_gizmosGroup;
+
+    //! Drawing landmark annotations node
+    osg::ref_ptr< osg::COnOffNode > m_landmarkAnnotationsGroup;
+
+    //! Mapping from annotated landmark ids to annotation nodes
+    std::map<std::string, osg::Node *> m_landmarkIdsToAnnotationNodes;
 
     //! Scene shift is used in ortho windows to move scene from origin. This const defines ammount of the shift.
     static const long SCENE_SHIFT_AMMOUNT = 1000;
@@ -168,15 +235,6 @@ public:
 
     //! Destructor
     virtual ~CSceneOSG();
-
-    //! Updates slice XY position in scene according to position in volume data
-    void updatePositionXY(int position);
-
-    //! Updates slice XZ position in scene according to position in volume data
-    void updatePositionXZ(int position);
-
-    //! Updates slice YZ position in scene according to position in volume data
-    void updatePositionYZ(int position);
 
     //! Method called on OSG update callback.
     virtual void updateFromStorage();
@@ -208,18 +266,6 @@ public:
     //! Returns thickness of the dummy geometry. 
     float getThin() const;
 
-    //! Anchors osg subtree to xy slice
-    void anchorToSliceXY(osg::Node * node);
-
-    //! Anchors osg subtree to xz slice
-    void anchorToSliceXZ(osg::Node * node);
-
-    //! Anchors osg subtree to yz slice
-    void anchorToSliceYZ(osg::Node * node);
-
-    //! Anchor to the main scene 
-    void anchorToOrthoScene(osg::Node * node);
-
     //! Returns pointer to XY slice
     CDraggableSlice * getSliceXY()
     {
@@ -241,12 +287,22 @@ public:
     //! Create default scene
     virtual void createScene();
 
+    void updateArbSliceGeometry();
+
+    void setArbSliceVisibility(bool visible)
+    {
+        m_arbSliceVisibility = visible;
+        updateArbSliceGeometry();
+    }
+
 protected:
     //! Create widgets overlay scene
     void createWidgetsScene(OSGCanvas *pCanvas, const osg::Matrix & viewMatrix, int Flags);
 
     //! App mode changed callback
     void onAppModeChanged(scene::CAppMode::tMode mode);
+
+    void orthoSliceMoved();
 
 protected:
     //! Info text
@@ -255,8 +311,8 @@ protected:
     //! 3 pointers to each draggable slice
     osg::ref_ptr< CDraggableSlice > p_DraggableSlice[3];
 
-    //! 3 On/off nodes (used to show/hide draggable slices
-    osg::ref_ptr< osg::COnOffNode > p_onOffNode[3];
+    //! 4 On/off nodes (used to show/hide draggable slices
+    osg::ref_ptr< osg::COnOffNode > p_onOffNode[4];
 
     //! Scene moved signal
     vpl::mod::CSignal< void > m_SceneChangedSignal;
@@ -284,6 +340,10 @@ protected:
 
     //! Visibility connections
     vpl::mod::tSignalConnection  m_conVis[6];
+
+    osg::ref_ptr<osg::CArbitrarySliceVisualizer2D> m_arbSlice2D;
+
+    bool m_arbSliceVisibility;
 };
 
 
@@ -382,6 +442,51 @@ protected:
     osg::ref_ptr<osg::StateSet> m_renderedSS;
 };
 
-} // namespace scene
+
+class CArbitrarySliceScene : public CSceneBase
+{
+public:
+    //! Constructor parametrized by canvas pointer
+    CArbitrarySliceScene(OSGOrtho2DCanvas * canvas = 0);
+
+    //! Destructor
+    ~CArbitrarySliceScene();
+
+    //! Method called on OSG update callback.
+    virtual void updateFromStorage() override;
+    void updateFromStorageArbitrarySlice();
+
+    //
+    virtual void setupScene(data::CDensityData & data) override;
+
+    osg::CArbitrarySliceGeometry* getSlice() const;
+
+    //! Move slice up/down event handler. True means up.
+    void sliceUpDown(int direction);
+
+protected:
+    osg::ref_ptr< osg::CArbitrarySliceGeometry > m_pImplantSlice;
+
+    //! Plane dragger
+    osg::ref_ptr<osgManipulator::Dragger> m_planeDragger;
+    osg::ref_ptr< scene::CPlaneARBUpdateSelection > m_selection;
+
+    osg::ref_ptr<osg::COrthoSlicesVisualizer2D> m_xySlice2D;
+    osg::ref_ptr<osg::COrthoSlicesVisualizer2D> m_xzSlice2D;
+    osg::ref_ptr<osg::COrthoSlicesVisualizer2D> m_yzSlice2D;
+
+    osg::ref_ptr<osg::COnOffNode> p_onOffNode[3];
+
+    //! Signal connection
+    vpl::mod::tSignalConnection m_c1;
+
+    //! Slice moved signal connections
+    vpl::mod::tSignalConnection m_conSliceMoved;
+
+    void orthoSliceMoved();
+};
+
+
+}
 
 #endif // CSceneOSG_H

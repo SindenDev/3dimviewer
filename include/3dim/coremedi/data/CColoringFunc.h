@@ -63,6 +63,9 @@ namespace ColoringFunc
 
         //! Complex (no LUT) coloring
         COMPLEX_COLORING = 32,
+
+        //! Constant coloring respecting the original density data
+        CONST_COLORING_CUSTOM = 64,
     };
 
 } // namespace ColoringFunc
@@ -83,7 +86,10 @@ public:
     typedef CColor4<T> tColor;
 
     //! Input density value.
-    typedef vpl::img::tDensityPixel tPixel;
+    //typedef vpl::img::tDensityPixel tPixel;
+    typedef vpl::sys::tInt64 tPixel; // Density data are signed, but CColoringFunc is used to region coloring
+                                     // and region data are unsigned, + multi-class region data are 32b, so tPixel cannot be tDensityPixel (int16),
+                                     // or tPixel32 (Uint32)
 
 protected:
     bool m_overrideRegionColoring;
@@ -545,6 +551,91 @@ public:
     {
         return tColor();
     }
+};
+
+///////////////////////////////////////////////////////////////////////////////
+//! Functor for constant coloring of a given range of densities.
+//! Custom functor for coloring respecting the original density data.
+//! Just the name has been changed, so the density window recognize,
+//! that it should colorize respecting the original density data, not the modified texture (sharpen or equalized view).
+class CConstColoringCustom : public CColoringFunc4b
+{
+public:
+    //! Smart pointer type.
+    //! - Declares type tSmartPtr.
+    VPL_SHAREDPTR(CConstColoringCustom);
+
+    //! Default color transparency. 
+    enum { ALPHA = 128 };
+
+public:
+    //! Default constructor.
+    CConstColoringCustom(const tPixel& T1, const tPixel& T2, const tColor& Color)
+        : m_T1(T1)
+        , m_T2(T2)
+        , m_Color(Color)
+    { }
+
+    //! Nonparametric constructor used for serialization only
+    CConstColoringCustom()
+    { }
+
+    //! Destructor.
+    virtual ~CConstColoringCustom()
+    { }
+
+    //! Returns type of the coloring function.
+    virtual int getType() const { return ColoringFunc::CONST_COLORING_CUSTOM; }
+
+    //! Serialize
+    template < class tpSerializer >
+    void serialize(vpl::mod::CChannelSerializer<tpSerializer> & Writer)
+    {
+        Writer.write(m_T1);
+        Writer.write(m_T2);
+        m_Color.serialize(Writer);
+    }
+
+    //! Deserialize
+    template < class tpSerializer >
+    void deserialize(vpl::mod::CChannelSerializer<tpSerializer> & Reader)
+    {
+        Reader.read(m_T1);
+        Reader.read(m_T2);
+        m_Color.deserialize(Reader);
+    }
+
+    //! Colorize whole slice image
+    virtual void colorize(vpl::img::CRGBImage &rgbImage, const vpl::img::CDImage &densityImage, const data::CSlicePropertyContainer &properties)
+    {
+        const int xSize = std::min(densityImage.getXSize(), rgbImage.getXSize());
+        const int ySize = std::min(densityImage.getYSize(), rgbImage.getYSize());
+        for (int y = 0; y < ySize; ++y)
+        {
+            for (int x = 0; x < xSize; ++x)
+            {
+                vpl::img::CRGBPixel pixel = rgbImage(x, y);
+                tColor prevColor = *(reinterpret_cast<tColor *>(&pixel));
+                tColor currColor = makeColor(densityImage(x, y));
+                tColor newColor = blendColors(currColor, prevColor);
+                rgbImage(x, y) = *(reinterpret_cast<vpl::img::tRGBPixel *>(&newColor));
+            }
+        }
+    }
+
+    //! Coloring function.
+    virtual tColor makeColor(const tPixel& Density)
+    {
+        //return (Density > m_T1 && Density < m_T2) ? m_Color : tColor();
+        return (Density >= m_T1 && Density <= m_T2) ? m_Color : tColor();
+    }
+
+protected:
+    //! Density thresholds.
+    tPixel m_T1, m_T2;
+
+    //! Assigned color.
+    tColor m_Color;
 };
 
 } // namespace data

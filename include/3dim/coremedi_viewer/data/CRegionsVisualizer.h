@@ -118,7 +118,7 @@ namespace osg
             m_vertices->clear();
             m_indices->clear();
 
-			CMarchingSquares ms(slice);
+			alg::CMarchingSquares<vpl::img::tPixel16> ms(slice);
 
 			std::vector<geometry::Vec2> vertices;
 			std::vector<int> indices;

@@ -8,9 +8,11 @@ set(QT_LIB_NAME			"Qt")
 set(OSG_LIB_NAME		"OSG")
 set(GLU_LIB_NAME		"GLU")
 set(VPL_LIB_NAME		"VPL")
+set(TINYXML_LIB_NAME    "TinyXML2")
 set(VTK_LIB_NAME		"VTK")
 set(PNG_LIB_NAME		"Libpng")
 set(XML_LIB_NAME		"Libxml")
+set(TIFF_LIB_NAME		"Libtiff")
 set(GLEW_LIB_NAME		"GLEW")
 set(GDCM_LIB_NAME		"GDCM")
 set(GLAD_LIB_NAME		"glad")
@@ -37,8 +39,19 @@ set(FREEGLUT_LIB_NAME   "Freeglut")
 set(LEAPMOTION_LIB_NAME "LeapMotion")
 set(GLAD_LIB_NAME 		"glad")
 set(PYTHONCPP_LIB_NAME  "PythonCppInterop")
-set(PYTHON_LIB_NAME     "PythonLibs")
+set(TENSORFLOW_LIB_NAME "Tensorflow")
+set(PYTHON_LIB_NAME     "Python")
+set(GTEST_LIB_NAME     "GTest")
+set(GRIDCUT_LIB_NAME     "GridCut")
+set(VPLSwig_LIB_NAME    "VPLSwig")
 
+if(DARWIN)
+    set(CERES_LIB_NAME  "CERES")
+else()
+    set(CERES_LIB_NAME  "Ceres")
+endif()
+
+set(DOXYGEN_LIB_NAME    "Doxygen")
 
 
 
@@ -50,6 +63,7 @@ list(APPEND all_library_names ${QT_LIB_NAME})
 list(APPEND all_library_names ${OSG_LIB_NAME})
 list(APPEND all_library_names ${GLU_LIB_NAME})
 list(APPEND all_library_names ${VPL_LIB_NAME})
+list(APPEND all_library_names ${TINYXML_LIB_NAME})
 list(APPEND all_library_names ${VTK_LIB_NAME})
 list(APPEND all_library_names ${PNG_LIB_NAME})
 list(APPEND all_library_names ${XML_LIB_NAME})
@@ -77,10 +91,14 @@ list(APPEND all_library_names ${OPENMESH_LIB_NAME})
 list(APPEND all_library_names ${STATISMO_LIB_NAME})
 list(APPEND all_library_names ${FREEGLUT_LIB_NAME})
 list(APPEND all_library_names ${LEAPMOTION_LIB_NAME})
-list(APPEND library_names ${GLAD_LIB_NAME})
 list(APPEND all_library_names ${PYTHONCPP_LIB_NAME})
 list(APPEND all_library_names ${PYTHON_LIB_NAME})
-
+list(APPEND all_library_names ${GTEST_LIB_NAME})
+list(APPEND all_library_names ${CERES_LIB_NAME})
+list(APPEND all_library_names ${DOXYGEN_LIB_NAME})
+list(APPEND all_library_names ${TENSORFLOW_LIB_NAME})
+list(APPEND all_library_names ${GRIDCUT_LIB_NAME})
+list(APPEND all_library_names ${VPLSwig_LIB_NAME})
 
 
 macro(delete_previous_info_variables)
@@ -132,6 +150,7 @@ endmacro()
 
 #generic macro for adding include/link directories.
 #Because all of this is already available under variables derived from library name, the only thing needed is that name.
+#Exceptions that don't go through this macro.. Qt
 macro(ADD_LIB LIBNAME)
     
     set(arguments ${ARGN})
@@ -209,6 +228,11 @@ macro(ADD_LIB LIBNAME)
         
         message(STATUS "Linked libraries at ${${LIBNAME}_LIBRARY_DIRS}: ${${LIBNAME}_LIBRARIES}")
 
+    #else()
+    #    if(NOT ${${LIBNAME}_LIBRARIES} STREQUAL "")
+    #        message(STATUS "Libraries ${${LIBNAME}_LIBRARIES}")
+    #        target_link_libraries(${TRIDIM_CURRENT_TARGET} PRIVATE ${${LIBNAME}_LIBRARIES})
+    #    endif()
     endif()
 
     
@@ -225,14 +249,25 @@ macro(ADD_LIB_GDCM)
 
 endmacro()
 
+macro(ADD_LIB_TENSORFLOW)
+
+    ADD_LIB(${TENSORFLOW_LIB_NAME} ${ARGV})
+
+    target_compile_definitions(${TRIDIM_CURRENT_TARGET} PRIVATE PROTOBUF_USE_DLLS )
+
+    # Tensorflow 1.7
+    target_include_directories(${TRIDIM_CURRENT_TARGET} PRIVATE ${${TENSORFLOW_LIB_NAME}_PATH}/include/tensorflow)
+    target_include_directories(${TRIDIM_CURRENT_TARGET} PRIVATE ${${TENSORFLOW_LIB_NAME}_PATH}/include/tensorflow/contrib/cmake/buildgpu)
+    target_include_directories(${TRIDIM_CURRENT_TARGET} PRIVATE ${${TENSORFLOW_LIB_NAME}_PATH}/include/tensorflow/contrib/cmake/buildgpu/external/eigen_archive)
+    target_include_directories(${TRIDIM_CURRENT_TARGET} PRIVATE ${${TENSORFLOW_LIB_NAME}_PATH}/include/tensorflow/third_party/eigen3)
+    target_include_directories(${TRIDIM_CURRENT_TARGET} PRIVATE ${${TENSORFLOW_LIB_NAME}_PATH}/include/tensorflow/contrib/cmake/buildgpu/protobuf/src/protobuf/src)
+    target_include_directories(${TRIDIM_CURRENT_TARGET} PRIVATE ${${TENSORFLOW_LIB_NAME}_PATH}/include/tensorflow/contrib/cmake/buildgpu/external/nsync/public) # NOTE: Not necessary for TF 1.3
+
+endmacro()
+
 
 macro(ADD_LIB_OFICIALPYTHON)
-
-    FIND_PACKAGE(PythonLibs)
-    INCLUDE_DIRECTORIES(${PYTHON_INCLUDE_PATH})
-    target_link_libraries(${TRIDIM_CURRENT_TARGET} PRIVATE "${PYTHON_LIBRARY}")
-    set( PYTHON_DEBUG_LIBRARY "" CACHE STRING "Python debug library." FORCE )
-    
+    ADD_LIB(${PYTHON_LIB_NAME} ${ARGV})
 endmacro()
 
 macro(ADD_LIB_PYTHONCPP)
@@ -244,6 +279,12 @@ endmacro()
 macro(ADD_LIB_PYTHON)
     
     ADD_LIB(${PYTHON_LIB_NAME} ${ARGV})
+    
+endmacro()
+
+macro(ADD_LIB_GTEST)
+    
+    ADD_LIB(${GTEST_LIB_NAME} ${ARGV})
     
 endmacro()
 
@@ -272,8 +313,8 @@ endmacro()
 macro(ADD_LIB_GLAD)
     
     ADD_LIB(${GLAD_LIB_NAME} ${ARGV})
-	
-	target_compile_definitions( ${TRIDIM_CURRENT_TARGET} PRIVATE NOMINMAX )
+    
+    target_compile_definitions( ${TRIDIM_CURRENT_TARGET} PRIVATE NOMINMAX )
     
 endmacro()
 
@@ -327,6 +368,11 @@ macro( ADD_LIB_VPL )
 
 endmacro()
 
+macro( ADD_LIB_TINYXML )
+
+    ADD_LIB(${TINYXML_LIB_NAME} ${ARGV})
+
+endmacro()
 
 # Find the OpenMesh library.
 macro( ADD_LIB_OPENMESH )
@@ -353,15 +399,116 @@ macro( ADD_LIB_OSG )
     ADD_LIB(${OSG_LIB_NAME} ${ARGV})
 
 endmacro()
+   
+macro(ADD_LIB_CERES)
+    
+    if(UNIX)
+
+        # This module defines the following variables:
+        #
+        # Ceres_FOUND / CERES_FOUND: True if Ceres has been successfully
+        #                            found. Both variables are set as although
+        #                            FindPackage() only references Ceres_FOUND
+        #                            in Config mode, given the conventions for
+        #                            <package>_FOUND when FindPackage() is
+        #                            called in Module mode, users could
+        #                            reasonably expect to use CERES_FOUND
+        #                            instead.
+        #
+        # CERES_VERSION: Version of Ceres found.
+        #
+        # CERES_INCLUDE_DIRS: Include directories for Ceres and the
+        #                     dependencies which appear in the Ceres public
+        #                     API and are thus required to use Ceres.
+        #
+        # CERES_LIBRARIES: Libraries for Ceres and all
+        #                  dependencies against which Ceres was
+        #                  compiled. This will not include any optional
+        #                  dependencies that were disabled when Ceres was
+        #                  compiled.
+
+        #it seems no defintions/flags are exported..
+        find_package(${CERES_LIB_NAME} REQUIRED)
+
+        #make sure the FOUND variables are consistent and there is no room for mistake
+        if(${Ceres_FOUND})
+            set(Ceres_FOUND TRUE)
+            set(CERES_FOUND} TRUE)
+        endif()
+
+        if(${CERES_FOUND})
+            set(Ceres_FOUND TRUE)
+            set(CERES_FOUND} TRUE)
+        endif()
+
+        #Because libname may be capitalized differently, make sure it's set as expected
+        #Refering to variables through XXX_LIB_NAME must work.
+        if(${CERES_LIB_NAME}_FOUND)
+
+            set(${CERES_LIB_NAME}_INCLUDE_DIRS ${CERES_INCLUDE_DIRS})
+
+            list(GET ${CERES_LIB_NAME}_INCLUDE_DIRS 0 extracted_ceres_include_path)
+
+            get_filename_component(result "${extracted_ceres_include_path}" DIRECTORY)
+
+            set(${CERES_LIB_NAME}_LIBRARY_DIRS "${result}/lib")
+
+            #attempt to find the library in order to get its name
+            #find_library(result2 "${CERES_LIBRARIES}" "${${CERES_LIB_NAME}_LIBRARY_DIRS}")
+            #
+            #if(result2)
+            #
+            #    get_filename_component(ceres_lib_filename "${result2}" NAME)
+            #
+            #    #update this to full name so it works combined with library path..
+            #    #set(CERES_LIBRARIES ${ceres_lib_filename})
+            #
+            #endif()
+
+            set(${CERES_LIB_NAME}_LIBRARIES ${CERES_LIBRARIES})
+
+            mark_as_advanced(${CERES_LIB_NAME}_DIR)
+            #message(${${CERES_LIB_NAME}_INCLUDE_DIRS})
+            #message(${${CERES_LIB_NAME}_LIBRARY_DIRS})
+            #message(${${CERES_LIB_NAME}_LIBRARIES})
+
+            set( INFO_INCLUDE-DIRS_${CERES_LIB_NAME} ${${CERES_LIB_NAME}_INCLUDE_DIRS} CACHE STRING "${CERES_LIB_NAME} include dirs." FORCE)
 
 
-##pokud se to nestane, tak smazat
-macro( ADD_LIB_GLU )
+            #info variables
+            set( INFO_LIBRARY-LIST_${CERES_LIB_NAME} ${${CERES_LIB_NAME}_LIBRARIES} CACHE STRING "${CERES_LIB_NAME} libraries."  FORCE)
+            set( INFO_LIBRARY-DIRS_${CERES_LIB_NAME} ${${CERES_LIB_NAME}_LIBRARY_DIRS} CACHE STRING "${CERES_LIB_NAME} library dirs."  FORCE)
 
-message(FATAL_ERROR "NECO CHCE PRIDAT GLU... !!!!!!!!!!!!!!!!!!!!!!!!!")
 
-    ADD_LIB(${GLU_LIB_NAME} ${ARGV})
+            #string(TOUPPER ${QT_LIB_NAME} upper_libname)
+            #set(${upper_libname}_LINKED_LIBS ${INFO_LIBRARY-LIST_${QT_LIB_NAME}})
 
+            list(APPEND info_variable_list INFO_LIBRARY-LIST_${CERES_LIB_NAME})
+            list(APPEND info_variable_list INFO_LIBRARY-DIRS_${CERES_LIB_NAME})
+
+            target_link_libraries(${TRIDIM_CURRENT_TARGET} PRIVATE ${CERES_LIBRARIES})
+
+            message(STATUS "Linked libraries at ${${CERES_LIB_NAME}_LIBRARY_DIRS}: ${${CERES_LIB_NAME}_LIBRARIES}")
+
+            unset(capitalized_libname)
+            string(TOUPPER ${CERES_LIB_NAME} capitalized_libname)
+
+            #add definitions indicating used libs for testing in precompiled headers
+            target_compile_definitions(${TRIDIM_CURRENT_TARGET} PRIVATE USED_LIB_${capitalized_libname})
+
+            #All without this property are hidden by marking them as advanced.
+            #It is a property because one scope level up (with PARENT_SCOPE) doesn't have to be enough.
+            SET_PROPERTY(GLOBAL PROPERTY USED_LIB_${capitalized_libname} "TRUE")
+
+        endif()
+
+    else()
+
+        ADD_LIB(${CERES_LIB_NAME} ${ARGV})
+
+    endif()
+
+#    message(${CERES_LIBRARIES})
 endmacro()
 
 
@@ -480,6 +627,12 @@ macro( ADD_LIB_PNG )
 
     ADD_LIB(${PNG_LIB_NAME} ${ARGV})
 
+endmacro()
+
+macro(ADD_LIB_TIFF)
+    
+    ADD_LIB(${TIFF_LIB_NAME} ${ARGV})
+        
 endmacro()
 
 # Find iconv
@@ -717,7 +870,7 @@ macro ( ADD_LIB_QT )
         set(Qt_BINARY_DIRS "${tmp}")
 
     else()
-        set(QT_QMAKE_EXECUTABLE "${BUILD_PATH_TO_PREBUILT_LIBS}/${LIBRARY_${QT_LIB_NAME}}/bin/qmake.exe")
+        set(QT_QMAKE_EXECUTABLE "${${QT_LIB_NAME}_PATH}/bin/qmake.exe")
     endif()
 
            
@@ -810,8 +963,8 @@ macro( ADD_LIB_QT5 components_arg)
     if(UNIX)
         set(QT_MODULES_PATH "${LIBRARY_PATHS_Qt_install_path}/lib/cmake/")
     else()
-        set(QT_MODULES_PATH "${BUILD_PATH_TO_PREBUILT_LIBS}/${LIBRARY_${QT_LIB_NAME}}/lib/cmake")
-        #message(STATUS "${BUILD_PATH_TO_PREBUILT_LIBS}/${LIBRARY_${QT_LIB_NAME}}/lib/cmake was added to CMAKE_MODULE_PATH")
+        set(QT_MODULES_PATH "${${QT_LIB_NAME}_PATH}/lib/cmake")
+        #message(STATUS "${${QT_LIB_NAME}_PATH}/lib/cmake was added to CMAKE_MODULE_PATH")
     endif()
 
     #list(APPEND CMAKE_MODULE_PATH ${QT_MODULES_PATH})
@@ -932,4 +1085,27 @@ macro( ADD_LIB_XLAB )
 
     ADD_LIB(${XLAB_LIB_NAME} ${ARGV})
 
+endmacro()
+
+macro( ADD_LIB_OPENMP )
+  if(DARWIN)
+    if (MAC_OPENMP_ENABLED)
+       find_package(OpenMP REQUIRED)
+       if(NOT TARGET OpenMP::OpenMP_CXX)
+          add_library(OpenMP_TARGET INTERFACE)
+          add_library(OpenMP::OpenMP_CXX ALIAS OpenMP_TARGET)
+          target_compile_options(OpenMP_TARGET INTERFACE ${OpenMP_CXX_FLAGS})
+          find_package(Threads REQUIRED)
+          target_link_libraries(OpenMP_TARGET INTERFACE Threads::Threads)
+          target_link_libraries(OpenMP_TARGET INTERFACE ${OpenMP_CXX_FLAGS})
+       endif()
+       target_link_libraries(${TRIDIM_CURRENT_TARGET} PUBLIC OpenMP::OpenMP_CXX)
+    endif()
+  endif()
+endmacro()
+
+
+#find GraphCut
+macro(ADD_LIB_GRIDCUT)  
+    ADD_LIB(${GRIDCUT_LIB_NAME} ${ARGV})
 endmacro()

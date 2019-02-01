@@ -22,39 +22,53 @@
 
 #include <osg/COnOffNode.h>
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
-/// \fn void osg::COnOffNode::traverse(NodeVisitor &nv) void osg::COnOffNode::setOnOffState(bool newState)
-///
-/// \brief  ! Accept node visitor. 
-///
-/// \param [in,out] nv  The nv. 
-////////////////////////////////////////////////////////////////////////////////////////////////////
-void osg::COnOffNode::traverse(NodeVisitor &nv)
+osg::COnOffNode::COnOffNode(bool isOn/* = true*/) : m_isOn(isOn)
 {
-    if( m_bIsOn )
+    setName("COnOffNode");
+}
+
+void osg::COnOffNode::traverse(NodeVisitor& nv)
+{
+    if (m_isOn)
     {
         Switch::traverse(nv);
     }
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
-/// \fn void osg::COnOffNode::setOnOffState(bool newState)
-///
-/// \brief  ! Set state. 
-///
-/// \param  newState    State of the new. 
-////////////////////////////////////////////////////////////////////////////////////////////////////
+osg::BoundingSphere osg::COnOffNode::computeBound() const
+{
+    if(m_isOn)
+    {
+        return Switch::computeBound();
+    }
+    else
+    {
+        return BoundingSphere();
+    }
+}
+
 void osg::COnOffNode::setOnOffState(bool newState)
 {
-    if( m_bIsOn != newState )
+    if (m_isOn != newState)
     {
-/*        if( newState )
-            setAllChildrenOn();
-        else
-            setAllChildrenOff();
+        m_isOn = newState;
 
-            */
-        m_bIsOn = newState;
+        dirtyBound();
     }
+}
+
+bool osg::COnOffNode::isVisible() const
+{
+    return m_isOn;
+}
+
+void osg::COnOffNode::hide()
+{
+    setOnOffState(false);
+}
+
+void osg::COnOffNode::show()
+{
+    setOnOffState(true);
 }
 

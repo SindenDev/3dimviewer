@@ -23,8 +23,8 @@
 #ifndef _3DIMAPPVERSION_H
 #define _3DIMAPPVERSION_H
 
-#define VER_MAJOR               3
-#define VER_MINOR               2
+#define VER_MAJOR               4
+#define VER_MINOR               1
 #define VER_BUILD               1
 
 #define STR_HELPER(x) #x

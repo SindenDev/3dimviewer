@@ -69,23 +69,23 @@ struct SReportPageContentSettings
     double                  marginBottom;
     double                  marginRight;
 
-    QString					text;
-    QString					HTML;
-    EContentType			contentType = ECT_UNUSED;
-    QColor					color;
-    QFont					font;
-    QTextOption				textOptions;
-    bool					scalingEnabled = true;
+    QString                    text;
+    QString                    HTML;
+    EContentType            contentType = ECT_UNUSED;
+    QColor                    color;
+    QFont                    font;
+    QTextOption                textOptions;
+    bool                    scalingEnabled = true;
     bool                    overlay = false;
 
     //image
-    QImage					img;
-    QString					caption;
-    double					imageScale = 1.0;
-    bool					centered = true;
-    bool					stretchImage = false;
-    bool					captionInsideImage = false;
-    eImageCaptionPosition	captionPos = EICP_BOTTOM;
+    QImage                    img;
+    QString                    caption;
+    double                    imageScale = 1.0;
+    bool                    centered = true;
+    bool                    stretchImage = false;
+    bool                    captionInsideImage = false;
+    eImageCaptionPosition    captionPos = EICP_BOTTOM;
     Qt::AspectRatioMode     aspectRatioMode = Qt::KeepAspectRatio;
 
 };
@@ -93,7 +93,7 @@ struct SReportPageContentSettings
 /**
 * \brief  Class encapsulating one specific content unit on page. Content can be HTML, plain text, or image.
 */
-class CReportPageContent
+class CReportPageContent 
 {
     friend class CReportPage;
     friend class CReportGenerator;
@@ -166,45 +166,40 @@ public:
         return *this;
     }
 
-    /** Move constructor */
-    //	CReportPageContent(CReportPageContent&& other) = delete;
-    /** Move assignment operator */
-    //CReportPageContent& operator= (CReportPageContent&& other) = delete;
-
 public:
 
     /**
-    * \brief			Sets content color.
+    * \brief            Sets content color.
     *
-    * \param	col		Desired color.
+    * \param    col        Desired color.
     */
     void setColor(QColor col);
 
     /**
-    * \brief	Returns curretly used color for this content.
+    * \brief    Returns curretly used color for this content.
     *
-    * \return	Content color.
+    * \return    Content color.
     */
     QColor getColor();
 
     /**
-    * \brief				Returns curretly used font for this content.
+    * \brief                Returns curretly used font for this content.
     *
-    * \return				Content font.
+    * \return                Content font.
     */
     QFont getFont();
 
     /**
-    * \brief				Returns overall rectangle in page allocated for this content and margins.
+    * \brief                Returns overall rectangle in page allocated for this content and margins.
     *
-    * \return				Overall rectangle.
+    * \return                Overall rectangle.
     */
     QRect getOverallRect();
 
     /**
-    * \brief				Returns content rectangle in page allocated for this content.
+    * \brief                Returns content rectangle in page allocated for this content.
     *
-    * \return				Content rectangle.
+    * \return                Content rectangle.
     */
     QRect getContentRect();
 
@@ -215,9 +210,9 @@ public:
     EContentType getContentType();
 
     /**
-    * \brief				Returns text options used for this content.
+    * \brief                Returns text options used for this content.
     *
-    * \return				Content text options.
+    * \return                Content text options.
     */
     QTextOption getTextOptions();
 
@@ -228,67 +223,67 @@ public:
 protected:
 
     /**
-    * \brief			Sets contetn text, does not recalculate content rectange
+    * \brief            Sets contetn text, does not recalculate content rectange
     *
-    * \param	text	Text to be printed.
+    * \param    text    Text to be printed.
     */
     void setText(QString text);
 
     /**
-    * \brief			Sets contetn table, does not recalculate content rectange
+    * \brief            Sets contetn table, does not recalculate content rectange
     *
-    * \param	table	Table to be printed.
+    * \param    table    Table to be printed.
     */
     void setTable(CReportTable table);
 
     /**
-    * \brief			Sets contetn image, does not recalculate content rectange
+    * \brief            Sets contetn image, does not recalculate content rectange
     *
-    * \param	img		Image to be printed.
+    * \param    img        Image to be printed.
     */
     void setImage(QImage img);
 
     /**
-    * \brief				Sets contetn text options.
+    * \brief                Sets contetn text options.
     *
-    * \param	options		Text options.
+    * \param    options        Text options.
     */
     void setTextOptions(QTextOption options);
 
     /**
-    * \brief				Sets whole new content.
+    * \brief                Sets whole new content.
     *
-    * \param	settings	Content settings.
+    * \param    settings    Content settings.
     */
     void setContent(SReportPageContentSettings settings);
 
     /**
-    * \brief				Sets overall content rectangle in page.
+    * \brief                Sets overall content rectangle in page.
     *
-    * \param	rect		Overall rectangle.
+    * \param    rect        Overall rectangle.
     */
     void setOverallRect(QRect rect);
 
     /**
-    * \brief				Sets content rectangle.
+    * \brief                Sets content rectangle.
     *
-    * \param	rect		Content rectangle.
+    * \param    rect        Content rectangle.
     */
     void setContentRect(QRect rect);
 
     /**
-    * \brief				Sets content font.
+    * \brief                Sets content font.
     *
-    * \param	font		Desired font.
+    * \param    font        Desired font.
     */
     void setFont(QFont font);
 
     /**
-    * \brief				Prints content.
+    * \brief                Prints content.
     *
-    * \param	painter		Painter used to print.
+    * \param    painter        Painter used to print.
     */
-    virtual void print(QPainter *painter);
+    virtual void print(QPainter& painter);
 
     void moveTop(int value);
     void moveLeft(int value);
@@ -325,25 +320,25 @@ protected:
 private:
 
     /**
-    * \brief				Prints HTML text.
+    * \brief                Prints HTML text.
     *
-    * \param	painter		Painter used to print.
+    * \param    painter        Painter used to print.
     */
-    void printHTMLText(QPainter *painter);
+    void printHTMLText(QPainter& painter);
 
     /**
-    * \brief				Prints plaint text.
+    * \brief                Prints plaint text.
     *
-    * \param	painter		Painter used to print.
+    * \param    painter        Painter used to print.
     */
-    void printPlainText(QPainter *painter);
+    void printPlainText(QPainter& painter);
 
     /**
-    * \brief				Prints image.
+    * \brief                Prints image.
     *
-    * \param	painter		Painter used to print.
+    * \param    painter        Painter used to print.
     */
-    void printImage(QPainter *painter);
+    void printImage(QPainter& painter);
 };
 
 #endif

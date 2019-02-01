@@ -32,6 +32,7 @@
 #include <memory>
 
 #ifdef __APPLE__
+#if __cplusplus < 201300
 namespace std {
   template<typename T, typename... Args>
   std::unique_ptr<T> make_unique(Args&&... args)
@@ -39,6 +40,7 @@ namespace std {
       return std::unique_ptr<T>(new T(std::forward<Args>(args)...));
   }
 }
+#endif
 #endif
 
 int osg::nodeWrapper::index = 0;
@@ -106,9 +108,9 @@ void analysePrimSet(osg::PrimitiveSet*prset, const osg::Vec3Array *verts) {
 
 /*
 void MyVisitor::apply(osg::Geode& node) {
-	addNode(node);
+    addNode(node);
 
-	nodes.back().properties.push_back("osg::Geode";
+    nodes.back().properties.push_back("osg::Geode";
     osg::StateSet* state_set = node.getStateSet();
     if (state_set) {
         handleStateSet(stateset);
@@ -124,9 +126,9 @@ void MyVisitor::apply(osg::Geode& node) {
 Generic nodes :
 
 void MyVisitor::apply(osg::Node& node) {
-	addNode(node);
+    addNode(node);
 
-	nodes.back().properties.push_back("osg::Node";
+    nodes.back().properties.push_back("osg::Node";
     osg::StateSet* state_set = node.getStateSet();
     if (state_set) {
         handleStateSet(stateset);
@@ -258,7 +260,10 @@ osg::OSGTreeAnalyser::OSGTreeAnalyser() : osg::NodeVisitor(TRAVERSE_ALL_CHILDREN
     auto time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
     //create dump file with unique timestamp
 
-	dump_file = std::make_unique<osg::Log>(std::to_string(time)+"-osg.txt");
+    dump_file = std::make_unique<osg::Log>(std::to_string(time)+"-osg.txt");
+
+    //reset static index for multiple passes..
+    nodeWrapper::index = 0;
 }
 
 
@@ -356,19 +361,53 @@ void osg::OSGTreeAnalyser::addNode(T &node) {
     if (not pre_traverse)
         return;
 
+
+    Node *baseNode = static_cast<Node *>(&node);
+    std::string ptrStr = QString("0x%1").arg((quintptr)baseNode,
+        QT_POINTER_SIZE * 2, 16, QChar('0')).toStdString();
+
+    //if node finds itself in its own parents stack -> cycle..  probably doesn't even work.. idk..
+    bool cycle = false;
+
+    auto parent_stack_copy = parent_stack;
+
+    for (int i = 0; i < parent_stack_copy.size(); ++i)
+    {
+
+        std::string item = parent_stack_copy.top().second;
+
+        if (item.compare(ptrStr) == 0)
+        {
+            cycle = true;
+            break;
+        } 
+
+        parent_stack_copy.pop();
+    }
+    
+    //break the cycle
+    if (cycle)
+        return;
+
+
+
     nodes.push_back(nodeWrapper());
-    auto current = &nodes.back();
+    nodeWrapper *current = &nodes.back();
 
     if (parent_stack.size() != 0){
         //current->parent_indices.push_back(-1);
     //else {
-        current->parent_indices.push_back(parent_stack.top());
-        nodes.at(parent_stack.top()).child_indices.push_back(current->my_index);
+        current->parent_indices.push_back(parent_stack.top().first);
+        nodes.at(parent_stack.top().first).child_indices.push_back(current->my_index);
     }
 
 
     if (node.getNumChildren() != 0) {
-        parent_stack.push(current->my_index);
+
+        //qDebug() << current->my_index << QString::fromStdString(ptrStr) << QString::fromStdString(baseNode->getName());
+
+
+        parent_stack.push(std::pair<int, std::string>(current->my_index, ptrStr));
         current->hasChildren = true;
     }
 
@@ -396,6 +435,8 @@ void osg::OSGTreeAnalyser::apply(Node& node) {
         name = node.getName();
 
     nodeWrapper *current = &nodes.back();
+    int current_node_index = nodes.size() - 1;//reallocation of vector f* with the pointer
+
 
     current->properties.push_back(std::string(level++, '\t') + "<Node att=\"node\">");
     tag_stack.push("Node");
@@ -618,15 +659,22 @@ void osg::OSGTreeAnalyser::apply(Node& node) {
 
     traverse(node);
     
+
+    //previous current pointer could be invalidated with vector resize..
+    nodeWrapper *current_again = &nodes.at(current_node_index);
+
+
     //if node was parent, now are all its children traversed so remove it from stack
     //if (current->child_indices.size() != 0)   //this doesn't work for some reason
-    if (current->hasChildren)
-        parent_stack.pop();
-
+    if (current_again->hasChildren)
+    {
+        if (!parent_stack.empty())
+        {
+            parent_stack.pop();
+        }
+    }
 
 }
-
-
 
 
 //special case1
@@ -636,15 +684,14 @@ void osg::OSGTreeAnalyser::apply(Drawable& node) {
         nodes.push_back(nodeWrapper());
         auto current = &nodes.back();
 
-        current->parent_indices.push_back(parent_stack.top());
-        nodes.at(parent_stack.top()).child_indices.push_back(current->my_index);
+        current->parent_indices.push_back(parent_stack.top().first);
+        nodes.at(parent_stack.top().first).child_indices.push_back(current->my_index);
 
         pre_traverse = false;
     }
 
     nodes.back().properties.push_back(std::string(level++, '\t') + "<Drawable att=\"node\">");
     tag_stack.push("Drawable");
-
 
 
     bool culling = node.getCullingActive();
@@ -683,8 +730,8 @@ void osg::OSGTreeAnalyser::apply(Geometry& node) {
         nodes.push_back(nodeWrapper());
         auto current = &nodes.back();
 
-        current->parent_indices.push_back(parent_stack.top());
-        nodes.at(parent_stack.top()).child_indices.push_back(current->my_index);
+        current->parent_indices.push_back(parent_stack.top().first);
+        nodes.at(parent_stack.top().first).child_indices.push_back(current->my_index);
 
         pre_traverse = false;
     }

@@ -207,7 +207,7 @@ static unsigned __stdcall miniDumpThread( void* pArguments )
             ::CloseHandle(hFile);
         }
     }
-    FreeLibrary(debugDll);
+    FreeLibrary(debugDll);  
 	return 0;
 } 
 
@@ -283,44 +283,68 @@ public:
         return false;
     }
 #endif
+
+    static QStringList getLogPaths(bool bIncludeBackups = false)
+    {
+        QString dir = QDir::currentPath();
+        QList<QString> paths;
+        {
+            QFileInfo fi(dir + QString("/3DimViewer.log"));
+            QFileInfo fi2(QDir::homePath() + QString("/3DimViewer.log"));
+
+            if (fi.exists() && fi2.exists())
+            {
+                QDateTime dt = fi.lastModified();
+                QDateTime dt2 = fi2.lastModified();
+                //qDebug() << dt.toString();
+                //qDebug() << dt2.toString();
+
+                if (dt.isValid() && dt2.isValid() && dt2 > dt)
+                {
+                    paths.push_back(fi2.filePath());
+                    paths.push_back(fi.filePath());
+                }
+                else
+                {
+                    paths.push_back(fi.filePath());
+                    paths.push_back(fi2.filePath());
+                }
+            }
+            else
+            {
+                if (fi.exists())
+                {
+                    paths.push_back(fi.filePath());
+                }
+
+                if (fi2.exists())
+                {
+                    paths.push_back(fi2.filePath());
+                }
+            }
+            if (bIncludeBackups)
+            {
+                QFileInfo fib(dir + QString("/3DimViewer.last"));
+                QFileInfo fib2(QDir::homePath() + QString("/3DimViewer.last"));
+
+                if (fib.exists())
+                {
+                    paths.push_back(fib.filePath());
+                }
+
+                if (fib2.exists())
+                {
+                    paths.push_back(fib2.filePath());
+                }
+            }
+        }
+
+        if (!paths.empty())
+            return paths;
+        return QStringList();
+    }
     
 protected:
-	QStringList getLogPaths()
-	{
-		QString dir = QDir::currentPath();
-		QList<QString> paths;
-		{
-			QFileInfo fi(dir + QString("/3DimViewer.log"));
-			QFileInfo fi2(QDir::homePath() + QString("/3DimViewer.log"));
-			if (fi.exists() && fi2.exists())
-			{
-				QDateTime dt = fi.lastModified();
-				QDateTime dt2 = fi2.lastModified();
-				//qDebug() << dt.toString();
-				//qDebug() << dt2.toString();
-				if (dt2>dt)
-				{
-					paths.push_back(fi2.filePath());
-					paths.push_back(fi.filePath());
-				}
-				else
-				{
-					paths.push_back(fi.filePath());
-					paths.push_back(fi2.filePath());
-				}
-			}
-			else
-			{
-				if (fi.exists())
-					paths.push_back(fi.filePath());
-				if (fi2.exists())
-					paths.push_back(fi2.filePath());
-			}
-		}
-		if (!paths.empty())
-			return paths;
-		return QStringList();
-	}
     QString readLog()
     {        
 		QString text;
@@ -401,7 +425,7 @@ public slots:
 			foreach(QString dump, lstCrashDumps)
 				lstCompress[dir.absoluteFilePath(dump)] = 1;
 			// save logs
-			QStringList logs = getLogPaths();
+			QStringList logs = getLogPaths(true);
 			foreach(QString log, logs)
 				lstCompress[log] = 1;
 			// save app generated crash dump
@@ -529,13 +553,7 @@ public:
 
 #ifdef WIN32
     //! Windows conversion of wchar string to char string in ACP (uses shortname if conversion is not possible)
-    static std::string wcs2ACP(const std::wstring &filename)
-    {
-        return wcs2ACP(filename.c_str());
-    }
-
-    //! Windows conversion of wchar string to char string in ACP (uses shortname if conversion is not possible)
-    static std::string wcs2ACP(const wchar_t *filename)
+    static std::string wcs2ACP(const wchar_t *filename, bool bDoNotUseShortName)
     {
         std::string convFilename;
         if (NULL==filename) 
@@ -544,12 +562,12 @@ public:
         {
             BOOL bUsedDefaultChar = false; // has to be BOOL!
             // get buffer size
-            int size=WideCharToMultiByte(CP_ACP,0,filename,wcslen(filename),0,0,0,&bUsedDefaultChar);
+            int size=WideCharToMultiByte(CP_ACP, WC_NO_BEST_FIT_CHARS,filename,wcslen(filename),0,0,0,&bUsedDefaultChar);
             if (size>0)
             {
                 // convert
                 char* buffer=new char[size+1];
-                int sizeC=WideCharToMultiByte(CP_ACP,0,filename,wcslen(filename),buffer,size,0,&bUsedDefaultChar);
+                int sizeC=WideCharToMultiByte(CP_ACP, WC_NO_BEST_FIT_CHARS,filename,wcslen(filename),buffer,size,0,&bUsedDefaultChar);
                 if (sizeC>0)
                 {
                     assert(sizeC<size+1);
@@ -567,7 +585,7 @@ public:
                 {
                     _wcslwr(wcsTmpStr); // because openmesh write checks for lower case extension only
                     std::wstring tmp = wcsTmpStr;
-                    return wcs2ACP(wcsTmpStr);
+                    return wcs2ACP(wcsTmpStr, true);
                 }
                 else
                 {
@@ -582,6 +600,13 @@ public:
         }
         return convFilename;
     }
+
+    //! Windows conversion of wchar string to char string in ACP (uses shortname if conversion is not possible)
+    static std::string wcs2ACP(const std::wstring &filename)
+    {
+        return wcs2ACP(filename.c_str(), false);
+    }
+
     static std::wstring ACP2wcs(const char *filename)
     {
         std::wstring convFilename;
@@ -875,7 +900,7 @@ static bool createZipFile(QString destFile, std::map<QString, int> paths, bool b
 			if (bDecompressZip && 0 == inf.suffix().compare("zip", Qt::CaseInsensitive))
 			{
 	#ifdef WIN32
-				std::wstring uniPath = (const wchar_t*)(it->first).utf16();	
+				uniPath = (const wchar_t*)(it->first).utf16();	
 				std::string zipPath = wcs2ACP(uniPath);
 	#else
 				std::string zipPath = it->first.toStdString();

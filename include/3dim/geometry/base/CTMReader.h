@@ -73,6 +73,8 @@
 #include <string.h>
 #endif
 
+const char EXT_SUFFIX_PHYSFS[] = "/physfs";
+
 
 //== NAMESPACES ===============================================================
 
@@ -104,7 +106,7 @@ public:
 
   std::string get_description() const
   { return "Open CTM model format"; }
-  std::string get_extensions() const { return "ctm"; }
+  std::string get_extensions() const { return "ctm ctm/physfs"; }
 
   bool read(const std::string& _filename,
 	    BaseImporter& _bi,
@@ -123,11 +125,24 @@ public:
   /// Returns the threshold to be used for considering two point to be equal.
   float epsilon() const { return eps_; }
 
+  void enableReadFromPhysFS()
+  {
+      readFromPhysFS = true;
+  }
 
+  void disableReadFromPhysFS()
+  {
+      readFromPhysFS = false;
+  }
+
+private:
+
+    bool read_ctm_physfs(const std::string& _filename, BaseImporter& _bi, Options& _opt);
 
 private:
 
   float eps_;
+  bool readFromPhysFS;
 };
 
 

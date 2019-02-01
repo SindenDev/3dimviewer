@@ -25,6 +25,7 @@
 ///////////////////////////////////////////////////////////////////////////////
 
 #include <render/glErrorReporting.h>
+#include <osg/DisplaySettings>
 
 std::string glErrorEnumString(GLenum value)
 {
@@ -129,8 +130,11 @@ std::string glGetErrors(std::string functionName)
     return errorString;
 }
 
-bool isDebugContext()
+bool isDebugMessageCallbackAvailable()
 {
+#ifdef __APPLE__
+    return false;
+#endif
     int glVersion[2] = { -1, -1 };
     glGetIntegerv(GL_MAJOR_VERSION, &glVersion[0]);
     glGetIntegerv(GL_MINOR_VERSION, &glVersion[1]);
@@ -138,9 +142,18 @@ bool isDebugContext()
     return (glVersion[0] > 4) || (glVersion[0] == 4 && glVersion[1] >= 3);
 }
 
-bool glDebugCallbackReady()
+bool isDebugContextEnabled()
 {
-    static bool debugContext = isDebugContext();
+    int contextFlag;
 
-    return debugContext;
+    glGetIntegerv(GL_CONTEXT_FLAGS, &contextFlag);
+
+    return contextFlag & GL_CONTEXT_FLAG_DEBUG_BIT;
+}
+
+bool glGetErrorEnabled()
+{
+    static bool enabled = !isDebugMessageCallbackAvailable() && (osg::DisplaySettings::instance()->getGLContextFlags() & GL_CONTEXT_FLAG_DEBUG_BIT);
+
+    return enabled;
 }

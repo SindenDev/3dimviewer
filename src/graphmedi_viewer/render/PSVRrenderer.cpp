@@ -50,8 +50,6 @@
 
 #define ROUNDING_MASK 0xFFFFFFFC
 
-#define tridimGlR(name, glExp) glExp; { if(!glDebugCallbackReady()){std::string errorString = glGetErrors(name); if (!errorString.empty()) VPL_LOG_ERROR(errorString);} }
-
 namespace PSVR
 {
 
@@ -317,7 +315,6 @@ void PSVolumeRendering::internalSetDataToCustomVolume()
 void PSVolumeRendering::resetLookupTables()
 {
     createLookupTables();
-    updateLookupTables();
 }
 
 void PSVolumeRendering::updateLookupTables(std::string lutName)
@@ -464,8 +461,11 @@ void PSVolumeRendering::updateRenderTargets()
 
 void PSVolumeRendering::createLookupTables()
 {
+    std::for_each(m_internalLookupTables.begin(), m_internalLookupTables.end(), [](unsigned short* table) {delete[] table; });
+
     m_internalLookupTables.clear();
     m_skipConditions.clear();
+
     for (int i = 0; i < static_cast<int>(ELookups::LOOKUPS_COUNT); ++i)
     {
         m_internalLookupTables.push_back(new unsigned short[4 * LUT_2D_W * LUT_2D_H]);
@@ -603,10 +603,8 @@ void PSVolumeRendering::createLookupTables()
 // deallocate all used resources
 void PSVolumeRendering::release()
 {
-    for (std::size_t i = 0; i < m_internalLookupTables.size(); ++i)
-    {
-        delete[] m_internalLookupTables[i];
-    }
+    std::for_each(m_internalLookupTables.begin(), m_internalLookupTables.end(), [](unsigned short* table) {delete[] table; });
+
     m_internalLookupTables.clear();
 
     m_Thread.terminate(true);
@@ -1158,6 +1156,29 @@ bool PSVolumeRendering::internalInitRendering()
     m_stateSetVolumeRenderBackup->setTextureAttribute(5, m_textureDepth);
     m_stateSetVolumeRenderBackup->setTextureAttribute(7, m_textureCurrentVolume);
 
+    m_stateSetVolumeRenderBackup->addUniform(m_uniform_t3D);
+    m_stateSetVolumeRenderBackup->addUniform(m_uniform_tSkip3D);
+    m_stateSetVolumeRenderBackup->addUniform(m_uniform_LookUp);
+    m_stateSetVolumeRenderBackup->addUniform(m_uniform_Noise);
+    m_stateSetVolumeRenderBackup->addUniform(m_uniform_tRaysStartEnd);
+    m_stateSetVolumeRenderBackup->addUniform(m_uniform_Depth);
+
+    m_stateSetVolumeRenderBackup->addUniform(m_uniform_textureSampling);
+    m_stateSetVolumeRenderBackup->addUniform(m_uniform_inputAdjustment);
+    m_stateSetVolumeRenderBackup->addUniform(m_uniform_imageAdjustment);
+    m_stateSetVolumeRenderBackup->addUniform(m_uniform_sVector);
+    m_stateSetVolumeRenderBackup->addUniform(m_uniform_skipTexSize);
+    m_stateSetVolumeRenderBackup->addUniform(m_uniform_tResolution);
+    m_stateSetVolumeRenderBackup->addUniform(m_uniform_tSkipResolution);
+    m_stateSetVolumeRenderBackup->addUniform(m_uniform_StopCondition);
+    m_stateSetVolumeRenderBackup->addUniform(m_uniform_wSize);
+    m_stateSetVolumeRenderBackup->addUniform(m_uniform_pl);
+    m_stateSetVolumeRenderBackup->addUniform(m_uniform_plNear);
+    m_stateSetVolumeRenderBackup->addUniform(m_uniform_plFar);
+    m_stateSetVolumeRenderBackup->addUniform(m_uniform_invProjectionMatrix);
+    m_stateSetVolumeRenderBackup->addUniform(m_uniform_invModelViewMatrix);
+    m_stateSetVolumeRenderBackup->addUniform(m_uniform_skipCondition);
+
     m_stateSetResize->addUniform(m_uniform_image);
     m_stateSetResize->addUniform(m_uniform_kernel);
     m_stateSetResize->addUniform(m_uniform_resolution);
@@ -1181,29 +1202,6 @@ void PSVolumeRendering::setShaderInternal(EShaders shader)
 {
     m_stateSetVolumeRender = new osg::StateSet(*m_stateSetVolumeRenderBackup);
 
-    m_stateSetVolumeRender->addUniform(m_uniform_t3D);
-    m_stateSetVolumeRender->addUniform(m_uniform_tSkip3D);
-    m_stateSetVolumeRender->addUniform(m_uniform_LookUp);
-    m_stateSetVolumeRender->addUniform(m_uniform_Noise);
-    m_stateSetVolumeRender->addUniform(m_uniform_tRaysStartEnd);
-    m_stateSetVolumeRender->addUniform(m_uniform_Depth);
-
-    m_stateSetVolumeRender->addUniform(m_uniform_textureSampling);
-    m_stateSetVolumeRender->addUniform(m_uniform_inputAdjustment);
-    m_stateSetVolumeRender->addUniform(m_uniform_imageAdjustment);
-    m_stateSetVolumeRender->addUniform(m_uniform_sVector);
-    m_stateSetVolumeRender->addUniform(m_uniform_skipTexSize);
-    m_stateSetVolumeRender->addUniform(m_uniform_tResolution);
-    m_stateSetVolumeRender->addUniform(m_uniform_tSkipResolution);
-    m_stateSetVolumeRender->addUniform(m_uniform_StopCondition);
-    m_stateSetVolumeRender->addUniform(m_uniform_wSize);
-    m_stateSetVolumeRender->addUniform(m_uniform_pl);
-    m_stateSetVolumeRender->addUniform(m_uniform_plNear);
-    m_stateSetVolumeRender->addUniform(m_uniform_plFar);
-    m_stateSetVolumeRender->addUniform(m_uniform_invProjectionMatrix);
-    m_stateSetVolumeRender->addUniform(m_uniform_invModelViewMatrix);
-    m_stateSetVolumeRender->addUniform(m_uniform_skipCondition);
-
     if (shader == EShaders::SURFACE)
     {
         m_stateSetVolumeRender->addUniform(m_uniform_surfacePar);
@@ -1219,11 +1217,6 @@ void PSVolumeRendering::setShaderInternal(EShaders shader)
         m_stateSetVolumeRender->addUniform(m_uniform_tCustom3D);
 
         m_stateSetVolumeRender->setTextureAttribute(1, m_textureCustomAuxVolume);
-    }
-    else
-    {
-        m_stateSetVolumeRender->setTextureAttribute(1, m_textureAuxVolume);
-
     }
 
     m_stateSetVolumeRender->setAttributeAndModes(m_shaders[shader], osg::StateAttribute::ON | osg::StateAttribute::OVERRIDE);
@@ -1245,11 +1238,6 @@ bool PSVolumeRendering::internalUploadAuxTexture()
     VPL_LOG_TRACE("PSVolumeRendering::internalUploadAuxTexture");
 
      storeVolumeToTexture(m_AuxVolumeData, m_textureAuxVolume);
-
-    if (m_spParams->selectedShader != EShaders::CUSTOM)
-    {
-        m_stateSetVolumeRender->setTextureAttribute(1, m_textureAuxVolume);
-    }
 
     m_AuxVolumeData.resize(0, 0, 0, 0);
 
@@ -1561,8 +1549,6 @@ bool PSVolumeRendering::internalUploadCustomAuxTexture()
     VPL_LOG_TRACE("PSVolumeRendering::internalUploadCustomAuxTexture");
 
     storeVolumeToTexture(m_auxCustomData, m_textureCustomAuxVolume);
-
-    m_stateSetVolumeRender->setTextureAttribute(1, m_textureCustomAuxVolume);
 
     m_auxCustomData.resize(0, 0, 0, 0);
 
@@ -1948,6 +1934,8 @@ void PSVolumeRendering::renderVolume(osg::RenderInfo& renderInfo)
             }
 
             internalUploadCustomAuxTexture();
+
+            flags |= OSR_INVALID; // Hack: custom data didn't show for the first time after the start of application, this helps
         }
 
         // Create a local copy of current rendering parameters
@@ -1960,7 +1948,7 @@ void PSVolumeRendering::renderVolume(osg::RenderInfo& renderInfo)
     osg::Vec2i viewportSize = osg::Vec2i(preViewport->width(), preViewport->height());
     osg::Vec2i renderingSize = getRenderingSize(params, viewportSize, flags);
 
-    auto newViewport = new osg::Viewport(0, 0, renderingSize.x(), renderingSize.y());
+    osg::ref_ptr<osg::Viewport> newViewport = new osg::Viewport(0, 0, renderingSize.x(), renderingSize.y());
 
     // Resolution changed?
     if (flags & OSR_INVALID)
@@ -1984,7 +1972,7 @@ void PSVolumeRendering::renderVolume(osg::RenderInfo& renderInfo)
     params.invModelViewMatrix = osg::Matrix::inverse(boxModelViewMatrix);
     params.invProjectionMatrix = osg::Matrix::inverse(renderInfo.getState()->getProjectionMatrix());
 
-    auto stateSet = new osg::StateSet();
+    osg::ref_ptr<osg::StateSet> stateSet = new osg::StateSet();
     renderInfo.getState()->captureCurrentState(*stateSet);
 
     m_fboDepth->apply(*renderInfo.getState(), osg::FrameBufferObject::DRAW_FRAMEBUFFER);
@@ -2026,9 +2014,6 @@ void PSVolumeRendering::renderVolume(osg::RenderInfo& renderInfo)
         {
             shaderUpdateCallback();
         }
-
-        m_stateSetVolumeRender->setTextureAttribute(2, m_textureLookUp);
-
 
         renderInfo.getState()->apply(m_stateSetVolumeRender);
         renderInfo.getState()->applyModelViewAndProjectionUniformsIfRequired();
@@ -2186,9 +2171,6 @@ void PSVolumeRendering::setMousePressed(bool bPressed)
 void PSVolumeRendering::setShader(EShaders shader)
 {
     tLock Lock(*this);
-
-    if (shader == m_spParams->selectedShader)
-        return;
 
     m_spParams->selectedShader = shader;
 

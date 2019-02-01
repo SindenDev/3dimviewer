@@ -186,9 +186,9 @@ QWidget(parent),
 
     connectDrawingHandler();
 
-    m_drawingMode = data::CDrawingOptions::DRAW_STROKE;
+    //m_drawingMode = data::CDrawingOptions::DRAW_STROKE;
 
-    setDrawingOptions();
+    //setDrawingOptions();
 
     ui->noteText->setText(tr(CNotesPluginPanel::default_textedit_text.toStdString().c_str()));
 
@@ -291,7 +291,7 @@ void CNotesPluginPanel::buildNoteTree() const {
     headerItem->setText(treeColumns::discard, "");
 
     
-    headerItem->setIcon(treeColumns::visibility, QIcon(":/icons/icons/visibility.png"));
+    headerItem->setIcon(treeColumns::visibility, QIcon(":/svg/svg/visibility.svg"));
 
     ui->noteTree->setHeaderItem(headerItem);
 
@@ -364,7 +364,7 @@ void CNotesPluginPanel::spitOutNewDiscardButton(QPushButton *button, QWidget *wi
     button->setObjectName("discardButton");
     button->setMaximumWidth(32);
     button->setMaximumHeight(32);
-    button->setIcon(QIcon(":/icons/icons/notedeletesmall.png"));
+    button->setIcon(QIcon(":/svg/svg/notedeletesmall.svg"));
     button->setToolTip(tr("Will delete this note"));
     button->setStatusTip(tr("Will delete this note"));
 
@@ -671,15 +671,28 @@ void CNotesPluginPanel::on_noteTree_itemClicked(QTreeWidgetItem *item, int colum
 void CNotesPluginPanel::on_notesActivePushButton_toggled(bool checked) {
     
     if (checked) {
-        setDrawingOptions();
+        //setDrawingOptions();
         connectDrawingHandler();
 
-        ui->noteTree->setCurrentItem(ui->noteTree->topLevelItem(m_lastActiveRow));
+        //ui->noteTree->setCurrentItem(ui->noteTree->topLevelItem(m_lastActiveRow));
 
         ui->notesActivePushButton->setText(tr("Notes active"));
 
     } else {
         PLUGIN_APP_MODE.disconnectAllDrawingHandlers();
+
+        ui->drawPushButton->blockSignals(true);
+        ui->drawPushButton->setChecked(false);
+        ui->drawPushButton->blockSignals(false);
+
+        ui->drawArrowPushButton->blockSignals(true);
+        ui->drawArrowPushButton->setChecked(false);
+        ui->drawArrowPushButton->blockSignals(false);
+
+        ui->deleteLinePushButton->blockSignals(true);
+        ui->deleteLinePushButton->setChecked(false);
+        ui->deleteLinePushButton->blockSignals(false);
+
         ui->noteTree->setCurrentItem(nullptr);
 
         ui->notesActivePushButton->setText(tr("Notes inactive"));
@@ -965,7 +978,6 @@ void CNotesPluginPanel::showEvent(QShowEvent* event) {
 }
 
 bool CNotesPluginPanel::eventFilter(QObject *object, QEvent *event) {
-   
     if (object == ui->noteText) {
 
 		if (event->type() == QKeyEvent::KeyRelease) {
@@ -999,7 +1011,6 @@ bool CNotesPluginPanel::eventFilter(QObject *object, QEvent *event) {
                     checkMatrices();
 
         } else if (event->type() == QMouseEvent::Wheel) {    
-            
             QWheelEvent *ev = (QWheelEvent *)event;
             if(ev->delta() > 0)
                 m_zoom_level++;
@@ -1172,7 +1183,7 @@ void CNotesPluginPanel::highlight_lines(int X, int Y) {
 
 
 	//We want to highlight lines only when deleting.. and shift must be pressed
-    if (not ui->deleteLinePushButton->isChecked() || (ui->deleteLinePushButton->isChecked() && (QApplication::keyboardModifiers() & Qt::ShiftModifier) != Qt::ShiftModifier)) {
+    if (not ui->deleteLinePushButton->isChecked() || (QApplication::keyboardModifiers() & Qt::ShiftModifier) != Qt::ShiftModifier) {
 
 
         if (m_highlightedLineIds.size() != 0) {
@@ -1441,7 +1452,7 @@ void CNotesPluginPanel::discardNoteFromTree(int row) {
 
         ui->noteText->setText(CNotesPluginPanel::tr(CNotesPluginPanel::default_textedit_text.toStdString().c_str()));
 
-        ui->drawPushButton->setChecked(true);
+        //ui->drawPushButton->setChecked(true);
     }
 
 
@@ -1568,12 +1579,21 @@ void CNotesPluginPanel::on_strokeWidthSpinner_valueChanged(int value){
 ////RADIO BUTTONS
 void CNotesPluginPanel::on_drawPushButton_toggled(){
 
-    if (not ui->notesActivePushButton->isChecked()) {
-        ui->notesActivePushButton->setChecked(true);
-        ui->notesActivePushButton->setText(tr("Notes active"));
-    }
-
     if (ui->drawPushButton->isChecked()) {
+
+        if (not ui->notesActivePushButton->isChecked()) {
+            ui->notesActivePushButton->setChecked(true);
+            ui->notesActivePushButton->setText(tr("Notes active"));
+        }
+
+        ui->drawArrowPushButton->blockSignals(true);
+        ui->drawArrowPushButton->setChecked(false);
+        ui->drawArrowPushButton->blockSignals(false);
+
+        ui->deleteLinePushButton->blockSignals(true);
+        ui->deleteLinePushButton->setChecked(false);
+        ui->deleteLinePushButton->blockSignals(false);
+
         m_drawingMode = data::CDrawingOptions::DRAW_STROKE;
         m_transparent = false;
         setDrawingOptions();
@@ -1582,12 +1602,21 @@ void CNotesPluginPanel::on_drawPushButton_toggled(){
 
 void CNotesPluginPanel::on_drawArrowPushButton_toggled() {
 
-    if (not ui->notesActivePushButton->isChecked()) {
-        ui->notesActivePushButton->setChecked(true);
-        ui->notesActivePushButton->setText(tr("Notes active"));
-    }
-
     if (ui->drawArrowPushButton->isChecked()) {
+
+        if (not ui->notesActivePushButton->isChecked()) {
+            ui->notesActivePushButton->setChecked(true);
+            ui->notesActivePushButton->setText(tr("Notes active"));
+        }
+
+        ui->drawPushButton->blockSignals(true);
+        ui->drawPushButton->setChecked(false);
+        ui->drawPushButton->blockSignals(false);
+
+        ui->deleteLinePushButton->blockSignals(true);
+        ui->deleteLinePushButton->setChecked(false);
+        ui->deleteLinePushButton->blockSignals(false);
+
         m_drawingMode = data::CDrawingOptions::DRAW_ARROW;
         m_transparent = false;
         setDrawingOptions();
@@ -1596,13 +1625,21 @@ void CNotesPluginPanel::on_drawArrowPushButton_toggled() {
 
 void CNotesPluginPanel::on_deleteLinePushButton_toggled() {
 
-    if (not ui->notesActivePushButton->isChecked()) {
-        ui->notesActivePushButton->setChecked(true);
-        ui->notesActivePushButton->setText(tr("Notes active"));
-    }
-
-
     if (ui->deleteLinePushButton->isChecked()) {
+
+        if (not ui->notesActivePushButton->isChecked()) {
+            ui->notesActivePushButton->setChecked(true);
+            ui->notesActivePushButton->setText(tr("Notes active"));
+        }
+
+        ui->drawPushButton->blockSignals(true);
+        ui->drawPushButton->setChecked(false);
+        ui->drawPushButton->blockSignals(false);
+
+        ui->drawArrowPushButton->blockSignals(true);
+        ui->drawArrowPushButton->setChecked(false);
+        ui->drawArrowPushButton->blockSignals(false);
+
         m_drawingMode = data::CDrawingOptions::DRAW_STROKE;
         m_transparent = true;
         setDrawingOptions();
@@ -1720,9 +1757,21 @@ void CNotesPluginPanel::handleDrawing(const osg::Vec3Array *points, const int ha
         
         //reflect the change in ui
         ui->notesActivePushButton->blockSignals(true);
-            ui->notesActivePushButton->setChecked(false);
-            ui->notesActivePushButton->setText(tr("Notes inactive"));
+        ui->notesActivePushButton->setChecked(false);
+        ui->notesActivePushButton->setText(tr("Notes inactive"));
         ui->notesActivePushButton->blockSignals(false);
+
+        ui->drawPushButton->blockSignals(true);
+        ui->drawPushButton->setChecked(false);
+        ui->drawPushButton->blockSignals(false);
+
+        ui->drawArrowPushButton->blockSignals(true);
+        ui->drawArrowPushButton->setChecked(false);
+        ui->drawArrowPushButton->blockSignals(false);
+
+        ui->deleteLinePushButton->blockSignals(true);
+        ui->deleteLinePushButton->setChecked(false);
+        ui->deleteLinePushButton->blockSignals(false);
 
         m_hasFocus = false;
 
@@ -1736,8 +1785,8 @@ void CNotesPluginPanel::handleDrawing(const osg::Vec3Array *points, const int ha
         
         //reflect the change in ui
 	    ui->notesActivePushButton->blockSignals(true);
-            ui->notesActivePushButton->setChecked(true);
-            ui->notesActivePushButton->setText(tr("Notes active"));
+        ui->notesActivePushButton->setChecked(true);
+        ui->notesActivePushButton->setText(tr("Notes active"));
         ui->notesActivePushButton->blockSignals(false);
 
         m_hasFocus = true;
@@ -1752,10 +1801,7 @@ void CNotesPluginPanel::handleDrawing(const osg::Vec3Array *points, const int ha
     //Don't react without focus
     if (not m_hasFocus || points == nullptr || (m_drawingMode != data::CDrawingOptions::DRAW_STROKE && m_drawingMode != data::CDrawingOptions::DRAW_ARROW) || handlerType != data::CDrawingOptions::HANDLER_WINDOW)
         return;
-    
 
-    bool createdNew = false;
-    
     int index = getIndexOfCurrentItem();
 
     data::CObjectPtr<data::CNoteData> noteData(PLUGIN_APP_STORAGE.getEntry(data::Storage::NoteData::Id));
@@ -1764,6 +1810,8 @@ void CNotesPluginPanel::handleDrawing(const osg::Vec3Array *points, const int ha
     snap();
 
     if (ui->drawPushButton->isChecked() || ui->drawArrowPushButton->isChecked()) {
+
+        bool createdNew = false;
 
         osg::Matrix current_matrix = getRenderer()->getViewMatrix();
 
@@ -1841,6 +1889,11 @@ void CNotesPluginPanel::handleDrawing(const osg::Vec3Array *points, const int ha
 
 
 void CNotesPluginPanel::setDrawingOptions() {
+
+    if (!ui->notesActivePushButton->isChecked())
+    {
+        return;
+    }
 
     // Get drawing options from data storage
     data::CObjectPtr<data::CDrawingOptions> spOptions(PLUGIN_APP_STORAGE.getEntry(data::Storage::DrawingOptions::Id));

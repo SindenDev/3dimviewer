@@ -32,7 +32,7 @@
 #include <osg/Group>
 #include <osg/Texture2D>
 
-OSGOrtho2DCanvas::OSGOrtho2DCanvas(QWidget* parent, bool antialiasing) : OSGCanvas(parent, antialiasing)
+OSGOrtho2DCanvas::OSGOrtho2DCanvas(QWidget* parent) : OSGCanvas(parent)
 {
     // create new manipulator
     m_sceneManipulator = new osgGA::OrthoManipulator;

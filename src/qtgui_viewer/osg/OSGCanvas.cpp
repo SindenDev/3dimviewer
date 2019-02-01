@@ -45,6 +45,7 @@ supported by Apple.
 
 #include <osg/CAppMode.h>
 #include <osg/CSceneManipulator.h>
+#include <osg/OrthoManipulator.h>
 #include <osg/CSceneOSG.h>
 #include <osg/CScreenshot.h>
 #include <osg/Version>
@@ -56,19 +57,24 @@ supported by Apple.
 #include <QMouseEvent>
 #include <QApplication>
 
+#include <QPinchGesture>
+#include <QPanGesture>
+#include <QGestureRecognizer>
+
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 
-OSGCanvas::OSGCanvas(QWidget *parent, bool antialiasing) :
-    QGLOSGWidget(parent, osg::Vec4(0, 0, 0, 0), antialiasing)
+OSGCanvas::OSGCanvas(QWidget *parent) : QGLOSGWidget(parent, osg::Vec4(0, 0, 0, 0))
 {
     // Sets the widget's clear color
     data::CObjectPtr<data::CAppSettings> settings( APP_STORAGE.getEntry(data::Storage::AppSettings::Id) );
     osg::Vec4 color( settings->getClearColor() );
     init(parent,color);
+
+    grabGesture(Qt::GestureType::PinchGesture);
+    //grabGesture(Qt::GestureType::PanGesture);
 }
 
-OSGCanvas::OSGCanvas(QWidget *parent, const osg::Vec4 &bgColor):
-    QGLOSGWidget(parent,bgColor,false)
+OSGCanvas::OSGCanvas(QWidget *parent, const osg::Vec4 &bgColor) : QGLOSGWidget(parent,bgColor)
 {
     init(parent,bgColor);
 }
@@ -85,6 +91,9 @@ void OSGCanvas::init(QWidget *parent, const osg::Vec4 &bgColor)
     // Sets the widget's clear color
     setBackgroundColor(bgColor);
 
+    setAttribute(Qt::WA_OpaquePaintEvent);
+    setAttribute(Qt::WA_NoSystemBackground);
+
     // set mouse tracking so we can extract continously density from a point under cursor
     setMouseTracking(true);
 
@@ -93,6 +102,7 @@ void OSGCanvas::init(QWidget *parent, const osg::Vec4 &bgColor)
 
 OSGCanvas::~OSGCanvas()
 {
+    makeCurrent();
     APP_MODE.getModeChangedSignal().disconnect(m_Connection);
 }
 
@@ -135,6 +145,106 @@ void OSGCanvas::restoreMouseMode(bool bForce)
     m_bRestoreModeOnMouseRelease = false;
 }
 
+bool OSGCanvas::gestureEvent(QGestureEvent* event)
+{
+    QGesture *gesture = event->gesture(Qt::GestureType::PinchGesture);
+    QPinchGesture *pinch = dynamic_cast<QPinchGesture *>(gesture);
+    if (pinch != NULL)
+    {
+        double scale = pinch->totalScaleFactor();
+        osg::Vec2 centerPoint = osg::Vec2(-pinch->centerPoint().x(), pinch->centerPoint().y());
+        double rotationAngle = pinch->totalRotationAngle();
+
+        if (pinch->scaleFactor() == pinch->lastScaleFactor())
+        {
+            m_lastScale = pinch->totalScaleFactor();
+        }
+        if (pinch->centerPoint() == pinch->lastCenterPoint())
+        {
+            m_lastCenter = osg::Vec2(-pinch->centerPoint().x(), pinch->centerPoint().y());
+        }
+        if (pinch->rotationAngle() == pinch->lastRotationAngle())
+        {
+            m_lastRotation = pinch->totalRotationAngle();
+        }
+
+        osg::CSceneManipulator *sceneManipulator = dynamic_cast<osg::CSceneManipulator *>(this->getView()->getCameraManipulator());
+        osgGA::OrthoManipulator *orthoManipulator = dynamic_cast<osgGA::OrthoManipulator *>(this->getView()->getCameraManipulator());
+
+        if ((sceneManipulator == NULL) && (orthoManipulator == NULL))
+        {
+            return false;
+        }
+
+        // ignore regular mouse input while gesture is used
+        if (pinch->state() == Qt::GestureState::GestureStarted)
+        {
+            if (orthoManipulator != NULL)
+            {
+                orthoManipulator->setEnabled(false);
+            }
+            if (sceneManipulator != NULL)
+            {
+                sceneManipulator->setEnabled(false);
+            }
+        }
+        else if (pinch->state() == Qt::GestureState::GestureFinished)
+        {
+            if (orthoManipulator != NULL)
+            {
+                orthoManipulator->setEnabled(true);
+            }
+            if (sceneManipulator != NULL)
+            {
+                sceneManipulator->setEnabled(true);
+            }
+        }
+
+        // resolve zoom
+        if (m_lastScale != scale)
+        {
+            if (orthoManipulator != NULL)
+            {
+                orthoManipulator->zoomGesture(m_lastScale / scale);
+            }
+            if (sceneManipulator != NULL)
+            {
+                sceneManipulator->zoom(m_lastScale / scale);
+            }
+            m_lastScale = scale;
+        }
+        // resolve move
+        /*if (m_lastCenter != centerPoint)
+        {
+            if ((scale / m_lastScale < 1.05) && (m_lastScale / scale < 1.05)) // handle this only when scale has not changed too much
+            {
+                if (orthoManipulator != NULL)
+                {
+                    orthoManipulator->panGesture(centerPoint - m_lastCenter);
+                }
+                if (sceneManipulator != NULL)
+                {
+                    sceneManipulator->pan(centerPoint - m_lastCenter);
+                }
+                m_lastCenter = centerPoint;
+            }
+        }
+        // resolve rotation
+        if (m_lastRotation != rotationAngle)
+        {
+            if (sceneManipulator != NULL)
+            {
+                sceneManipulator->rotate(rotationAngle - m_lastRotation);
+            }
+            m_lastRotation = rotationAngle;
+        }*/
+
+        return true;
+    }
+
+    return false;
+}
+
 void OSGCanvas::keyPressEvent( QKeyEvent* event )
 {
 	m_bShortcut = false;
@@ -149,14 +259,31 @@ void OSGCanvas::keyPressEvent( QKeyEvent* event )
         APP_MODE.storeAndSet( scene::CAppMode::MODE_DENSITY_WINDOW );         
         break;
     case Qt::Key_Shift:
-        if (APP_MODE.areDrawingHandlers())
+        if (scene::CAppMode::DEFAULT_MODE != APP_MODE.getCustomShiftMode())
         {
             restoreMouseMode();
-            if (dynamic_cast<CVolumeRendererWindow *>(this) != NULL)
-            //if (NULL!=dynamic_cast<scene::CScene3D*>(m_view->getSceneData()))
-                APP_MODE.storeAndSet( scene::CAppMode::COMMAND_DRAW_WINDOW ); // surface culling
-            else
-                APP_MODE.storeAndSet( scene::CAppMode::COMMAND_DRAW_GEOMETRY );            
+            APP_MODE.storeAndSet(APP_MODE.getCustomShiftMode());
+        }
+        else
+        {
+            if (APP_MODE.areDrawingHandlers())
+            {
+                restoreMouseMode();
+                data::CObjectPtr< data::CDrawingOptions > spOptions(APP_STORAGE.getEntry(data::Storage::DrawingOptions::Id));
+                data::CDrawingOptions::EDrawingMode mode = spOptions->getDrawingMode();
+                if (mode != data::CDrawingOptions::DRAW_NOTHING)
+                {
+                    if (dynamic_cast<CVolumeRendererWindow *>(this) != NULL)
+                    {
+                        //if (NULL!=dynamic_cast<scene::CScene3D*>(m_view->getSceneData()))
+                        APP_MODE.storeAndSet(scene::CAppMode::COMMAND_DRAW_WINDOW); // surface culling
+                    }
+                    else
+                    {
+                        APP_MODE.storeAndSet(scene::CAppMode::COMMAND_DRAW_GEOMETRY);
+                    }
+                }
+            }
         }
         break;
     case Qt::Key_Escape:
@@ -256,6 +383,12 @@ bool OSGCanvas::event(QEvent *event)
 		//qDebug() << ke->key() << " " << ke->modifiers();
 		m_bShortcut = true;
 	}
+
+    if (event->type() == QEvent::Gesture)
+    {
+        return gestureEvent(dynamic_cast<QGestureEvent *>(event));
+    }
+
     return QGLOSGWidget::event( event );
 }
 
@@ -299,7 +432,7 @@ void OSGCanvas::setCursorX(int appmode)
     case scene::CAppMode::COMMAND_SCENE_ZOOM:
         {
             // TODO: add better magnifier cursor
-            QCursor magCursor(QPixmap(":/icons/magnifier.png"));
+            QCursor magCursor(QPixmap(":/svg/svg/magnifier_small.svg"));
             setCursor(magCursor);
         }
         break;
@@ -311,6 +444,7 @@ void OSGCanvas::setCursorX(int appmode)
     case scene::CAppMode::COMMAND_DENSITY_MEASURE:
     case scene::CAppMode::COMMAND_DISTANCE_MEASURE:
     case scene::CAppMode::COMMAND_DRAW_WINDOW:
+    case scene::CAppMode::COMMAND_LANDMARK_ANNOTATION:
         setCursor(Qt::CrossCursor); // cross instead of pencil
         break;
     case scene::CAppMode::COMMAND_DRAW_GEOMETRY:

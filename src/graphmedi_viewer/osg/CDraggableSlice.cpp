@@ -29,6 +29,8 @@
 #include <osg/Version>
 #include <osg/CThickLineMaterial.h>
 
+#include <data/CArbitrarySlice.h>
+
 #include <app/Signals.h>
 #include <graph/osg/NodeMasks.h>
 
@@ -282,7 +284,6 @@ scene::CDraggableSlice::CDraggableSlice(bool isOrtho) :
 
 scene::CDraggableSlice::~CDraggableSlice()
 {
-
 }
 
 //====================================================================================================================
@@ -349,6 +350,8 @@ void scene::CDraggableSlice::moveInDepth( int iPosition )
 	p_Selection->manualTranslation( translation );
 
 	p_Dragger->setMatrix( p_Selection->getMatrix() );
+
+    VPL_SIGNAL(SigOrthoSliceMoved).invoke();
 }
 
 //====================================================================================================================
@@ -518,7 +521,7 @@ void scene::CDraggableSliceXY::scaleScene(float dx, float dy, float dz, int sx, 
 //====================================================================================================================
 void scene::CDraggableSliceXY::updateFromStorage()
 {
-    data::CObjectPtr<data::COrthoSliceXY> spSlice( APP_STORAGE.getEntry(data::Storage::SliceXY::Id) );
+    data::CObjectPtr<data::COrthoSliceXY> spSlice( APP_STORAGE.getEntry(m_SliceId) );
 
     moveInDepth( spSlice->getPosition() );
     if( !m_Ortho )

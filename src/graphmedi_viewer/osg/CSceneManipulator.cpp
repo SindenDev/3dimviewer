@@ -31,8 +31,62 @@
 
 using namespace osgGA;
 
+void osg::CSceneManipulator::zoom(double zoomFactor)
+{
+    osg::Vec3d eye, center, up;
+
+    getTransformation(eye, center, up);
+    osg::Vec3 forward = eye - center;
+    forward.normalize();
+    osg::Vec3 right = up ^ forward;
+    right.normalize();
+
+    eye = (eye - center) * osg::Matrixd::scale(zoomFactor, zoomFactor, zoomFactor) + center;
+
+    setTransformation(eye, center, up);
+}
+
+void osg::CSceneManipulator::pan(osg::Vec2 movement)
+{
+    osg::Vec3d eye, center, up;
+
+    getTransformation(eye, center, up);
+    osg::Vec3 forward = eye - center;
+    forward.normalize();
+    osg::Vec3 right = up ^ forward;
+    right.normalize();
+
+    eye += right * movement.x() + up * movement.y();
+    center += right * movement.x() + up * movement.y();
+
+    setTransformation(eye, center, up);
+}
+
+void osg::CSceneManipulator::rotate(double rotation)
+{
+    osg::Vec3d eye, center, up;
+
+    getTransformation(eye, center, up);
+    osg::Vec3 forward = eye - center;
+    forward.normalize();
+    osg::Vec3 right = up ^ forward;
+    right.normalize();
+
+    osg::Matrix m = osg::Matrix::rotate(osg::inDegrees(rotation), forward);
+    osg::Vec4 o = osg::Vec4(0.0, 0.0, 0.0, 1.0) * m;
+    osg::Vec4 v = osg::Vec4(up[0], up[1], up[2], 1.0) * m;
+    up = osg::Vec3(v[0] - o[0], v[1] - o[1], v[2] - o[2]);
+
+    setTransformation(eye, center, up);
+}
+
 bool osg::CSceneManipulator::handle(const GUIEventAdapter& ea,GUIActionAdapter& us)
 {
+    if (!m_enabled)
+    {
+        return false;
+    }
+
     // Check the application mode
     if( !APP_MODE.check(scene::CAppMode::MODE_TRACKBALL) )
     {
@@ -291,7 +345,7 @@ bool osg::CSceneManipulator::calcMovement()
 
             // notify(DEBUG_INFO) << "Pushing forward"<<std::endl;
             // push the camera forward.
-            float scale = -fd;
+            scale = -fd;
 
             osg::Matrix rotation_matrix(_rotation);
 

@@ -34,7 +34,7 @@ CPreviewDialog::CPreviewDialog(QWidget *parent, const QString& title, CPreviewDi
 	m_filterNames(data.getFiltersNames()),
 	m_currentSlice(data.getCurrentSlice()),
 	m_currentFilterIndex(data.getCurrentFilterIndex()),
-	m_paramsDesc(data.getParamDescription(m_currentFilterIndex)),
+	m_paramsDesc(data.getParamDescription(data.getCurrentFilterIndex())),
 	m_loadSlice(false),
 	m_sliderPressed(false)
 {

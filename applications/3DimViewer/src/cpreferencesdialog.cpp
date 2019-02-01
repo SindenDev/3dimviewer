@@ -34,10 +34,10 @@
 #include <mainwindow.h>
 
 #ifdef ENABLE_PYTHON
-#include <qtpython\pyconfigure.h>
-#include <qtpython\CPythonInterpretQt.h>
-#include <qtpython\CPythonSettings.h>
-#include <qtpython\CMessageBox.h>
+#include <qtpython/pyconfigure.h>
+#include <qtpython/interpret.h>
+#include <qtpython/settings.h>
+#include <QtGui/dialogs/messageWindow.h>
 #endif
 
 CPreferencesDialog::CPreferencesDialog(const QDir &localeDir, QMenuBar* pMenuBar, CEventFilter &eventFilter, QWidget *parent, Qt::WindowFlags f) :
@@ -48,6 +48,7 @@ CPreferencesDialog::CPreferencesDialog(const QDir &localeDir, QMenuBar* pMenuBar
     m_bColorsChanged = false;
     m_bChangesNeedRestart = false;
 	m_bChangedShortcuts = false;
+    m_bReinitializeInterpret = false;
     ui->setupUi(this);
     //ui->comboBoxRenderingMode->setVisible(false);
     //ui->labelRenderingMode->setVisible(false);
@@ -82,6 +83,9 @@ CPreferencesDialog::CPreferencesDialog(const QDir &localeDir, QMenuBar* pMenuBar
     // error logging
     bool bLoggingEnabled = settings.value("LoggingEnabled", QVariant(true)).toBool();
     ui->checkBoxLogging->setChecked(bLoggingEnabled);
+    // log opengl errors
+    bool logOpenglErrors = settings.value("LogOpenglErrors", QVariant(DEFAULT_LOG_OPENGL_ERRORS)).toBool();
+    ui->checkBoxLogOpenglErrors->setChecked(logOpenglErrors);
     // DICOM port
     int nDicomPort = settings.value("DicomPort", DEFAULT_DICOM_PORT).toInt();
     ui->spinBoxDicomPort->setValue(nDicomPort);
@@ -105,12 +109,21 @@ CPreferencesDialog::CPreferencesDialog(const QDir &localeDir, QMenuBar* pMenuBar
 	ui->radioButtonPatientName->setChecked(savedFilesNameMode == 0);
 	ui->radioButtonFolderName->setChecked(savedFilesNameMode == 1);
 
+    // get models format
+    int modelsFormat = settings.value("ExportedModelsFormat").toInt();
+    ui->comboBoxDefaultModelsFormat->setCurrentIndex(modelsFormat);
+
     connect(this,SIGNAL(accepted()),this,SLOT(on_CPreferencesDialog_accepted()));
     QPushButton* resetButton = ui->buttonBox->button(QDialogButtonBox::RestoreDefaults);
     connect(resetButton, SIGNAL(clicked()), this, SLOT(resetDefaultsPressed()));
     connect(ui->pushButtonShowLog,SIGNAL(clicked()),qobject_cast<C3DimApplication*>(qApp),SLOT(showLog()));
     //
 	connect(ui->listPages,SIGNAL(currentRowChanged(int)),this,SLOT(pageChange(int)));
+
+    // segmentation
+    int brushThickness = settings.value("BrushThickness", DEFAULT_BRUSH_THICKNESS).toInt();
+    ui->radioButtonThin->setChecked(brushThickness == 0);
+    ui->radioButtonThick->setChecked(brushThickness == 1);
 
 	// shortcuts
 	ui->treeWidget->header()->setStretchLastSection(false);
@@ -164,35 +177,73 @@ CPreferencesDialog::CPreferencesDialog(const QDir &localeDir, QMenuBar* pMenuBar
 
 	ui->eFPath->setText(previousDir);
 
+#ifdef ENABLE_DEEPLEARNING
+    // utilities
+    connect(ui->eFBrowseDeepLearning, SIGNAL(clicked()), this, SLOT(showFileDialogDeepLearning()));
+    settings.beginGroup("DeepLearning");
+    QString text = settings.value("deepLearningDir2").toString();
+    ui->eFPathDeepLearning->setText(text.isEmpty() ? QCoreApplication::applicationDirPath() + "/deeplearning" : text);
+    settings.endGroup();
+    ui->eFPathDeepLearning->setReadOnly(true);
+    ui->eFPathDeepLearning->setEnabled(true);
+
+    connect(ui->buttonResetDeepLearningDir, SIGNAL(clicked()), this, SLOT(resetDeepLearningDirToDefault()));
+#else
+    ui->eFBrowseDeepLearning->hide();
+    ui->eFPathDeepLearning->hide();
+    ui->label_6->hide();
+    ui->buttonResetDeepLearningDir->hide();
+
+    // comparison in czech doesn't work
+    //for (int index = 0; index < ui->listPages->count(); index++)
+    {
+        int index = 4;
+
+        //if (ui->listPages->item(index)->text() == "Utilities" || ui->listPages->item(index)->text() == QString::fromUtf8("Další"))
+        {
+            if (page == index)
+            {
+                ui->listPages->setCurrentRow(0);
+            }
+            ui->listPages->item(index)->setHidden(true);
+        }
+    }
+#endif
+
 #ifdef ENABLE_PYTHON
+	pythonQt::Settings& pySettings = VPL_SINGLETON(pythonQt::Settings);
+	const bool isPythonEnabled = pySettings.isPythonEnabled();
+	ui->checkBoxEnablePython->setChecked(isPythonEnabled);
+    ui->checkBoxEnablePython->hide();
+    ui->lblVPLSwig->hide();
+    ui->eFPathVPLSwig->hide();
+    ui->eFBrowseVPLSwig->hide();
+    ui->pbRestorePython->hide();
+    ui->eFPathPythonPath->setReadOnly(true);
+    ui->eFPathPythonPath->setEnabled(true);
+
     connect(ui->eFBrowseVPLSwig, SIGNAL(clicked()), this, SLOT(showFileDialogVPLSwig()));
     connect(ui->eFBrowsePythonPath, SIGNAL(clicked()), this, SLOT(showFileDialogPython()));
     connect(ui->comboBoxPythonType, SIGNAL(currentIndexChanged(int)), this, SLOT(pythonTypeChanged(int)));
     connect(ui->checkBoxEnablePython, SIGNAL(stateChanged(int)), this, SLOT(showHidePythonOptions(int)));
+    connect(ui->pbRestorePython, SIGNAL(clicked()), this, SLOT(restorePython()));
 
-    pythonQt::CPythonSettings& pySettings = pythonQt::CPythonSettings::getInstance();
-
-    QString previousVPLSwig = pySettings.getVPLSwigPath();
-    QString previousPythonInterpret = pySettings.getExternalPythonPath();
+	const QString previousVPLSwig = pySettings.getVplSwigPath();
+	const QString previousPythonInterpret = pySettings.getExternalPythonPath();
     if (!pySettings.isSelectedInternalInterpret())
     {
-        bool oldState = ui->comboBoxPythonType->blockSignals(true);
+	    const bool oldState = ui->comboBoxPythonType->blockSignals(true);
         ui->comboBoxPythonType->setCurrentIndex(1);
         ui->comboBoxPythonType->blockSignals(oldState);
     }
 
     ui->eFPathVPLSwig->setText(previousVPLSwig);
     ui->eFPathPythonPath->setText(previousPythonInterpret);
-    bool isPythonEnabled = pySettings.isPythonEnabled();
-    ui->checkBoxEnablePython->setChecked(isPythonEnabled);
 
     ui->eFBrowseVPLSwig->setEnabled(isPythonEnabled);
-    ui->eFBrowsePythonPath->setEnabled(isPythonEnabled);
+    ui->eFBrowsePythonPath->setEnabled(true);
     ui->comboBoxPythonType->setEnabled(isPythonEnabled);
-
-    ui->lblRestartRequired->setVisible(false);
 #else
-    ui->lblRestartRequired->setVisible(false);
     ui->eFBrowseVPLSwig->setDisabled(true);
     ui->eFBrowsePythonPath->setDisabled(true);
     ui->comboBoxPythonType->setDisabled(true);
@@ -223,6 +274,8 @@ CPreferencesDialog::~CPreferencesDialog()
         settings.endGroup();
     }
     delete ui;
+
+
 }
 
 void CPreferencesDialog::showFileDialog()
@@ -292,6 +345,17 @@ void CPreferencesDialog::pageChange(int index)
     ui->labelPageName->setText(ui->listPages->item(index)->text());
     ui->stackedWidget->setCurrentIndex(index);
 }
+#ifdef ENABLE_PYTHON
+void CPreferencesDialog::restorePython()
+{
+    QSettings settings;
+    // reset python settings
+    const QString vplSwigDefault = QDir::currentPath() + "/" + pythonQt::settings::defaultVplswigPath;
+    ui->eFPathVPLSwig->setText(vplSwigDefault);
+    ui->comboBoxPythonType->setCurrentIndex(0);
+}
+#endif
+
 
 void CPreferencesDialog::on_CPreferencesDialog_accepted()
 {
@@ -328,6 +392,13 @@ void CPreferencesDialog::on_CPreferencesDialog_accepted()
         m_bChangesNeedRestart=true;
     }
 
+    const bool wantLogOpenglErrors = ui->checkBoxLogOpenglErrors->isChecked();
+    if (wantLogOpenglErrors != settings.value("LogOpenglErrors", QVariant(DEFAULT_LOG_OPENGL_ERRORS)).toBool())
+    {
+        settings.setValue("LogOpenglErrors", wantLogOpenglErrors);
+        m_bChangesNeedRestart = true;
+    }
+
 	const bool bWantModelRegionLink = ui->checkBoxLinkModels->isChecked();
 	bool bModelRegionLink = settings.value("ModelRegionLinkEnabled", QVariant(DEFAULT_MODEL_REGION_LINK)).toBool();
 	if(bModelRegionLink!=bWantModelRegionLink)
@@ -361,6 +432,13 @@ void CPreferencesDialog::on_CPreferencesDialog_accepted()
     if (settings.value("DicomPort").toInt() != nDicomPort)
 		settings.setValue("DicomPort", ui->spinBoxDicomPort->value());
 
+    int brushThickness = DEFAULT_BRUSH_THICKNESS;
+    if (ui->radioButtonThin->isChecked())
+        brushThickness = 0;
+    if (ui->radioButtonThick->isChecked())
+        brushThickness = 1;
+    settings.setValue("BrushThickness", brushThickness);
+
 	// save event filter stuff
 	settings.setValue("logEnabled", ui->eFEnable->isChecked());
 	settings.setValue("logMouseEnabled", ui->eFMouse->isChecked());
@@ -379,9 +457,43 @@ void CPreferencesDialog::on_CPreferencesDialog_accepted()
 	settings.setValue("logTabBars", ui->eFTabBars->isChecked());
 	settings.setValue("logLists", ui->eFLists->isChecked());
 	settings.setValue("logTables", ui->eFTables->isChecked());
-
     settings.setValue("isPythonEnabled", ui->checkBoxEnablePython->isChecked());
 
+
+    const int modelsFormat = ui->comboBoxDefaultModelsFormat->currentIndex();
+    if (settings.value("ExportedModelsFormat").toInt() != modelsFormat)
+    {
+        settings.setValue("ExportedModelsFormat", ui->comboBoxDefaultModelsFormat->currentIndex());
+    }
+
+#ifdef ENABLE_PYTHON
+	pythonQt::Settings& pySettings = VPL_SINGLETON(pythonQt::Settings);
+
+	const QString vplSwigPath = pySettings.getVplSwigPath();
+	if(vplSwigPath != ui->eFPathVPLSwig->displayText())
+	{
+		pySettings.setVplSwigPath(ui->eFPathVPLSwig->displayText());
+		m_bReinitializeInterpret = true;
+	}
+	const QString externalPythonPath = pySettings.getExternalPythonPath();
+	if (externalPythonPath != ui->eFPathPythonPath->displayText())
+	{
+		pySettings.setPythonExternalPath(ui->eFPathPythonPath->displayText());
+		m_bReinitializeInterpret = true;
+	}
+	const bool isInternal = ui->comboBoxPythonType->currentIndex() == 0;
+	if(isInternal != pySettings.isSelectedInternalInterpret())
+	{
+		pySettings.setInternalInterpret(isInternal);
+		m_bReinitializeInterpret = true;
+	}
+	if (m_bReinitializeInterpret)
+	{
+		data::Interpret& interpret = *data::CObjectPtr<data::Interpret>(APP_STORAGE.getEntry(data::Storage::InterpretData::Id));
+		interpret.notValid();
+		m_bChangesNeedRestart = true;
+	}
+#endif
 }
 
 void CPreferencesDialog::setButtonColor(QColor& targetColor, const QColor& sourceColor, QPushButton *targetButton)
@@ -446,13 +558,16 @@ void CPreferencesDialog::resetDefaultsPressed( )
 	ui->radioButtonPatientName->setChecked(savesFilesNameMode == 0);
 	ui->radioButtonFolderName->setChecked(savesFilesNameMode == 1);
 
+    int brushThickness = DEFAULT_BRUSH_THICKNESS;
+    ui->radioButtonThin->setChecked(brushThickness == 0);
+    ui->radioButtonThick->setChecked(brushThickness == 1);
+
 	QSettings settings;
 #ifdef ENABLE_PYTHON
-    // reset python settings
-    QString VPLSwigDefault = QDir::currentPath() + "/" + DEFAULT_VPLSWIG_PATH;
-    pythonQt::CPythonSettings::getInstance().setVPLSwigPath(VPLSwigDefault);
-    ui->eFPathVPLSwig->setText(VPLSwigDefault);
-    ui->comboBoxPythonType->setCurrentIndex(0);
+    restorePython();
+#endif
+#ifdef ENABLE_DEEPLEARNING
+    resetDeepLearningDirToDefault();
 #endif
 
     // reset keyboard shortcuts
@@ -703,68 +818,107 @@ bool CPreferencesDialog::eventFilter(QObject* obj, QEvent *event)
     return QDialog::eventFilter(obj, event);
 }
 
+#ifdef ENABLE_DEEPLEARNING
+
+void CPreferencesDialog::resetDeepLearningDirToDefault()
+{
+    QSettings settings;
+    settings.beginGroup("DeepLearning");
+    const QString deepLearningDefaultDir = QCoreApplication::applicationDirPath() + "/deeplearning";
+    ui->eFPathDeepLearning->setText(deepLearningDefaultDir);
+    settings.remove("deepLearningDir2");
+}
+
+void CPreferencesDialog::showFileDialogDeepLearning()
+{
+    QSettings settings;
+    settings.beginGroup("DeepLearning");
+    const QString previousDir = settings.value("deepLearningDir2").toString();
+    
+    QFileDialog dialog;
+    dialog.setFileMode(QFileDialog::Directory);
+    dialog.setOption(QFileDialog::ShowDirsOnly);
+    
+    QString pathToSelectedFolder = dialog.getExistingDirectory(this, tr("Select Directory"), previousDir);
+    if (!pathToSelectedFolder.isEmpty())
+    {
+        ui->eFPathDeepLearning->setText(pathToSelectedFolder);
+
+        if (!VPL_SIGNAL(SigHasCnnModels).invoke2(pathToSelectedFolder))
+        {
+            MessageWindow(QMessageBox::Warning, tr("CNN models were not found in selected folder.")).show();
+        }
+
+        if(!VPL_SIGNAL(SigHasLandmarksDefinition).invoke2(pathToSelectedFolder))
+        {
+            MessageWindow(QMessageBox::Warning, tr("Landmarks definition was not found in selected folder.")).show();
+        }
+    }
+
+    settings.setValue("deepLearningDir2", ui->eFPathDeepLearning->text());
+}
+#endif
+
 #ifdef ENABLE_PYTHON
 
 void CPreferencesDialog::showFileDialogVPLSwig()
 {
-
-    pythonQt::CPythonSettings& pySettings = pythonQt::CPythonSettings::getInstance();
-    QString previousVPLSwig = pySettings.getVPLSwigPath();
+    pythonQt::Settings& pySettings = VPL_SINGLETON(pythonQt::Settings);
+	const QString previousVplSwig = pySettings.getVplSwigPath();
 
     //show file dialog, which allows the user to select a folder
-    QFileDialog *dialog = new QFileDialog();
-    dialog->setFileMode(QFileDialog::Directory);
-    dialog->setOption(QFileDialog::ShowDirsOnly);
+    QFileDialog dialog;
+    dialog.setFileMode(QFileDialog::Directory);
+    dialog.setOption(QFileDialog::ShowDirsOnly);
 
     //get path to selected folder
-    QString path = dialog->getExistingDirectory(this, tr("Select Directory with VPLSwig package"), previousVPLSwig);
+    QString path = dialog.getExistingDirectory(this, tr("Select Directory with VPLSwig package"), previousVplSwig);
 
     //show that path in ui
     if (!path.isEmpty())
     {
-        pySettings.setVPLSwigPath(path);
-        ui->eFPathVPLSwig->setText(path);
-        ui->lblRestartRequired->setVisible(true);
+		ui->eFPathVPLSwig->setText(path);
     }
-    delete dialog;
 }
-
+//! Display directory open dialog when button for searching external python is clicked.
 void CPreferencesDialog::showFileDialogPython()
 {
 
-    pythonQt::CPythonSettings& pySettings = pythonQt::CPythonSettings::getInstance();
-    QString previousDir = pySettings.getExternalPythonPath();
+    pythonQt::Settings& pySettings = VPL_SINGLETON(pythonQt::Settings);
+	const QString previousDir = pySettings.getExternalPythonPath();
 
 
     //show file dialog, which allows the user to select a folder
-    QFileDialog *dialog = new QFileDialog();
-    dialog->setFileMode(QFileDialog::Directory);
-    dialog->setOption(QFileDialog::ShowDirsOnly);
+	QFileDialog dialog;
+    dialog.setFileMode(QFileDialog::Directory);
+    dialog.setOption(QFileDialog::ShowDirsOnly);
 
     //get path to selected folder
-    QString path = dialog->getExistingDirectory(this, tr("Select Directory"), previousDir);
+    QString path = dialog.getExistingDirectory(this, tr("Select Directory"), previousDir);
 
     //show that path in ui
     if (!path.isEmpty())
     {
-        pySettings.setPythonExternalPath(path);
-        ui->eFPathPythonPath->setText(path);
-        ui->lblRestartRequired->setVisible(true);
+		if (!data::Interpret::isExistInterpret(path))
+		{
+			//MessageWindow(tr("Selected path does not contain python.exe.")).show();
+            MessageWindow(QMessageBox::Warning, tr("External interpret was not found in selected folder. Select another folder or switch to internal interpret.")).show();
+		}
+        else
+        {
+            ui->eFPathPythonPath->setText(path);
+        }
     }
-
-    delete dialog;
 }
 
 void CPreferencesDialog::pythonTypeChanged(int index)
 {
-    pythonQt::CPythonSettings::getInstance().setInternalInterpret(index == 0);
-    ui->lblRestartRequired->setVisible(true);
 }
 
 void CPreferencesDialog::showHidePythonOptions(int state)
 {
 #ifdef ENABLE_PYTHON
-    pythonQt::CPythonSettings& pySettings = pythonQt::CPythonSettings::getInstance();
+    pythonQt::Settings& pySettings = VPL_SINGLETON(pythonQt::Settings);
 
     if (state == Qt::Checked)
     {
@@ -775,16 +929,13 @@ void CPreferencesDialog::showHidePythonOptions(int state)
         // than check external interpret and if exist set it.
         if (pySettings.isSelectedInternalInterpret())
         {
-            existInterpret = pythonQt::CPythonInterpretQt::isExistInterpret(pythonQt::InterpretType::INTERNAL);
+            existInterpret = data::Interpret::isExistInterpret(data::InterpretType::INTERNAL);
             if (!existInterpret)
             {
-                if (pythonQt::CPythonInterpretQt::isExistInterpret(pythonQt::InterpretType::EXTERNAL))
+                if (data::Interpret::isExistInterpret(data::InterpretType::EXTERNAL))
                 {
-                    pythonQt::CMessageBox message(QMessageBox::Warning, tr("Internal interpret was not found, changed to external."));
-                    message.show();
-
+                    MessageWindow(QMessageBox::Warning, tr("Internal interpret was not found, changing to external.")).show();
                     existInterpret = true;
-                    pySettings.setInternalInterpret(false);
                     ui->comboBoxPythonType->setCurrentIndex(1);
                 }
             }
@@ -793,14 +944,12 @@ void CPreferencesDialog::showHidePythonOptions(int state)
         // than check internal interpret and if exist set it.
         else
         {
-            existInterpret = pythonQt::CPythonInterpretQt::isExistInterpret(pythonQt::InterpretType::EXTERNAL);
+            existInterpret = data::Interpret::isExistInterpret(data::InterpretType::EXTERNAL);
             if (!existInterpret)
             {
-                if (pythonQt::CPythonInterpretQt::isExistInterpret(pythonQt::InterpretType::INTERNAL))
+                if (data::Interpret::isExistInterpret(data::InterpretType::INTERNAL))
                 {
-                    pythonQt::CMessageBox message(QMessageBox::Warning, tr("External interpret was not found, changed to internal."));
-                    message.show();
-                    pySettings.setInternalInterpret(true);
+                    MessageWindow(QMessageBox::Warning, tr("External interpret was not found, changing to internal.")).show();
                     existInterpret = true;
                     ui->comboBoxPythonType->setCurrentIndex(0);
 
@@ -815,23 +964,22 @@ void CPreferencesDialog::showHidePythonOptions(int state)
             ui->eFBrowseVPLSwig->setEnabled(true);
             ui->eFBrowsePythonPath->setEnabled(true);
             ui->comboBoxPythonType->setEnabled(true);
-            pythonQt::CPythonInterpretQt::Initialize();
+            m_bReinitializeInterpret = true;
         }
         else
         {
-            ui->checkBoxEnablePython->toggle();
-            pythonQt::CMessageBox message(tr("Internal/External interpret path not contains python.exe."));
+            //ui->checkBoxEnablePython->toggle();
             ui->eFBrowseVPLSwig->setEnabled(false);
             ui->comboBoxPythonType->setEnabled(false);
-            ui->checkBoxEnablePython->setChecked(false);
-            message.show();
+            //ui->checkBoxEnablePython->setChecked(false);
+            MessageWindow(tr("Internal/External interpret path does not contain python.exe.")).show();
         }
     }
     else
     {
         ui->eFBrowseVPLSwig->setEnabled(false);
         ui->comboBoxPythonType->setEnabled(false);
-        ui->checkBoxEnablePython->setChecked(false);
+        //ui->checkBoxEnablePython->setChecked(false);
     }
 #endif
 }

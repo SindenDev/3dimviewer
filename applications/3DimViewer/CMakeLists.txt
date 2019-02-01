@@ -37,21 +37,21 @@ add_definitions(-DPLUG_APP_SIGNATURE="OpenSource")    #if this is not defined, t
 
 
 
-# required definitions for 3rd party libraries
-if( WIN32 )
-# disabled
-# 4005    'identifier' : macro redefinition
-# 4099    PDB 'filename' was not found with 'object/library' or at 'path'; linking object as if no debug info
-# 4481    nonstandard extension used: override specifier 'keyword'
-# 4189    local variable is initialized but not referenced
-# 4996    This function or variable may be unsafe. Consider using...
-# treat as errors
-# 4552    operator has no effect; expected operator with side-effect
-# 4701    potentially uninitialized local variable used
-# 4715    not all control paths return a value
-# 4716    function must return a value
-  add_definitions ( /wd4005 /wd4099 /wd4481 /wd4189 /wd4996 /we4552 /we4701 /we4715 /we4716 ) 
-endif()
+## required definitions for 3rd party libraries
+#if( WIN32 )
+## disabled
+## 4005    'identifier' : macro redefinition
+## 4099    PDB 'filename' was not found with 'object/library' or at 'path'; linking object as if no debug info
+## 4481    nonstandard extension used: override specifier 'keyword'
+## 4189    local variable is initialized but not referenced
+## 4996    This function or variable may be unsafe. Consider using...
+## treat as errors
+## 4552    operator has no effect; expected operator with side-effect
+## 4701    potentially uninitialized local variable used
+## 4715    not all control paths return a value
+## 4716    function must return a value
+#  add_definitions ( /wd4005 /wd4099 /wd4481 /wd4189 /wd4996 /we4552 /we4701 /we4715 /we4716 ) 
+#endif()
 
   
 #-------------------------------------------------------------------------------
@@ -75,16 +75,20 @@ target_include_directories(${TRIDIM_CURRENT_TARGET} PRIVATE ${CMAKE_SOURCE_DIR}/
 
 target_include_directories(${TRIDIM_CURRENT_TARGET} PRIVATE ${CMAKE_SOURCE_DIR}/plugins/Notes )
 
+target_include_directories(${TRIDIM_CURRENT_TARGET} PRIVATE ${CMAKE_SOURCE_DIR}/include/3dim/qtplugin )
+
+#AppConfigure.h
+target_include_directories(${TRIDIM_CURRENT_TARGET} PRIVATE  "${CMAKE_SOURCE_DIR}/applications/${BUILD_PROJECT_NAME}/include" )
+
 #-------------------------------------------------------------------------------
 # Find required 3rd party libraries
 
-set( QT_BASIC "TRUE")
-
-ADD_LIB_QT()
+ADD_LIB_QT(Core Gui Network Widgets PrintSupport OpenGL LinguistTools Sql Script WebView)
 ADD_LIB_OSG()
-ADD_LIB_VPL()
-ADD_LIB_EIGEN()
 ADD_LIB_FLANN()
+ADD_LIB_VPL()
+ADD_LIB_TINYXML()
+ADD_LIB_EIGEN()
 
 if( BUILD_WITH_GDCM )
     ADD_LIB_GDCM()
@@ -99,10 +103,14 @@ ADD_LIB_ICONV()
 ADD_LIB_OPENCTM()
 ADD_LIB_ZLIB()
 ADD_LIB_OPENGL()
+ADD_LIB_OPENMP()
 
-if(BUILD_WITH_PYTHON)
-    ADD_LIB_3DIMPYTHON()
-endif(BUILD_WITH_PYTHON)
+#if(BUILD_WITH_PYTHON)
+#	ADD_LIB_OFICIALPYTHON()
+#    ADD_LIB_PYTHONCPP()
+#	option( INSTALL_INTERPRET "Install also python interpret?" OFF )
+#	option( INSTALL_VPLSWIG "Install also python interpret?" OFF )
+#endif(BUILD_WITH_PYTHON)
 
 
 if(DARWIN)
@@ -110,34 +118,41 @@ if(DARWIN)
 
     find_library(APP_SERVICES ApplicationServices)
     find_library(CORE_FOUNDATION_LIBRARY CoreFoundation)
+    find_library(IOKIT_LIBRARY IOKit)
   
     target_link_libraries( ${TRIDIM_CURRENT_TARGET} PRIVATE
         ${MATH_LIBRARY}
         ${APP_SERVICES}
         ${CORE_FOUNDATION_LIBRARY}
-        )   
+        ${IOKIT_LIBRARY}
+        )
+    
+endif()
+
+#-------------------------------------------------------------------------------
+# Flags and definitions
+
+if(MSVC)
+  # /bigobj is required for windows builds because of the size of some files
+  target_compile_options(${TRIDIM_CURRENT_TARGET} PUBLIC /bigobj )
 endif()
     
-
-if( WIN32 )  
-    target_link_libraries( ${TRIDIM_CURRENT_TARGET} PRIVATE Qt5::WinMain)
-endif()
-
+  
 #-------------------------------------------------------------------------------
 # Add files
 
 # header files
 # GraphicsWindowQt included explicitly as it doesn't have an extension
-ADD_EXECUTABLE_HEADER_DIRECTORY( ${QT3DIMVIEWER_PATH}/${QT3DIMVIEWER_INCLUDE} )
+ADD_HEADER_DIRECTORY( ${QT3DIMVIEWER_PATH}/${QT3DIMVIEWER_INCLUDE} )
 
-ADD_EXECUTABLE_HEADER_DIRECTORY( ${CMAKE_SOURCE_DIR}/include/3dim/qtplugin )
+ADD_HEADER_DIRECTORY( ${CMAKE_SOURCE_DIR}/include/3dim/qtplugin )
 
 
 
 # source files
-ADD_EXECUTABLE_SOURCE_DIRECTORY( ${QT3DIMVIEWER_PATH}/${QT3DIMVIEWER_SRC} )
+ADD_SOURCE_DIRECTORY( ${QT3DIMVIEWER_PATH}/${QT3DIMVIEWER_SRC} )
 
-ADD_EXECUTABLE_SOURCE_DIRECTORY( ${CMAKE_SOURCE_DIR}/src/qtplugin )
+ADD_SOURCE_DIRECTORY( ${CMAKE_SOURCE_DIR}/src/qtplugin )
 
 
 # note: qt doesn't list headers if not specified together with sources
@@ -162,7 +177,7 @@ ADD_SOURCE_GROUPS( ${QT3DIMVIEWER_INCLUDE}
                     zip
                     )
 
-ADD_SOURCE_GROUPS2( ${QT3DIMVIEWER_INCLUDE}
+ADD_SOURCE_GROUPS( ${QT3DIMVIEWER_INCLUDE}
                     ${QT3DIMVIEWER_SRC}
                     ${QT3DIMVIEWER_INCLUDE}/3dim
                     ${QT3DIMVIEWER_SRC}
@@ -173,7 +188,7 @@ ADD_SOURCE_GROUPS2( ${QT3DIMVIEWER_INCLUDE}
 # QT related settings
 
 # process headers by MOC and generate list of resulting source files
-#QTX_WRAP_CPP( 3DIMVIEWERQT_INCLUDES_MOC ${TRIDIM_EXECUTABLE_HEADERS} )
+#QTX_WRAP_CPP( 3DIMVIEWERQT_INCLUDES_MOC ${${TRIDIM_CURRENT_TARGET}_HEADERS} )
 
 # UI files are processed to headers and sources
 #QTX_WRAP_UI( 3DIMVIEWERQT_FORMS_HEADERS ${3DIMVIEWERQT_FORMS} )
@@ -193,7 +208,7 @@ SET( QT_USE_QTOPENGL TRUE )
 # http://qt.developpez.com/doc/5.0-snapshot/cmake-manual/
 
 # files to translate
-SET( FILES_TO_TRANSLATE ${TRIDIM_EXECUTABLE_SOURCES} ${3DIMVIEWERQT_FORMS} )
+SET( FILES_TO_TRANSLATE ${${TRIDIM_CURRENT_TARGET}_SOURCES} ${3DIMVIEWERQT_FORMS} )
 
 
 # specify/create source translation files
@@ -225,7 +240,9 @@ ADD_3DIM_LIB_TARGET( ${TRIDIM_GUIQT_LIB} )
 ADD_3DIM_LIB_TARGET( ${TRIDIM_GUIQTMEDI_LIB} )
 
 
-
+#if(BUILD_WITH_PYTHON)
+#    ADD_3DIM_LIB_TARGET( ${TRIDIM_PYTHONQT_LIB} )
+#endif(BUILD_WITH_PYTHON)
 
 if( BUILD_PLUGINS )
 
@@ -238,15 +255,40 @@ if( BUILD_PLUGINS )
     ADD_3DIM_QTPLUGIN_TARGET( ${TRIDIM_DEMO_PLUGIN} )
     ADD_3DIM_QTPLUGIN_TARGET( ${TRIDIM_NOTES_PLUGIN} )
     
-    if(BUILD_WITH_PYTHON)
-        ADD_3DIM_QTPLUGIN_TARGET( ${TRIDIM_SCRIPTVOLUME_PLUGIN} )
-        ADD_3DIM_QTPLUGIN_TARGET( ${TRIDIM_PYTHON_PLUGIN} )
-    endif(BUILD_WITH_PYTHON)
+    #if(BUILD_WITH_PYTHON)
+    #    ADD_3DIM_QTPLUGIN_TARGET( ${TRIDIM_SCRIPTVOLUME_PLUGIN} )
+    #    ADD_3DIM_QTPLUGIN_TARGET( ${TRIDIM_PYTHON_PLUGIN} )
+    #endif(BUILD_WITH_PYTHON)
     
 endif()
 
 #-------------------------------------------------------------------------------
 # Finalize
+
+if(BUILD_WITH_GDCM)
+
+#remove DCMTK based classes
+	list(REMOVE_ITEM ${TRIDIM_CURRENT_TARGET}_HEADERS ${QT3DIMVIEWER_PATH}/${QT3DIMVIEWER_INCLUDE}/CDicomTransferDialog.h  )
+	list(REMOVE_ITEM ${TRIDIM_CURRENT_TARGET}_SOURCES ${QT3DIMVIEWER_PATH}/${QT3DIMVIEWER_SRC}/CDicomTransferDialog.cpp  )
+	list(REMOVE_ITEM 3DIMVIEWERQT_FORMS ${QT3DIMVIEWER_PATH}/${QT3DIMVIEWER_UI}/CDicomTransferDialog.ui  )
+
+  list(REMOVE_ITEM ${TRIDIM_CURRENT_TARGET}_HEADERS ${QT3DIMVIEWER_PATH}/${QT3DIMVIEWER_INCLUDE}/CDicomDCTk.h  )
+  list(REMOVE_ITEM ${TRIDIM_CURRENT_TARGET}_HEADERS ${QT3DIMVIEWER_PATH}/${QT3DIMVIEWER_INCLUDE}/CDicomSaverDCTk.h  )
+
+  list(REMOVE_ITEM ${TRIDIM_CURRENT_TARGET}_HEADERS ${QT3DIMVIEWER_PATH}/${QT3DIMVIEWER_SRC}/CDicomDCTk.cpp  )
+  list(REMOVE_ITEM ${TRIDIM_CURRENT_TARGET}_HEADERS ${QT3DIMVIEWER_PATH}/${QT3DIMVIEWER_SRC}/CDicomSaverDCTk.cpp  )
+
+else()
+	#Remove GDCM based classes
+  list(REMOVE_ITEM ${TRIDIM_CURRENT_TARGET}_HEADERS ${QT3DIMVIEWER_PATH}/${QT3DIMVIEWER_INCLUDE}/DefTagGDCM.h  )
+
+  list(REMOVE_ITEM ${TRIDIM_CURRENT_TARGET}_HEADERS ${QT3DIMVIEWER_PATH}/${QT3DIMVIEWER_INCLUDE}/CDicomGDCM.h  )
+  list(REMOVE_ITEM ${TRIDIM_CURRENT_TARGET}_HEADERS ${QT3DIMVIEWER_PATH}/${QT3DIMVIEWER_INCLUDE}/CDicomSaverGDCM.h  )
+
+  list(REMOVE_ITEM ${TRIDIM_CURRENT_TARGET}_HEADERS ${QT3DIMVIEWER_PATH}/${QT3DIMVIEWER_SRC}/CDicomGDCM.cpp  )
+  list(REMOVE_ITEM ${TRIDIM_CURRENT_TARGET}_HEADERS ${QT3DIMVIEWER_PATH}/${QT3DIMVIEWER_SRC}/CDicomSaverGDCM.cpp  )
+
+endif()
 
 IF(WIN32)
   # enable large address aware (>2GB)
@@ -257,10 +299,8 @@ IF(WIN32)
 endif()
 
 target_sources(${TRIDIM_CURRENT_TARGET} PRIVATE
-                ${TRIDIM_EXECUTABLE_SOURCES}
-                ${TRIDIM_EXECUTABLE_HEADERS}
-                #${3DIMVIEWERQT_INCLUDES_MOC}
-                #${3DIMVIEWERQT_FORMS_HEADERS}
+                ${${TRIDIM_CURRENT_TARGET}_SOURCES}
+                ${${TRIDIM_CURRENT_TARGET}_HEADERS}
                 ${3DIMVIEWERQT_RESOURCES_RCC}
                 ${QT3DIMVIEWER_QM_FILES}
                 ${3DIMVIEWERQT_FORMS}
@@ -272,49 +312,27 @@ target_sources(${TRIDIM_CURRENT_TARGET} PRIVATE
 # Set debug postfix, output directories, etc.
 set_target_properties( ${TRIDIM_CURRENT_TARGET} PROPERTIES
                        LINKER_LANGUAGE CXX
-                       PROJECT_LABEL ${TRIDIM_EXECUTABLE_PROJECT_NAME}
+                       PROJECT_LABEL ${TRIDIM_CURRENT_TARGET}
                        DEBUG_POSTFIX d
                        LINK_FLAGS "${TRIDIM_LINK_FLAGS}"
-                       #RUNTIME_OUTPUT_DIRECTORY "${TRIDIM_APPLICATION_SOURCE_FOLDER_PATH}/${TRIDIM_CURRENT_TARGET}/bin"
-                       #RUNTIME_OUTPUT_DIRECTORY_DEBUG "${TRIDIM_APPLICATION_SOURCE_FOLDER_PATH}/${TRIDIM_CURRENT_TARGET}/bin"
-                       #RUNTIME_OUTPUT_DIRECTORY_RELEASE "${TRIDIM_APPLICATION_SOURCE_FOLDER_PATH}/${TRIDIM_CURRENT_TARGET}/bin"
-                       #RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL "${TRIDIM_APPLICATION_SOURCE_FOLDER_PATH}/${TRIDIM_CURRENT_TARGET}/bin"
-                       #RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO "${TRIDIM_APPLICATION_SOURCE_FOLDER_PATH}/${TRIDIM_CURRENT_TARGET}/bin"
                        )
 
-
-# Add dependencies
-add_dependencies( ${TRIDIM_CURRENT_TARGET}
-                  ${TRIDIM_GUIQT_LIB}
-                  ${TRIDIM_GUIQTMEDI_LIB}
-                  ${TRIDIM_GEOMETRY_LIB}
-                  ${TRIDIM_GRAPH_LIB}
-                  ${TRIDIM_GRAPHMEDI_LIB}
-                  ${TRIDIM_CORE_LIB}
-                  ${TRIDIM_COREMEDI_LIB}
-                  )
+#if(BUILD_WITH_PYTHON)
+#    target_compile_definitions(${TRIDIM_CURRENT_TARGET} PRIVATE ENABLE_PYTHON)
+#    target_link_libraries(${TRIDIM_CURRENT_TARGET} PRIVATE ${TRIDIM_PYTHONQT_LIB} )
+#endif()
 
 if( BUILD_PLUGINS )
   add_dependencies( ${TRIDIM_CURRENT_TARGET}
-                    #${TRIDIM_DATAEXPRESS_PLUGIN}
-                    #${TRIDIM_AUTOSEGANDFILTERING_PLUGIN}
-                    #${TRIDIM_MANUALSEG_PLUGIN}
-                    #${TRIDIM_MANUALSEG3D_PLUGIN}
-                    #${TRIDIM_MODELCREATE_PLUGIN}
-                    #${TRIDIM_REGIONANDMODELCONTROL_PLUGIN}
-                    #${TRIDIM_LOOKUPTABLEEDITOR_PLUGIN}
-                    #${TRIDIM_SEGTOSMALLREGIONS_PLUGIN}
-                    #${TRIDIM_DATASHIFT_PLUGIN}
                     ${TRIDIM_DEMO_PLUGIN}
                     ${TRIDIM_NOTES_PLUGIN}
                     ${TRIDIM_GAUGE_PLUGIN}
-                    #${TRIDIM_EXPERIMENTALSEG_PLUGIN}
                     )
     
-    if(BUILD_WITH_PYTHON)
-        add_dependencies( 3DimViewer ${TRIDIM_SCRIPTVOLUME_PLUGIN})
-        add_dependencies( 3DimViewer ${TRIDIM_PYTHON_PLUGIN})
-    endif(BUILD_WITH_PYTHON)
+    #if(BUILD_WITH_PYTHON)
+    #    add_dependencies( 3DimViewer ${TRIDIM_SCRIPTVOLUME_PLUGIN})
+    #    add_dependencies( 3DimViewer ${TRIDIM_PYTHON_PLUGIN})
+    #endif()
     
 endif()
 
@@ -406,11 +424,13 @@ set(qt_stuff
 #"Qt5Quick.dll"
 #"Qt5Script.dll"
 #"Qt5Sql.dll"
+"Qt5Svg.dll"
 #"Qt5WebChannel.dll"
 #"Qt5WebEngineCore.dll"
 #"Qt5WebEngine.dll"
 #"Qt5WebEngineWidgets.dll"
 "Qt5Widgets.dll"
+"Qt5Xml.dll"
 )
 
 set(qt_imageformats 
@@ -467,7 +487,7 @@ set(osg_stuff
 
 
 
-#set up for install all dynamic libraries needed to run hte application..
+#set up for install all dynamic libraries needed to run the application..
 if(WIN32)
 
     #gather files first..
@@ -504,12 +524,13 @@ if(WIN32)
     
     INSTALL_LIB(${OPENSSL_LIB_NAME})
     INSTALL_LIB(${ZLIB_LIB_NAME})
-    INSTALL_LIB(${GLEW_LIB_NAME})
     INSTALL_LIB(${CURL_LIB_NAME})
     INSTALL_LIB(${ICONV_LIB_NAME})
     INSTALL_LIB(${PNG_LIB_NAME})
     INSTALL_LIB(${PHYSFS_LIB_NAME})
     INSTALL_LIB(${OPENCTM_LIB_NAME})
+    
+    #INSTALL_LIB(${PYTHON3_LIB_NAME})
 
     
     #install needed files to run..    
@@ -527,9 +548,16 @@ INSTALL_DOCS()
 INSTALL_FONTS()
 INSTALL_TRANSLATIONS()
 
-RUN_INSTALL_AS_POST_BUILD()
+#if(BUILD_WITH_PYTHON)
+#    INSTALL_PYTHON()
+#endif()
+#if(INSTALL_VPLSWIG)
+#	INSTALL_DIRECTORY_TO_BIN("${VPLSwig_PATH}/VPLSwig" python)
+#endif()
+#if(INSTALL_INTERPRET)
+#	INSTALL_DIRECTORY_TO_BIN("${Python_PATH}/interpret" python)
+#endif()
 
-# Install application
-#install( TARGETS 3DimViewer RUNTIME DESTINATION . )
+RUN_INSTALL_AS_POST_BUILD()
 
 pop_target_stack()

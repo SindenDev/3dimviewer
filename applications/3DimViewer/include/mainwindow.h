@@ -40,6 +40,8 @@
 #include <QMouseEvent>
 #include <QTabBar>
 #include <QSlider>
+#include <QEvent>
+#include <QNetworkReply>
 
 //#include <data/CExamination.h>
 #include <CAppExamination.h>
@@ -49,8 +51,15 @@
 #include <osg/OSGOrtho2DCanvas.h>
 #include <osg/CSceneOSG.h>
 #include <osg/CMeasurementsEH.h>
-#include <drawing/CISEventHandler.h>
+#ifdef ENABLE_DEEPLEARNING
+    #include <graphmedi_viewer/osg/CLandmarkAnnotationsEH.h>
+#endif
+#include <drawing/CISEventHandlerEx.h>
 #include <osg/CModelCutVisualizer.h>
+
+#include <CRegion3DPreviewVisualizer.h>
+#include <CRegion3DPreviewManager.h>
+#include <geometry/base/CTrianglesContainer.h>
 
 #ifdef USE_PSVR
    #include <render/CSceneVolumeRendering.h>
@@ -65,7 +74,6 @@
 #include <cpreferencesdialog.h>
 #include <CPluginManager.h>
 #include <CCustomUI.h>
-#include <CModelVisualizer.h>
 #include <Signals.h>
 #include <data/CModelCut.h>
 #include <CPreviewDialog.h>
@@ -76,9 +84,14 @@
 #include <data/CVolumeOfInterest.h>
 
 #include <data/CRegionsVisualizer.h>
+#include <data/CMultiClassRegionsVisualizer.h>
 #include <data/CVolumeOfInterestVisualizer.h>
 
+#include <osg/CArbitrarySliceVisualizer.h>
+
 #include <osg/CLimiterSceneOSG.h>
+
+#include <osg/CModelDragger3D.h>
 
 #if defined(__APPLE__) &&  !defined(_LIBCPP_VERSION)
 #include <tr1/array>
@@ -86,9 +99,26 @@
 #include <array>
 #endif
 
-
+/////////////////////////////////////////////////////
+class CDockWidgetEx : public QDockWidget
+{
+    Q_OBJECT
+public:
+    //! Constructor
+    CDockWidgetEx(QWidget* pParent = NULL) : QDockWidget(pParent) 
+    { 
+        
+    }
+    //! Destructor
+    ~CDockWidgetEx() { }
+};
 
 /////////////////////////////////////////////////////
+
+namespace osg
+{
+    class CModelVisualizerEx;
+}
 
 namespace Ui {
 class MainWindow;
@@ -190,7 +220,17 @@ public:
     {
         Workspace3D=0,
         WorkspaceTabs=1,
-        WorkspaceGrid=2
+        WorkspaceGrid=2,
+        WorkspaceSlices=3
+    };
+
+    enum
+    {
+        View3D = 0,
+        ViewXY = 1,
+        ViewXZ = 2,
+        ViewYZ = 3,
+        ViewARB = 4
     };
 
 private:
@@ -212,16 +252,65 @@ private:
     //! OSG window with Sagittal slice
     OSGOrtho2DCanvas*               m_OrthoYZSlice;
 
-    QDockWidget                     m_wnd3DView,
+    OSGOrtho2DCanvas*               m_ArbitrarySlice;
+
+    //! Dock widgets with osg windows
+    /*QDockWidget                     m_wnd3DView,
                                     m_wndXYView,
                                     m_wndXZView,
-                                    m_wndYZView;
+                                    m_wndYZView,
+                                    m_wndArbitraryView;*/
+
+    std::vector<CCustomDockWidget*> m_wndViews;
+
+    /*QDockWidget                     m_wnd3DViewSubstitute,
+                                    m_wndXYViewSubstitute,
+                                    m_wndXZViewSubstitute,
+                                    m_wndYZViewSubstitute,
+                                    m_wndArbitraryViewSubstitute;*/
+
+    std::vector<QDockWidget*> m_wndViewsSubstitute;
+
+    /*CCustomDockWidgetTitle*       m_wnd3DViewCustomToolbar;
+    CCustomDockWidgetTitle*       m_wndXYViewCustomToolbar;
+    CCustomDockWidgetTitle*       m_wndXZViewCustomToolbar;
+    CCustomDockWidgetTitle*       m_wndYZViewCustomToolbar;
+    CCustomDockWidgetTitle*       m_wndArbitraryViewCustomToolbar;*/
+
+    struct sWindowInfo
+    {
+        unsigned int windowType;
+        bool bFloating;
+        bool bShowSubstitute;
+        bool bDirty;
+
+        sWindowInfo(unsigned int type, bool floating, bool showSubstitute, bool dirty)
+            : windowType(type)
+            , bFloating(floating)
+            , bShowSubstitute(showSubstitute)
+            , bDirty(dirty)
+        {}
+
+        inline bool operator==(const sWindowInfo& info)
+        {
+            return windowType == info.windowType;
+        }
+    };
+
+    std::vector<sWindowInfo> m_viewsToShow;
+
+    int getIndexOfWndInLayout(unsigned int wnd);
 
     // helpers
     QTimer                          m_timer;
 
 	//! Signal connection for volume data change
-	vpl::mod::tSignalConnection m_Connection;
+	vpl::mod::tSignalConnection m_Connection, m_Connection2DCanvasLeave;
+
+    //! Network access manager
+    QNetworkAccessManager m_networkManager;
+
+    void sig2DCanvasLeave(OSGCanvas* pCanvas, bool bLeave);
 
 	//! Called on volume data change.
 	void onNewDensityData(data::CStorageEntry *pEntry);
@@ -246,15 +335,32 @@ private:
 #endif
     <osg::CModelVisualizerEx*, MAX_IMPORTED_MODELS>      m_modelVisualizers;
 
+#ifdef ENABLE_DEEPLEARNING
+    //! Used to render the reference model for landmark annotation
+    osg::ref_ptr<osg::CModelVisualizerEx>                m_referenceAnatomicalLandmarkModelVisualizer;
+    //! Stores reference landmarks attached to the reference landmark annotation visualizer so they can be deleted from it on request
+    osg::NodeList                                        m_referenceAnatomicalLandmarkModelAnnotations;
+#endif
+
+    //! STL model dragger
+    osg::ref_ptr<osg::CPivotDraggerHolder>      m_draggerPivot;
+    osg::ref_ptr<osg::C3DModelDraggerHolder>    m_draggerModel;
+    osg::ref_ptr<osg::COnOffNode>               m_switchDraggerModel;
+
     //! OSG scenes.
     osg::ref_ptr<scene::CScene3D>   m_Scene3D;
     osg::ref_ptr<scene::CSceneXY>   m_SceneXY;
     osg::ref_ptr<scene::CSceneXZ>   m_SceneXZ;
     osg::ref_ptr<scene::CSceneYZ>   m_SceneYZ;
+    osg::ref_ptr<scene::CArbitrarySliceScene> m_SceneArb;
+    osg::ref_ptr<osg::CArbitrarySliceVisualizer> m_arbSliceVisualizer;
 
-	osg::ref_ptr<osg::CRegionsVisualizerForSliceXY> m_xyVizualizer;
+	/*osg::ref_ptr<osg::CRegionsVisualizerForSliceXY> m_xyVizualizer;
 	osg::ref_ptr<osg::CRegionsVisualizerForSliceXZ> m_xzVizualizer;
-	osg::ref_ptr<osg::CRegionsVisualizerForSliceYZ> m_yzVizualizer;
+	osg::ref_ptr<osg::CRegionsVisualizerForSliceYZ> m_yzVizualizer;*/
+    osg::ref_ptr<osg::CMultiClassRegionsVisualizerForSliceXY> m_xyVizualizer;
+    osg::ref_ptr<osg::CMultiClassRegionsVisualizerForSliceXZ> m_xzVizualizer;
+    osg::ref_ptr<osg::CMultiClassRegionsVisualizerForSliceYZ> m_yzVizualizer;
 
 	osg::ref_ptr<osg::CVolumeOfInterestVisualizerForSliceXY> m_xyVOIVizualizer;
 	osg::ref_ptr<osg::CVolumeOfInterestVisualizerForSliceXZ> m_xzVOIVizualizer;
@@ -281,6 +387,9 @@ private:
     //! YZ scene drawing event handler
     osg::ref_ptr< osgGA::CISSceneYZEH > m_drawYZEH;
 
+    //! ARB scene drawing event handler
+    osg::ref_ptr< osgGA::CISSceneARBEH > m_drawARBEH;
+
     //! Event handlers - measurement on 3D scene
     osg::ref_ptr< scene::CMeasurements3DEH > m_measurements3DEH;
 
@@ -292,6 +401,20 @@ private:
 
     //! Event handlers - measurement on YZ scene
     osg::ref_ptr< scene::CMeasurementsYZEH > m_measurementsYZEH;
+
+#ifdef ENABLE_DEEPLEARNING
+    //! Event handlers - landmark annotation on 3D scene
+    osg::ref_ptr< scene::CLandmarkAnnotations3DEH > m_landmarkAnnotations3DEH;
+
+    //! Event handlers - landmark annotation on XY scene
+    osg::ref_ptr< scene::CLandmarkAnnotationsXYEH > m_landmarkAnnotationsXYEH;
+
+    //! Event handlers - landmark annotation XZ scene
+    osg::ref_ptr< scene::CLandmarkAnnotationsXZEH > m_landmarkAnnotationsXZEH;
+
+    //! Event handlers - landmark annotation YZ scene
+    osg::ref_ptr< scene::CLandmarkAnnotationsYZEH > m_landmarkAnnotationsYZEH;
+#endif
 
 	//! Cuts through model
 	osg::ref_ptr<osg::CModelCutVisualizerSliceXY> m_importedModelCutSliceXY[MAX_IMPORTED_MODELS];
@@ -325,6 +448,30 @@ private:
     //! Translations base directory
     QDir                    m_localeDir;
 
+    bool m_myViewVisibilityChange;
+
+    std::vector<int> m_visibleModelsBefore3Dseg;
+
+ // Region 3D Preview
+    osg::CRegion3DPreviewVisualizer *m_region3DPreviewVisualizer;
+    bool m_region3DPreviewVisible;
+    data::CRegion3DPreviewManager *m_region3DPreviewManager;
+
+    vpl::base::CFunctor<void> *m_on3DPreviewStart;
+    vpl::base::CFunctor<void> *m_on3DPreviewUpdate;
+    vpl::base::CFunctor<void, geometry::CTrianglesContainer&> *m_on3DPreviewStop;
+
+    void on3DPreviewStart();
+    void on3DPreviewUpdate();
+    void on3DPreviewStop(geometry::CTrianglesContainer& container);
+
+    void setUpRegion3DPreview();
+    void destroyRegion3DPreview();
+
+    void onDrawingInProgress(bool drawingInProgress);
+
+    bool setStrokeOnOff(bool on, int region);
+
 // mouse mode handling
     //! Signal connection for mouse mode change monitoring
     vpl::mod::tSignalConnection m_ConnectionModeChanged;
@@ -341,6 +488,9 @@ private:
 // region data monitoring
     void            sigRegionDataChanged(data::CStorageEntry *pEntry);
     vpl::mod::tSignalConnection m_conRegionData;
+
+    void sigRegionColoringChanged(data::CStorageEntry *pEntry);
+    vpl::mod::tSignalConnection m_conRegionColoring;
 
 // model monitoring
     void            sigBonesModelChanged(data::CStorageEntry *pEntry);
@@ -368,6 +518,8 @@ private:
 
 	bool			getContoursVisibility();
 
+    CCustomDockWidgetTitle* createTitleBar(unsigned int wnd, unsigned int commonButton = DWT_BUTTONS_PIN, bool showSlider = true);
+
 // model cut
 	//! Set Model Cut Visibility
 	void			setModelCutVisibilitySignal(int id, bool bShow);
@@ -392,9 +544,13 @@ private:
     //! enablers after workspace change
     void            afterWorkspaceChange();
 
+    void saveFloatingWindowsGeometry();
+    void loadFloatingWindowsGeometry();
+
 // helpers
     //! detaches widgets from their parent dock windows
     void            removeViewsParentWidget(QWidget *view);
+    void removeDockWidgetAndWindow(QDockWidget* dockWidget);
     //! returns parent dock widget
     QDockWidget*    getParentDockWidget(QWidget* view);
     //! Show Message Box
@@ -403,6 +559,8 @@ private:
     void            fixBadSliceSliderPos();
     //! Post open action for DICOM and VLM
     void            postOpen(const QString& filename, bool bDicomData);
+    //! Post open action for DICOM and VLM, initialize segmentation volume, undo
+    void            postOpenActions();
     //! Post save action for DICOM and VLM
     void            postSave(const QString& filename);
     //! Action before project open (return false to cancel)
@@ -423,6 +581,31 @@ private:
 
 	void enableMenuActions();
 
+    void setActiveRegion3DPreviewVisibility(bool visible);
+    void setActiveRegion3DPreviewInterval(int value);
+    bool getActiveRegion3DPreviewVisibility();
+
+    void changeVRVisibility(bool visible);
+    bool isVRVisible();
+    void onSigVRChanged();
+    bool areModelsVisible();
+    void changeModelsVisibility(bool visible);
+    void pluginLog(int type, const std::string& whatInvoke, const std::string& message);
+
+
+    bool eventFilter(QObject *object, QEvent *event) override;
+
+    //! notify our server that the license lives
+    void pingOurServer();
+    //! Get mac address
+    QString getMacAddress();
+    //! Get ip4 address
+    quint32 getIPAddress();
+    //! Convert std::wstring to QString
+    QString QStringFromWString(const std::wstring & wsString);
+    //! Retrieve serial number of hard disk
+    std::wstring getHardDiskSerialNumber();
+
 // events
 protected:
     //! handle show event to restore layout
@@ -430,7 +613,9 @@ protected:
     //! handle close event to save layout
     void            closeEvent(QCloseEvent *event);
 
-	void showPreviewDialog(const QString& title, CPreviewDialogData& data, int dataType);
+    void enterEvent(QEvent* event);
+
+	void showPreviewDialog(const QString& title, CPreviewDialogData& dialogData, int dataType);
 
 	//! function gets the title of the window and two QStrings, each of them represents rows titles/values separated by ';' and color of the first row
 	void showInfoDialog(const QString& title, const QString& rowsTitles, const QString& rowsValues, const QColor& color);
@@ -447,6 +632,9 @@ protected:
 
 protected:
     void onVREnabledChange(bool value);
+
+public slots:
+    void update3DPreview();
 
 // slots
 private slots:
@@ -478,7 +666,9 @@ private slots:
     //! Save STL model
     bool            saveSTL();
 
-	bool            saveSTLById(int storage_id);
+    bool            saveSTLinDicomCoords();
+
+	bool            saveSTLById(int storage_id, bool useDicom);
 
     //! Print method
     void            print();
@@ -544,10 +734,12 @@ private slots:
     void            showPanelsToolBar();
 
     //! Show/hide views
+    void            showAnyView(bool bShow, QWidget* pView);
     void            show3DView(bool);
     void            showAxialView(bool);
     void            showCoronalView(bool);
     void            showSagittalView(bool);
+    void            showArbitraryView(bool);
 
     //! Show/hide panels
     void            showDensityWindowPanel(bool);
@@ -560,6 +752,7 @@ private slots:
     void            showAxialSlice(bool bShow);
     void            showCoronalSlice(bool bShow);
     void            showSagittalSlice(bool bShow);
+    void            showArbitrarySlice(bool bShow);
 
     //! Show VR in 3D scene
     void            showMergedVR(bool bShow);
@@ -584,6 +777,17 @@ private slots:
     //! Set workspace to a layout where 3D scene and slices are in a grid
     void            setUpWorkSpaceGrid();
 
+    void            setUpWorkSpaceSlices();
+
+    void makeFloating3D(bool bFloating);
+    void makeFloatingAxial(bool bFloating);
+    void makeFloatingCoronal(bool bFloating);
+    void makeFloatingSagittal(bool bFloating);
+    void makeFloatingArbitrary(bool bFloating);
+
+    void makeWndFloating(unsigned int wnd, bool bFloating, bool updateWorkspace = true);
+    void showViewInWindow(int view, int window);
+
     //! Save user perspective (workspace layout)
     void            saveUserPerspective();
     //! Load user perspective (workspace layout)
@@ -591,7 +795,22 @@ private slots:
     //! Load default perspective (workspace layout)
     void            loadDefaultPerspective();
 
-// mouse modes
+    //! Return model visible state
+    bool getModelDraggerVisibility();
+
+    //! Shows or hides model dragger
+    void setModelDraggerVisibility(bool visible);
+
+    //! Returns the model id of the model connected to the dragger
+    int getModelDraggerModelId();
+
+    //! Connects the model dragger for the model with the given id or disables it
+    void setModelDraggerModelId(int modelId, bool on);
+
+    //! Update model in storage which is connected to the drager based on dragger move
+    void onDraggerMove(int eventType, bool setMatrix);
+
+    // mouse modes
     //! Switch mouse mode to density window adjustment mode
     void            mouseModeDensityWindow(bool);
     //! Switch mouse mode to scene manipulation mode
@@ -633,6 +852,10 @@ private slots:
 
 	bool getVOIVisibility();
 
+    void moveRegionDataToMulticlass();
+
+    void removeAllModels();
+
 // undo and redo
     //! Undo last undoable action
     void            performUndo();
@@ -647,7 +870,8 @@ private slots:
 
 // screenshots
     QImage*         canvasScreenShotToQImage(OSGCanvas* pCanvas, int nRenderingSize, bool bIncludeWidgets);
-    void            saveScreenshot(OSGCanvas* pCanvas);
+    void            saveScreenshotOfCanvas(OSGCanvas* pCanvas);
+    void            saveScreenshot(int viewType);
 	void			copyScreenshotToClipboard(OSGCanvas* pCanvas);
     void            saveSlice(OSGCanvas* pCanvas, int mode);
 
@@ -655,6 +879,7 @@ private slots:
     void            updateTabIcons();
     void            dockWidgetVisiblityChanged(bool visible);
     void            dockLocationChanged ( Qt::DockWidgetArea area );
+    void            dockWidget_topLevelChanged(bool changed);
 
 // recent files
     void            addToRecentFiles(const QString& wsFileName);
@@ -696,6 +921,16 @@ private slots:
 	void showFeedbackRequestDialog();
 
 	void resetAppMode();
+
+    void onActiveRegionChanged();
+
+    void showSelectedView();
+
+    //! server ping handling
+    void pingFinished(QNetworkReply* reply);
+
+    //! ssl error handling
+    void sslErrorHandler(QNetworkReply* reply, const QList<QSslError> & errlist);
 
 public slots:
 	//! Create surface model

@@ -48,10 +48,13 @@ public:
 		m_pModifierFn = NULL;
 		m_bCanceled = false;
         m_loopsCnt = 1;
-        m_currentLoopIndex = 1;
+        m_currentLoopIndex = 0;
         setAttribute(Qt::WA_ShowWithoutActivating);
         setWindowTitle(QApplication::applicationName());
         setWindowModality(Qt::WindowModal);
+#ifdef __APPLE__
+        setMinimumWidth(600);
+#endif
     }
     void setTitle(const QString &title) { setWindowTitle(title); };
 	void setModifierFn(ProgressModifierFn mfn) { m_pModifierFn = mfn; }
@@ -64,16 +67,23 @@ public:
             if (NULL != m_pModifierFn)
             {
                 int max = iMax * m_loopsCnt;
-                int count = iCount + (iMax * (m_currentLoopIndex - 1));
+                int count = iCount + (iMax * m_currentLoopIndex);
                 m_pModifierFn(count, max);
             }
 			if (!isHidden())
 			{
-				setMaximum (iMax * m_loopsCnt);
-				setValue(iCount + (iMax * (m_currentLoopIndex - 1)));
-				bool bCanceled = m_bCanceled = this->wasCanceled(); // save to local variable because processEvents can lead to destruction of this object
-				QApplication::processEvents();
-				return !bCanceled;
+                const int prevMax = maximum();
+                const int prevVal = value();
+                const int newMax = iMax * m_loopsCnt;
+                const int newVal = iCount + (iMax * m_currentLoopIndex);
+                if ((100 * newVal) / std::max(1, newMax) != (100 * prevVal) / std::max(1, prevMax)) // some actions call progress too often           
+                {
+                    setMaximum(newMax);
+                    setValue(newVal);
+                    bool bCanceled = m_bCanceled = this->wasCanceled(); // save to local variable because processEvents can lead to destruction of this object
+                    QApplication::processEvents();
+                    return !bCanceled;
+                }
 			}
 			m_bCanceled = this->wasCanceled();
             return !m_bCanceled;
@@ -87,6 +97,11 @@ public:
         show();
         QApplication::processEvents();
     }
+    void setInfinite()
+	{
+        setRange(0,0);
+        setValue(0);
+	}
 };
 
 #endif

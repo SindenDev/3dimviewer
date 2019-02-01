@@ -572,14 +572,20 @@ scene::CGizmo::CGizmo( double size, const osg::Vec3 & offset )
 	p_Geometry->setColorArray( color_array, osg::Array::BIND_OVERALL );
 
 	// set up always-render property
-    p_Geometry->getOrCreateStateSet()->setMode( GL_DEPTH_TEST,osg::StateAttribute::OFF );
-    p_Geometry->getOrCreateStateSet()->setRenderingHint( osg::StateSet::TRANSPARENT_BIN );
-    p_Geometry->getOrCreateStateSet()->setRenderBinMode( osg::StateSet::OVERRIDE_RENDERBIN_DETAILS );//:USE_RENDERBIN_DETAILS);
-    p_Geometry->getOrCreateStateSet()->setRenderBinDetails( 111, "RenderBin" );
+    setGeometryRenderingProperties(p_Geometry);
+
 
     p_Geode->addDrawable(p_Geometry);
 
     addChild(p_Geode);
+}
+
+void scene::CGizmo::setGeometryRenderingProperties(osg::Geometry *geometry)
+{
+    p_Geometry->getOrCreateStateSet()->setMode(GL_DEPTH_TEST, osg::StateAttribute::OFF);
+    p_Geometry->getOrCreateStateSet()->setRenderingHint(osg::StateSet::TRANSPARENT_BIN);
+    p_Geometry->getOrCreateStateSet()->setRenderBinMode(osg::StateSet::OVERRIDE_RENDERBIN_DETAILS);//:USE_RENDERBIN_DETAILS);
+    p_Geometry->getOrCreateStateSet()->setRenderBinDetails(111, "RenderBin");
 }
 
 //====================================================================================================================

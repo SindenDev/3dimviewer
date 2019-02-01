@@ -121,7 +121,7 @@ public:
     ~CDensityWindow()
     { }
 
-    void colorize(vpl::img::CRGBImage &rgbImage, const vpl::img::CDImage &densityImage, const data::CSlicePropertyContainer &properties);
+    void colorize(vpl::img::CRGBImage &rgbImage, const vpl::img::CDImage &densityImage, const data::CSlicePropertyContainer &properties, const vpl::img::CDImage &originalImage);
 
     //! Returns density window attributes.
     const SDensityWindow& getParams() const { return m_Params; }

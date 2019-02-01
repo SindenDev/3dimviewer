@@ -36,7 +36,8 @@ bool CSmallSubmeshReducer::reduce(geometry::CMesh &mesh, int triangle_threshold)
 
     // add property and clear it
     OpenMesh::FPropHandleT<int> fProp_submeshIndex;
-    mesh.add_property<int>(fProp_submeshIndex, "submeshIndex");
+    //if (!mesh.get_property_handle(fProp_submeshIndex, "submeshIndex"))
+        mesh.add_property<int>(fProp_submeshIndex, "submeshIndex"); // local property
 
     for (geometry::CMesh::FaceIter fit = mesh.faces_begin(); fit != mesh.faces_end(); ++fit)
     {
@@ -128,7 +129,8 @@ bool CSmallSubmeshReducer::reduceNonMax(geometry::CMesh &mesh)
 
     // add property and clear it
     OpenMesh::FPropHandleT<int> fProp_submeshIndex;
-    mesh.add_property<int>(fProp_submeshIndex, "submeshIndex");
+    //if (!mesh.get_property_handle(fProp_submeshIndex, "submeshIndex"))
+        mesh.add_property<int>(fProp_submeshIndex, "submeshIndex"); // local property
 
     for (geometry::CMesh::FaceIter fit = mesh.faces_begin(); fit != mesh.faces_end(); ++fit)
     {

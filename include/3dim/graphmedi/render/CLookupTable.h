@@ -133,13 +133,13 @@ public:
 
 protected:
     //! returns color considering only density control points
-    osg::Vec4 colorDensity(osg::Vec2d position, bool withAlphaFactor = true) const;
+    osg::Vec4 colorDensity(const osg::Vec2d& position, bool withAlphaFactor = true) const;
 
     //! returns color considering only gradient control points
-    osg::Vec4 colorGradient(osg::Vec2d position, bool withAlphaFactor = true) const;
+    osg::Vec4 colorGradient(const osg::Vec2d& position, bool withAlphaFactor = true) const;
 
     //! returns color considering only full 2d control points
-    osg::Vec4 color2d(osg::Vec2d position, bool withAlphaFactor = true) const;
+    osg::Vec4 color2d(const osg::Vec2d& position, bool withAlphaFactor = true) const;
 
     //! rebuilds cached lists of points
     void rebuildCache();
@@ -233,7 +233,7 @@ public:
 
 public:
     //! return color at specified position (components uses alpha-blending - components with higher index cover previous components)
-    osg::Vec4 color(osg::Vec2d position) const;
+    osg::Vec4 color(const osg::Vec2d& position) const;
 
     //! returns alpha factor of specified component
     double alphaFactor(int componentIndex) const;
@@ -318,14 +318,14 @@ public:
 
 public:
     //! calculates alpha-blending of two colors (A over B)
-    static osg::Vec4 blendColor(osg::Vec4 colorA, osg::Vec4 colorB);
+    static osg::Vec4 blendColor(const osg::Vec4& colorA, const osg::Vec4& colorB);
 
 private:
     //! calculates alpha-blending of color components
-    static float blendColorComponent(float colorAComponent, float colorAAlpha, float colorBComponent, float colorBAlpha);
+    static inline float blendColorComponent(float colorAComponent, float colorAAlpha, float colorBComponent, float colorBAlpha);
 
     //! calclates alpha-blending of alpha components
-    static float blendAlpha(float colorAAlpha, float colorBAlpha);
+    static inline float blendAlpha(float colorAAlpha, float colorBAlpha);
 };
 
 
