@@ -20,6 +20,8 @@
 //
 ///////////////////////////////////////////////////////////////////////////////
 
+#if !defined( TRIDIM_USE_GDCM )
+
 //3DV
 #include <data/CDicomSaverDCTk.h>
 
@@ -30,6 +32,8 @@
 #include <data/CVolumeOfInterestData.h>
 #include <VPL/Module/Progress.h>
 #include <data/CRegionColoring.h>
+#include "data/CMultiClassRegionData.h"
+#include <data/CMultiClassRegionColoring.h>
 
 //STL
 #include <memory>
@@ -109,11 +113,8 @@ bool CDicomSaverDCTk::saveSerie(std::string dirName, bool bSaveSegmented, bool b
 //    std::string ansiName = fileName.toStdString();
 //#endif
 
-#ifdef __APPLE__
-    std::auto_ptr<qint16> ptr(new qint16[2 * sizeX*sizeY]);
-#else
-    std::unique_ptr<qint16> ptr(new qint16[2 * sizeX*sizeY]);
-#endif
+    std::unique_ptr<qint16[]> ptr(new qint16[2 * sizeX*sizeY]);
+
 
     // TODO: check whether the top 3 slices are not empty ones (used for volume size alignment)
 
@@ -136,22 +137,41 @@ bool CDicomSaverDCTk::saveSerie(std::string dirName, bool bSaveSegmented, bool b
         // prepare pixel data
         if (bSaveSegmented)
         {
-            data::CObjectPtr< data::CRegionData > rVolume(APP_STORAGE.getEntry(data::Storage::RegionData::Id));
-            if (rVolume->getSize() == spData->getSize())
+            CObjectPtr<data::CMultiClassRegionColoring> spColoringMultiClass(APP_STORAGE.getEntry(data::Storage::MultiClassRegionColoring::Id));
+            CObjectPtr<data::CMultiClassRegionData> rVolumeMultiClass(APP_STORAGE.getEntry(data::Storage::MultiClassRegionData::Id));
+            CObjectPtr<data::CRegionColoring> spColoring(APP_STORAGE.getEntry(data::Storage::RegionColoring::Id));
+            CObjectPtr<data::CRegionData> rVolume(APP_STORAGE.getEntry(data::Storage::RegionData::Id));
+
+            int activeRegion;
+            bool useMultiClass = false;
+
+            if (rVolumeMultiClass->hasData())
+            {
+                activeRegion = spColoringMultiClass->getActiveRegion();
+                useMultiClass = true;
+            }
+            else
+            {
+                activeRegion = spColoring->getActiveRegion();
+            }
+
+            if ((useMultiClass ? rVolumeMultiClass->getSize() : rVolume->getSize()) == spData->getSize())
             {
                 if (bSaveActive)
                 {
-                    data::CObjectPtr<data::CRegionColoring> spColoring(APP_STORAGE.getEntry(data::Storage::RegionColoring::Id));
-                    const int activeRegion(spColoring->getActiveRegion());
                     qint16* pData = ptr.get();
                     for (int y = minY; y < maxY; y++)
                     {
                         for (int x = minX; x < maxX; x++)
                         {
-                            if (rVolume->at(x, y, z) == activeRegion)
+                            if ((useMultiClass && rVolumeMultiClass->at(x, y, z, activeRegion)) || (!useMultiClass && rVolume->at(x, y, z) == activeRegion))
+                            {
                                 *pData = std::max(spData->at(x, y, z) + 1024, 0);
+                            }
                             else
+                            {
                                 *pData = 0;
+                            }
                             pData++;
                         }
                     }
@@ -163,10 +183,14 @@ bool CDicomSaverDCTk::saveSerie(std::string dirName, bool bSaveSegmented, bool b
                     {
                         for (int x = minX; x < maxX; x++)
                         {
-                            if (rVolume->at(x, y, z) != 0)
+                            if ((useMultiClass && rVolumeMultiClass->at(x, y, z) != 0) || (!useMultiClass && rVolume->at(x, y, z) != 0))
+                            {
                                 *pData = std::max(spData->at(x, y, z) + 1024, 0);
+                            }
                             else
+                            {
                                 *pData = 0;
+                            }
                             pData++;
                         }
                     }
@@ -319,3 +343,5 @@ bool CDicomSaverDCTk::saveSerie(std::string dirName, bool bSaveSegmented, bool b
     return bOk;
 }
 }// namespace data
+
+#endif //TRIDIM_USE_GDCM

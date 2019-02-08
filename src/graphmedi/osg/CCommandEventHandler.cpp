@@ -35,6 +35,7 @@ typedef osgUtil::LineSegmentIntersector osgIntersec;
 
 
 scene::CCommandEventHandler::CCommandEventHandler()
+    : m_mask(-1)
 {
 }
 
@@ -81,7 +82,8 @@ bool scene::CCommandEventHandler::handle(const osgGA::GUIEventAdapter& ea,
 
                 // Intersections with interest geometry
                 osgIntersec::Intersections AllIntersections, UsableIntersections;
-                view->computeIntersections(ea.getX(), ea.getY(), AllIntersections);
+
+                view->computeIntersections(ea.getX(), ea.getY(), AllIntersections, m_mask);
 
                 // sort intersections
     //            std::stable_sort(AllIntersections.begin(), AllIntersections.end());

@@ -20,6 +20,8 @@
 //
 ///////////////////////////////////////////////////////////////////////////////
 
+#if !defined( TRIDIM_USE_GDCM )
+
 #include <data/CDicomDCTk.h>
 #include <data/DicomTags.h>
 #include <data/DicomTagUtils.h>
@@ -52,6 +54,7 @@
 // SHA-1 hash function
 #include <math/sha1.h>
 
+#include <codecvt>
 
 
 namespace data 
@@ -324,7 +327,7 @@ void data::CDicomDCTk::getSliceIds(tDicomNumList& Numbers)
     DcmDataset * dataset = m_pHandle->getDataset();
 
     // This version doesn't work for Planmeca's multi-frame dicom files
-/*    DcmStack Stack;
+    /*DcmStack Stack;
     OFCondition	status = dataset->findAndGetElements( TAG_SLICE_NUMBER, Stack );
     if( status.good() )
     {
@@ -372,7 +375,69 @@ void data::CDicomDCTk::getSliceIds(tDicomNumList& Numbers)
                 continue;
             }
 
-            Numbers.push_back( convPos2Id( double(f1), double(f2), double(f3) ) );
+            //Numbers.push_back(convPos2Id(double(f1), double(f2), double(f3)));
+
+            vpl::img::CPoint3D zero_point(0, 0, 0);
+            vpl::img::CVector3D normal_image;
+
+            DcmStack Stack2;
+            OFCondition status2 = dataset->findAndGetElements(TAG_IMAGE_ORIENTATION, Stack2);
+            if (status2.good())
+            {
+                for (unsigned long i = 0; i < Stack2.card(); ++i)
+                {
+                    // get the image position 	
+                    DcmElement * elem = dynamic_cast<DcmElement *>(Stack2.elem(i));
+                    if (!elem)
+                    {
+                        continue;
+                    }
+
+                    // retrieve the position
+                    Float64 x1, x2, x3, y1, y2, y3;
+                    status2 = elem->getFloat64(x1, 0);
+                    status2 = elem->getFloat64(x2, 1);
+                    status2 = elem->getFloat64(x3, 2);
+                    status2 = elem->getFloat64(y1, 3);
+                    status2 = elem->getFloat64(y2, 4);
+                    status2 = elem->getFloat64(y3, 5);
+                    if (status2.bad())
+                    {
+                        x1 = 1.0;
+                        x2 = 0.0;
+                        x3 = 0.0;
+                        y1 = 0.0;
+                        y2 = 1.0;
+                        y3 = 0.0;
+                    }
+
+                    normal_image.vectorProduct(vpl::img::CVector3D(x1, x2, x3), vpl::img::CVector3D(y1, y2, y3));
+                    normal_image.normalize();
+
+                    vpl::img::CVector3D position_vector(zero_point, vpl::img::CPoint3D(f1, f2, f3));
+                    double pos = normal_image.dotProduct(normal_image, position_vector);
+
+                    Numbers.push_back(pos);
+                }
+            }
+            else
+            {
+                Float64 x1, x2, x3, y1, y2, y3;
+                x1 = 1.0;
+                x2 = 0.0;
+                x3 = 0.0;
+                y1 = 0.0;
+                y2 = 1.0;
+                y3 = 0.0;
+
+                normal_image.vectorProduct(vpl::img::CVector3D(x1, x2, x3), vpl::img::CVector3D(y1, y2, y3));
+                normal_image.normalize();
+
+                vpl::img::CVector3D position_vector(zero_point, vpl::img::CPoint3D(f1, f2, f3));
+                double pos = normal_image.dotProduct(normal_image, position_vector);
+
+                Numbers.push_back(pos);
+            }
         }
     }
     if (Numbers.empty())
@@ -588,6 +653,15 @@ const std::string trimSpaces(const std::string& str)
     return str.substr(beginStr, range);
 }
 
+// workaround for protected destructor on mac
+template <class Facet>
+    struct deletable_facet : Facet
+    {
+        template <class ...Args>
+        deletable_facet(Args&& ...argsx) : Facet(std::forward<Args>(argsx)...) { }
+        ~deletable_facet() { }
+    };
+    
 
 //! Reads all informative DICOM tags (patient name, etc.) from the dataset.
 //! - Throws exception on failure.
@@ -603,6 +677,15 @@ void readTagsDCTk(DcmDataset * dataset, vpl::img::CDicomSlice & slice)
     OFString buffer;
     DcmTag tag;
     OFCondition	status;
+
+    std::string charset;
+    tag = DCM_SpecificCharacterSet;
+    status = dataset->findAndGetOFString(tag, buffer);
+    if (!status.bad())
+    {
+        charset = buffer.c_str();
+    }
+
 
     tag = TAG_NUMBER_OF_FRAMES;
     long int numOfFrames = 0;
@@ -637,6 +720,36 @@ void readTagsDCTk(DcmDataset * dataset, vpl::img::CDicomSlice & slice)
     else
     {
         slice.m_sPatientName = trimSpaces(std::string(buffer.c_str()));
+        if (!charset.empty() && !slice.m_sPatientName.empty())
+        {
+            std::string codecvtname;
+            if (0 == charset.compare("ISO_IR 100")) // 8859-1
+                codecvtname = ".1252";
+            if (0 == charset.compare("ISO_IR 101")) // 8859-2
+                codecvtname = ".1250";
+            if (0 == charset.compare("ISO_IR 192")) // UTF-8
+            {
+                // no conversion needed
+            }
+            if (!codecvtname.empty()) 
+            {
+                try {
+                    std::wstring wbuf;
+                    std::wstring_convert<deletable_facet<std::codecvt_byname<wchar_t, char, std::mbstate_t> > > convert(new deletable_facet< std::codecvt_byname<wchar_t, char, std::mbstate_t> >(codecvtname.c_str()));
+                    wbuf = convert.from_bytes(slice.m_sPatientName);
+                    if (!wbuf.empty())
+                    {
+                        //OutputDebugStringW(wbuf.c_str());
+                        std::wstring_convert<std::codecvt_utf8<wchar_t>> utf8_conv;                        
+                        slice.m_sPatientName = utf8_conv.to_bytes(wbuf);
+                    }
+                }
+                catch (const std::exception& ex)
+                {
+                    VPL_LOG_INFO("codecvt failed for " << codecvtname.c_str() << " " << ex.what());
+                }
+            }
+        }
     }
 
     // patient id 
@@ -2298,3 +2411,5 @@ bool CDicomDCTk::loadDicomDCTk2D(const vpl::sys::tString &dir, const std::string
 }
 
  }//namespace data
+
+#endif // TRIDIM_USE_GDCM

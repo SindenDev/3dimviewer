@@ -94,7 +94,10 @@ public:
 	bool isSet() { return m_isVOISet; }
 
 	//! Sets flag, that tells if the volume of interest is set.
-	void setSetFlag(bool set) { m_isVOISet = set; }
+	void setSetFlag(bool set)
+    {
+        m_isVOISet = set;
+    }
 
 	//! Writes the data to a given output channel.
 	template <class S>

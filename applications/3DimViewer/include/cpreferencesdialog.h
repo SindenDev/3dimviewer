@@ -34,9 +34,11 @@
 
 #define DEFAULT_BACKGROUND_COLOR        qRgb(51,51,102) 
 #define DEFAULT_LOGGING                 true
+#define DEFAULT_LOG_OPENGL_ERRORS       false
 #define DEFAULT_MODEL_REGION_LINK		true
 #define DEFAULT_SAVE_PATH_MODE          0
 #define DEFAULT_SAVED_FILES_NAME_MODE	0
+#define DEFAULT_BRUSH_THICKNESS         1
 #define DEFAULT_STYLESHEET              ""
 #define DEFAULT_DICOM_PORT              5678
 #define DEFAULT_BIG_ICONS				true
@@ -58,7 +60,7 @@ public:
         {            
             if (metric == QStyle::PM_SmallIconSize)
             { // used by menu
-                s = 20; // looks better than 24 px icons
+                s = 24;
             }
             if (metric == QStyle::PM_ToolBarIconSize)
             {
@@ -71,7 +73,7 @@ public:
 				if (NULL!=pDesktop && pDesktop->logicalDpiX()>100)
 				{
 					double dpiFactor = pDesktop->logicalDpiX()/96.0;
-					dpiFactor = 1 + (dpiFactor-1)/4; // don't scale directly because we don't have that good icons
+					dpiFactor = 1 + (dpiFactor-1)/2; // don't scale directly because we don't have that good icons
 					s = (int)(s*dpiFactor);
 				}
 			}
@@ -121,8 +123,13 @@ private slots:
     void showFileDialogVPLSwig();
     void showFileDialogPython();
     void showHidePythonOptions(int state);
-#endif
+    void restorePython();
 
+#endif
+#ifdef ENABLE_DEEPLEARNING
+    void resetDeepLearningDirToDefault();
+    void showFileDialogDeepLearning();
+#endif
     void showFileDialog();
     void showHideFilterOptions(int state);
 	void setMonitoredObjectsChecked();
@@ -142,6 +149,8 @@ private:
 	void removeCustomShortcuts( QTreeWidgetItem *item );
 
     CEventFilter &m_eventFilter;
+
+    bool m_bReinitializeInterpret;
 };
 
 #endif // CPREFERENCESDIALOG_H

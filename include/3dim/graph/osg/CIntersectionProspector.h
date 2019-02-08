@@ -26,7 +26,6 @@
 ///////////////////////////////////////////////////////////////////////////////
 // include files
 
-#include <osgUtil/IntersectVisitor>
 #include <osgUtil/LineSegmentIntersector>
 #include <vector>
 #include <algorithm>

@@ -66,7 +66,8 @@ public:
 	    HANDLER_NORMAL = 6,
         HANDLER_WINDOW = 7,
         HANDLER_IMPLANT = 8,
-	    HANDLER_UNKNOWN = 9
+	    HANDLER_UNKNOWN = 9,
+        HANDLER_ARB = 10
     };
 
 public:

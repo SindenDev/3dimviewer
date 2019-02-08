@@ -23,7 +23,12 @@
 #ifndef CFlannTree_H_included
 #define CFlannTree_H_included
 
+#pragma warning( push )
+#pragma warning( disable : 4456)
+#pragma warning( disable : 4458)
+#pragma warning( disable : 4245)
 #include <flann/flann.h>
+#pragma warning( pop )
 #include <geometry/base/CMesh.h>
 #include <memory>
 
@@ -56,16 +61,16 @@ namespace geometry
         typedef flann::Matrix<size_t> tFlannIMatrix;
     public:
         //! Simple constructor (without initialization)
-        CFlannTree() {}
+        CFlannTree();
 
         //! Initializing constructor - by mesh.
-        CFlannTree(const CMesh &mesh) { init(mesh); }
+        CFlannTree(const CMesh &mesh);
 
         //! Initializing constructor - by array of points.
-        CFlannTree(const Vec3Array &points) { init(points); }
+        CFlannTree(const Vec3Array &points);
 
         //! Destructor
-        virtual ~CFlannTree() {}
+        virtual ~CFlannTree();
 
         //! Initialize by mesh. Index returned with search methods is order number of the vertex in the mesh.
         virtual bool init(const CMesh &mesh) { return init(meshToPoints(mesh)); }
@@ -126,8 +131,23 @@ namespace geometry
         //! Convert vector of indices to the Flann matrix format
         tFlannIMatrix indicesToFlann(tIndexVec &data, size_t rows) const;
 
+        //! Convert vector of double values to the flann matrix format
+        tFlannDMatrix doublesToFlann(tDoubleVec &data, size_t rows, size_t cols) const;
+
+        //! Convert vector of indices to the Flann matrix format
+        tFlannIMatrix indicesToFlann(tIndexVec &data, size_t rows, size_t cols) const;
+
+        //! Initialize helper buffers
+        void initHelperBuffers();
+
     private:
         tIndexTreePtr m_tree;
+
+        //! Helper buffers for improved performance
+        tDoubleVec *m_result_distances;
+        tIndexVec *m_result_indices;
+        //! Size of m_result_indices and m_result_distances (based on omp_get_max_threads)
+        int m_result_buffers_count;
     };
 
     typedef CFlannTree::tSmartPtr CFlannTreePtr;

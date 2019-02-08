@@ -8,4 +8,13 @@
     <file>icons/notesplugin.png</file>
     <file>icons/notesplugin_dock.png</file>
   </qresource>
+	<qresource prefix="/svg">
+		<file>svg/visibility.svg</file>
+		<file>svg/tool_brush.svg</file>
+		<file>svg/arrow.svg</file>
+		<file>svg/tool_eraser.svg</file>
+		<file>svg/notedeletesmall.svg</file>
+		<file>svg/notesplugin.svg</file>
+		<file>svg/notesplugin_dock.svg</file>
+	</qresource>
 </RCC>

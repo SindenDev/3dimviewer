@@ -63,6 +63,18 @@
         <source>Measure Density Value [Hu]</source>
         <translation>Měřit hustotu [Hu]</translation>
     </message>
+    <message>
+        <source>Activates the density measurement mode.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Activates the distance measurement mode.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Clears all measurements.</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>GaugePlugin</name>

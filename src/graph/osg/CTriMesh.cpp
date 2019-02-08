@@ -22,315 +22,234 @@
 
 #include "osg/CTriMesh.h"
 
-#include <osgUtil/SmoothingVisitor>
 #include <osg/KdTree>
 #include <osg/CullFace>
-#include <osg/Version>
-#include <osg/CForceCullCallback.h>
 
-#define BUFFER_INDEX_PROPERTY "bufferIndex"
+#include "osg/CConvertToGeometry.h"
+#include <osg/CPseudoMaterial.h>
+#include <geometry/base/CMesh.h>
 
-void osg::CTriMeshDrawCallback::drawImplementation(osg::RenderInfo &ri, const osg::Drawable *d) const
-{
-    osg::Geometry *g = m_drawable->asGeometry();
-    if (g != NULL)
-    {
-        if ((g->getVertexArray()->getDataSize() != 0) && (g->getNumPrimitiveSets() != 0) && (g->getPrimitiveSet(0)->getTotalDataSize() != 0))
-        {
-            // draw original geometry
-            m_drawable->drawImplementation(ri);
-        }
-    }
-}
 
 osg::CTriMesh::CTriMesh()
-    : m_bKDTreeUsed(false)
-    , m_bUseVertexColors(false)
+    : m_kdtreeUsed(false)
+    , m_useVertexColors(false)
+    , m_useMultipleMaterials(false)
 {
     setName("CTriMesh");
-    pGeode = new osg::Geode;
-    pGeometries.push_back(new osg::Geometry);
-    pGeometriesVisitors.push_back(new osg::Geometry);
-    pVertices = new osg::Vec3Array;
-    pVertexColors = new osg::Vec4Array;
-    pPrimitiveSets.push_back(new osg::DrawElementsUInt(osg::PrimitiveSet::TRIANGLES));
-    pVertexGroupIndices = new osg::Vec4Array;
-    pVertexGroupWeights = new osg::Vec4Array;
-    pVisitorsSubTree = new osg::MatrixTransform;
-    setVisitorsSubTree(NULL);
 
-    pGeometriesVisitors.back()->setCullingActive(false);  
+    m_geode = new osg::Geode();
+    m_vertices = new osg::Vec3Array();
+    m_texCoords = new osg::Vec2Array();
+    m_normals = new Vec3Array();
+    m_noNormals = new Vec3Array(1);
+    m_colors = new osg::Vec4Array(1);
+    m_vertexColors = new osg::Vec4Array();
+    m_vertexGroupIndices = new osg::Vec4Array();
+    m_vertexGroupWeights = new osg::Vec4Array();
 
-    // set draw callback
-    pGeometriesVisitors.back()->setDrawCallback(new CTriMeshDrawCallback(pGeometries.back()));
+    (*m_noNormals)[0] = osg::Vec3(0.0, 0.0, 0.0);
+    (*m_colors)[0] = osg::Vec4(1.0, 1.0, 1.0, 1.0);
 
-    this->addChild(pVisitorsSubTree);
-    this->addChild(pGeode);
+    m_defaultMaterial = m_defaultMaterialBackup = new osg::CPseudoMaterial();
+    m_defaultMaterial->uniform("Shininess")->set(85.0f);
+    m_defaultMaterial->uniform("Specularity")->set(1.0f);
+    m_materials[0] = m_defaultMaterial;
 
-    pGeometries.back()->setVertexArray(pVertices);
-    pGeometries.back()->addPrimitiveSet(pPrimitiveSets.back());
-
-    pDefaultMaterial = pDefaultMaterialBackup = new osg::CPseudoMaterial;
-    pDefaultMaterial->uniform("Shininess")->set(85.0f);
-    pDefaultMaterial->uniform("Specularity")->set(1.0f);
-    pMaterials[0] = pDefaultMaterial;
-    pDefaultMaterial->apply(pGeometries.back());
-
-    pColors = new osg::Vec4Array(1);
-    (*pColors)[0] = osg::Vec4(1.0, 1.0, 1.0, 1.0);
-    pGeometries.back()->setColorArray(pColors, osg::Array::BIND_OVERALL);
+    addChild(m_geode);
 }
 
-void osg::CTriMesh::setVisitorsSubTree(osg::MatrixTransform *visitorsSubTree)
+void osg::CTriMesh::createMesh(geometry::CMesh& mesh, const std::map<std::string, vpl::img::CRGBAImage::tSmartPtr>& textures, bool createNormals)
 {
-    // set active node to geode - if visitorsSubTree is NULL, use original geometry, otherwise use visitors and set bones geometry to the visitors tree
-    pVisitorsSubTree->removeChildren(0, pVisitorsSubTree->getNumChildren());
-    if (visitorsSubTree != NULL)
-    {
-        pVisitorsSubTree->addChild(visitorsSubTree);
-        pGeode->removeDrawables(0, pGeode->getNumDrawables());
-        for (int i = 0; i < pGeometries.size(); ++i)
-        {
-            pGeode->addDrawable(pGeometriesVisitors[i]);
-        }
-    }
-    else
-    {
-        pGeode->removeDrawables(0, pGeode->getNumDrawables());
-        for (int i = 0; i < pGeometries.size(); ++i)
-        {
-            pGeode->addDrawable(pGeometries[i]);
-        }
-    }
-}
-
-void osg::CTriMesh::createMesh(geometry::CMesh *mesh, bool createNormals)
-{
-    if (!mesh)
-    {
-        return;
-    }
-
     // KD tree is not used
-    m_bKDTreeUsed = false;
+    m_kdtreeUsed = false;
 
-    long numvert = mesh->n_vertices();
-    long numtris = mesh->n_faces();
+    mesh.garbage_collection();
+    mesh.update_face_normals();
+    mesh.update_vertex_normals();
 
-    // remove entities marked for deletion
-    if (numvert + numtris > 0)
-    {
-        mesh->garbage_collection();
-    }
+    auto numvert = mesh.n_vertices();
+    auto numtris = mesh.n_faces();
 
-    numvert = mesh->n_vertices();
-    numtris = mesh->n_faces();
-
-    // indexing counters
-    long index = 0;
-
-    // analyze material property
-    std::map<int, int> materialIndexToGeometryIndex;
-    int geometryIndex = 0;
-    m_geometryIndexToMaterialIndex.clear();
     std::set<int> usedMaterials;
-    OpenMesh::FPropHandleT<int> fPropHandle_material;
-    bool tempProperty = false;
-    if (!mesh->get_property_handle(fPropHandle_material, MATERIAL_PROPERTY_NAME))
-    {
-        usedMaterials.insert(0);
-        tempProperty = true;
-        m_geometryIndexToMaterialIndex[0] = 0;
-        materialIndexToGeometryIndex[0] = 0;
-        mesh->add_property(fPropHandle_material, MATERIAL_PROPERTY_NAME);
 
-        for (geometry::CMesh::FaceIter fit = mesh->faces_begin(); fit != mesh->faces_end(); ++fit)
+    OpenMesh::FPropHandleT<int> fPropHandle_material;
+    bool hasMaterialProperty = mesh.get_property_handle(fPropHandle_material, MATERIAL_PROPERTY_NAME);
+
+    // Analyze material property
+    if (!hasMaterialProperty)
+    {
+        mesh.add_property(fPropHandle_material, MATERIAL_PROPERTY_NAME);
+
+        for (geometry::CMesh::FaceIter fit = mesh.faces_begin(); fit != mesh.faces_end(); ++fit)
         {
-            mesh->property(fPropHandle_material, fit.handle()) = 0;
+            mesh.property(fPropHandle_material, fit.handle()) = 0;
         }
+
+        usedMaterials.insert(0);
     }
     else
     {
-        tempProperty = false;
-        for (geometry::CMesh::FaceIter fit = mesh->faces_begin(); fit != mesh->faces_end(); ++fit)
+        for (geometry::CMesh::FaceIter fit = mesh.faces_begin(); fit != mesh.faces_end(); ++fit)
         {
-            int materialIndex = mesh->property(fPropHandle_material, fit.handle());
-
-            if (materialIndexToGeometryIndex.find(materialIndex) == materialIndexToGeometryIndex.end())
-            {
-                m_geometryIndexToMaterialIndex[geometryIndex] = materialIndex;
-                materialIndexToGeometryIndex[materialIndex] = geometryIndex;
-                geometryIndex++;
-            }
+            int materialIndex = mesh.property(fPropHandle_material, fit.handle());
 
             usedMaterials.insert(materialIndex);
         }
     }
 
-    // resolve materials
-    std::map<int, osg::ref_ptr<osg::CPseudoMaterial> > tmpMaterials = pMaterials;
-    pMaterials.clear();
-    for (std::map<int, osg::ref_ptr<osg::CPseudoMaterial> >::iterator it = tmpMaterials.begin(); it != tmpMaterials.end(); ++it)
+    auto materials = m_materials;
+    m_materials.clear();
+
+    // Resolve materials
+    for (auto matIdx : usedMaterials)
     {
-        if (it->second != NULL)
+        if (materials.find(matIdx) == materials.end())
         {
-            pMaterials[it->first] = it->second;
+            m_materials[matIdx] = m_defaultMaterial;
         }
-    }
-    for (std::set<int>::iterator it = usedMaterials.begin(); it != usedMaterials.end(); ++it)
-    {
-        if (pMaterials.find(*it) == pMaterials.end())
+        else
         {
-            pMaterials[*it] = pDefaultMaterial;
+            m_materials[matIdx] = materials[matIdx];
         }
     }
 
-    // remove excess geometries and add new
-    while (pGeometries.size() > usedMaterials.size())
+    m_geometries.clear();
+    m_primitiveSets.clear();
+
+    m_geode->removeDrawables(0, m_geode->getNumDrawables());
+
+    std::map<int, long> indices;
+    std::map<int, long> primitiveSetsSizes;
+
+    for (auto matIdx : usedMaterials)
     {
-        pGeode->removeDrawable(pGeometries.back());
-        pGeometries.back()->removePrimitiveSet(0, pGeometries.back()->getNumPrimitiveSets());
-        pGeometries.pop_back();
-        pPrimitiveSets.pop_back();
-    }
-    while (pGeometries.size() < usedMaterials.size())
-    {
-        pPrimitiveSets.push_back(new osg::DrawElementsUInt(osg::PrimitiveSet::TRIANGLES));
-        pGeometries.push_back(new osg::Geometry);
-        pGeometries.back()->addPrimitiveSet(pPrimitiveSets.back());
-        pGeometries.back()->setVertexArray(pVertices.get());
-        pGeometries.back()->setColorArray(pColors, osg::Array::BIND_OVERALL);
-        pGeode->addDrawable(pGeometries.back());
+        indices[matIdx] = 0;
+        primitiveSetsSizes[matIdx] = 0;
+
+        m_primitiveSets[matIdx] = new osg::DrawElementsUInt(osg::PrimitiveSet::TRIANGLES);
+        m_geometries[matIdx] = new osg::Geometry();
+
+        m_geometries[matIdx]->addPrimitiveSet(m_primitiveSets[matIdx]);
+        m_geometries[matIdx]->setVertexArray(m_vertices);
+        m_geometries[matIdx]->setColorArray(m_colors, osg::Array::BIND_OVERALL);
+
+        m_geode->addDrawable(m_geometries[matIdx]);
+
+        m_geometries[matIdx]->setCullingActive(false);
     }
 
     // Create normals
-    pNormals = new Vec3Array(std::max(1, (int)numvert));
-    pVertexColors = new Vec4Array(std::max(1, (int)numvert));
-    pNoNormals = new Vec3Array();
-    pNoNormals->push_back(osg::Vec3(0.0, 0.0, 0.0));
+    m_normals->resize(numvert);
+    m_vertexColors->resize(numvert);
 
-    mesh->update_face_normals();
-    mesh->update_vertex_normals();
-    ENormalsUsage normalsUsage;
-    if (createNormals)
-    {
-        normalsUsage = ENU_VERTEX;
-    }
-    else
-    {
-        normalsUsage = ENU_NONE;
-    }
-    useNormals(normalsUsage);
-
-    // resolve colors
-    useVertexColors(m_bUseVertexColors, true);
+    useNormals(createNormals ? ENU_VERTEX : ENU_NONE);
+    useVertexColors(m_useVertexColors, true);
 
     // Allocate memory for vertices
-    pVertices->resize(std::max(1, (int)numvert));
+    m_vertices->resize(numvert);
+    m_texCoords->resize(numvert);
 
     // Copy vertices and add bufferIndex property to each vertex of mesh for easy face-vertex indexing later
-    index = 0;
     OpenMesh::VPropHandleT<int> vProp_bufferIndex;
 
     // Test if property exist and if not, add it
-    if (!mesh->get_property_handle(vProp_bufferIndex, BUFFER_INDEX_PROPERTY))
+    if (!mesh.get_property_handle(vProp_bufferIndex, BUFFER_INDEX_PROPERTY))
     {
-        mesh->add_property(vProp_bufferIndex, BUFFER_INDEX_PROPERTY);
+        mesh.add_property(vProp_bufferIndex, BUFFER_INDEX_PROPERTY);
     }
 
-    for (geometry::CMesh::VertexIter vit = mesh->vertices_begin(); vit != mesh->vertices_end(); ++vit)
+    long index = 0;
+
+    for (geometry::CMesh::VertexIter vit = mesh.vertices_begin(); vit != mesh.vertices_end(); ++vit, ++index)
     {
-        mesh->property(vProp_bufferIndex, vit) = index;
-        (*pVertices)[index] = osg::Vec3(mesh->point(vit)[0], mesh->point(vit)[1], mesh->point(vit)[2]);
-        (*pNormals)[index] = osg::Vec3(mesh->normal(vit)[0], mesh->normal(vit)[1], mesh->normal(vit)[2]);
-        (*pVertexColors)[index] = osg::Vec4(mesh->color(vit)[0] / 255.0, mesh->color(vit)[1] / 255.0, mesh->color(vit)[2] / 255.0, 1.0);
-        ++index;
+        mesh.property(vProp_bufferIndex, vit) = index;
+
+        (*m_vertices)[index] = osg::Vec3(mesh.point(vit)[0], mesh.point(vit)[1], mesh.point(vit)[2]);
+        (*m_normals)[index] = osg::Vec3(mesh.normal(vit)[0], mesh.normal(vit)[1], mesh.normal(vit)[2]);
+        (*m_vertexColors)[index] = osg::Vec4(mesh.color(vit)[0] / 255.0, mesh.color(vit)[1] / 255.0, mesh.color(vit)[2] / 255.0, 1.0);
+        (*m_texCoords)[index] = osg::Vec2(mesh.texcoord2D(vit)[0], mesh.texcoord2D(vit)[1]);
     }
+    m_vertices->dirty();
+    m_normals->dirty();
+    m_vertexColors->dirty();
+    m_texCoords->dirty();
 
     // Calculate sizes of primitive sets
-    std::vector<int> primitiveSetsSizes(usedMaterials.size(), 0);
-    for (geometry::CMesh::FaceIter fit = mesh->faces_begin(); fit != mesh->faces_end(); ++fit)
+    for (geometry::CMesh::FaceIter fit = mesh.faces_begin(); fit != mesh.faces_end(); ++fit)
     {
-        int materialIndex = mesh->property(fPropHandle_material, fit.handle());
-        primitiveSetsSizes[materialIndexToGeometryIndex[materialIndex]]++;
+        int materialIndex = mesh.property(fPropHandle_material, fit.handle());
+
+        primitiveSetsSizes[materialIndex]++;
     }
 
     // Allocate memory for indexing
-    for (int i = 0; i < usedMaterials.size(); ++i)
+    for (auto matIdx : usedMaterials)
     {
-        pPrimitiveSets[i]->resize(std::max(3, (int)primitiveSetsSizes[i] * 3));
-
-        pPrimitiveSets[i]->dirty();
+        m_primitiveSets[matIdx]->resize(3 * primitiveSetsSizes[matIdx]);
     }
 
     // Copy triangle vertex indexing
-    std::vector<int> indices(usedMaterials.size(), 0);
-    for (geometry::CMesh::FaceIter fit = mesh->faces_begin(); fit != mesh->faces_end(); ++fit)
+    for (geometry::CMesh::FaceIter fit = mesh.faces_begin(); fit != mesh.faces_end(); ++fit)
     {
-        int materialIndex = mesh->property(fPropHandle_material, fit.handle());
+        int materialIndex = mesh.property(fPropHandle_material, fit.handle());
 
-        for (geometry::CMesh::FaceVertexIter fvit = mesh->fv_begin(fit); fvit != mesh->fv_end(fit); ++fvit)
+        for (geometry::CMesh::FaceVertexIter fvit = mesh.fv_begin(fit); fvit != mesh.fv_end(fit); ++fvit)
         {
-            (*pPrimitiveSets[materialIndexToGeometryIndex[materialIndex]])[indices[materialIndexToGeometryIndex[materialIndex]]++] = mesh->property(vProp_bufferIndex, fvit);
+            (*m_primitiveSets[materialIndex])[indices[materialIndex]++] = mesh.property(vProp_bufferIndex, fvit);
         }
     }
 
-    // Property is used in guide fabrication. This property is connection between visible osg model 
-    // vertices (and faces) and openmesh model. Drawed guide limiting curve stores touched triangles numbers
-    // and algortihm translates them to the (open)mesh triangle indexes. Do not remove commentary 
-    // If the property must be removed for some reason, discuss it with me. Wik.
-    //    mesh->remove_property(vProp_bufferIndex);
-
     OpenMesh::VPropHandleT<geometry::CMesh::CVertexGroups> vProp_vertexGroups;
-    if (mesh->get_property_handle(vProp_vertexGroups, VERTEX_GROUPS_PROPERTY_NAME))
+    if (mesh.get_property_handle(vProp_vertexGroups, VERTEX_GROUPS_PROPERTY_NAME))
     {
-        pVertexGroupIndices->resize(numvert);
-        pVertexGroupWeights->resize(numvert);
+        m_vertexGroupIndices->resize(numvert);
+        m_vertexGroupWeights->resize(numvert);
 
         index = 0;
-        for (geometry::CMesh::VertexIter vit = mesh->vertices_begin(); vit != mesh->vertices_end(); ++vit)
+        for (geometry::CMesh::VertexIter vit = mesh.vertices_begin(); vit != mesh.vertices_end(); ++vit, ++index)
         {
-            geometry::CMesh::CVertexGroups vertexGroup = mesh->property(vProp_vertexGroups, vit);
+            geometry::CMesh::CVertexGroups vertexGroup = mesh.property(vProp_vertexGroups, vit);
+
             for (int i = 0; i < 4; ++i)
             {
                 vertexGroup.indices[i] = std::max(vertexGroup.indices[i], 0);
             }
-            (*pVertexGroupIndices)[index] = osg::Vec4(vertexGroup.indices[0], vertexGroup.indices[1], vertexGroup.indices[2], vertexGroup.indices[3]);
-            (*pVertexGroupWeights)[index] = osg::Vec4(vertexGroup.weights[0], vertexGroup.weights[1], vertexGroup.weights[2], vertexGroup.weights[3]);
-            ++index;
+
+            (*m_vertexGroupIndices)[index] = osg::Vec4(vertexGroup.indices[0], vertexGroup.indices[1], vertexGroup.indices[2], vertexGroup.indices[3]);
+            (*m_vertexGroupWeights)[index] = osg::Vec4(vertexGroup.weights[0], vertexGroup.weights[1], vertexGroup.weights[2], vertexGroup.weights[3]);
         }
 
-        for (int i = 0; i < pGeometries.size(); ++i)
+        for (auto geometry : m_geometries)
         {
-            pVertexGroupIndices->setNormalize(false);
-            pGeometries[i]->setVertexAttribArray(6, pVertexGroupIndices, osg::Array::BIND_PER_VERTEX);
-
-            pVertexGroupWeights->setNormalize(false);
-            pGeometries[i]->setVertexAttribArray(7, pVertexGroupWeights, osg::Array::BIND_PER_VERTEX);
-
-            pVertexGroupWeights->dirty();
-            pVertexGroupIndices->dirty();
+            geometry.second->setVertexAttribArray(6, m_vertexGroupIndices, osg::Array::BIND_PER_VERTEX);
+            geometry.second->setVertexAttribArray(7, m_vertexGroupWeights, osg::Array::BIND_PER_VERTEX);
         }
-    }
-    else
-    {
-        for (int i = 0; i < pGeometries.size(); ++i)
-        {
-            pGeometries[i]->setVertexAttribArray(6, NULL);
-            pGeometries[i]->setVertexAttribArray(7, NULL);
-        }
+
+        m_vertexGroupIndices->setNormalize(false);
+        m_vertexGroupWeights->setNormalize(false);
+
+        m_vertexGroupWeights->dirty();
+        m_vertexGroupIndices->dirty();
     }
 
-    for (int i = 0; i < pGeometries.size(); ++i)
+    for (auto geometry : m_geometries)
     {
-        pGeometries[i]->dirtyGLObjects();
-        pGeometries[i]->dirtyBound();
+        geometry.second->setTexCoordArray(0, m_texCoords, osg::Array::BIND_PER_VERTEX);
+        geometry.second->setTexCoordArray(1, m_texCoords, osg::Array::BIND_PER_VERTEX);
     }
 
     // clean up
-    if (tempProperty)
+    if (!hasMaterialProperty)
     {
-        mesh->remove_property(fPropHandle_material);
+        mesh.remove_property(fPropHandle_material);
+    }
+
+    m_textureMap.clear();
+
+    // apply new textures
+    for (auto& texture : textures)
+    {
+        m_textureMap[texture.first] = CConvertToGeometry::convert(texture.second);
     }
 
     // apply materials
@@ -339,418 +258,223 @@ void osg::CTriMesh::createMesh(geometry::CMesh *mesh, bool createNormals)
 
 void osg::CTriMesh::useVertexColors(bool value, bool force)
 {
-    if (force || value != m_bUseVertexColors)
+    if (force || value != m_useVertexColors)
     {
-        m_bUseVertexColors = value;
+        m_useVertexColors = value;
 
-        for (int i = 0; i < pGeometries.size(); ++i)
+        for (auto geometry : m_geometries)
         {
-            pGeometries[i]->setColorArray(m_bUseVertexColors ? pVertexColors : pColors, m_bUseVertexColors ? osg::Array::BIND_PER_VERTEX : osg::Array::BIND_OVERALL);
-            pGeometries[i]->dirtyGLObjects();
+            if (m_useVertexColors)
+            {
+                geometry.second->setColorArray(m_vertexColors, osg::Array::BIND_PER_VERTEX);
+            }
+            else
+            {
+                geometry.second->setColorArray(m_colors, osg::Array::BIND_OVERALL);
+            }
+
+            geometry.second->dirtyGLObjects();
         }
     }
 }
 
-void osg::CTriMesh::updateVertexColors(osg::Vec4Array *vertexColors)
+void osg::CTriMesh::updateVertexColors(const geometry::CMesh& mesh, float alpha)
 {
-    pVertexColors = vertexColors;
-    useVertexColors(m_bUseVertexColors, true);
+    long index = 0;
+
+    for (geometry::CMesh::ConstVertexIter vit = mesh.vertices_begin(); vit != mesh.vertices_end(); ++vit)
+    {
+        const auto& color = mesh.color(vit);
+
+        (*m_vertexColors)[index++] = osg::Vec4(color[0] / 255.0, color[1] / 255.0, color[2] / 255.0, alpha);
+    }
+
+    m_vertexColors->dirty();
+
+    dirtyGeometry();
 }
 
-void osg::CTriMesh::setColor(float r, float g, float b, float a)
+void osg::CTriMesh::dirtyGeometry()
 {
-    auto& color = (*pColors)[0];
-    const auto newColor = osg::Vec4(r, g, b, a);
-
-    if (color != newColor)
+    for (auto geometry : m_geometries)
     {
-        color = newColor;
-        pColors->dirty();
-
-        for (int i = 0; i < pGeometries.size(); ++i)
-        {
-            pGeometries[i]->dirtyGLObjects();
-        }
+        geometry.second->dirtyGLObjects();
     }
+}
+
+void osg::CTriMesh::setColor(const osg::Vec4& value)
+{
+    (*m_colors)[0] = value;
+
+    m_colors->dirty();
+
+    dirtyGeometry();
 }
 
 void osg::CTriMesh::useNormals(ENormalsUsage normalsUsage)
 {
-    for (int i = 0; i < pGeometries.size(); ++i)
+    for (auto geometry : m_geometries)
     {
         switch (normalsUsage)
         {
-        case ENU_VERTEX:
-            pGeometries[i]->setNormalArray(pNormals.get(), osg::Array::BIND_PER_VERTEX);
-            break;
+            case ENU_VERTEX:
+                geometry.second->setNormalArray(m_normals, osg::Array::BIND_PER_VERTEX);
+                m_normals->dirty();
+                break;
 
-        case ENU_NONE:
-        default:
-            pGeometries[i]->setNormalArray(pNoNormals.get(), osg::Array::BIND_OVERALL);
-            break;
+            case ENU_NONE:
+            default:
+                geometry.second->setNormalArray(m_noNormals, osg::Array::BIND_OVERALL);
+                m_noNormals->dirty();
+                break;
         }
 
-        pGeometries[i]->dirtyGLObjects();
+        geometry.second->dirtyGLObjects();
     }
 }
 
-void osg::CTriMesh::updatePartOfMesh(geometry::CMesh *mesh, const tIdPosVec &ip, bool createNormals)
+void osg::CTriMesh::updatePartOfMesh(const std::vector<std::pair<long, SPositionNormal>>& ip)
 {
     // If no vertices, do nothing...
     if (ip.size() == 0)
         return;
 
-    // Do not update kd-tree
-    //if (m_bKDTreeUsed)
-    //    return;
-
-    /*
-    // Normals settings
-    ENormalsUsage normalsUsage;
-    if (createNormals)
-    {
-        normalsUsage = ENU_VERTEX;
-    }
-    else
-    {
-        normalsUsage = ENU_NONE;
-    }
-    useNormals(normalsUsage);
-    */
+    m_kdtreeUsed = false;
 
     // Get vertex array size
-    long vsize(pVertices->size());
+    long vsize(m_vertices->size());
 
     // For all given points
-    tIdPosVec::const_iterator ith(ip.begin()), ithEnd(ip.end());
-    for (; ith != ithEnd; ++ith)
+    for (auto ith : ip)
     {
-        assert(ith->first < vsize);
+        assert(ith.first < vsize);
 
         // Move point
-        (*pVertices)[ith->first] = ith->second.position;
-        (*pNormals)[ith->first] = ith->second.normal;
+        (*m_vertices)[ith.first] = ith.second.position;
+        (*m_normals)[ith.first] = ith.second.normal;
     }
 
-    pNormals->dirty();
-    pVertices->dirty();
+    m_normals->dirty();
+    m_vertices->dirty();
 
-    for (int i = 0; i < pGeometries.size(); ++i)
+    for (auto geometry : m_geometries)
     {
-        pGeometries[i]->dirtyGLObjects();
-        pGeometries[i]->dirtyBound();
+        geometry.second->dirtyGLObjects();
+        geometry.second->dirtyBound();
     }
 }
 
 //! Sets use of multiple materials at once
 void osg::CTriMesh::setUseMultipleMaterials(bool value)
 {
-    bUseMultipleMaterials = value;
+    m_useMultipleMaterials = value;
 
     applyMaterials();
 }
 
 void osg::CTriMesh::applyMaterials()
 {
-    if (bUseMultipleMaterials)
+    if (m_useMultipleMaterials)
     {
-        for (int i = 0; i < pGeometries.size(); ++i)
+        for (auto geometry : m_geometries)
         {
-            int materialIndex = m_geometryIndexToMaterialIndex[i];
-            pMaterials[materialIndex]->apply(pGeometries[i], osg::StateAttribute::ON | osg::StateAttribute::OVERRIDE | osg::StateAttribute::PROTECTED);
+            m_materials[geometry.first]->setTextures(m_textureMap);
+            m_materials[geometry.first]->apply(geometry.second, osg::StateAttribute::ON | osg::StateAttribute::OVERRIDE | osg::StateAttribute::PROTECTED);
         }
     }
     else
     {
-        for (int i = 0; i < pGeometries.size(); ++i)
+        for (auto geometry : m_geometries)
         {
-            pDefaultMaterial->apply(pGeometries[i], osg::StateAttribute::ON | osg::StateAttribute::OVERRIDE | osg::StateAttribute::PROTECTED);
+            m_defaultMaterial->setTextures(m_textureMap);
+            m_defaultMaterial->apply(geometry.second, osg::StateAttribute::ON | osg::StateAttribute::OVERRIDE | osg::StateAttribute::PROTECTED);
         }
     }
 }
 
 //! Sets and applies material with specified id, -1 is default material
-void osg::CTriMesh::setMaterial(osg::CPseudoMaterial *material, int id)
+void osg::CTriMesh::setMaterial(osg::CPseudoMaterial* material, int id)
 {
     if (id == -1)
     {
-        if (material == NULL)
+        if (material == nullptr)
         {
-            material = pDefaultMaterialBackup;
+            material = m_defaultMaterialBackup;
         }
 
-        for (std::map<int, osg::ref_ptr<osg::CPseudoMaterial> >::iterator it = pMaterials.begin(); it != pMaterials.end(); ++it)
+        for (auto &mat : m_materials)
         {
-            if (it->second == pDefaultMaterial)
+            if (mat.second == m_defaultMaterial)
             {
-                it->second = material;
+                mat.second = material;
             }
         }
 
-        material->copyInternals(pDefaultMaterial);
-        pDefaultMaterial = material;
+        material->copyInternals(m_defaultMaterial);
+        m_defaultMaterial = material;
     }
     else
     {
-        if (material == NULL)
+        if (material == nullptr)
         {
-            material = pDefaultMaterial;
+            material = m_defaultMaterial;
         }
 
-        material->copyInternals(pMaterials[id]);
-        pMaterials[id] = material;
+        if (m_materials[id] != nullptr)
+        {
+            material->copyInternals(m_materials[id]);
+        }
+
+        m_materials[id] = material;
     }
 
     applyMaterials();
 }
 
-//! Gets number of materials
-int osg::CTriMesh::getNumMaterials()
-{
-    return pMaterials.size();
-}
-
 //! Returns material with specified id, -1 is default material
-osg::CPseudoMaterial *osg::CTriMesh::getMaterialById(int id)
+osg::CPseudoMaterial *osg::CTriMesh::getMaterial(int id)
 {
     if (id == -1)
     {
-        return pDefaultMaterial;
+        return m_defaultMaterial;
     }
     else
     {
-        std::map<int, osg::ref_ptr<osg::CPseudoMaterial> >::iterator found = pMaterials.find(id);
-        return (found == pMaterials.end() ? NULL : found->second);
+        auto found = m_materials.find(id);
+
+        return (found == m_materials.end() ? nullptr : found->second);
     }
 }
 
-//! Returns material with specified index, -1 is default material
-osg::CPseudoMaterial *osg::CTriMesh::getMaterialByIndex(int index)
+const std::map<int, osg::ref_ptr<osg::CPseudoMaterial>>& osg::CTriMesh::getMaterials() const
 {
-    if ((index == -1) || (index >= pMaterials.size()))
-    {
-        return pDefaultMaterial;
-    }
-    else
-    {
-        std::vector<int> indices;
-        for (std::map<int, osg::ref_ptr<osg::CPseudoMaterial> >::iterator it = pMaterials.begin(); it != pMaterials.end(); ++it)
-        {
-            indices.push_back(it->first);
-        }
-        std::sort(indices.begin(), indices.end());
-
-        int id = indices[index];
-        return getMaterialById(id);
-    }
+    return m_materials;
 }
 
 void osg::CTriMesh::buildKDTree()
 {
-    if (m_bKDTreeUsed)
+    if (m_kdtreeUsed)
     {
         return;
     }
 
-    for (int i = 0; i < pGeometries.size(); ++i)
+    for (auto geometry : m_geometries)
     {
+        auto currentGeometry = geometry.second;
+
         // Update the KDTree
         osg::KdTree::BuildOptions kdTreeBuildOptions;
         osg::ref_ptr<osg::KdTree> kdTree = new osg::KdTree();
 
-        if (kdTree->build(kdTreeBuildOptions, pGeometries[i]))
+        if (kdTree->build(kdTreeBuildOptions, currentGeometry))
         {
-            pGeometries[i]->setShape(kdTree.get());
-            m_bKDTreeUsed = true;
-        }
-        else
-        {
-            //LOG_MSG(logERROR) << "osg::KdTree::build() unsuccessful.";
+            currentGeometry->setShape(kdTree);
+            m_kdtreeUsed = true;
         }
     }
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////////
-// Creates OSG geometry from loaded OpenMesh data structure
-
-osg::Geometry *osg::convertOpenMesh2OSGGeometry(geometry::CMesh *mesh, bool vertexNormals)
+osg::Geode * osg::CTriMesh::getMeshGeode()
 {
-    osg::Geometry *geometry = new osg::Geometry();
-
-    if ((mesh == NULL) || (geometry == NULL))
-    {
-        return NULL;
-    }
-
-    // pre-process loaded mesh and get counts
-    mesh->garbage_collection();
-    if (!mesh->has_vertex_normals())
-    {
-        mesh->request_vertex_normals();
-    }
-    if (!mesh->has_face_normals())
-    {
-        mesh->request_face_normals();
-    }
-    mesh->update_normals();
-    long numvert(mesh->n_vertices());
-    long numtris(mesh->n_faces());
-
-    // prepare osg::Geometry
-    osg::Vec3Array *pNormals = new osg::Vec3Array(vertexNormals ? numvert : numtris * 3);
-    osg::Vec3Array *pVertices = new osg::Vec3Array(vertexNormals ? numvert : numtris * 3);
-
-    osg::DrawElementsUInt *pPrimitives = new osg::DrawElementsUInt(osg::PrimitiveSet::TRIANGLES, numtris * 3);
-    osg::StateSet *pState = geometry->getOrCreateStateSet();
-    geometry->setNormalArray(pNormals, osg::Array::BIND_PER_VERTEX);
-    geometry->setVertexArray(pVertices);
-    geometry->addPrimitiveSet(pPrimitives);
-
-    // indexing counters
-    long index = 0;
-    long triindex = 0;
-
-    // Copy vertices and add bufferIndex property to each vertex of mesh for easy face-vertex indexing later
-    index = 0;
-    OpenMesh::VPropHandleT<int> vProp_bufferIndex;
-    OpenMesh::VPropHandleT<int> vProp_flag;
-    mesh->add_property(vProp_bufferIndex, "bufferIndex");
-
-    for (geometry::CMesh::VertexIter vit = mesh->vertices_begin(); vit != mesh->vertices_end(); ++vit)
-    {
-        mesh->property(vProp_bufferIndex, vit) = index;
-        (*pVertices)[index] = osg::Vec3(mesh->point(vit)[0], mesh->point(vit)[1], mesh->point(vit)[2]);
-        ++index;
-    }
-
-    // Copy triangle vertex indexing
-    if (vertexNormals)
-    {
-        index = 0;
-        for (geometry::CMesh::FaceIter fit = mesh->faces_begin(); fit != mesh->faces_end(); ++fit)
-        {
-            for (geometry::CMesh::FaceVertexIter fvit = mesh->fv_begin(fit); fvit != mesh->fv_end(fit); ++fvit)
-            {
-                (*pPrimitives)[index++] = mesh->property(vProp_bufferIndex, fvit);
-            }
-        }
-    }
-    else
-    {
-        index = 0;
-        int vindex = 0;
-        for (geometry::CMesh::FaceIter fit = mesh->faces_begin(); fit != mesh->faces_end(); ++fit)
-        {
-            osg::Vec3 fn(mesh->normal(fit)[0], mesh->normal(fit)[1], mesh->normal(fit)[2]);
-
-            for (geometry::CMesh::FaceVertexIter fvit = mesh->fv_begin(fit); fvit != mesh->fv_end(fit); ++fvit)
-            {
-                (*pVertices)[vindex] = osg::Vec3(mesh->point(fvit)[0], mesh->point(fvit)[1], mesh->point(fvit)[2]);
-                (*pNormals)[vindex] = fn;
-                (*pPrimitives)[index] = vindex;
-                index++;
-                vindex++;
-            }
-        }
-    }
-
-    // Copy normals
-    if (vertexNormals)
-    {
-        index = 0;
-        for (geometry::CMesh::VertexIter vit = mesh->vertices_begin(); vit != mesh->vertices_end(); ++vit)
-        {
-            (*pNormals)[index] = osg::Vec3(mesh->normal(vit)[0], mesh->normal(vit)[1], mesh->normal(vit)[2]);
-            ++index;
-        }
-    }
-
-    // remove no longer needed bufferIndex property
-    mesh->remove_property(vProp_bufferIndex);
-
-    geometry->dirtyGLObjects();
-    geometry->dirtyBound();
-
-    return geometry;
-}
-
-
-osg::Geometry *osg::convertOpenMesh2OSGGeometry(geometry::CMesh *mesh, const osg::Vec4& color)
-{
-    if (NULL==mesh)
-        return NULL;
-    osg::Geometry *geometry = new osg::Geometry();
-
-    if (NULL==geometry)
-        return NULL;
-
-    // pre-process loaded mesh and get counts
-    mesh->garbage_collection();
-    if (!mesh->has_vertex_normals())
-    {
-        mesh->request_vertex_normals();
-    }
-    if (!mesh->has_face_normals())
-    {
-        mesh->request_face_normals();
-    }
-    mesh->update_normals();
-
-    long numvert(mesh->n_vertices());
-    long numtris(mesh->n_faces());
-
-    // prepare osg::Geometry
-    osg::Vec3Array *pNormals = new osg::Vec3Array(numvert);
-    osg::Vec3Array *pVertices = new osg::Vec3Array(numvert);
-
-    osg::DrawElementsUInt *pPrimitives = new osg::DrawElementsUInt(osg::PrimitiveSet::TRIANGLES, numtris * 3);
-    osg::StateSet *pStateSet = geometry->getOrCreateStateSet();
-
-    // Enable depth test so that an opaque polygon will occlude a transparent one behind it.
-    pStateSet->setMode(GL_DEPTH_TEST, osg::StateAttribute::ON | osg::StateAttribute::PROTECTED);
-
-    // Culling
-    pStateSet->setAttributeAndModes(new osg::CullFace(osg::CullFace::BACK), osg::StateAttribute::OFF);
-
-    // Color
-    osg::Vec4Array *pColors = new osg::Vec4Array(1);
-    (*pColors)[0] = color;
-
-    geometry->setColorArray(pColors, osg::Array::BIND_OVERALL);
-
-    // prepare osg::Geometry
-    geometry->setNormalArray(pNormals, osg::Array::BIND_PER_VERTEX);
-    geometry->setVertexArray(pVertices);
-    geometry->addPrimitiveSet(pPrimitives);
-
-    // Copy vertices and add bufferIndex property to each vertex of mesh for easy face-vertex indexing later
-    OpenMesh::VPropHandleT<int> vProp_bufferIndex;
-    OpenMesh::VPropHandleT<int> vProp_flag;
-
-    // THIS PROPERTY TIES OSG AND OPENMESH TOGETHER. IT IS USED IN ANOTHER PARTS OF BSP. DO NOT REMOVE IT. NEVER!
-    mesh->add_property(vProp_bufferIndex, "bufferIndex");
-
-    long index = 0;
-    for (geometry::CMesh::VertexIter vit = mesh->vertices_begin(); vit != mesh->vertices_end() && index < numvert; ++vit)
-    {
-        mesh->property(vProp_bufferIndex, vit) = index;
-        (*pVertices)[index] = osg::Vec3(mesh->point(vit)[0], mesh->point(vit)[1], mesh->point(vit)[2]);
-        (*pNormals)[index] = osg::Vec3(mesh->normal(vit)[0], mesh->normal(vit)[1], mesh->normal(vit)[2]);
-        ++index;
-    }
-
-    // Copy triangle vertex indexing
-    index = 0;
-    for (geometry::CMesh::FaceIter fit = mesh->faces_begin(); fit != mesh->faces_end(); ++fit)
-    {
-        for (geometry::CMesh::FaceVertexIter fvit = mesh->fv_begin(fit); fvit != mesh->fv_end(fit); ++fvit)
-        {
-            (*pPrimitives)[index++] = mesh->property(vProp_bufferIndex, fvit);
-        }
-    }
-
-    geometry->dirtyGLObjects();
-    geometry->dirtyBound();
-
-    return geometry;
+    return m_geode;
 }

@@ -26,6 +26,7 @@
 #include <data/CSlice.h>
 #include <data/CDensityWindow.h>
 #include <data/CRegionColoring.h>
+#include <data/CMultiClassRegionColoring.h>
 #include <data/CAppSettings.h>
 #include <data/CDensityData.h>
 #include <data/CColoringFunc.h>
@@ -44,11 +45,13 @@ namespace data
 CSlice::CSlice()
     : m_DensityData(INIT_SIZE, INIT_SIZE, 0)
     , m_RegionData(INIT_SIZE, INIT_SIZE, 0)
+    , m_multiClassRegionData(INIT_SIZE, INIT_SIZE, 0)
     , m_RGBData(INIT_SIZE, INIT_SIZE, 0)
     , m_spImage(new osg::Image)
     , m_spTexture(new tTexture)
     , m_fTextureWidth(1.0f)
     , m_fTextureHeight(1.0f)
+    , m_updateEnabled(true)
 {
     init();
 }
@@ -61,10 +64,12 @@ void CSlice::init()
     // Initialize the image data
     m_DensityData.resize(INIT_SIZE, INIT_SIZE);
     m_RegionData.resize(INIT_SIZE, INIT_SIZE);
+    m_multiClassRegionData.resize(INIT_SIZE, INIT_SIZE);
     m_RGBData.resize(INIT_SIZE, INIT_SIZE);
 
     m_DensityData.fillEntire(vpl::img::CPixelTraits<vpl::img::tDensityPixel>::getPixelMin());
     m_RegionData.fillEntire(vpl::img::CPixelTraits<vpl::img::tDensityPixel>::getPixelMin());
+    m_multiClassRegionData.fillEntire(vpl::img::CPixelTraits<vpl::img::tDensityPixel>::getPixelMin());
     m_RGBData.fillEntire(vpl::img::CPixelTraits<vpl::img::tRGBPixel>::getPixelMin());
 
     // Protect from being optimized away as static state.
@@ -72,6 +77,8 @@ void CSlice::init()
     m_spTexture->setImage(m_spImage.get());
     m_fTextureWidth = 1.0f;
     m_fTextureHeight = 1.0f;
+
+    m_updateEnabled = true;
 
     // Texture properties
     setupTexture();
@@ -319,13 +326,12 @@ void CSlice::onPropertySourceChanged(data::CStorageEntry *entry)
 {
     data::CChangedEntries changes;
     entry->getChanges(changes);
-    update(changes);
+    //update(changes); //if anything doesn't work, ask Martin
 
 	std::map<int,int> invalidateIds;
     CSlicePropertyContainer::tPropertyList propertyList = m_properties.propertyList();
     for (CSlicePropertyContainer::tPropertyList::iterator it = propertyList.begin(); it != propertyList.end(); ++it)
     {
-        (*it)->propertySourceStorageId();
         if (changes.hasChanged((*it)->propertySourceStorageId()))
         {            			
 			invalidateIds[(*it)->sliceStorageId()] += (*it)->sliceInvalidationFlags(); 
@@ -360,26 +366,35 @@ bool CSlice::updateRGBData(bool bSizeChanged, int densityWindowId )
     // Get the density window
     CObjectPtr<CDensityWindow> spDensityWindow( APP_STORAGE.getEntry(densityWindowId) );
 
-    vpl::img::CDImage *pBackup = applyFilterAndGetBackup(false,0,0);
+    vpl::img::CDImage *pBackup = applyFilterAndGetBackup(false, 0, 0);
 
     // Is region coloring enabled?
-    if( m_DensityData.getXSize() != m_RegionData.getXSize() || m_DensityData.getYSize() != m_RegionData.getYSize() )
+    if( (m_DensityData.getXSize() != m_RegionData.getXSize() || m_DensityData.getYSize() != m_RegionData.getYSize()) && (m_DensityData.getXSize() != m_multiClassRegionData.getXSize() || m_DensityData.getYSize() != m_multiClassRegionData.getYSize()) )
     {
-        spDensityWindow->colorize(m_RGBData, m_DensityData, m_properties);
+        spDensityWindow->colorize(m_RGBData, m_DensityData, m_properties, NULL != pBackup ? *pBackup : m_DensityData);
     }
     else
     {
-        spDensityWindow->colorize(m_RGBData, m_DensityData, m_properties);
+        spDensityWindow->colorize(m_RGBData, m_DensityData, m_properties, NULL != pBackup ? *pBackup : m_DensityData);
 
         if (!spDensityWindow->getColoring()->overrideRegionColoring())
 		{
-			// Get the region coloring object
-			CObjectPtr<CRegionColoring> spColoring(APP_STORAGE.getEntry(Storage::RegionColoring::Id));
-			spColoring->colorize(m_RGBData, m_RegionData);
+            CObjectPtr<CMultiClassRegionData> spMultiClassRegionData(APP_STORAGE.getEntry(Storage::MultiClassRegionData::Id));
+            if (spMultiClassRegionData->hasData())
+            {
+                CObjectPtr<CMultiClassRegionColoring> spMultiClassColoring(APP_STORAGE.getEntry(Storage::MultiClassRegionColoring::Id));
+                spMultiClassColoring->colorize(m_RGBData, m_multiClassRegionData);
+            }
+            else
+            {
+                CObjectPtr<CRegionColoring> spColoring(APP_STORAGE.getEntry(Storage::RegionColoring::Id));
+                spColoring->colorize(m_RGBData, m_RegionData);
+            }
 		}
     }
 
-	CObjectPtr<CVolumeOfInterestData> spVOI(APP_STORAGE.getEntry(Storage::VolumeOfInterestData::Id));
+    // TODO: JS - VOI is set even if it shouldn't be and the arbitrary slice is colorized according to it
+	/*CObjectPtr<CVolumeOfInterestData> spVOI(APP_STORAGE.getEntry(Storage::VolumeOfInterestData::Id));
 
 	if (spVOI->isSet())
 	{
@@ -398,7 +413,7 @@ bool CSlice::updateRGBData(bool bSizeChanged, int densityWindowId )
 				}
 			}
 		}
-	}
+	}*/
 	
     restoreFromBackupAndFree(pBackup);
 
@@ -594,6 +609,11 @@ double CSlice::getDensity(int x, int y) const
         return -1000.0;
 
     return m_DensityData.at(x, y);
+}
+
+void CSlice::setUpdatesEnabled(bool enabled)
+{
+    m_updateEnabled = enabled;
 }
 
 } // namespace data

@@ -44,7 +44,9 @@ CSeriesSelectionDialog::CSeriesSelectionDialog(QWidget *parent, Qt::WindowFlags 
 
     QSettings settings;
     settings.beginGroup("SeriesSelectionWindow");
-    resize(settings.value("size").toSize());
+    QRect geometry = settings.value("geometry", QRect(100, 100, 500, 500)).toRect();
+    setGeometry(geometry);
+    //resize(settings.value("size").toSize());
     settings.endGroup();
 
     QObject::connect(ui->spinSubsamplingX, SIGNAL(valueChanged(double)), this, SLOT(on_spinSubsampling_valueChanged(double)));
@@ -59,15 +61,24 @@ CSeriesSelectionDialog::CSeriesSelectionDialog(QWidget *parent, Qt::WindowFlags 
 	ui->tableWidget->installEventFilter(this);
 	ui->tableWidget->viewport()->installEventFilter(this);
 
-	m_preview = new CSeriesSelectionDialogPreview(this, Qt::WindowTitleHint | Qt::WindowSystemMenuHint | Qt::WindowMaximizeButtonHint | Qt::WindowCloseButtonHint);
+	m_preview = new CSeriesSelectionDialogPreview(this, Qt::WindowTitleHint | Qt::WindowSystemMenuHint | Qt::WindowMaximizeButtonHint | Qt::WindowCloseButtonHint | Qt::WindowStaysOnTopHint);
+
+    settings.beginGroup("SeriesSelectionDialogPreview");
+
+    geometry = settings.value("geometry", QRect(100, 100, 600, 600)).toRect();
+    m_preview->setGeometry(geometry);
+
+    settings.endGroup();
 }
 
 CSeriesSelectionDialog::~CSeriesSelectionDialog()
 {
     QSettings settings;
     settings.beginGroup("SeriesSelectionWindow");
-    settings.setValue("size",size());
+    settings.setValue("geometry", geometry());
+    //settings.setValue("size",size());
     settings.endGroup();
+    hidePreview();
 	m_preview->close();
 	QApplication::restoreOverrideCursor();
     delete ui;
@@ -75,12 +86,12 @@ CSeriesSelectionDialog::~CSeriesSelectionDialog()
 
 bool CSeriesSelectionDialog::eventFilter(QObject *obj, QEvent *event)
 {
+    QApplication::restoreOverrideCursor();
+
 	if (obj == ui->tableWidget->viewport())
 	{
 		if (event->type() == QEvent::MouseMove)
 		{
-			QApplication::restoreOverrideCursor();
-
 			QMouseEvent *me = static_cast<QMouseEvent *>(event);
 
 			if (NULL == me)
@@ -96,7 +107,7 @@ bool CSeriesSelectionDialog::eventFilter(QObject *obj, QEvent *event)
 
 				if (m_Selection >= 0)
 				{
-					QApplication::setOverrideCursor(QCursor(QPixmap(":/icons/resources/magnifier_menu.png")));
+					QApplication::setOverrideCursor(QCursor(QPixmap(":/svg/svg/magnifier_small.svg")));
 				}
 			}
 		}
@@ -277,7 +288,7 @@ bool CSeriesSelectionDialog::setSeries(data::CSeries *pSeries)
             {
                 Q_ASSERT(false); // could not load first slice
             }
-            QString imageInfo = QString(tr("%1 x %2 x %3 voxels\n"
+            QString imageInfo = QString(tr("%1 x %2 x %3\n"
                                         "%4 x %5 x %6 mm"
                                #ifdef _DEBUG
                                          "\n%7 - %8"
@@ -285,7 +296,10 @@ bool CSeriesSelectionDialog::setSeries(data::CSeries *pSeries)
                                            ))
                                     .arg(Slice.getXSize()).arg(Slice.getYSize()).arg(spInfo->getNumOfSlices())
                                     .arg(Slice.getDX(),0,'f',2).arg(Slice.getDY(),0,'f',2).arg(Slice.getThickness(),0,'f',2)
-                                    .arg(SliceFirst.getPosition(),0,'f',2).arg(SliceLast.getPosition(),0,'f',2);
+                               #ifdef _DEBUG
+                                    .arg(SliceFirst.getPosition(),0,'f',2).arg(SliceLast.getPosition(),0,'f',2)
+                               #endif
+                                    ;
             if( !Slice.m_sImageType.empty() )
             {
                 imageInfo+="\n"+QString::fromUtf8(Slice.m_sImageType.c_str());
@@ -330,7 +344,7 @@ bool CSeriesSelectionDialog::setSeries(data::CSeries *pSeries)
 				//	val = e1.seriesID.compare(e2.seriesID, Qt::CaseInsensitive);
 				return val;
 			});
-			it++;
+			++it;
 		}
 	}
 
@@ -479,11 +493,32 @@ void CSeriesSelectionDialog::showPreview()
 
 	//spInfo->sortFilenamesByNumber();
 
+    if (!m_preview->isVisible())
+    {
+        QSettings settings;
+        settings.beginGroup("SeriesSelectionDialogPreview");
+
+        QRect geometry = settings.value("geometry", QRect(100, 100, 600, 600)).toRect();
+        m_preview->setGeometry(geometry);
+
+        settings.endGroup();
+    }
+
 	m_preview->setSerie(spInfo);
 	m_preview->show();
 	m_preview->raise();
 
 	QApplication::restoreOverrideCursor();
+}
+
+void CSeriesSelectionDialog::hidePreview()
+{
+    QSettings settings;
+    settings.beginGroup("SeriesSelectionDialogPreview");
+    settings.setValue("geometry", m_preview->geometry());
+    settings.endGroup();
+
+    m_preview->hide();
 }
 
 CSeriesSelectionDialogPreview::CSeriesSelectionDialogPreview(QWidget *parent, Qt::WindowFlags f)
@@ -525,6 +560,7 @@ void CSeriesSelectionDialogPreview::setSerie(data::CSerieInfo::tSmartPtr serie)
 
     int slicesCnt = m_serie->getNumOfDicomFilesForPreview();
 	m_slider->setMaximum(slicesCnt - 1);
+    m_slider->setMinimum(0);
 
     m_slider->setEnabled(true);
 
@@ -551,6 +587,17 @@ void CSeriesSelectionDialogPreview::sliceChanged(int val)
 		data::sExtendedTags tags;
         if (!m_serie->loadDicomFileForPreview(val, Slice, tags, true, m_pixelSpacing))
 		{
+            m_bitmap = new QImage(300, 300, QImage::Format_RGB32);
+            for (int y = 0; y < 300; ++y)
+            {
+                for (int x = 0; x < 300; ++x)
+                {
+                    m_bitmap->setPixel(x, y, qRgb(0, 0, 0));
+                }
+            }
+
+            resizeImage();
+
 			return;
 		}
 	}

@@ -83,6 +83,7 @@ public:
     //! Returns true if the coloring is enabled.
     bool isColoringEnabled() const { return m_bColoringEnabled; }
 
+    CRegionData& makeDummy(bool dummy);
 
     //! Writes the density volume data to a given output channel.
     template <class S>
@@ -90,7 +91,15 @@ public:
     {
 	    vpl::img::CVolume16::serialize(Writer);
         Writer.beginWrite( *this );
+
+        // need to write some magic value, because the version was missing and i needed to write another stuff (JS)
+        Writer.write((unsigned char)126);
+        WRITEINT32(2);
+
         Writer.write( (unsigned char)m_bColoringEnabled );
+
+        Writer.write(m_bMakeDummy);
+
         Writer.endWrite(*this);
 
     }
@@ -103,7 +112,22 @@ public:
         Reader.beginRead(*this);
         unsigned char b = 0;
         Reader.read( b );
-        m_bColoringEnabled = (b != 0);
+
+        if (b != 126)
+        {
+            m_bColoringEnabled = (b != 0);
+        }
+        else
+        {
+            int version = 0;
+            READINT32(version);
+
+            if (version > 1)
+            {
+                Reader.read(m_bMakeDummy);
+            }
+        }
+
         Reader.endRead( *this );
     }
 
@@ -134,6 +158,8 @@ public:
 protected:
     //! Is the coloring enabled?
     bool m_bColoringEnabled;
+
+    bool m_bMakeDummy;
 
     //! Volume undo object
     tVolumeUndo m_volumeUndo;

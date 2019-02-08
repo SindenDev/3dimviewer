@@ -54,7 +54,10 @@ public:
     virtual bool restore( tVolume * ptrVolume );
 
     //! Each undo object must return its data size in bytes
-    virtual long getDataSize() { return m_compress.getDataSize(); }
+    virtual long getDataSize()
+    {
+        return m_compress.getDataSize();
+    }
 
 protected:
     //! Compress

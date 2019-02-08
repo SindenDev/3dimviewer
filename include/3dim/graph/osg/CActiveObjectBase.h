@@ -51,11 +51,11 @@ namespace osgGA
 
 namespace osg
 {
-	////////////////////////////////////////////////////////////////////////////////////////////////////
-	//!\brief	Active object interface. 
-	////////////////////////////////////////////////////////////////////////////////////////////////////
-	class CActiveObjectBase
-	{
+    ////////////////////////////////////////////////////////////////////////////////////////////////////
+    //!\brief	Active object interface. 
+    ////////////////////////////////////////////////////////////////////////////////////////////////////
+    class CActiveObjectBase
+    {
     public:
         //! "Classes" of the active objects
         enum EObjectClass
@@ -67,18 +67,18 @@ namespace osg
 
         typedef vpl::mod::CSignal<void, CActiveObjectBase *> tOnDestroySignal;
 
-	public:
+    public:
         /// Constructor
         CActiveObjectBase( const std::string & name = "ActiveObject", int priority = 0, EObjectClass oc = AO_DEFAULT );
 
         //! Destructor
         virtual ~CActiveObjectBase();
 
-		//! On mouse enter callback
-		virtual void onMouseEnter(const osgGA::GUIEventAdapter& ea, bool command_mode);
+        //! On mouse enter callback
+        virtual void onMouseEnter(const osgGA::GUIEventAdapter& ea, bool command_mode);
 
-		//! On mouse exit callback
-		virtual void onMouseExit(const osgGA::GUIEventAdapter& ea, bool command_mode);
+        //! On mouse exit callback
+        virtual void onMouseExit(const osgGA::GUIEventAdapter& ea, bool command_mode);
 
         //! On mouse down callback
         virtual bool onMouseDown(const osgGA::GUIEventAdapter& ea, osgGA::GUIActionAdapter& aa );
@@ -131,7 +131,7 @@ namespace osg
 
         tOnDestroySignal m_destroySignal;
 
-	}; // class CActiveObjectInterface
+    }; // class CActiveObjectInterface
 }
 
 

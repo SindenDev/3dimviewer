@@ -23,6 +23,8 @@
 #ifndef CDicomSaverDCTK_H
 #define CDicomSaverDCTK_H
 
+#if !defined( TRIDIM_USE_GDCM )
+
 #include <data/CDicomSaver.h>
 #include <VPL/Module/Progress.h>
 
@@ -55,4 +57,5 @@ public:
 
 } // namespace data
 
-#endif // CDicomLoader_H
+#endif // TRIDIM_USE_GDCM
+#endif // CDicomSaverDCTK_H

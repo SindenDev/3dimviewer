@@ -37,9 +37,9 @@ namespace geometry
 // define our OM mesh
 struct OMTraits : public OpenMesh::DefaultTraits
 {
-    VertexAttributes(OpenMesh::Attributes::Status | OpenMesh::Attributes::Normal | OpenMesh::Attributes::Color);
+    VertexAttributes(OpenMesh::Attributes::Status | OpenMesh::Attributes::Normal | OpenMesh::Attributes::Color | OpenMesh::Attributes::TexCoord2D);
     FaceAttributes(OpenMesh::Attributes::Status | OpenMesh::Attributes::Normal);
-	EdgeAttributes(OpenMesh::Attributes::Status | OpenMesh::Attributes::Normal);
+    EdgeAttributes(OpenMesh::Attributes::Status | OpenMesh::Attributes::Normal);
     HalfedgeAttributes(OpenMesh::Attributes::Status);
 };
 

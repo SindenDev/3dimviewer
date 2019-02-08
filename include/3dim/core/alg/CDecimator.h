@@ -56,7 +56,7 @@ public:
     ~CDecimator() {}
 
     //! Reduce input tri mesh using Volume error metrics polygonal surface simplification.
-    bool Reduce(geometry::CMesh &mesh, int final_vert_number, int final_tri_number);
+    bool Reduce(geometry::CMesh &mesh, int final_vert_number, int final_tri_number, float maxHausdorffDist = -1.0);
 
     bool makeProgress(int step);
 };

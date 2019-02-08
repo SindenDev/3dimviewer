@@ -39,6 +39,9 @@
         <file alias="dock_icon_restore.png">resources/dock_icon_restore.png</file>
         <file alias="dock_icon_close.png">resources/dock_icon_close.png</file>
         <file alias="dock_icon_screenshot.png">resources/dock_icon_screenshot.png</file>
+        <file alias="dock_icon_pin.png">resources/dock_icon_pin.png</file>
+        <file alias="dock_icon_unpin.png">resources/dock_icon_unpin.png</file>
+        <file alias="dock_icon_visibility.png">resources/dock_icon_visibility.png</file>
         <file alias="icon3d.png">resources/icon3d.png</file>
         <file alias="iconxy.png">resources/iconxy.png</file>
         <file alias="iconxz.png">resources/iconxz.png</file>
@@ -56,4 +59,96 @@
         <file>resources/volume_rendering_window2_dock.png</file>
         <file>resources/models_dock.png</file>
     </qresource>
+    <qresource prefix="/svg">
+		<file>svg/3dim.svg</file>
+        <file>svg/3d_window2.svg</file>
+        <file>svg/arrow_redo.svg</file>
+        <file>svg/arrow_redo_menu.svg</file>
+        <file>svg/arrow_undo.svg</file>
+        <file>svg/arrow_undo_menu.svg</file>
+        <file>svg/autoseg.svg</file>
+        <file>svg/cog.svg</file>
+        <file>svg/cog_menu.svg</file>
+        <file>svg/delete.svg</file>
+        <file>svg/delete_menu.svg</file>
+        <file>svg/density_window.svg</file>
+        <file>svg/density_window2.svg</file>
+        <file>svg/density_window_dock.svg</file>
+        <file>svg/disk.svg</file>
+        <file>svg/disk_menu.svg</file>
+        <file>svg/dropper.svg</file>
+        <file>svg/error.svg</file>
+        <file>svg/error_menu.svg</file>
+        <file>svg/exclamination.svg</file>
+        <file>svg/exclamination_menu.svg</file>
+        <file>svg/folder_open_arrow.svg</file>
+        <file>svg/folder_open_arrow_menu.svg</file>
+        <file>svg/folder_open_up.svg</file>
+        <file>svg/folder_open_up_gray.svg</file>
+        <file>svg/folder_open_up_gray_menu.svg</file>
+        <file>svg/folder_open_up_menu.svg</file>
+        <file>svg/fullscreen.svg</file>
+        <file>svg/help.svg</file>
+        <file>svg/help_menu.svg</file>
+        <file>svg/icon3d.svg</file>
+        <file>svg/iconxy.svg</file>
+        <file>svg/iconxz.svg</file>
+        <file>svg/iconyz.svg</file>
+        <file>svg/iconarb.svg</file>
+        <file>svg/information.svg</file>
+        <file>svg/information_menu.svg</file>
+        <file>svg/magnifier.svg</file>
+        <file>svg/magnifier_menu.svg</file>
+        <file>svg/magnifier_small.svg</file>
+        <file>svg/measure_density.svg</file>
+        <file>svg/measure_density_menu.svg</file>
+        <file>svg/measure_distance.svg</file>
+        <file>svg/models.svg</file>
+        <file>svg/models_dock.svg</file>
+        <file>svg/normal_slice.svg</file>
+        <file>svg/ortho_slices_window.svg</file>
+        <file>svg/ortho_slices_window_dock.svg</file>
+        <file>svg/page.svg</file>
+        <file>svg/page_menu.svg</file>
+        <file>svg/page_multiple.svg</file>
+        <file>svg/page_multiple_menu.svg</file>
+        <file>svg/page_white.svg</file>
+        <file>svg/page_white_menu.svg</file>
+        <file>svg/printer.svg</file>
+        <file>svg/regions.svg</file>
+        <file>svg/segmentation_window.svg</file>
+        <file>svg/segmentation_window_dock.svg</file>
+        <file>svg/segmentation_window_menu.svg</file>
+        <file>svg/show_bone_model_menu.svg</file>
+        <file>svg/show_volume_rendering.svg</file>
+        <file>svg/show_xy_slice3.svg</file>
+        <file>svg/show_xz_slice3.svg</file>
+        <file>svg/show_yz_slice3.svg</file>
+        <file>svg/slice_move.svg</file>
+        <file>svg/slice_move_menu.svg</file>
+        <file>svg/star.svg</file>
+        <file>svg/star_menu.svg</file>
+        <file>svg/tick.svg</file>
+        <file>svg/tick_gray.svg</file>
+        <file>svg/tick_gray_menu.svg</file>
+        <file>svg/tick_menu.svg</file>
+        <file>svg/trackball.svg</file>
+        <file>svg/trackball_menu.svg</file>
+        <file>svg/user_menu.svg</file>
+        <file>svg/volume_rendering_window2.svg</file>
+        <file>svg/volume_rendering_window2_dock.svg</file>
+        <file>svg/volume_rendering_window2_menu.svg</file>
+        <file>svg/xy_ortho_window2_menu.svg</file>
+        <file>svg/xz_ortho_window2.svg</file>
+        <file>svg/yz_ortho_window2.svg</file>
+        <file>svg/arb_window.svg</file>
+		<file>svg/splash.svg</file>
+		<file>svg/dock_icon_maximize.svg</file>
+		<file>svg/dock_icon_restore.svg</file>
+		<file>svg/dock_icon_close.svg</file>
+		<file>svg/dock_icon_screenshot.svg</file>
+		<file>svg/dock_icon_pin.svg</file>
+		<file>svg/dock_icon_unpin.svg</file>
+		<file>svg/dock_icon_visibility.svg</file>
+	</qresource>
 </RCC>

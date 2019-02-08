@@ -105,6 +105,10 @@ public:
     //! Store bounding box 
     void storeBB( const osg::BoundingBox & bb ) { m_box = bb; }
 
+    void zoomGesture(double zoomFactor);
+    void panGesture(osg::Vec2 movement);
+    void setEnabled(bool value) { m_enabled = value; }
+
 protected:
 	//! Compute position from eye, center and up vector.
 	void computePosition(const osg::Vec3& eye, const osg::Vec3& center, const osg::Vec3& up);
@@ -175,6 +179,10 @@ protected:
 
     //! Stored bounding box
     osg::BoundingBox m_box;
+
+    bool m_wasPush;
+
+    bool m_enabled;
 };
 
 

@@ -177,6 +177,11 @@ public:
 		return m_Color[index];
 	}
 
+    bool operator==(const CColor4& color) const
+    {
+        return color[0] == m_Color[0] && color[1] == m_Color[1] && color[2] == m_Color[2]/* && color[3] == m_Color[3]*/;
+    }
+
 protected:
     //! RGBA color components.
     T m_Color[4];
@@ -307,6 +312,28 @@ public:
         {
             *it = Value;
         }
+    }
+
+    //! Removes i-th element from vector.
+    void erase(int i)
+    {
+        if (i >= 0 && i < getSize())
+        {
+            m_ColorVector.erase(m_ColorVector.begin() + i);
+        }
+    }
+
+    //! Return color index if found or -1 if not found.
+    int findColor(const tColor& Value)
+    {
+        typename tColorVector::iterator it = std::find(m_ColorVector.begin(), m_ColorVector.end(), Value);
+
+        if (it == m_ColorVector.end())
+        {
+            return -1;
+        }
+
+        return it - m_ColorVector.begin();
     }
 
 	//! Serialize

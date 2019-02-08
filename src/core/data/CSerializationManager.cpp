@@ -25,7 +25,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //!\brief   ! Constructor. 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-CSerializationManager::CSerializationManager( data::CDataStorage * dataStorage, data::CStorageIdRemapper* mapper)
+CSerializationManager::CSerializationManager( data::CDataStorage * dataStorage, data::CStorageIdRemapperBase* mapper)
     : m_dataStorage( dataStorage )
     , m_version( SERIALIZER_CURRENT_VERSION )
     , m_idMapper(mapper)
@@ -35,7 +35,6 @@ CSerializationManager::CSerializationManager( data::CDataStorage * dataStorage, 
 
 CSerializationManager::~CSerializationManager()
 {
-    delete m_idMapper;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -137,6 +136,16 @@ void CSerializationManager::deserialize(vpl::mod::CBinarySerializer & Reader, tI
         throw vpl::mod::Serializer::CReadFailed();
     }
 
+#ifdef _WIN32
+    // output storage entry id
+    {
+        std::stringstream ss;
+        ss << "Loading " << ids.size() << " storage entries\n";
+        std::string str = ss.str();
+        OutputDebugStringA(str.c_str());
+    }
+#endif
+
     CProgress::setProgressMax( ids.size() );
 
     // deserialize all items
@@ -149,6 +158,15 @@ void CSerializationManager::deserialize(vpl::mod::CBinarySerializer & Reader, tI
 			if (i > data::Storage::UNKNOWN && i < data::Storage::MAX_ID)
 			{
 				VPL_LOG_INFO("Deserialize skipping entry " << i);
+#ifdef _WIN32
+                // output storage entry id
+                {
+                    std::stringstream ss;
+                    ss << "Deserialize skipping entry " << i << "\n";
+                    std::string str = ss.str();
+                    OutputDebugStringA(str.c_str());
+                }
+#endif
 			}
             continue;
 		}
@@ -194,14 +212,15 @@ void CSerializationManager::deserialize(vpl::mod::CBinarySerializer & Reader, tI
             m_dataStorage->invalidate(entry, data::Storage::FORCE_UPDATE | data::StorageEntry::DESERIALIZED);
         }
 
+        // check progress before readError because progress functions in entry deserializers throw exceptions (ie cause readError)
+        if (!CProgress::progress())
+        {
+            return;
+        }
+
         if (readError)
         {
             throw vpl::mod::Serializer::CReadFailed();
-        }
-
-        if( !CProgress::progress() )
-        {
-            return;
         }
     }
 

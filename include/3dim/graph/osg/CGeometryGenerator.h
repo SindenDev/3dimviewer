@@ -41,14 +41,29 @@ namespace geometry
         }
         return o;
     }
+
+    class CMesh;
 }
 
 namespace osg
 {
+    //! \class  CProceduralGeometry
+    //!
+    //! \brief  Interface for all proceduraly generated geometries.
+    class CProceduralGeometry : public osg::Geode
+    {
+    public:
+        //! Setup geometry, or force updates
+        virtual void update() {};
+
+        void setColor(const osg::Vec4 &color);
+
+    };
+
     ////////////////////////////////////////////////////////////////////////////////////////////////////
     //!\brief	Donut geometry. 
     ////////////////////////////////////////////////////////////////////////////////////////////////////
-    class CDonutGeometry : public osg::Geometry
+    class CDonutGeometry : public CProceduralGeometry
     {
     public:
         //! Default constructor
@@ -58,7 +73,9 @@ namespace osg
         void setSize(float r1, float r2);
 
         //! Setup geometry, or force updates
-        void update();
+        virtual void update() override;
+
+        osg::ref_ptr<osg::Geometry> getGeometry() { return m_geometry; }
 
     protected:
         //! Allocate needed data
@@ -80,6 +97,9 @@ namespace osg
         osg::ref_ptr<osg::Vec3Array> m_normals;
         osg::ref_ptr<osg::Vec4Array> m_colors;
 
+        //! Geometry
+        osg::ref_ptr<osg::Geometry> m_geometry;
+        
         std::vector<osg::ref_ptr<osg::DrawElementsUInt>> m_drawElements;
     };
 
@@ -150,17 +170,30 @@ namespace osg
         //! Set height
         void setHeight(float height) { m_height = height; }
 
+        float getHeight() { return m_height; }
+
         //! Set use capping
         void setCapping(bool bCap1 = true, bool bCap2 = true);
 
         //! Set all geometry offset
-        void setOffset(const osg::Vec3 & offset) { m_offset = offset; }
+        void setOffset(const osg::Vec3 &offset) { m_offset = offset; }
+
+        void setColor(const osg::Vec4 &color);
 
         //! Update geometry
-        void update();
+        void update(bool centerShift = false);
 
         //! Set used axis
-        void setAxis(const osg::Vec3 & axis) { m_axis = axis; }
+        void setAxis(const osg::Vec3 &axis) { m_axis = axis; }
+
+        //! 
+        std::unique_ptr<geometry::CMesh> createCMesh();
+
+        void setNumSegments(int numSegments) { m_num_segments = numSegments; }
+
+        osg::Vec3 getSize() {
+            return osg::Vec3(m_r1, m_r2, m_height);
+        }
 
     protected:
         //! Allocate arrays
@@ -200,7 +233,7 @@ namespace osg
     ////////////////////////////////////////////////////////////////////////////////////////////////////
     //!\brief	Arrow 3 d geometry. 
     ////////////////////////////////////////////////////////////////////////////////////////////////////
-    class CArrow3DGeometry : public osg::Geode
+    class CArrow3DGeometry : public CProceduralGeometry
     {
     public:
         //! Default constructor
@@ -213,7 +246,7 @@ namespace osg
         void setAxis(const osg::Vec3 & axis) { m_axis = axis; }
 
         //! Setup geometry, or force updates
-        void update();
+        virtual void update() override;
 
     protected:
         //! Cylinder radius
@@ -354,17 +387,23 @@ namespace osg
     ////////////////////////////////////////////////////////////////////////////////////////////////////
     //!\brief	Sphere geometry. 
     ////////////////////////////////////////////////////////////////////////////////////////////////////
-    class CSphereGeometry : public osg::Geometry
+    class CSphereGeometry_old : public CProceduralGeometry
     {
     public:
         //! Default constructor
-        CSphereGeometry(unsigned int num_of_segments = 16);
+        CSphereGeometry_old(unsigned int num_of_segments = 16, float radius = 1.0f);
 
         //! Modify geometry settings
         void setRadius(float radius) { m_radius = radius; }
 
         //! Setup geometry, or force updates
         void update();
+
+        osg::ref_ptr<osg::Geometry> getGeometry() { return m_geometry; }
+
+        std::unique_ptr<geometry::CMesh> createCMesh();
+
+        void setColor(const osg::Vec4 &color);
 
     protected:
         //! Allocate needed data
@@ -388,6 +427,55 @@ namespace osg
 
         //! Number of segments
         unsigned int m_num_segments;
+
+        //! Geometry
+        osg::ref_ptr<osg::Geometry> m_geometry;
+
+    }; // class CSphereGeometry
+
+    class CSphereGeometry : public CProceduralGeometry
+    {
+    public:
+        //! Default constructor
+        CSphereGeometry(unsigned int num_of_segments = 16, float radius = 1.0f);
+
+        //! Modify geometry settings
+        void setRadius(float radius) { m_radius = radius; }
+
+        //! Setup geometry, or force updates
+        void update();
+
+        osg::ref_ptr<osg::Geometry> getGeometry() { return m_geometry; }
+
+        std::unique_ptr<geometry::CMesh> createCMesh();
+
+        void setColor(const osg::Vec4 &color);
+
+    protected:
+        //! Allocate needed data
+        bool allocateArrays(unsigned int num_segments);
+
+    protected:
+        //! Sphere radius
+        float m_radius;
+
+        //! Ring geometry points
+        osg::ref_ptr<osg::Vec3Array> m_points;
+
+        //! Normals
+        osg::ref_ptr<osg::Vec3Array> m_normals;
+
+        //! Colors
+        osg::ref_ptr<osg::Vec4Array> m_colors;
+
+        //! Draw elements bindings
+        osg::ref_ptr<osg::DrawElementsUInt> m_de_array;
+
+        //! Number of segments
+        unsigned int m_num_segments;
+
+        //! Geometry
+        osg::ref_ptr<osg::Geometry> m_geometry;
 
     }; // class CSphereGeometry
 
@@ -423,6 +511,12 @@ namespace osg
             m_width = width;
         }
 
+        //! Sets thickness of the geometry
+        void setThickness(float thickness)
+        {
+            m_thickness = thickness;
+        }
+
         //! Sets angular length of arrow part itself (in degrees)
         void setArrowLength(float arrowLength)
         {
@@ -452,6 +546,7 @@ namespace osg
         float m_width;
         float m_arrow1Length;
         float m_arrow2Length;
+        float m_thickness;
 
         //! Geometry offset
         osg::Vec3 m_offset;
@@ -490,13 +585,17 @@ namespace osg
         //! Setup geometry, or force updates
         void update();
 
+        std::unique_ptr<geometry::CMesh> createCMesh();
+
+        //! Current cube size
+        osg::Vec3 m_size;
+
     protected:
         //! Allocate needed data
         bool allocateArrays();
 
     protected:
-        //! Current cube size
-        osg::Vec3 m_size;
+
 
         //! Ring geometry points
         osg::ref_ptr<osg::Vec3Array> m_points;
@@ -507,6 +606,30 @@ namespace osg
         //! Colors
         osg::ref_ptr<osg::Vec4Array> m_colors;
     }; // class CCubeGeometry
+
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////////
+    //!\brief	Cylinder geometry. 
+    ////////////////////////////////////////////////////////////////////////////////////////////////////
+    class CCylinderGeometry : public CFrustrumGeometry
+    {
+    public:
+        //! Default constructor
+        CCylinderGeometry(unsigned int num_of_segments = 32, float radius = 1.0f);
+
+        //! Modify geometry settings
+        void setRadius(float radius) { m_r1 = radius; m_r2 = radius; }
+
+        //! Set used axis
+        void setAxis(const osg::Vec3 &axis = osg::Vec3(0.0f, 0.0f, 1.0f)) { m_axis = axis; }
+    protected:
+
+        //forbid some methods..
+        using CFrustrumGeometry::setRadii;
+        using CFrustrumGeometry::setCapping;
+
+    }; // class CCylinderGeometry
+
 }
 
 // CGeometryGenerator_H_included

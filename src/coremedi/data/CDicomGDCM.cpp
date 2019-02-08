@@ -20,14 +20,13 @@
 //
 ///////////////////////////////////////////////////////////////////////////////
 
-#include <data/CDicomGDCM.h>
-
 #if defined( TRIDIM_USE_GDCM )
+
+#include <data/CDicomGDCM.h>
 
 #include <data/CSeries.h>
 //for insert method
 #include <data/CDicomSaverGDCM.h>
-#include <data/DicomTags.h>
 
 //STL
 #include <codecvt>
@@ -37,6 +36,8 @@
 #include <Wbemcli.h>
 #include <comdef.h>
 #pragma comment(lib, "wbemuuid.lib")
+#pragma comment(lib, "ws2_32.lib")
+#pragma comment(lib, "rpcrt4.lib")  // UuidCreate - Minimum supported OS Win 2000
 #endif
 
 
@@ -62,17 +63,18 @@ CDicomGDCM::~CDicomGDCM()
 }
 
 #ifdef WIN32 // Windows need nonunicode paths to be in ACP
-std::string CDicomGDCM::wcs2ACP(const std::wstring &filename)
+std::string CDicomGDCM::wcs2ACP(const std::wstring &filename, bool bDoNotUseShortName)
 {
 	std::string convFilename;
 	{
+        BOOL bUsedDefaultChar = false;
 		// get buffer size
-		int size = WideCharToMultiByte(CP_ACP, 0, filename.c_str(), filename.size(), 0, 0, 0, 0);
+		int size = WideCharToMultiByte(CP_ACP, WC_NO_BEST_FIT_CHARS, filename.c_str(), filename.size(), 0, 0, 0, &bUsedDefaultChar);
 		if (size>0)
 		{
 			// convert
 			char* buffer = new char[size + 1];
-			int sizeC = WideCharToMultiByte(CP_ACP, 0, filename.c_str(), filename.size(), buffer, size, 0, 0);
+			int sizeC = WideCharToMultiByte(CP_ACP, WC_NO_BEST_FIT_CHARS, filename.c_str(), filename.size(), buffer, size, 0, &bUsedDefaultChar);
 			if (sizeC>0)
 			{
 				assert(sizeC<size + 1);
@@ -81,6 +83,26 @@ std::string CDicomGDCM::wcs2ACP(const std::wstring &filename)
 			}
 			delete buffer;
 		}
+        // conversion wasn't possible, get short path
+        if (bUsedDefaultChar && !bDoNotUseShortName)
+        {
+            wchar_t wcsTmpStr[_MAX_PATH] = {};
+            unsigned int result = GetShortPathNameW(filename.c_str(), wcsTmpStr, _MAX_PATH); // works for full path only or when current dir is correctly set
+            if (result>0 && result<_MAX_PATH)
+            {
+                _wcslwr(wcsTmpStr); // because openmesh write checks for lower case extension only
+                std::wstring tmp = wcsTmpStr;
+                return wcs2ACP(wcsTmpStr, true);
+            }
+            else
+            {
+#ifdef _MSC_VER
+                //qDebug() << "Couldn't get ansi name for " << QString::fromUtf16((const ushort *)filename.c_str());
+#endif
+                convFilename.clear();
+            }
+        }
+
 	}
 	return convFilename;
 }
@@ -99,7 +121,51 @@ void CDicomGDCM::getSliceIds(tDicomNumList& Numbers)
 
     for (; it != itEnd; ++it)
     {
-        Numbers.push_back(convPos2Id((*it)[0], (*it)[1], (*it)[2]));
+        // retrieve the position
+        double f1, f2, f3;
+        f1 = (*it)[0];
+        f2 = (*it)[1];
+        f3 = (*it)[2];
+        //Numbers.push_back(convPos2Id((*it)[0], (*it)[1], (*it)[2]));
+
+        vpl::img::CPoint3D zero_point(0, 0, 0);
+        vpl::img::CVector3D normal_image;
+
+        std::string orientation = m_loader.readTag(gdcm::Tag(VPL_GDCM_ImageOrientationPatient));
+
+        std::vector<double> values;
+        std::istringstream f(orientation);
+        std::string s;
+        while (std::getline(f, s, '\\'))
+        {
+            values.push_back(std::atof(s.c_str()));
+        }
+
+        double x1 = 1.0;
+        double x2 = 0.0;
+        double x3 = 0.0;
+        double y1 = 0.0;
+        double y2 = 1.0;
+        double y3 = 0.0;
+
+        if (values.size() == 6)
+        {
+            // retrieve the position
+            x1 = values[0];
+            x2 = values[1];
+            x3 = values[2];
+            y1 = values[3];
+            y2 = values[4];
+            y3 = values[5];
+        }
+
+        normal_image.vectorProduct(vpl::img::CVector3D(x1, x2, x3), vpl::img::CVector3D(y1, y2, y3));
+        normal_image.normalize();
+
+        vpl::img::CVector3D position_vector(zero_point, vpl::img::CPoint3D(f1, f2, f3));
+        double pos = normal_image.dotProduct(normal_image, position_vector);
+
+        Numbers.push_back(pos);
     }  
    
 }

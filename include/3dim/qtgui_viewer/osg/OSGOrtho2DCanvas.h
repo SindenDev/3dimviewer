@@ -42,17 +42,13 @@ class OSGOrtho2DCanvas : public OSGCanvas
 
 public:
     //! Constructor
-    OSGOrtho2DCanvas(QWidget* parent, bool antialiasing);
-
-    //! Destructor
-    virtual ~OSGOrtho2DCanvas() {}
+    OSGOrtho2DCanvas(QWidget* parent);
 
     //! Get manipulator.
     osgGA::OrthoManipulator * getManipulator()
     {
         return m_sceneManipulator.get();
     }
-
 
     //! Compute sizes of pixel in field of view
     osg::Vec2 getPixelSize();

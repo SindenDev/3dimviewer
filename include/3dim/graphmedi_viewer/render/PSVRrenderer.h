@@ -239,7 +239,18 @@ public:
     //! - This method is usually called during 'OSG drawable' rendering.
     void renderVolume(osg::RenderInfo& renderInfo);
 
-protected:
+    //! Sets specified flags.
+    void setFlag(int Flag);
+
+    //! Sets specified flags.
+    void setAndSignalFlag(int Flag);
+
+    //! Clears specified flags.
+    void clearFlag(int Flag);
+
+    //! Returns true if a given flag is set.
+    bool testFlag(int Flag);
+
     //! Internal flags.
     enum EFlag
     {
@@ -285,6 +296,7 @@ protected:
         INVALID = INIT_INVALID | LUT_INVALID | OSR_INVALID | DATA_INVALID | TEXTURE_INVALID | AUX_TEXTURE_INVALID | CUSTOM_DATA_INVALID | CUSTOM_TEXTURE_INVALID,
     };
 
+protected:
     //! Predefined constants...
     enum EConf
     {
@@ -342,18 +354,6 @@ protected:
 
     //! Helper thread used to prepare volume data, etc.
     static VPL_THREAD_ROUTINE(setupLoop);
-
-    //! Sets specified flags.
-    void setFlag(int Flag);
-
-    //! Sets specified flags.
-    void setAndSignalFlag(int Flag);
-
-    //! Clears specified flags.
-    void clearFlag(int Flag);
-
-    //! Returns true if a given flag is set.
-    bool testFlag(int Flag);
 
     //! Returns the rendering resolution.
     //! - The value depends on the current rendering resolution

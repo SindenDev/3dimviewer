@@ -66,6 +66,9 @@ public:
         //! Density window adjusting mode.
 	    MODE_DENSITY_WINDOW     = 2,
 
+        //! Highlight mode.
+        MODE_HIGHLIGHT          = 3,
+
         //! Default mouse mode.
         DEFAULT_MODE            = MODE_TRACKBALL
     };
@@ -95,7 +98,10 @@ public:
         COMMAND_IMPLANT_INFO	    = 403 | COMMAND_MODE,
 
         //! Protosegmentation (used in DentalViewer).
-		COMMAND_AUTO_SEGMENTATION   = 500 | COMMAND_MODE
+		COMMAND_AUTO_SEGMENTATION   = 500 | COMMAND_MODE,
+
+        //! Landmark annotation commands (used in 3DimViewer).
+        COMMAND_LANDMARK_ANNOTATION = 600 | COMMAND_MODE
     };
 
     //! Type representing the current application mode.
@@ -137,6 +143,12 @@ public:
     //! on a slice geometry in any OSG window.
     //! - Connected signal handlers receive the measured length [mm].
 	typedef vpl::mod::CSignal<void, double> tSigDistanceMeasure;
+
+    //! Signal invoked when the COMMAND_LANDMARK_ANNOTATION mode is active and user clicks
+    //! on a slice geometry in any OSG window.
+    //! - All connected signal handlers receive (x,y,z) volume coordinates
+    //!   of the mouse cursor.
+    typedef vpl::mod::CSignal<void, float, float, float> tSigLandmarkAnnotationPointPicked;
 
     //! Signal invoked by drawing handler after user finishes any drawing on a slice
     //! geometry. One of drawing modes must be active.
@@ -201,6 +213,7 @@ public:
     void setDefault()
     {
         m_StoredMode = m_Mode = DEFAULT_MODE;
+        m_CustomShiftMode = DEFAULT_MODE;
 	    m_sigModeChanged.invoke(m_Mode);
     }
 
@@ -258,6 +271,12 @@ public:
     tSigMeasuringParameters & getMeasuringParametersSignal()
     {
         return m_sigMeasuringParameters;
+    }
+
+    //! Returns reference to the "landmark annotation point picked" signal.
+    tSigLandmarkAnnotationPointPicked& getLandmarkAnnotationPointPickedSignal()
+    {
+        return m_sigLandmarkAnnotationPointPicked;
     }
 
     //! Returns reference to the "scene hit" signal.
@@ -386,12 +405,33 @@ public:
     //! Is highlighting enabled
     bool isHighlightEnabled(){ return m_bHighlightEnabled; }
 
+    //! Set custom shift mode
+    void setCustomShiftMode(tMode mode)
+    {
+        m_CustomShiftMode = mode;
+    }
+
+    //! Reset custom shift mode
+    void resetCustomShiftMode()
+    {
+        m_CustomShiftMode = DEFAULT_MODE;
+    }
+
+    //! Get custom shift mode
+    tMode getCustomShiftMode() const
+    {
+        return m_CustomShiftMode;
+    }
+
 protected:
     //! Current application mode.
     tMode m_Mode;
 
     //! Previous/stored mode.
     tMode m_StoredMode;
+
+    //! Custom shift mode
+    tMode m_CustomShiftMode;
 
     //! Is highlighting enabled
     bool m_bHighlightEnabled;
@@ -416,6 +456,9 @@ protected:
 
     //! Measuring tool parameters signal
     tSigMeasuringParameters m_sigMeasuringParameters;
+
+    //! Landmark annotated signal.
+    tSigLandmarkAnnotationPointPicked m_sigLandmarkAnnotationPointPicked;
 
 	//! Drawing is done signal
 	tSigDrawingDone m_sigDrawingDone;
@@ -442,6 +485,7 @@ private:
     CAppMode() : 
 		m_Mode(DEFAULT_MODE), 
 		m_StoredMode(DEFAULT_MODE), 
+        m_CustomShiftMode(DEFAULT_MODE),
 		m_bHighlightEnabled(true),
 		m_bContinuousDrawing(false)
 	{

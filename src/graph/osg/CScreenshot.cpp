@@ -58,26 +58,21 @@ void osg::CScreenshotCapture::operator () (osg::RenderInfo& renderInfo) const
 
     m_fbo->setAttachment(osg::Camera::COLOR_BUFFER0, osg::FrameBufferAttachment(m_texture));
 
-    auto stateSet = new osg::StateSet();
+    osg::ref_ptr<osg::StateSet> stateSet = new osg::StateSet();
     renderInfo.getState()->captureCurrentState(*stateSet);
 
     m_fbo->apply(*renderInfo.getState(), osg::FrameBufferObject::DRAW_FRAMEBUFFER);
 
-    glBlitFramebuffer(0, 0, width, height, 0, 0, width, height, GL_COLOR_BUFFER_BIT, GL_NEAREST);
-    GLenum error = glGetError();
-    if (error!=GL_NO_ERROR)
-    {
-        VPL_LOG_ERROR("Screenshot blit error " << glErrorEnumString(error));
-    }
-    renderInfo.getState()->applyTextureAttribute(0, m_texture);
-    
-#ifdef __APPLE__ // has different format than on windows and readImageFromCurrentTexture can't handle it
-    // khronos.org/opengl/wiki/GL_EXT_framebuffer_multisample
-    m_fbo->apply(*renderInfo.getState(), osg::FrameBufferObject::READ_DRAW_FRAMEBUFFER);
-    m_image->readPixels(0,0,width,height,m_texture->getInternalFormat(),GL_UNSIGNED_BYTE);
-#else
-    m_image->readImageFromCurrentTexture(renderInfo.getContextID(), false);
-#endif
+    tridimGlR("glBlitFramebuffer", glBlitFramebuffer(0, 0, width, height, 0, 0, width, height, GL_COLOR_BUFFER_BIT, GL_NEAREST));
+
+    // Works on Apple and everywhere
+    m_fbo->apply(*renderInfo.getState(), osg::FrameBufferObject::READ_FRAMEBUFFER);
+    m_image->readPixels(0, 0, width, height, m_texture->getInternalFormat(), GL_UNSIGNED_BYTE);
+
+    // Does not work with osg 3.7.0 -> using readPixels
+    //renderInfo.getState()->applyTextureAttribute(0, m_texture);
+    //m_image->readImageFromCurrentTexture(renderInfo.getContextID(), false);
+
     renderInfo.getState()->haveAppliedAttribute(m_fbo);
     renderInfo.getState()->apply(stateSet);
 }

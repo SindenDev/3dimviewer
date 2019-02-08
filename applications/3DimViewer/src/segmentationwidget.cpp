@@ -28,6 +28,7 @@
 #include <coremedi/app/Signals.h>
 #include <data/CDensityData.h>
 #include <data/CRegionData.h>
+#include <data/CRegionColoring.h>
 #include <osg/CAppMode.h>
 #include <mainwindow.h>
 #include <data/CUndoManager.h>
@@ -117,7 +118,7 @@ void CSegmentationWidget::SetColoring()
 
     // === Version 1 ===
     // Use density window LUT (Look-Up Table) to show the thresholding result
-    VPL_SIGNAL(SigSetColoring).invoke(new data::CConstColoring(ui->lowThresholdSlider->value(),
+    VPL_SIGNAL(SigSetColoring).invoke(new data::CConstColoringCustom(ui->lowThresholdSlider->value(),
                                                                ui->highThresholdSlider->value(),
                                                                MyColor));
 

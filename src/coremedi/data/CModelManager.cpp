@@ -60,6 +60,7 @@ CModelManager::CModelManager()
     setModelColor(Storage::SoftTissuesModel::Id, 1.0f, 0.0f, 0.0f, 1.0f);
     setModelColor(Storage::ImprintModel::Id, 1.0f, 0.0f, 0.0f, 1.0f);
     setModelColor(Storage::TemplateModel::Id, 0.0f, 0.0f, 1.0f, 1.0f);
+    setModelColor(Storage::ReferenceAnatomicalLandmarkModel::Id, 1.0f, 1.0f, 0.0f, 1.0f);
     for (int id = 0; id < MAX_IMPORTED_MODELS; ++id)
     {
         setModelColor(Storage::ImportedModel::Id + id, 1.0f, 1.0f, 0.0f, 1.0f);
@@ -89,6 +90,7 @@ void CModelManager::init()
     STORABLE_FACTORY.registerObject(SoftTissuesModel::Id, SoftTissuesModel::Type::create, ModelDeps);
     STORABLE_FACTORY.registerObject(ImprintModel::Id, ImprintModel::Type::create, ModelDeps);
     STORABLE_FACTORY.registerObject(TemplateModel::Id, TemplateModel::Type::create, ModelDeps);
+    STORABLE_FACTORY.registerObject(ReferenceAnatomicalLandmarkModel::Id, ReferenceAnatomicalLandmarkModel::Type::create, ModelDeps);
     for (int id = 0; id < MAX_IMPORTED_MODELS; ++id)
     {
         STORABLE_FACTORY.registerObject(ImportedModel::Id + id, ImportedModel::Type::create, ModelDeps);
@@ -107,6 +109,7 @@ void CModelManager::init()
 	APP_STORAGE.getEntry(SoftTissuesModel::Id);
 	APP_STORAGE.getEntry(ImprintModel::Id);
 	APP_STORAGE.getEntry(TemplateModel::Id);
+    APP_STORAGE.getEntry(ReferenceAnatomicalLandmarkModel::Id);
 	for (int id = 0; id < MAX_IMPORTED_MODELS; ++id)
 		APP_STORAGE.getEntry(ImportedModel::Id + id);
 
@@ -125,6 +128,7 @@ void CModelManager::init()
     initMeshUndoProvider(Storage::SoftTissuesModel::Id);
     initMeshUndoProvider(Storage::ImprintModel::Id);
     initMeshUndoProvider(Storage::TemplateModel::Id);
+    initMeshUndoProvider(Storage::ReferenceAnatomicalLandmarkModel::Id);
     for (int id = 0; id < MAX_IMPORTED_MODELS; ++id)
     {
         initMeshUndoProvider(Storage::ImportedModel::Id + id);
@@ -248,6 +252,11 @@ void CModelManager::setModelVisibility(int id, bool bVisible)
     }
     
     CObjectPtr<CModel> spModel( APP_STORAGE.getEntry(id, Storage::NO_UPDATE) );
+
+    if (!spModel->hasData())
+    {
+        return;
+    }
     
     if( bVisible )
     {
@@ -315,7 +324,8 @@ void CModelManager::updateTransparencyNeeded()
     observedModels.push_back(Storage::BonesModel::Id);
     observedModels.push_back(Storage::SoftTissuesModel::Id);
     observedModels.push_back(Storage::ImprintModel::Id);
-    observedModels.push_back(Storage::TemplateModel::Id);
+    observedModels.push_back(Storage::TemplateModel::Id); 
+    observedModels.push_back(Storage::ReferenceAnatomicalLandmarkModel::Id);
     for (int id = 0; id < MAX_IMPORTED_MODELS; ++id)
     {
         observedModels.push_back(Storage::ImportedModel::Id + id);
@@ -431,7 +441,7 @@ void CModelManager::restore( CSnapshot * snapshot )
         // this check can provide some performance gain (ignore changes on unused models)
         if (bMeshWasValid || bMeshIsValid)
         {            
-            APP_STORAGE.invalidate( ptrModel.getEntryPtr() );
+            APP_STORAGE.invalidate( ptrModel.getEntryPtr(), data::StorageEntry::UNDOREDO);
         }
     }
     resolveTransparency();
@@ -440,7 +450,7 @@ void CModelManager::restore( CSnapshot * snapshot )
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-// Get new snapshot from the od one.
+// Get new snapshot from the old one.
 CSnapshot *CModelManager::getSnapshot( CSnapshot * snapshot )
 {
     // new snapshot
@@ -490,6 +500,10 @@ CSnapshot * CModelManager::getSnapshot( CSnapshot * snapshot, std::vector<int> m
     // copy model array
     for( int i = 0; i < modelList.size(); ++i )
     {
+        // VitaS 5.9.2018: Skip if id is invalid. This can happen - in orthodontics if only one jaw is used COrthodontiaWidget::createSnapshotModel tries to get snapshot of the uninitialised model. 
+        if (modelList[i] < 0)
+            continue;
+
         // try to get model from the storage
         data::CObjectPtr<data::CModel> ptrModel( APP_STORAGE.getEntry( modelList[i] ) );
         s->m_modelMap[ modelList[i] ] = *ptrModel;
@@ -775,6 +789,38 @@ bool CModelManager::isBaseModel(int storage_id)
 void CModelManager::setMultiSelectionEnabled(bool enabled)
 {
     m_multiSelectionEnabled = enabled;
+}
+
+int CModelManager::findFreeModelId()
+{
+    for (int i = 0; i < MAX_IMPORTED_MODELS; ++i)
+    {
+        data::CObjectPtr<data::CModel> spModel(APP_STORAGE.getEntry(data::Storage::ImportedModel::Id + i));
+
+        if (!spModel->hasData())
+        {
+            return data::Storage::ImportedModel::Id + i;
+        }
+    }
+
+    return -1;
+}
+
+void CModelManager::autoAssignModelColor(int modelId, bool doInvalidation /*= true*/)
+{
+    if (modelId != -1)
+    {
+        int modelIndex = modelId - data::Storage::ImportedModel::Id;
+
+        data::CObjectPtr<data::CModel> spModel(APP_STORAGE.getEntry(modelId));
+
+        osg::Vec3 color = modelIndex < 16 ? data::CColorTable::get(modelIndex) : m_colorTable.randomNext();
+
+        spModel->setColor(color[0], color[1], color[2], 1.0);
+
+        if(doInvalidation)
+            APP_STORAGE.invalidate(spModel.getEntryPtr(), data::CModel::COLORING_CHANGED);
+    }
 }
 
 } // namespace data

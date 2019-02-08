@@ -57,7 +57,7 @@ public:
     };
 
     //! Vector of dicom slice numbers.
-    typedef std::vector<long long> tDicomNumList;
+    typedef std::vector<double> tDicomNumList;
 
 public:
     //! Default constructor.

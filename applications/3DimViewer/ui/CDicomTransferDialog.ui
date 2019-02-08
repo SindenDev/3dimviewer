@@ -52,7 +52,7 @@
        </property>
        <property name="icon">
         <iconset resource="../resources.qrc">
-         <normaloff>:/icons/folder_open_arrow_menu.png</normaloff>:/icons/folder_open_arrow_menu.png</iconset>
+         <normaloff>:/svg/svg/folder_open_arrow_menu.svg</normaloff>:/svg/svg/folder_open_arrow_menu.svg</iconset>
        </property>
        <property name="iconSize">
         <size>
@@ -119,7 +119,7 @@
        </property>
        <property name="icon">
         <iconset resource="../resources.qrc">
-         <normaloff>:/icons/folder_open_arrow.png</normaloff>:/icons/folder_open_arrow.png</iconset>
+         <normaloff>:/svg/svg/folder_open_arrow.svg</normaloff>:/svg/svg/folder_open_arrow.svg</iconset>
        </property>
       </widget>
      </item>

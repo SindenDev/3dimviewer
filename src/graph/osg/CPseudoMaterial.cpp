@@ -24,33 +24,14 @@
 #include <osg/Geode>
 #include <sstream>
 
-osg::CDirectionalLightSource::CDirectionalLightSource()
-    : m_color(1.0, 1.0, 1.0)
-    , m_direction(0.0, 0.0, 1.0)
-{ }
 
 osg::CDirectionalLightSource::CDirectionalLightSource(osg::Vec3 color, osg::Vec3 direction)
     : m_color(color)
     , m_direction(direction)
 { }
 
-osg::CDirectionalLightSource::CDirectionalLightSource(const osg::CDirectionalLightSource &other)
-    : m_color(other.m_color)
-    , m_direction(other.m_direction)
-{ }
+osg::CDirectionalLightSource::CDirectionalLightSource() : CDirectionalLightSource(osg::Vec3(1.0, 1.0, 1.0), osg::Vec3(0.0, 0.0, 1.0)) {}
 
-osg::CDirectionalLightSource::~CDirectionalLightSource()
-{ }
-
-osg::CDirectionalLightSource &osg::CDirectionalLightSource::operator=(const osg::CDirectionalLightSource &other)
-{
-    if (this != &other)
-    {
-        m_color = other.m_color;
-        m_direction = other.m_direction;
-    }
-    return *this;
-}
 
 osg::Vec3 &osg::CDirectionalLightSource::color()
 {
@@ -62,37 +43,13 @@ osg::Vec3 &osg::CDirectionalLightSource::direction()
     return m_direction;
 }
 
-osg::CPointLightSource::CPointLightSource()
-    : m_color(1.0, 1.0, 1.0)
-    , m_position(0.0, 0.0, 0.0)
-    , m_attenuation(1.0)
-{ }
-
 osg::CPointLightSource::CPointLightSource(osg::Vec3 color, osg::Vec3 position, double attenuation)
     : m_color(color)
     , m_position(position)
     , m_attenuation(attenuation)
 { }
 
-osg::CPointLightSource::CPointLightSource(const CPointLightSource &other)
-    : m_color(other.m_color)
-    , m_position(other.m_position)
-    , m_attenuation(other.m_attenuation)
-{ }
-
-osg::CPointLightSource::~CPointLightSource()
-{ }
-
-osg::CPointLightSource &osg::CPointLightSource::operator=(const osg::CPointLightSource &other)
-{
-    if (this != &other)
-    {
-        m_color = other.m_color;
-        m_position = other.m_position;
-        m_attenuation = other.m_attenuation;
-    }
-    return *this;
-}
+osg::CPointLightSource::CPointLightSource() : CPointLightSource(osg::Vec3(1.0, 1.0, 1.0), osg::Vec3(0.0, 0.0, 0.0), 1.0) {}
 
 osg::Vec3 &osg::CPointLightSource::color()
 {
@@ -109,15 +66,6 @@ double &osg::CPointLightSource::attenuation()
     return m_attenuation;
 }
 
-osg::CSpotLightSource::CSpotLightSource()
-    : m_color(1.0, 1.0, 1.0)
-    , m_position(0.0, 0.0, 0.0)
-    , m_direction(0.0, 0.0, 1.0)
-    , m_attenuation(0.0)
-    , m_focus(1.0)
-    , m_angle(30.0)
-{ }
-
 osg::CSpotLightSource::CSpotLightSource(osg::Vec3 color, osg::Vec3 position, osg::Vec3 direction, double attenuation, double focus, double angle)
     : m_color(color)
     , m_position(position)
@@ -127,31 +75,7 @@ osg::CSpotLightSource::CSpotLightSource(osg::Vec3 color, osg::Vec3 position, osg
     , m_angle(angle)
 { }
 
-osg::CSpotLightSource::CSpotLightSource(const osg::CSpotLightSource &other)
-    : m_color(other.m_color)
-    , m_position(other.m_position)
-    , m_direction(other.m_direction)
-    , m_attenuation(other.m_attenuation)
-    , m_focus(other.m_focus)
-    , m_angle(other.m_angle)
-{ }
-
-osg::CSpotLightSource::~CSpotLightSource()
-{ }
-
-osg::CSpotLightSource &osg::CSpotLightSource::operator=(const osg::CSpotLightSource &other)
-{
-    if (this != &other)
-    {
-        m_color = other.m_color;
-        m_position = other.m_position;
-        m_direction = other.m_direction;
-        m_attenuation = other.m_attenuation;
-        m_focus = other.m_focus;
-        m_angle = other.m_angle;
-    }
-    return *this;
-}
+osg::CSpotLightSource::CSpotLightSource() : CSpotLightSource(osg::Vec3(1.0, 1.0, 1.0), osg::Vec3(0.0, 0.0, 0.0), osg::Vec3(0.0, 0.0, 1.0), 0.0, 1.0, 30.0) {}
 
 osg::Vec3 &osg::CSpotLightSource::color()
 {
@@ -189,9 +113,6 @@ osg::CAttribute::CAttribute(int location, std::string name, EAttributeType type)
     , type(type)
 { }
 
-osg::CAttribute::~CAttribute()
-{ }
-
 std::string osg::CAttribute::getTypename(EAttributeType type)
 {
     switch (type)
@@ -218,10 +139,13 @@ std::string osg::CAttribute::getTypename(EAttributeType type)
     }
 }
 
-osg::CPseudoMaterial::CPseudoMaterial(bool twoSided, bool flatShading, bool useVertexColors)
+osg::CPseudoMaterial::CPseudoMaterial(bool twoSided/* = false*/, bool flatShading/* = false*/, bool useVertexColors/* = true*/)
+    : m_twoSided(twoSided)
+    , m_flatShading(flatShading)
+    , m_useVertexColors(useVertexColors)
+    , m_dirty(true)
 {
-    setName("CPseudoMaterial");
-    m_uniDummy = new osg::Uniform("-dummy-", 1.0f);
+    //setName("CPseudoMaterial");
 
     m_uniAlpha = new osg::Uniform("Alpha", 1.0f);
     m_uniDiffuse = new osg::Uniform("Diffuse", osg::Vec3(1.0f, 1.0f, 1.0f));
@@ -235,35 +159,87 @@ osg::CPseudoMaterial::CPseudoMaterial(bool twoSided, bool flatShading, bool useV
     m_uniforms.push_back(m_uniShininess);
     m_uniforms.push_back(m_uniSpecularity);
 
-    m_twoSided = twoSided;
-    m_flatShading = flatShading;
-    m_useVertexColors = useVertexColors;
-
-    m_directionalLightSourceCount = 0;
-    m_pointLightSourceCount = 0;
-    m_spotLightSourceCount = 0;
-    updateLightUniforms();
-
     //singleLightSetup();
     fourLightSetup();
 
-    makeDirty();
+    updateLightUniforms();
+
+    setupShaders();
 }
 
-osg::CPseudoMaterial::~CPseudoMaterial()
+void osg::CPseudoMaterial::setupShaders()
 {
+    m_program = new osg::Program();
+
+    m_geomShader = new osg::Shader(osg::Shader::GEOMETRY);
+    m_vertShader = new osg::Shader(osg::Shader::VERTEX);
+    m_fragShader = new osg::Shader(osg::Shader::FRAGMENT);
+
+    m_program->addShader(m_vertShader);
+    m_program->addShader(m_fragShader);
 }
 
-void osg::CPseudoMaterial::setFlatShading(bool flatShading)
+void osg::CPseudoMaterial::setTextures(const std::map<std::string, osg::ref_ptr<osg::Texture2D>>& textures)
 {
-    m_flatShading = flatShading;
-    makeDirty();
+    for (auto uni : m_uniTextures)
+    {
+        m_uniforms.erase(std::find(begin(m_uniforms), end(m_uniforms), uni));
+    }
+
+    m_uniTextures.clear();
+
+    int unit = 1;
+    for (auto& texture : textures)
+    {
+        m_uniTextures.push_back(new osg::Uniform(osg::Uniform::SAMPLER_2D, "Sampler" + texture.first, 1));
+        m_uniTextures.back()->setElement(0, unit++);
+
+        m_uniforms.push_back(m_uniTextures.back());
+    }
+
+    m_textures = textures;
+
+    m_dirty = true;
 }
 
-void osg::CPseudoMaterial::setUseVertexColors(bool useVertexColors)
+void osg::CPseudoMaterial::setFlatShading(bool value)
 {
-    m_useVertexColors = useVertexColors;
-    makeDirty();
+    if (m_flatShading != value)
+    {
+        m_flatShading = value;
+        m_dirty = true;
+    }
+}
+
+void osg::CPseudoMaterial::setUseVertexColors(bool value)
+{
+    if (m_useVertexColors != value)
+    {
+        m_useVertexColors = value;
+        m_dirty = true;
+    }
+}
+
+void osg::CPseudoMaterial::applySingleLightSetup()
+{
+    m_directionalLightSources.clear();
+    singleLightSetup();
+
+    m_uniforms.erase(std::find(begin(m_uniforms), end(m_uniforms), m_uniDirectionalLightSourceColor));
+    m_uniforms.erase(std::find(begin(m_uniforms), end(m_uniforms), m_uniDirectionalLightSourceDirection));
+
+    updateLightUniforms();
+}
+
+void osg::CPseudoMaterial::applyFourLightSetup()
+{
+    m_directionalLightSources.clear();
+    fourLightSetup();
+
+    m_uniforms.erase(std::find(begin(m_uniforms), end(m_uniforms), m_uniDirectionalLightSourceColor));
+    m_uniforms.erase(std::find(begin(m_uniforms), end(m_uniforms), m_uniDirectionalLightSourceDirection));
+
+    updateLightUniforms();
 }
 
 std::vector<osg::CDirectionalLightSource> &osg::CPseudoMaterial::directionalLightSources()
@@ -299,118 +275,63 @@ void osg::CPseudoMaterial::fourLightSetup()
     lightDirection[2].normalize();
     lightDirection[3].normalize();
 
-    m_directionalLightSources.clear();
-    m_pointLightSources.clear();
-    m_spotLightSources.clear();
-
     m_directionalLightSources.push_back(CDirectionalLightSource(lightColor[0], lightDirection[0]));
     m_directionalLightSources.push_back(CDirectionalLightSource(lightColor[1], lightDirection[1]));
     m_directionalLightSources.push_back(CDirectionalLightSource(lightColor[2], lightDirection[2]));
     m_directionalLightSources.push_back(CDirectionalLightSource(lightColor[3], lightDirection[3]));
-
-    updateLightUniforms();
-
-    makeDirty();
 }
 
 void osg::CPseudoMaterial::singleLightSetup()
 {
-    m_directionalLightSources.clear();
-    m_pointLightSources.clear();
-    m_spotLightSources.clear();
-
     m_directionalLightSources.push_back(CDirectionalLightSource(osg::Vec3(1.0, 1.0, 1.0), osg::Vec3(0.0, 0.0, 1.0)));
-
-    updateLightUniforms();
-
-    makeDirty();
-}
-
-void osg::CPseudoMaterial::removeUniform(osg::Uniform *uniform)
-{
-    for (std::set<osg::ref_ptr<osg::Object> >::iterator it = m_objects.begin(); it != m_objects.end(); ++it)
-    {
-        osg::Node *node = dynamic_cast<osg::Node *>((*it).get());
-        osg::Drawable *drawable = dynamic_cast<osg::Drawable *>((*it).get());
-
-        osg::StateSet *stateSet = (node != NULL ? node->getOrCreateStateSet() : drawable->getOrCreateStateSet());
-        stateSet->removeUniform(uniform);
-    }
-
-    for (std::vector<osg::ref_ptr<osg::Uniform> >::iterator it = m_uniforms.begin(); it != m_uniforms.end(); ++it)
-    {
-        if (*it == uniform)
-        {
-            m_uniforms.erase(it);
-            break;
-        }
-    }
 }
 
 void osg::CPseudoMaterial::updateLightUniforms()
 {
     // directional lights
-    if (m_directionalLightSourceCount != m_directionalLightSources.size())
+    if (!m_directionalLightSources.empty())
     {
-        removeUniform(m_uniDirectionalLightSourceColor);
-        removeUniform(m_uniDirectionalLightSourceDirection);
-
-        m_uniDirectionalLightSourceColor = new osg::Uniform(osg::Uniform::FLOAT_VEC3, "DirectionalLightSourceColor", std::max(1, static_cast<int>(m_directionalLightSources.size())));
-        m_uniDirectionalLightSourceDirection = new osg::Uniform(osg::Uniform::FLOAT_VEC3, "DirectionalLightSourceDirection", std::max(1, static_cast<int>(m_directionalLightSources.size())));
+        m_uniDirectionalLightSourceColor = new osg::Uniform(osg::Uniform::FLOAT_VEC3, "DirectionalLightSourceColor",static_cast<int>(m_directionalLightSources.size()));
+        m_uniDirectionalLightSourceDirection = new osg::Uniform(osg::Uniform::FLOAT_VEC3, "DirectionalLightSourceDirection", static_cast<int>(m_directionalLightSources.size()));
 
         m_uniforms.push_back(m_uniDirectionalLightSourceColor);
         m_uniforms.push_back(m_uniDirectionalLightSourceDirection);
 
-        m_directionalLightSourceCount = m_directionalLightSources.size();
-    }
-
-    for (int i = 0; i < m_directionalLightSources.size(); ++i)
-    {
-        m_uniDirectionalLightSourceColor->setElement(i, m_directionalLightSources[i].color());
-        m_uniDirectionalLightSourceDirection->setElement(i, m_directionalLightSources[i].direction());
+        for (int i = 0; i < m_directionalLightSources.size(); ++i)
+        {
+            m_uniDirectionalLightSourceColor->setElement(i, m_directionalLightSources[i].color());
+            m_uniDirectionalLightSourceDirection->setElement(i, m_directionalLightSources[i].direction());
+        }
     }
 
     // point lights
-    if (m_pointLightSourceCount != m_pointLightSources.size())
+    if (!m_pointLightSources.empty())
     {
-        removeUniform(m_uniPointLightSourceColor);
-        removeUniform(m_uniPointLightSourcePosition);
-        removeUniform(m_uniPointLightSourceAttenuation);
-
-        m_uniPointLightSourceColor = new osg::Uniform(osg::Uniform::FLOAT_VEC3, "PointLightSourceColor", std::max(1, static_cast<int>(m_pointLightSources.size())));
-        m_uniPointLightSourcePosition = new osg::Uniform(osg::Uniform::FLOAT_VEC3, "PointLightSourcePosition", std::max(1, static_cast<int>(m_pointLightSources.size())));
-        m_uniPointLightSourceAttenuation = new osg::Uniform(osg::Uniform::FLOAT, "PointLightSourceAttenuation", std::max(1, static_cast<int>(m_pointLightSources.size())));
+        m_uniPointLightSourceColor = new osg::Uniform(osg::Uniform::FLOAT_VEC3, "PointLightSourceColor",static_cast<int>(m_pointLightSources.size()));
+        m_uniPointLightSourcePosition = new osg::Uniform(osg::Uniform::FLOAT_VEC3, "PointLightSourcePosition", static_cast<int>(m_pointLightSources.size()));
+        m_uniPointLightSourceAttenuation = new osg::Uniform(osg::Uniform::FLOAT, "PointLightSourceAttenuation", static_cast<int>(m_pointLightSources.size()));
 
         m_uniforms.push_back(m_uniPointLightSourceColor);
         m_uniforms.push_back(m_uniPointLightSourcePosition);
         m_uniforms.push_back(m_uniPointLightSourceAttenuation);
 
-        m_pointLightSourceCount = m_pointLightSources.size();
-    }
-
-    for (int i = 0; i < m_pointLightSources.size(); ++i)
-    {
-        m_uniPointLightSourceColor->setElement(i, m_pointLightSources[i].color());
-        m_uniPointLightSourcePosition->setElement(i, m_pointLightSources[i].position());
-        m_uniPointLightSourceAttenuation->setElement(i, m_pointLightSources[i].attenuation());
+        for (int i = 0; i < m_pointLightSources.size(); ++i)
+        {
+            m_uniPointLightSourceColor->setElement(i, m_pointLightSources[i].color());
+            m_uniPointLightSourcePosition->setElement(i, m_pointLightSources[i].position());
+            m_uniPointLightSourceAttenuation->setElement(i, m_pointLightSources[i].attenuation());
+        }
     }
 
     // spot lights
-    if (m_spotLightSourceCount != m_spotLightSources.size())
+    if (!m_spotLightSources.empty())
     {
-        removeUniform(m_uniSpotLightSourceColor);
-        removeUniform(m_uniSpotLightSourcePosition);
-        removeUniform(m_uniSpotLightSourceDirection);
-        removeUniform(m_uniSpotLightSourceAttenuation);
-        removeUniform(m_uniSpotLightSourceFocus);
-        removeUniform(m_uniSpotLightSourceAngle);
-
-        m_uniSpotLightSourceColor = new osg::Uniform(osg::Uniform::FLOAT_VEC3, "SpotLightSourceColor", std::max(1, static_cast<int>(m_spotLightSources.size())));
-        m_uniSpotLightSourcePosition = new osg::Uniform(osg::Uniform::FLOAT_VEC3, "SpotLightSourcePosition", std::max(1, static_cast<int>(m_spotLightSources.size())));
-        m_uniSpotLightSourceDirection = new osg::Uniform(osg::Uniform::FLOAT_VEC3, "SpotLightSourceDirection", std::max(1, static_cast<int>(m_spotLightSources.size())));
-        m_uniSpotLightSourceAttenuation = new osg::Uniform(osg::Uniform::FLOAT, "SpotLightSourceAttenuation", std::max(1, static_cast<int>(m_spotLightSources.size())));
-        m_uniSpotLightSourceFocus = new osg::Uniform(osg::Uniform::FLOAT, "SpotLightSourceFocus", std::max(1, static_cast<int>(m_spotLightSources.size())));
-        m_uniSpotLightSourceAngle = new osg::Uniform(osg::Uniform::FLOAT, "SpotLightSourceAngle", std::max(1, static_cast<int>(m_spotLightSources.size())));
+        m_uniSpotLightSourceColor = new osg::Uniform(osg::Uniform::FLOAT_VEC3, "SpotLightSourceColor", static_cast<int>(m_spotLightSources.size()));
+        m_uniSpotLightSourcePosition = new osg::Uniform(osg::Uniform::FLOAT_VEC3, "SpotLightSourcePosition", static_cast<int>(m_spotLightSources.size()));
+        m_uniSpotLightSourceDirection = new osg::Uniform(osg::Uniform::FLOAT_VEC3, "SpotLightSourceDirection", static_cast<int>(m_spotLightSources.size()));
+        m_uniSpotLightSourceAttenuation = new osg::Uniform(osg::Uniform::FLOAT, "SpotLightSourceAttenuation", static_cast<int>(m_spotLightSources.size()));
+        m_uniSpotLightSourceFocus = new osg::Uniform(osg::Uniform::FLOAT, "SpotLightSourceFocus", static_cast<int>(m_spotLightSources.size()));
+        m_uniSpotLightSourceAngle = new osg::Uniform(osg::Uniform::FLOAT, "SpotLightSourceAngle", static_cast<int>(m_spotLightSources.size()));
 
         m_uniforms.push_back(m_uniSpotLightSourceColor);
         m_uniforms.push_back(m_uniSpotLightSourcePosition);
@@ -419,36 +340,21 @@ void osg::CPseudoMaterial::updateLightUniforms()
         m_uniforms.push_back(m_uniSpotLightSourceFocus);
         m_uniforms.push_back(m_uniSpotLightSourceAngle);
 
-        m_spotLightSourceCount = m_spotLightSources.size();
-    }
-
-    for (int i = 0; i < m_spotLightSources.size(); ++i)
-    {
-        m_uniSpotLightSourceColor->setElement(i, m_spotLightSources[i].color());
-        m_uniSpotLightSourcePosition->setElement(i, m_spotLightSources[i].position());
-        m_uniSpotLightSourceDirection->setElement(i, m_spotLightSources[i].direction());
-        m_uniSpotLightSourceAttenuation->setElement(i, m_spotLightSources[i].attenuation());
-        m_uniSpotLightSourceFocus->setElement(i, m_spotLightSources[i].focus());
-        m_uniSpotLightSourceAngle->setElement(i, m_spotLightSources[i].angle());
-    }
-
-    makeDirty();
-}
-
-void osg::CPseudoMaterial::makeDirty()
-{
-    m_dirty = true;
-
-    std::set<osg::ref_ptr<osg::Object> > objects = m_objects;
-    for (std::set<osg::ref_ptr<osg::Object> >::iterator it = objects.begin(); it != objects.end(); ++it)
-    {
-        apply(*it);
+        for (int i = 0; i < m_spotLightSources.size(); ++i)
+        {
+            m_uniSpotLightSourceColor->setElement(i, m_spotLightSources[i].color());
+            m_uniSpotLightSourcePosition->setElement(i, m_spotLightSources[i].position());
+            m_uniSpotLightSourceDirection->setElement(i, m_spotLightSources[i].direction());
+            m_uniSpotLightSourceAttenuation->setElement(i, m_spotLightSources[i].attenuation());
+            m_uniSpotLightSourceFocus->setElement(i, m_spotLightSources[i].focus());
+            m_uniSpotLightSourceAngle->setElement(i, m_spotLightSources[i].angle());
+        }
     }
 }
 
-void osg::CPseudoMaterial::copyInternals(CPseudoMaterial *other)
+void osg::CPseudoMaterial::copyInternals(CPseudoMaterial* other)
 {
-    if ((other == this) || (other == NULL))
+    if (other == this)
     {
         return;
     }
@@ -457,22 +363,20 @@ void osg::CPseudoMaterial::copyInternals(CPseudoMaterial *other)
     {
         osg::Uniform *srcUniform = other->m_internalUniforms[i];
         osg::Uniform *dstUniform = uniform(srcUniform->getName());
-        dstUniform->setType(srcUniform->getType());
-        dstUniform->copyData(*srcUniform);
+
+        if (nullptr != dstUniform)
+        {
+            dstUniform->setType(srcUniform->getType());
+            dstUniform->copyData(*srcUniform);
+        }
     }
 }
 
-osg::Uniform *osg::CPseudoMaterial::uniform(std::string name)
+osg::Uniform* osg::CPseudoMaterial::uniform(const std::string& name)
 {
-    for (int i = 0; i < m_uniforms.size(); ++i)
-    {
-        if (m_uniforms[i]->getName() == name)
-        {
-            return m_uniforms[i];
-        }
-    }
+    auto it = std::find_if(m_uniforms.begin(), m_uniforms.end(), [&name](osg::Uniform* uni) {return uni->getName() == name; });
 
-    return m_uniDummy;
+    return it != m_uniforms.end() ? *it : nullptr;
 }
 
 std::string osg::CPseudoMaterial::vertVersion()
@@ -583,7 +487,7 @@ std::string osg::CPseudoMaterial::geomOuts()
 
 std::string osg::CPseudoMaterial::fragIns()
 {
-    std::string prefix = m_flatShading ? "tridim_f_" : "tridim_v_";
+    std::string prefix = "tridim_v_";
 
     std::string str = "// INs \n";
     std::vector<std::pair<std::string, std::string> > members = shaderInOuts();
@@ -635,7 +539,7 @@ std::string osg::CPseudoMaterial::vertShaderSrc()
 
 std::string osg::CPseudoMaterial::insToStruct()
 {
-    std::string prefix = m_flatShading ? "tridim_f_" : "tridim_v_";
+    std::string prefix = "tridim_v_";
 
     std::string str = "// CONVERT ALL INs TO STRUCTURE \n";
     str += "tridim_f insToStruct() \n";
@@ -803,6 +707,23 @@ std::string osg::CPseudoMaterial::lightingSrc()
         "} \n");
 }
 
+void osg::CPseudoMaterial::recompileShaders()
+{
+    m_vertShader->setShaderSource(vertShaderSrc());
+    m_vertShader->dirtyShader();
+
+    m_geomShader->setShaderSource(geomShaderSrc());
+    m_geomShader->dirtyShader();
+
+    m_fragShader->setShaderSource(fragShaderSrc());
+    m_fragShader->dirtyShader();
+
+    for (int i = 0; i < m_attributes.size(); ++i)
+    {
+        m_program->addBindAttribLocation(m_attributes[i].name, m_attributes[i].location);
+    }
+}
+
 std::string osg::CPseudoMaterial::fragShaderSrc()
 {
     return "// FRAGMENT \n" + programName() + " \n" + fragVersion() + " \n" + uniforms() + " \n" + fragIns() + " \n" + fragStruct() + " \n" + surfStruct() + " \n" + lightingSrc() + " \n" + surfaceShaderSrc() + " \n" + insToStruct() + " \n" + std::string(
@@ -810,7 +731,7 @@ std::string osg::CPseudoMaterial::fragShaderSrc()
         "void main() \n"
         "{ \n"
         "    tridim_f I = insToStruct(); \n"
-        "    I.viewSpaceNormal = normalize(I.viewSpaceNormal); \n"
+        "    I.viewSpaceNormal = normalize(") + std::string(m_flatShading ? "cross(dFdx(I.viewSpacePosition), dFdy(I.viewSpacePosition))" : "I.viewSpaceNormal") + std::string("); \n"
         " \n"
         "    tridim_surf surface = surf(I); \n"
         " \n"
@@ -826,157 +747,88 @@ std::string osg::CPseudoMaterial::surfaceShaderSrc()
         "// SURFACE PROPERTIES CALCULATION \n"
         "tridim_surf surf(tridim_f I) \n"
         "{ \n"
-        "    tridim_surf O; \n"
+        "    tridim_surf O; \n") + (m_textures.find("Diffuse") != m_textures.end() ? std::string(
+        "    vec4 sampleDiffuse = texture(SamplerDiffuse, I.texCoord0.xy); \n"
+        "    O.albedo = I.color.rgb * Diffuse * sampleDiffuse.rgb; \n"
+        "    O.alpha = I.color.a * Alpha * sampleDiffuse.a; \n") : std::string(
         "    O.albedo = I.color.rgb * Diffuse; \n"
-        "    O.emission = Emission; \n"
-        "    O.alpha = I.color.a * Alpha; \n"
+        "    O.alpha = I.color.a * Alpha; \n")) + (m_textures.find("Emission") != m_textures.end() ? std::string(
+        "    vec4 sampleEmission = texture(SamplerEmission, I.texCoord0.xy); \n"
+        "    O.emission = Emission * sampleEmission.rgb; \n") : std::string(
+        "    O.emission = Emission; \n")) + (m_textures.find("Specularity") != m_textures.end() ? std::string(
+        "    vec4 sampleSpecularity = texture(SamplerSpecularity, I.texCoord0.xy); \n"
+        "    O.shininess = Shininess * sampleSpecularity.r; \n"
+        "    O.specularity = Specularity * sampleSpecularity.g; \n") : std::string(
         "    O.shininess = Shininess; \n"
-        "    O.specularity = Specularity; \n"
+        "    O.specularity = Specularity; \n")) + std::string(
         "    return O; \n"
         "} \n");
 }
 
-void osg::CPseudoMaterial::apply(osg::Object *object, StateAttribute::GLModeValue value/* = osg::StateAttribute::ON | osg::StateAttribute::OVERRIDE*/)
+class CPseudoMaterialData : public osg::Referenced
 {
-    osg::Node *node = dynamic_cast<osg::Node *>(object);
-    osg::Drawable *drawable = dynamic_cast<osg::Drawable *>(object);
-
-    if (node == NULL && drawable == NULL)
+public:
+    CPseudoMaterialData(const osg::ref_ptr<osg::Program> program, const std::vector<osg::ref_ptr<osg::Uniform>>& uniformsBackup, const std::map<std::string, osg::ref_ptr<osg::Texture2D>>& texturesBackup)
+        : m_program(program), m_uniformsBackup(uniformsBackup), m_texturesBackup(texturesBackup)
     {
-        return;
     }
+
+    const osg::ref_ptr<osg::Program> m_program;
+    const std::vector<osg::ref_ptr<osg::Uniform> > m_uniformsBackup;
+    const std::map<std::string, osg::ref_ptr<osg::Texture2D>> m_texturesBackup;
+};
+
+void osg::CPseudoMaterial::apply(osg::Node* node, StateAttribute::GLModeValue value/* = osg::StateAttribute::ON | osg::StateAttribute::OVERRIDE*/)
+{
+    revert(node);
 
     if (m_dirty)
     {
-        m_program = new osg::Program;
-
-        m_vertShader = new osg::Shader(osg::Shader::VERTEX, vertShaderSrc());
-        m_program->addShader(m_vertShader);
-
-        if (m_flatShading)
-        {
-            m_geomShader = new osg::Shader(osg::Shader::GEOMETRY, geomShaderSrc());
-            m_program->addShader(m_geomShader);
-        }
-
-        m_fragShader = new osg::Shader(osg::Shader::FRAGMENT, fragShaderSrc());
-        m_program->addShader(m_fragShader);
-
-        for (int i = 0; i < m_attributes.size(); ++i)
-        {
-            m_program->addBindAttribLocation(m_attributes[i].name, m_attributes[i].location);
-        }
+        recompileShaders();
 
         m_dirty = false;
     }
 
-    osg::StateSet *stateSet = node->getOrCreateStateSet();
-    CPseudoMaterial *prev = dynamic_cast<CPseudoMaterial *>(stateSet->getUpdateCallback());
-    if (prev != NULL)
-    {
-        prev->revert(node);
-    }
-    stateSet->setUpdateCallback(this);
-    stateSet->setAttributeAndModes(m_program, value);
+    auto stateSet = node->getOrCreateStateSet();
+
     for (int i = 0; i < m_uniforms.size(); ++i)
     {
         stateSet->addUniform(m_uniforms[i]);
     }
-    m_objects.insert(object);
-}
 
-void osg::CPseudoMaterial::revert(osg::Object *object)
-{
-    osg::Node *node = dynamic_cast<osg::Node *>(object);
-    osg::Drawable *drawable = dynamic_cast<osg::Drawable *>(object);
-
-    if (node == NULL && drawable == NULL)
+    int unit = 1;
+    for (auto& texture : m_textures)
     {
-        return;
+        stateSet->setTextureAttributeAndModes(unit++, texture.second);
     }
 
-    m_objects.erase(object);
+    stateSet->setAttributeAndModes(m_program, value);
 
-    osg::StateSet *stateSet = node->getOrCreateStateSet();
-    stateSet->removeAttribute(m_program);
-    for (int i = 0; i < m_uniforms.size(); ++i)
-    {
-        stateSet->removeUniform(m_uniforms[i]);
-    }
+    stateSet->setUserData(new CPseudoMaterialData(m_program, m_uniforms, m_textures));
 }
 
-void osg::CPseudoMaterial::operator()(StateSet *stateSet, NodeVisitor *nodeVisitor)
+void osg::CPseudoMaterial::revert(osg::Node* node)
 {
-    if (m_dirty)
+    auto data = dynamic_cast<CPseudoMaterialData*>(node->getOrCreateStateSet()->getUserData());
+
+    if (data != nullptr)
     {
-        if (m_vertShader == NULL)
+        auto stateSet = node->getOrCreateStateSet();
+
+        for (auto uniform : data->m_uniformsBackup)
         {
-            m_vertShader = new osg::Shader(osg::Shader::VERTEX, vertShaderSrc());
-        }
-        else
-        {
-            m_vertShader->setShaderSource(vertShaderSrc());
-            m_vertShader->dirtyShader();
+            stateSet->removeUniform(uniform);
         }
 
-        if (m_geomShader == NULL)
+        int unit = 1;
+        for (auto& texture : data->m_texturesBackup)
         {
-            m_geomShader = new osg::Shader(osg::Shader::GEOMETRY, geomShaderSrc());
-        }
-        else
-        {
-            m_geomShader->setShaderSource(geomShaderSrc());
-            m_geomShader->dirtyShader();
+            stateSet->removeTextureAttribute(unit++, texture.second);
         }
 
-        if (m_fragShader == NULL)
-        {
-            m_fragShader = new osg::Shader(osg::Shader::FRAGMENT, fragShaderSrc());
-        }
-        else
-        {
-            m_fragShader->setShaderSource(fragShaderSrc());
-            m_fragShader->dirtyShader();
-        }
+        stateSet->removeAttribute(data->m_program);
 
-        if (m_program == NULL)
-        {
-            m_program = new osg::Program;
-            m_program->addShader(m_vertShader);
-            m_program->addShader(m_fragShader);
-
-            if (m_flatShading)
-            {
-                m_program->addShader(m_geomShader);
-            }
-
-            for (int i = 0; i < m_attributes.size(); ++i)
-            {
-                m_program->addBindAttribLocation(m_attributes[i].name, m_attributes[i].location);
-            }
-        }
-        else
-        {
-            if (m_program != NULL)
-            {
-                while (m_program->getNumShaders() > 0)
-                {
-                    m_program->removeShader(m_program->getShader(0));
-                }
-            }
-
-            m_program->addShader(m_vertShader);
-            m_program->addShader(m_fragShader);
-
-            if (m_flatShading)
-            {
-                m_program->addShader(m_geomShader);
-            }
-
-            m_program->dirtyProgram();
-        }
-
-        m_dirty = false;
+        stateSet->setUserData(nullptr);
     }
 }
 
@@ -991,25 +843,30 @@ osg::CPseudoMaterial_Rim::CPseudoMaterial_Rim()
     m_uniforms.push_back(m_uniRimPower);
 }
 
-osg::CPseudoMaterial_Rim::~CPseudoMaterial_Rim()
-{ }
-
 std::string osg::CPseudoMaterial_Rim::surfaceShaderSrc()
 {
     return std::string(
         "// SURFACE PROPERTIES CALCULATION \n"
         "tridim_surf surf(tridim_f I) \n"
         "{ \n"
+        "    tridim_surf O; \n"
         "    vec3 cameraVec = normalize(I.viewSpacePosition.xyz); \n"
         "    float rimIntensity = 1.0 - abs(dot(I.viewSpaceNormal, cameraVec)); \n"
         "    rimIntensity = RimIntensity * pow(rimIntensity, RimPower); \n"
-        " \n"
-        "    tridim_surf O; \n"
+        " \n") + (m_textures.find("Diffuse") != m_textures.end() ? std::string(
+        "    vec4 sampleDiffuse = texture(SamplerDiffuse, I.texCoord0.xy); \n"
+        "    O.albedo = I.color.rgb * Diffuse * sampleDiffuse.rgb; \n"
+        "    O.alpha = I.color.a * Alpha * sampleDiffuse.a; \n") : std::string(
         "    O.albedo = I.color.rgb * Diffuse; \n"
-        "    O.emission = Emission + rimIntensity * RimColor; \n"
-        "    O.alpha = I.color.a * Alpha; \n"
+        "    O.alpha = I.color.a * Alpha; \n")) + (m_textures.find("Emission") != m_textures.end() ? std::string(
+        "    vec4 sampleEmission = texture(SamplerEmission, I.texCoord0.xy); \n"
+        "    O.emission = Emission * sampleEmission.rgb + rimIntensity * RimColor; \n") : std::string(
+        "    O.emission = Emission + rimIntensity * RimColor; \n")) + (m_textures.find("Specularity") != m_textures.end() ? std::string(
+        "    vec4 sampleSpecularity = texture(SamplerSpecularity, I.texCoord0.xy); \n"
+        "    O.shininess = Shininess * sampleSpecularity.r; \n"
+        "    O.specularity = Specularity * sampleSpecularity.g; \n") : std::string(
         "    O.shininess = Shininess; \n"
-        "    O.specularity = Specularity; \n"
+        "    O.specularity = Specularity; \n")) + std::string(
         "    return O; \n"
         "} \n");
 }
@@ -1028,9 +885,6 @@ osg::CPseudoMaterial_Skinned::CPseudoMaterial_Skinned(int maxBones, bool twoSide
     m_uniforms.push_back(m_uniBoneMatrices);
     m_internalUniforms.push_back(m_uniBoneMatrices);
 }
-
-osg::CPseudoMaterial_Skinned::~CPseudoMaterial_Skinned()
-{ }
 
 std::string osg::CPseudoMaterial_Skinned::vertShaderSrc()
 {
@@ -1092,25 +946,30 @@ osg::CPseudoMaterial_Skinned_Rim::CPseudoMaterial_Skinned_Rim(int maxBones, bool
     m_uniforms.push_back(m_uniRimPower);
 }
 
-osg::CPseudoMaterial_Skinned_Rim::~CPseudoMaterial_Skinned_Rim()
-{ }
-
 std::string osg::CPseudoMaterial_Skinned_Rim::surfaceShaderSrc()
 {
     return std::string(
         "// SURFACE PROPERTIES CALCULATION \n"
         "tridim_surf surf(tridim_f I) \n"
         "{ \n"
+        "    tridim_surf O; \n"
         "    vec3 cameraVec = normalize(I.viewSpacePosition.xyz); \n"
         "    float rimIntensity = 1.0 - abs(dot(I.viewSpaceNormal, cameraVec)); \n"
         "    rimIntensity = RimIntensity * pow(rimIntensity, RimPower); \n"
-        " \n"
-        "    tridim_surf O; \n"
+        " \n") + (m_textures.find("Diffuse") != m_textures.end() ? std::string(
+        "    vec4 sampleDiffuse = texture(SamplerDiffuse, I.texCoord0.xy); \n"
+        "    O.albedo = I.color.rgb * Diffuse * sampleDiffuse.rgb; \n"
+        "    O.alpha = I.color.a * Alpha * sampleDiffuse.a; \n") : std::string(
         "    O.albedo = I.color.rgb * Diffuse; \n"
-        "    O.emission = Emission + rimIntensity * RimColor; \n"
-        "    O.alpha = I.color.a * Alpha; \n"
+        "    O.alpha = I.color.a * Alpha; \n")) + (m_textures.find("Emission") != m_textures.end() ? std::string(
+        "    vec4 sampleEmission = texture(SamplerEmission, I.texCoord0.xy); \n"
+        "    O.emission = Emission * sampleEmission.rgb + rimIntensity * RimColor; \n") : std::string(
+        "    O.emission = Emission + rimIntensity * RimColor; \n")) + (m_textures.find("Specularity") != m_textures.end() ? std::string(
+        "    vec4 sampleSpecularity = texture(SamplerSpecularity, I.texCoord0.xy); \n"
+        "    O.shininess = Shininess * sampleSpecularity.r; \n"
+        "    O.specularity = Specularity * sampleSpecularity.g; \n") : std::string(
         "    O.shininess = Shininess; \n"
-        "    O.specularity = Specularity; \n"
+        "    O.specularity = Specularity; \n")) + std::string(
         "    return O; \n"
         "} \n");
 }

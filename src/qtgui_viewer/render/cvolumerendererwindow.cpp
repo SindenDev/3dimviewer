@@ -24,44 +24,34 @@
 #include "render/cvolumerendererwindow.h"
 
 
-CVolumeRendererWindow::CVolumeRendererWindow(QWidget* parent, bool antialiasing)
-#if defined(USE_PSVR)
-    : tBase(parent, antialiasing)
-#endif
+CVolumeRendererWindow::CVolumeRendererWindow(QWidget* parent) : OSGCanvas(parent)
 {
-#ifdef USE_PSVR
     m_Renderer.setCanvas(this);
-#endif // USE_PSVR
-}
-
-CVolumeRendererWindow::~CVolumeRendererWindow()
-{
-    //m_Renderer.release();
 }
 
 void CVolumeRendererWindow::showEvent(QShowEvent *event)
 {
     m_Renderer.init();
-    tBase::showEvent(event);	
+    OSGCanvas::showEvent(event);
 }
 
 void CVolumeRendererWindow::resizeEvent(QResizeEvent *event)
 {
     m_Renderer.updateRenderTargets();
-    tBase::resizeEvent(event);
+    OSGCanvas::resizeEvent(event);
 }
 
 void CVolumeRendererWindow::mousePressEvent(QMouseEvent *event)
 {
     m_Renderer.setMouseMode(true);
     m_Renderer.setMousePressed(true);
-    tBase::mousePressEvent(event);
+    OSGCanvas::mousePressEvent(event);
 }
 
 void CVolumeRendererWindow::mouseMoveEvent(QMouseEvent *event) {
 	
 	//and pass it along to base class
-	tBase::mouseMoveEvent(event);
+    OSGCanvas::mouseMoveEvent(event);
 
 }
 
@@ -70,19 +60,19 @@ void CVolumeRendererWindow::mouseReleaseEvent(QMouseEvent *event)
 {
     m_Renderer.setMouseMode(false);
     m_Renderer.setMousePressed(false);
-    tBase::mouseReleaseEvent(event);
+    OSGCanvas::mouseReleaseEvent(event);
 }
 
 void CVolumeRendererWindow::leaveEvent(QEvent *event)
 {
     m_Renderer.setMouseMode(false);
     m_Renderer.setMousePressed(false);
-    tBase::leaveEvent(event);
+    OSGCanvas::leaveEvent(event);
 }
 
 void CVolumeRendererWindow::dragLeaveEvent(QDragLeaveEvent *event)
 {
     m_Renderer.setMouseMode(false);
     m_Renderer.setMousePressed(false);
-    tBase::dragLeaveEvent(event);
+    OSGCanvas::dragLeaveEvent(event);
 }

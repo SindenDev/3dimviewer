@@ -137,19 +137,70 @@ void CDensityWindow::checkParams(SDensityWindow& Params)
     Params.m_Width = vpl::math::getMin(Params.m_Width, (getMaxDensity() - Params.m_Center) * 2);
 }
 
-void CDensityWindow::colorize(vpl::img::CRGBImage &rgbImage, const vpl::img::CDImage &densityImage, const data::CSlicePropertyContainer &properties)
+//! Colorize doesn't respect the original density data, when some filter, which modifies only texture (sharpen or equalize view) is applied.
+//! So now it takes even the original density slice and when the custom coloring is set, it makes color based on it. It is used in Viewer in quick segmentation and preview in thresholding.
+void CDensityWindow::colorize(vpl::img::CRGBImage &rgbImage, const vpl::img::CDImage &densityImage, const data::CSlicePropertyContainer &properties, const vpl::img::CDImage &originalImage)
 {
 	const int xSize = std::min(densityImage.getXSize(),rgbImage.getXSize());
 	const int ySize = std::min(densityImage.getYSize(),rgbImage.getYSize());
 
-    // basic colors (without context and properties) are cached internally, so apply them now
-#pragma omp parallel for
-    for (int y = 0; y < ySize; ++y)
+    if (m_spColoring->getType() == ColoringFunc::CONST_COLORING_CUSTOM)
     {
-        for (int x = 0; x < xSize; ++x)
+        // Maximum and minimum index of density window
+        int max = getMax();
+        int min = getMin();
+
+        // Linear density window approximation ratio evaluation
+        double dRatio = 255.0 / double(max - min);
+
+        static const CColor4b black(0, 0, 0, 255);
+        static const CColor4b white(255, 255, 255, 255);
+        static const CColor4b noColor(0, 0, 0, 0);
+
+        // make color based on original density data
+#pragma omp parallel for
+        for (int y = 0; y < ySize; ++y)
         {
-            CColor4b Color = getColorSafe(int(densityImage(x, y)));
-            rgbImage(x, y) = *(reinterpret_cast<vpl::img::tRGBPixel *>(&Color));
+            for (int x = 0; x < xSize; ++x)
+            {
+                CColor4b color = black;
+                CColor4b currentColor = m_spColoring->makeColor(CColoringFunc4b::tPixel(int(originalImage(x, y))));
+
+                int currentDensity = (int)densityImage(x, y);
+
+                if (currentDensity < min)
+                {
+                    color = blendColors(currentColor, black);
+                }
+                else if (currentDensity >= max)
+                {
+                    color = blendColors(currentColor, white);
+                }
+                else
+                {
+                    unsigned char ucGrayLevel = (unsigned char)(dRatio * ((int)densityImage(x, y) - min));
+                    CColor4b gray(0, 0, 0, 255);
+                    gray.setColor(ucGrayLevel, ucGrayLevel, ucGrayLevel, 255);
+                    color = blendColors(currentColor, gray);
+                }
+
+                //CColor4b Color = getColorSafe(int(densityImage(x, y)));
+                rgbImage(x, y) = *(reinterpret_cast<vpl::img::tRGBPixel *>(&color));
+            }
+        }
+    }
+
+    else
+    {
+        // basic colors (without context and properties) are cached internally, so apply them now
+#pragma omp parallel for
+        for (int y = 0; y < ySize; ++y)
+        {
+            for (int x = 0; x < xSize; ++x)
+            {
+                CColor4b Color = getColorSafe(int(densityImage(x, y)));
+                rgbImage(x, y) = *(reinterpret_cast<vpl::img::tRGBPixel *>(&Color));
+            }
         }
     }
 
@@ -317,6 +368,10 @@ void CDensityWindow::deserialize(vpl::mod::CChannelSerializer<vpl::mod::CBinaryS
 
     case ColoringFunc::COMPLEX_COLORING:
         m_spColoring = new CComplexColoring();
+        break;
+
+    case ColoringFunc::CONST_COLORING_CUSTOM:
+        m_spColoring = new CConstColoringCustom();
         break;
 
 

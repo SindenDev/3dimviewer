@@ -23,9 +23,9 @@
 #ifndef CDicomSaverGDCM_H
 #define CDicomSaverGDCM_H
 
-#include <data/CDicomSaver.h>
-
 #if defined( TRIDIM_USE_GDCM )
+
+#include <data/CDicomSaver.h>
 
 //GDCM
 #include <gdcmDataSet.h>

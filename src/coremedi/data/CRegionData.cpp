@@ -40,6 +40,7 @@ namespace data
 CRegionData::CRegionData()
     : vpl::img::CVolume16(1, 1, 1, DEFAULT_MARGIN )
     , m_bColoringEnabled(false)
+    , m_bMakeDummy(false)
     , m_volumeUndo(NULL, data::Storage::RegionData::Id, true)
 {
 	m_volumeUndo.setVolumePtr( this );
@@ -51,6 +52,7 @@ CRegionData::CRegionData()
 CRegionData::CRegionData(const CRegionData& Data)
     : vpl::img::CVolume16(Data)
     , m_bColoringEnabled(Data.m_bColoringEnabled)
+    , m_bMakeDummy(Data.m_bMakeDummy)
 {
 	m_volumeUndo.setVolumePtr( this );
 }
@@ -62,6 +64,12 @@ CRegionData::CRegionData(const CRegionData& Data)
 CRegionData& CRegionData::enableColoring(bool bEnabled)
 {
     m_bColoringEnabled = bEnabled;
+    return *this;
+}
+
+CRegionData& CRegionData::makeDummy(bool dummy)
+{
+    m_bMakeDummy = dummy;
     return *this;
 }
 
@@ -88,37 +96,37 @@ bool CRegionData::checkDependency(CStorageEntry *pParent)
 
 void CRegionData::update(const CChangedEntries& Changes)
 {
-    // Get the patient data
-    CObjectPtr<CDensityData> spData( APP_STORAGE.getEntry(Storage::PatientData::Id) );
-
-    // Re-initializes the data if density volume has changed its proportions.
-    vpl::tSize XSize = spData->getXSize();
-    vpl::tSize YSize = spData->getYSize();
-    vpl::tSize ZSize = spData->getZSize();
-    if( getXSize() != XSize || getYSize() != YSize || getZSize() != ZSize )
+    if (Changes.checkFlagAny(data::Storage::STORAGE_RESET))
     {
-        unsigned long rx = XSize;
-        unsigned long ry = YSize;
-        unsigned long rz = ZSize;
-        unsigned long dx = spData->getXSize();
-        unsigned long dy = spData->getYSize();
-        unsigned long dz = spData->getZSize();
-
-        if (rx * ry * rz < dx * dy * dz)
-        {
-            // Enforce data deallocation
-            resize(0, 0, 0, 0);
-        }
-
-        resize(XSize, YSize, ZSize, vpl::math::getMax< vpl::tSize >( spData->getMargin(), DEFAULT_MARGIN ) );
-        if( !Changes.checkFlagAny(data::Storage::STORAGE_RESET) )
-            fillEntire(0);
+        init();
     }
-
-    if( Changes.checkFlagAny(data::Storage::STORAGE_RESET) )
+    else
     {
-        // Clear all data - new volume
-        fillEntire(0);
+        // Get the patient data
+        CObjectPtr<CDensityData> spData(APP_STORAGE.getEntry(Storage::PatientData::Id));
+
+        // Re-initializes the data if density volume has changed its proportions.
+        vpl::tSize XSize = spData->getXSize();
+        vpl::tSize YSize = spData->getYSize();
+        vpl::tSize ZSize = spData->getZSize();
+        if (getXSize() != XSize || getYSize() != YSize || getZSize() != ZSize)
+        {
+            unsigned long rx = XSize;
+            unsigned long ry = YSize;
+            unsigned long rz = ZSize;
+            unsigned long dx = spData->getXSize();
+            unsigned long dy = spData->getYSize();
+            unsigned long dz = spData->getZSize();
+
+            if (rx * ry * rz < dx * dy * dz)
+            {
+                // Enforce data deallocation
+                resize(0, 0, 0, 0);
+            }
+
+            resize(XSize, YSize, ZSize, vpl::math::getMax< vpl::tSize >(spData->getMargin(), DEFAULT_MARGIN));
+            fillEntire(0);
+        }
     }
 }
 
@@ -130,6 +138,8 @@ void CRegionData::init()
 {
     // Enforce data deallocation
     resize(0, 0, 0, 0);
+
+    enableDummyMode(m_bMakeDummy);
 
     resize(INIT_SIZE, INIT_SIZE, INIT_SIZE, DEFAULT_MARGIN );
 

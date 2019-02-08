@@ -73,7 +73,13 @@ macro( ADD_TRIDIM_EXECUTABLE _EXECUTABLE_NAME )
     endif()
          
     set_target_properties(${TRIDIM_CURRENT_TARGET} PROPERTIES AUTOGEN_BUILD_DIR ${CMAKE_BINARY_DIR}/${BUILD_PROJECT_NAME}/Autogen/${TRIDIM_CURRENT_TARGET})
-                                   
+           
+    RUN_INSTALL_AS_POST_BUILD()
+
+    if(MSVC)
+        add_dependencies(${BUILD_PROJECT_NAME}_CUSTOM_INSTALL_TARGET ${TRIDIM_CURRENT_TARGET} )
+    endif()
+
 endmacro()
 
 # Executable name macro - omits WIN32 flag
@@ -125,7 +131,13 @@ macro( ADD_TRIDIM_CONSOLE_EXECUTABLE _EXECUTABLE_NAME )
     endif()    
             
     set_target_properties(${TRIDIM_CURRENT_TARGET} PROPERTIES AUTOGEN_BUILD_DIR ${CMAKE_BINARY_DIR}/${BUILD_PROJECT_NAME}/Autogen/${TRIDIM_CURRENT_TARGET})
-                                 
+           
+    RUN_INSTALL_AS_POST_BUILD()
+
+    if(MSVC)
+        add_dependencies(${BUILD_PROJECT_NAME}_CUSTOM_INSTALL_TARGET ${TRIDIM_CURRENT_TARGET} )
+    endif()
+
 endmacro()
 
 
@@ -207,6 +219,11 @@ macro( ADD_3DIM_PLUGIN_TARGET _PLUGIN_NAME )
         string( REPLACE Plugin "" _SHORT_PLUGIN_NAME ${_PLUGIN_NAME} )
         include( "${CMAKE_SOURCE_DIR}/plugins/${_SHORT_PLUGIN_NAME}.cmake" )
     endif()
+    
+    #make shared libs and plugins dependants of CUSTOM_INSTALL_TARGET, so the install will trigger only after they are also built.
+    #this should avoid problem when finished build of main project will trigger install without plugins being ready.
+    #add_dependencies(${BUILD_PROJECT_NAME}_CUSTOM_INSTALL_TARGET "${_PLUGIN_NAME}" )
+
 endmacro()
 
 #-------------------------------------------------------------------------------
@@ -221,31 +238,59 @@ macro( ADD_3DIM_QTPLUGIN_TARGET _PLUGIN_NAME )
         unset(${_PLUGIN_NAME}_plugin_path CACHE)
 #        add_subdirectory( ${CMAKE_SOURCE_DIR}/qtplugins/${_SHORT_PLUGIN_NAME} ${_SHORT_PLUGIN_NAME} )
     endif()
+
+    #make shared libs and plugins dependants of CUSTOM_INSTALL_TARGET, so the install will trigger only after they are also built.
+    #this should avoid problem when finished build of main project will trigger install without plugins being ready.
+    #add_dependencies(${BUILD_PROJECT_NAME}_CUSTOM_INSTALL_TARGET "${_PLUGIN_NAME}")
 endmacro()
 
 #-------------------------------------------------------------------------------
 # Adding source groups
 
-macro( ADD_SOURCE_GROUPS _DIR_INCLUDE _DIR_SOURCE )
-  source_group( "${_DIR_INCLUDE}" REGULAR_EXPRESSION ".*/${_DIR_INCLUDE}/[^/]*\\.(h|hxx|hpp)$" )
-  source_group( "${_DIR_SOURCE}" REGULAR_EXPRESSION ".*/${_DIR_SOURCE}/[^/]*\\.(c|cpp)$" )
 
-  foreach( arg ${ARGN} )
-    source_group( "${_DIR_INCLUDE}/${arg}" REGULAR_EXPRESSION ".*/${_DIR_INCLUDE}/${arg}/[^/]*\\.(h|hxx|hpp)$" )
-    source_group( "${_DIR_SOURCE}/${arg}" REGULAR_EXPRESSION ".*/${_DIR_SOURCE}/${arg}/[^/]*\\.(c|cpp)$" )
-  endforeach( arg )
-endmacro( ADD_SOURCE_GROUPS )
+
+#creates source groups in solution.. Keep in mind, that order of the subfolders matters..
+#Files are assigned to the last group they matched so the most specific paths should be last.
+#Use only after target_sources! or it won't have desired effect..
+macro( ADD_SOURCE_GROUPS _DIR_INCLUDE _DIR_SOURCE )
+
+    string(FIND "${_DIR_INCLUDE}" "include" result)
+
+    if(${result} GREATER "-1")
+        set(include_group_name_postfix "")
+    else()
+        set(include_group_name_postfix " headers")
+    endif()
+
+
+    string(FIND "${_DIR_SOURCE}" "src" result)
+
+    if(${result} GREATER "-1")
+        set(src_group_name_postfix "")
+    else()
+        set(src_group_name_postfix " sources")
+    endif()
+
+    source_group( "${_DIR_INCLUDE}${include_group_name_postfix}" REGULAR_EXPRESSION "^.*/${_DIR_INCLUDE}/[^/]*\\.(h|hxx|hpp)$" )
+    source_group( "${_DIR_SOURCE}${src_group_name_postfix}" REGULAR_EXPRESSION "^.*/${_DIR_SOURCE}/[^/]*\\.(c|cpp)$" )
+
+    foreach( subfolder ${ARGN} )
+        source_group( "${_DIR_INCLUDE}/${subfolder}${include_group_name_postfix}" REGULAR_EXPRESSION "^.*/${_DIR_INCLUDE}/${subfolder}.*\\.(h|hxx|hpp)$" )
+        source_group( "${_DIR_SOURCE}/${subfolder}${src_group_name_postfix}" REGULAR_EXPRESSION "^.*/${_DIR_SOURCE}/${subfolder}.*\\.(c|cpp)$" )
+    endforeach()
+
+endmacro()
 
 # second version
-macro( ADD_SOURCE_GROUPS2 _DIR_INCLUDE _DIR_SOURCE _DIR_INCLUDE2 _DIR_SOURCE2 )
-  source_group( "${_DIR_INCLUDE}" REGULAR_EXPRESSION ".*/${_DIR_INCLUDE}/[^/]*\\.(h|hxx|hpp)$" )
-  source_group( "${_DIR_SOURCE}" REGULAR_EXPRESSION ".*/${_DIR_SOURCE}/[^/]*\\.(c|cpp)$" )
-
-  foreach( arg ${ARGN} )
-    source_group( "${_DIR_INCLUDE2}/${arg}" REGULAR_EXPRESSION ".*/${_DIR_INCLUDE2}/${arg}/[^/]*\\.(h|hxx|hpp)$" )
-    source_group( "${_DIR_SOURCE2}/${arg}" REGULAR_EXPRESSION ".*/${_DIR_SOURCE2}/${arg}/[^/]*\\.(c|cpp)$" )
-  endforeach( arg )
-endmacro( ADD_SOURCE_GROUPS2 )
+#macro( ADD_SOURCE_GROUPS2 _DIR_INCLUDE _DIR_SOURCE _DIR_INCLUDE2 _DIR_SOURCE2 )
+#  source_group( "${_DIR_INCLUDE}" REGULAR_EXPRESSION ".*/${_DIR_INCLUDE}/[^/]*\\.(h|hxx|hpp)$" )
+#  source_group( "${_DIR_SOURCE}" REGULAR_EXPRESSION ".*/${_DIR_SOURCE}/[^/]*\\.(c|cpp)$" )
+#
+#  foreach( arg ${ARGN} )
+#    source_group( "${_DIR_INCLUDE2}/${arg}" REGULAR_EXPRESSION ".*/${_DIR_INCLUDE2}/${arg}/[^/]*\\.(h|hxx|hpp)$" )
+#    source_group( "${_DIR_SOURCE2}/${arg}" REGULAR_EXPRESSION ".*/${_DIR_SOURCE2}/${arg}/[^/]*\\.(c|cpp)$" )
+#  endforeach( arg )
+#endmacro( ADD_SOURCE_GROUPS2 )
 
 
 #-------------------------------------------------------------------------------
@@ -440,7 +485,10 @@ macro( INCLUDE_MEDICORE_OSS_HEADERS )
 endmacro()
 
 macro(ADD_NON_OSS_PLUGINS)
-  ADD_3DIM_QTPLUGIN_TARGET( ${TRIDIM_DATAEXPRESS_PLUGIN} )
+
+  if(NOT BUILD_WITH_GDCM)
+    ADD_3DIM_QTPLUGIN_TARGET( ${TRIDIM_DATAEXPRESS_PLUGIN} )
+  endif()
   ADD_3DIM_QTPLUGIN_TARGET( ${TRIDIM_AUTOSEGANDFILTERING_PLUGIN} )
   ADD_3DIM_QTPLUGIN_TARGET( ${TRIDIM_MANUALSEG_PLUGIN} )
   ADD_3DIM_QTPLUGIN_TARGET( ${TRIDIM_MANUALSEG3D_PLUGIN} )
@@ -450,8 +498,15 @@ macro(ADD_NON_OSS_PLUGINS)
   ADD_3DIM_QTPLUGIN_TARGET( ${TRIDIM_REGIONANDMODELCONTROL_PLUGIN} )
   ADD_3DIM_QTPLUGIN_TARGET( ${TRIDIM_DATASHIFT_PLUGIN} )
   ADD_3DIM_QTPLUGIN_TARGET( ${TRIDIM_EXPERIMENTALSEG_PLUGIN} )
+  ADD_3DIM_QTPLUGIN_TARGET( ${TRIDIM_REGIONBOOLEANOPERATIONS_PLUGIN} )
+  ADD_3DIM_QTPLUGIN_TARGET( ${TRIDIM_MULTICLASSAUTOSEG_PLUGIN} )
+  ADD_3DIM_QTPLUGIN_TARGET( ${TRIDIM_SEGREFINEMENTANDINTERPOLATION_PLUGIN} )
+  
   if(BUILD_WITH_PYTHON)
-      ADD_3DIM_QTPLUGIN_TARGET( ${TRIDIM_VOLUMEPYTHONSCRIPTING_PLUGIN} )
+      ADD_3DIM_QTPLUGIN_TARGET( ${TRIDIM_PYTHONSCRIPTING_PLUGIN} )
+      if(BUILD_WITH_DEEPLEARNING)
+        ADD_3DIM_QTPLUGIN_TARGET( ${TRIDIM_DEEPLEARNING_PLUGIN} )
+      endif()
   endif(BUILD_WITH_PYTHON)
 
 endmacro(ADD_NON_OSS_PLUGINS)

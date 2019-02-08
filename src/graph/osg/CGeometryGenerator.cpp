@@ -26,7 +26,11 @@
 #include <new>
 #include <VPL/Base/Logging.h>
 
+#include <geometry/base/CMesh.h>
+
 #define PI 3.14159265f
+
+#include <QDebug>
 
 osg::CDonutGeometry::CDonutGeometry(unsigned int num_of_segments/* = 16*/, unsigned int num_of_segments2/* = 5*/)
     : m_radius1(1.0f)
@@ -39,14 +43,19 @@ osg::CDonutGeometry::CDonutGeometry(unsigned int num_of_segments/* = 16*/, unsig
 
     (*m_colors)[0] = osg::Vec4(1.0, 1.0, 1.0, 1.0);
 
-    setVertexArray(m_points);
-    setColorArray(m_colors, osg::Array::BIND_OVERALL);
-    setNormalArray(m_normals, osg::Array::BIND_PER_VERTEX);
+    m_geometry = new osg::Geometry();
+
+    m_geometry->setVertexArray(m_points);
+    m_geometry->setColorArray(m_colors, osg::Array::BIND_OVERALL);
+    m_geometry->setNormalArray(m_normals, osg::Array::BIND_PER_VERTEX);
 
     for (unsigned i = 0; i < m_num_segments2; ++i)
     {
-        addPrimitiveSet(m_drawElements[i]);
+        m_geometry->addPrimitiveSet(m_drawElements[i]);
     }
+
+    // Create tree
+    addDrawable(m_geometry);
 }
 
 void osg::CDonutGeometry::setSize(float r1, float r2)
@@ -127,8 +136,8 @@ void osg::CDonutGeometry::update()
     m_points->dirty();
     m_normals->dirty();
 
-    dirtyBound();
-    dirtyGLObjects();
+    m_geometry->dirtyBound();
+    m_geometry->dirtyGLObjects();
 }
 
 
@@ -346,7 +355,7 @@ void osg::CFrustrumGeometry::allocateArrays(unsigned num_segments)
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //!\brief	Updates this object. 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-void osg::CFrustrumGeometry::update()
+void osg::CFrustrumGeometry::update(bool centerShift)
 {
     osg::Vec3 v1, v2, n;
     float r(m_r1 - m_r2);
@@ -368,10 +377,18 @@ void osg::CFrustrumGeometry::update()
         float si = sin(2 * PI  * (float)i / (float)m_num_segments);
         float co = cos(2 * PI  * (float)i / (float)m_num_segments);
 
-
-        // Store two facet points
-        (*m_points)[2 * i] = v1 = (osg::Vec3(co * m_r1, si * m_r1, 0.0) + m_offset) * m;
-        (*m_points)[2 * i + 1] = v2 = (osg::Vec3(co * m_r2, si * m_r2, m_height) + m_offset) * m;
+        if (centerShift)
+        {
+            // Store two facet points
+            (*m_points)[2 * i] = v1 = (osg::Vec3(co * m_r1, si * m_r1, -m_height / 2.0f) + m_offset) * m;
+            (*m_points)[2 * i + 1] = v2 = (osg::Vec3(co * m_r2, si * m_r2, m_height / 2.0f) + m_offset) * m;
+        }
+        else
+        {
+            // Store two facet points
+            (*m_points)[2 * i] = v1 = (osg::Vec3(co * m_r1, si * m_r1, 0.0) + m_offset) * m;
+            (*m_points)[2 * i + 1] = v2 = (osg::Vec3(co * m_r2, si * m_r2, m_height) + m_offset) * m;
+        }
 
         // Compute facet normal vector
         n = osg::Vec3(co * normalRatio, si * normalRatio, normalz) * m;
@@ -397,9 +414,18 @@ void osg::CFrustrumGeometry::update()
 
     }
 
-    // Add center points
-    (*m_points)[off_centers] = (osg::Vec3(0.0, 0.0, 0.0) + m_offset) * m;
-    (*m_points)[off_centers + 1] = (osg::Vec3(0.0, 0.0, m_height) + m_offset) * m;
+    if (centerShift) 
+    {
+        // Add center points
+        (*m_points)[off_centers] = (osg::Vec3(0.0, 0.0, -m_height / 2.0f) + m_offset) * m;
+        (*m_points)[off_centers + 1] = (osg::Vec3(0.0, 0.0, m_height / 2.0f) + m_offset) * m;
+    }
+    else 
+    {
+        // Add center points
+        (*m_points)[off_centers] = (osg::Vec3(0.0, 0.0, 0.0) + m_offset) * m;
+        (*m_points)[off_centers + 1] = (osg::Vec3(0.0, 0.0, m_height) + m_offset) * m;
+    }
 
     // Add center normals
     (*m_normals)[off_centers] = osg::Vec3(0.0, 0.0, -1.0) * m;
@@ -417,6 +443,128 @@ void osg::CFrustrumGeometry::update()
 
     dirtyBound();
     dirtyGLObjects();
+}
+
+void osg::CFrustrumGeometry::setColor(const osg::Vec4 &color)
+{
+    (*m_colors)[0] = color;
+
+    m_colors->dirty();
+}
+
+std::unique_ptr<geometry::CMesh> osg::CFrustrumGeometry::createCMesh() {
+
+    std::unique_ptr<geometry::CMesh> mesh = std::make_unique<geometry::CMesh>();
+
+    int numOfVertices = m_points->size();
+    int numOfFaces = m_de_faces->size();
+    int numOfFacesCap1 = m_de_cap1->size() - 2;
+    int numOfFacesCap2 = m_de_cap2->size() - 2;
+
+    // set vertices
+    std::vector<geometry::CMesh::VertexHandle> vlist;
+
+
+    for (int i = 0; i < numOfVertices; i++)
+        vlist.push_back(mesh->add_vertex(geometry::CMesh::Point((*m_points)[i].x(), (*m_points)[i].y(), (*m_points)[i].z())));
+
+
+
+    // set faces
+    for (int i = 0; i < numOfFaces; i = i + 2) {
+        geometry::CMesh::FaceHandle fh1 = mesh->add_face(vlist[(*m_de_faces)[i]], vlist[(*m_de_faces)[(i + 2) % numOfFaces]], vlist[(*m_de_faces)[(i + 1) ]]);
+        Q_ASSERT(fh1.is_valid());
+        geometry::CMesh::FaceHandle fh2 = mesh->add_face(vlist[(*m_de_faces)[(i + 2) % numOfFaces]], vlist[(*m_de_faces)[(i + 3) % numOfFaces]], vlist[(*m_de_faces)[i + 1]]);
+        Q_ASSERT(fh2.is_valid());
+    }
+
+
+
+    auto cap1Firstvertex = vlist[(*m_de_cap1)[0]];
+
+    //cap1 faces
+    for (int i = 1; i < numOfFacesCap1; i++) {
+        geometry::CMesh::FaceHandle fh = mesh->add_face(cap1Firstvertex, vlist[(*m_de_cap1)[i + 1]], vlist[(*m_de_cap1)[i]]);
+        Q_ASSERT(fh.is_valid());
+    }
+
+    geometry::CMesh::FaceHandle fh = mesh->add_face(cap1Firstvertex, vlist[(*m_de_cap1)[1]], vlist[(*m_de_cap1)[numOfFacesCap1]]);
+    Q_ASSERT(fh.is_valid());
+
+    auto cap2Firstvertex = vlist[(*m_de_cap2)[0]];
+
+    //cap2 faces
+    for (int i = 1; i < numOfFacesCap2; i++) {
+        geometry::CMesh::FaceHandle fh = mesh->add_face(cap2Firstvertex, vlist[(*m_de_cap2)[i]], vlist[(*m_de_cap2)[i + 1]]);
+        Q_ASSERT(fh.is_valid());
+    }
+
+    fh = mesh->add_face(cap2Firstvertex, vlist[(*m_de_cap2)[numOfFacesCap2]], vlist[(*m_de_cap2)[1]]);
+    Q_ASSERT(fh.is_valid());
+
+    //OpenMesh::IO::write_mesh(*(mesh.get()), "cylinder.stl");
+
+
+    return mesh;
+}
+
+std::unique_ptr<geometry::CMesh> osg::CCubeGeometry::createCMesh() {
+
+    std::unique_ptr<geometry::CMesh> mesh = std::make_unique<geometry::CMesh>();
+
+    int numOfVertices = m_points->size();
+
+    // set vertices
+    std::vector<geometry::CMesh::VertexHandle> vlist;
+
+    for (int i = 0; i < numOfVertices; i++)
+        vlist.push_back(mesh->add_vertex(geometry::CMesh::Point((*m_points)[i].x(), (*m_points)[i].y(), (*m_points)[i].z())));
+
+    // set faces
+    for (int i = 0; i < 6; i++) {
+
+        int offset = i * 4;
+
+        geometry::CMesh::FaceHandle fh = mesh->add_face(vlist[offset], vlist[offset + 1], vlist[offset + 2]);
+        Q_ASSERT(fh.is_valid());
+        fh = mesh->add_face(vlist[offset], vlist[offset + 2], vlist[offset + 3]);
+        Q_ASSERT(fh.is_valid());
+
+    }
+
+    //OpenMesh::IO::write_mesh(*(mesh.get()), "cube.stl");
+
+    return mesh;
+}
+
+std::unique_ptr<geometry::CMesh> osg::CSphereGeometry_old::createCMesh() {
+
+    std::unique_ptr<geometry::CMesh> mesh = std::make_unique<geometry::CMesh>();
+
+    int numOfVertices = m_points->size();
+
+    // set vertices
+    std::vector<geometry::CMesh::VertexHandle> vlist;
+
+    for (int i = 0; i < numOfVertices; i++)
+        vlist.push_back(mesh->add_vertex(geometry::CMesh::Point((*m_points)[i].x(), (*m_points)[i].y(), (*m_points)[i].z())));
+
+    //this is stupid.. every row of triangles in segment has own array?
+    for (int array_index = 0; array_index < m_num_segments; ++array_index) {
+
+        int numOfFaces = m_de_array[array_index]->size() / 3;
+
+        // set faces
+        for (int i = 0; i < numOfFaces; i++) {
+      
+            geometry::CMesh::FaceHandle fh = mesh->add_face(vlist[(*m_de_array[array_index])[3 * i]], vlist[(*m_de_array[array_index])[3 * i + 1]], vlist[(*m_de_array[array_index])[3 * i + 2]]);
+            Q_ASSERT(fh.is_valid());
+        }
+    }
+
+    //OpenMesh::IO::write_mesh(*(mesh.get()), "sphere.stl");
+
+    return mesh;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -744,24 +892,41 @@ void osg::CPill2DGeometry::update()
 //!
 //!\param	num_of_segments	Number of segments. 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-osg::CSphereGeometry::CSphereGeometry(unsigned int num_of_segments /*= 16 */)
-    : m_radius(1.0)
+osg::CSphereGeometry_old::CSphereGeometry_old(unsigned int num_of_segments /*= 16 */, float radius /*= 1.0f*/)
+    : m_radius(radius)
     , m_de_array(0)
     , m_num_segments(0)
 {
-    setName("CSphereGeometry");
+    setName("CSphereGeometry_old");
+
+    m_geometry = new osg::Geometry();
+
     allocateArrays(num_of_segments);
 
     (*m_colors)[0] = osg::Vec4(1.0, 1.0, 1.0, 1.0);
 
-    setVertexArray(m_points);
-    setNormalArray(m_normals, osg::Array::BIND_PER_VERTEX);
-    setColorArray(m_colors, osg::Array::BIND_OVERALL);
+
+
+    m_geometry->setVertexArray(m_points);
+    m_geometry->setNormalArray(m_normals, osg::Array::BIND_PER_VERTEX);
+    m_geometry->setColorArray(m_colors, osg::Array::BIND_OVERALL);
 
     for (unsigned h = 0; h < m_num_segments; ++h)
     {
-        addPrimitiveSet(m_de_array[h]);
+        m_geometry->addPrimitiveSet(m_de_array[h]);
     }
+
+    // Create tree
+    addDrawable(m_geometry);
+
+    update();
+}
+
+void osg::CSphereGeometry_old::setColor(const osg::Vec4 &color) {
+    (*m_colors)[0] = color;
+    m_geometry->setColorArray(m_colors, osg::Array::BIND_OVERALL);
+
+    m_colors->dirty();
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -771,7 +936,7 @@ osg::CSphereGeometry::CSphereGeometry(unsigned int num_of_segments /*= 16 */)
 //!
 //!\return	true if it succeeds, false if it fails. 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-bool osg::CSphereGeometry::allocateArrays(unsigned int num_segments)
+bool osg::CSphereGeometry_old::allocateArrays(unsigned int num_segments)
 {
     if (num_segments == 0)
         return false;
@@ -798,7 +963,7 @@ bool osg::CSphereGeometry::allocateArrays(unsigned int num_segments)
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //!\brief	Updates this object. 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-void osg::CSphereGeometry::update()
+void osg::CSphereGeometry_old::update()
 {
     // Angle increment
     float dangle(2.0f * PI / float(m_num_segments));
@@ -860,8 +1025,299 @@ void osg::CSphereGeometry::update()
     m_points->dirty();
     m_normals->dirty();
 
-    dirtyBound();
-    dirtyGLObjects();
+    m_geometry->dirtyBound();
+    m_geometry->dirtyGLObjects();
+}
+
+
+osg::CSphereGeometry::CSphereGeometry(unsigned int num_of_segments /*= 16 */, float radius /*= 1.0f*/)
+    : m_radius(radius)
+    , m_de_array(0)
+    , m_num_segments(0)
+{
+    setName("CSphereGeometry");
+
+    m_geometry = new osg::Geometry();
+
+    //ensure minimum segment count that makes sense..
+    if (num_of_segments <= 1)
+        num_of_segments = 2;
+
+    allocateArrays(num_of_segments);
+
+    (*m_colors)[0] = osg::Vec4(1.0, 1.0, 1.0, 1.0);
+
+    m_de_array->clear();
+
+    m_geometry->setVertexArray(m_points);
+    m_geometry->setNormalArray(m_normals, osg::Array::BIND_PER_VERTEX);
+    m_geometry->setColorArray(m_colors, osg::Array::BIND_OVERALL);  
+    m_geometry->addPrimitiveSet(m_de_array);
+    
+
+    // Create tree
+    addDrawable(m_geometry);
+
+    update();
+}
+
+void osg::CSphereGeometry::setColor(const osg::Vec4 &color) {
+    (*m_colors)[0] = color;
+    m_geometry->setColorArray(m_colors, osg::Array::BIND_OVERALL);
+
+    m_colors->dirty();
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+//!\brief	Allocate arrays. 
+//!
+//!\param	num_segments	Number of segments. 
+//!
+//!\return	true if it succeeds, false if it fails. 
+////////////////////////////////////////////////////////////////////////////////////////////////////
+bool osg::CSphereGeometry::allocateArrays(unsigned int num_segments)
+{
+    if (num_segments == 0)
+        return false;
+
+    if (num_segments == m_num_segments)
+        return true; // Already done...
+
+    m_points = new osg::Vec3Array(); 
+    m_normals = new osg::Vec3Array();
+    m_colors = new osg::Vec4Array(1);
+
+
+    m_points->reserve(num_segments * num_segments - (num_segments - 2));
+    m_normals->reserve(m_points->size());
+
+    //number of triangles in body + in caps
+    int number_of_triangles = (2 * (num_segments - 2)) * num_segments + 2 * num_segments;
+    
+    m_de_array = new osg::DrawElementsUInt(osg::DrawElements::TRIANGLES, number_of_triangles * 3);
+    
+
+    m_num_segments = num_segments;
+
+    return true;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+//!\brief	Updates this object. 
+////////////////////////////////////////////////////////////////////////////////////////////////////
+void osg::CSphereGeometry::update()
+{
+
+    /*
+    How it works:
+
+    single points on top/bottoms are caps and are generated last..
+
+    strips of vertices on the surface of the sphere are created
+    those are then stitched together into triangles and caps are added..
+    
+    */
+
+    m_points->clear();
+    m_normals->clear();
+    m_de_array->clear();
+
+    float angle_increment(2.0f * PI / float(m_num_segments));
+
+    // "Height" increment
+    float dz(2.0f * m_radius / float(m_num_segments));
+    float x, y, z(-m_radius);
+    float angle(0.0);
+
+    // "Height" angle increment
+    float z_angle_increment(PI / float(m_num_segments - 2));
+
+    // "Height" angle
+    float z_angle(-0.5f * PI + z_angle_increment);
+
+    //basically  m_num_segments * (m_num_segments - 1) grid + 2 vertices as caps..
+
+    // For all 'rows'
+    for (unsigned row = 0; row < m_num_segments - 1; ++row)
+    {
+        //for all 'columns'
+        for (unsigned col = 0; col < m_num_segments; ++col)
+        {
+            float sine(sin(angle));
+            float cosine(cos(angle));
+            float cosine_z(cos(z_angle));
+            float sine_z(sin(z_angle));
+
+            x = cosine * m_radius * cosine_z;
+            y = sine * m_radius * cosine_z;
+            z = m_radius * sine_z;
+
+            osg::Vec3 point(x, y, z);
+
+            // Store point and normal
+            m_points->push_back(point);
+            point.normalize();
+            m_normals->push_back(point);
+
+            // Increment angle
+            angle += angle_increment;
+        }
+
+        angle = 0.0f;
+
+        // Height increment
+        z += dz;
+
+        // Height angle increment
+        z_angle += z_angle_increment;
+    }
+
+
+    // Store point and normal of both caps
+    osg::Vec3 top_cap(0, 0, m_radius);
+
+    m_points->push_back(top_cap);
+    top_cap.normalize();
+    m_normals->push_back(top_cap);
+
+
+    osg::Vec3 bottom_cap(0, 0, -m_radius);
+
+    m_points->push_back(bottom_cap);
+    bottom_cap.normalize();
+    m_normals->push_back(bottom_cap);
+
+
+
+    int bottom_cap_index = m_points->size() - 1;
+    int top_cap_index = m_points->size() - 2;
+
+
+    // index triangles without caps..
+    int rows = m_num_segments - 2;  
+
+    for (int row = 0; row < rows; ++row) {
+        for (unsigned index = 0; index < m_num_segments; ++index)
+        {
+
+            int first_index = row * m_num_segments + index;
+            int next_index;
+                       
+            if ((first_index + 1) % m_num_segments == 0)
+                next_index = (first_index + 1) - m_num_segments;
+            else
+                next_index = (first_index + 1);
+
+
+            int top_index = first_index + m_num_segments;
+            int top_next_index;
+
+            if ((top_index + 1) % m_num_segments == 0)
+                top_next_index = (top_index + 1) - m_num_segments;
+            else
+                top_next_index = top_index + 1;
+
+
+            m_de_array->push_back(first_index);
+            m_de_array->push_back(top_index);
+            m_de_array->push_back(top_next_index);
+
+
+            m_de_array->push_back(first_index);
+            m_de_array->push_back(top_next_index);
+            m_de_array->push_back(next_index);
+
+        }
+
+    }
+
+
+    int first_row_index = 0;
+    int last_row_index = m_points->size() - 2 - m_num_segments;
+
+    //aaaand caps
+    for (unsigned index = first_row_index; index < m_num_segments; ++index)
+    {
+        m_de_array->push_back(bottom_cap_index);
+        m_de_array->push_back(index);
+
+
+        if ((index + 1) % m_num_segments == 0)
+            m_de_array->push_back((index + 1) - m_num_segments);
+        else
+            m_de_array->push_back(index + 1);
+
+    }
+
+    for (unsigned index = last_row_index; index < m_points->size() - 2; ++index)
+    {
+        m_de_array->push_back(index);
+
+        m_de_array->push_back(top_cap_index);
+
+        if((index + 1) % m_num_segments == 0)
+            m_de_array->push_back((index + 1) - m_num_segments);
+        else
+            m_de_array->push_back(index + 1);
+
+    }
+
+
+    m_de_array->dirty();
+    m_points->dirty();
+    m_normals->dirty();
+
+    m_geometry->dirtyBound();
+    m_geometry->dirtyGLObjects();
+}
+
+std::unique_ptr<geometry::CMesh> osg::CSphereGeometry::createCMesh() {
+
+    std::unique_ptr<geometry::CMesh> mesh = std::make_unique<geometry::CMesh>();
+
+    int numOfVertices = m_points->size();
+
+    // set vertices
+    std::vector<geometry::CMesh::VertexHandle> vlist;
+    vlist.reserve(numOfVertices);
+
+    for (int i = 0; i < numOfVertices; i++)
+        vlist.push_back(mesh->add_vertex(geometry::CMesh::Point(m_points->at(i).x(), m_points->at(i).y(), m_points->at(i).z())));
+
+
+    int numOfFaces = m_de_array->size() / 3;
+
+
+    // set faces
+    for (int i = 0; i < numOfFaces; i++) {
+
+        auto vh1 = vlist[m_de_array->at(3 * i)];
+        auto vh2 = vlist[m_de_array->at(3 * i + 2)]; 
+        auto vh3 = vlist[m_de_array->at(3 * i + 1)];
+
+        geometry::CMesh::FaceHandle fh = mesh->add_face(vh1, vh2, vh3);
+        assert(fh.is_valid());
+    }
+   
+
+    return mesh;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+//!\brief	Constructor. 
+//!
+//!\param	num_of_segments	Number of segments. 
+////////////////////////////////////////////////////////////////////////////////////////////////////
+osg::CCylinderGeometry::CCylinderGeometry(unsigned int num_of_segments /*= 32 */, float radius)
+    : CFrustrumGeometry(num_of_segments)
+{
+    setName("CCylinderGeometry");
+
+    setRadius(radius);
+    setCapping(true, true);
+    setAxis();
+    update(true);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -878,6 +1334,7 @@ osg::CSemiCircularArrowGeometry::CSemiCircularArrowGeometry(unsigned int num_of_
     , m_arrow2Length(5.0)
     , m_num_segments(0)
     , m_offset(0.0, 0.0, 0.0)
+    , m_thickness(0.1)
 {
     setName("CSemiCircularArrowGeometry");
     allocateArrays(num_of_segments);
@@ -937,10 +1394,10 @@ void osg::CSemiCircularArrowGeometry::update()
         float angle = m_angularOffset + 90.0 - m_angularLength * 0.5 + v * (m_angularLength / m_num_segments);
         osg::Vec2 vec = osg::Vec2(std::cos(osg::DegreesToRadians(angle)), std::sin(osg::DegreesToRadians(angle)));
 
-        osg::Vec3 v0 = osg::Vec3(vec * (m_radius - m_width * 0.5), 0.1);
-        osg::Vec3 v1 = osg::Vec3(vec * (m_radius + m_width * 0.5), 0.1);
-        osg::Vec3 v2 = osg::Vec3(vec * (m_radius - m_width * 0.5), -0.1);
-        osg::Vec3 v3 = osg::Vec3(vec * (m_radius + m_width * 0.5), -0.1);
+        osg::Vec3 v0 = osg::Vec3(vec * (m_radius - m_width * 0.5), m_thickness);
+        osg::Vec3 v1 = osg::Vec3(vec * (m_radius + m_width * 0.5), m_thickness);
+        osg::Vec3 v2 = osg::Vec3(vec * (m_radius - m_width * 0.5), -m_thickness);
+        osg::Vec3 v3 = osg::Vec3(vec * (m_radius + m_width * 0.5), -m_thickness);
 
         osg::Vec3 n0 = osg::Vec3(0.0, 0.0, 1.0);
         osg::Vec3 n1 = osg::Vec3(0.0, 0.0, -1.0);
@@ -991,12 +1448,12 @@ void osg::CSemiCircularArrowGeometry::update()
         osg::Vec2 vec0 = osg::Vec2(std::cos(osg::DegreesToRadians(angle0)), std::sin(osg::DegreesToRadians(angle0)));
         osg::Vec2 vec1 = osg::Vec2(std::cos(osg::DegreesToRadians(angle1)), std::sin(osg::DegreesToRadians(angle1)));
 
-        osg::Vec3 v0 = osg::Vec3(vec0 * (m_radius - m_width * 1.5), 0.1);
-        osg::Vec3 v1 = osg::Vec3(vec0 * (m_radius + m_width * 1.5), 0.1);
-        osg::Vec3 v2 = osg::Vec3(vec1 * (m_radius + m_width * 0.0), 0.1);
-        osg::Vec3 v3 = osg::Vec3(vec0 * (m_radius - m_width * 1.5), -0.1);
-        osg::Vec3 v4 = osg::Vec3(vec0 * (m_radius + m_width * 1.5), -0.1);
-        osg::Vec3 v5 = osg::Vec3(vec1 * (m_radius + m_width * 0.0), -0.1);
+        osg::Vec3 v0 = osg::Vec3(vec0 * (m_radius - m_width * 1.5), m_thickness);
+        osg::Vec3 v1 = osg::Vec3(vec0 * (m_radius + m_width * 1.5), m_thickness);
+        osg::Vec3 v2 = osg::Vec3(vec1 * (m_radius + m_width * 0.0), m_thickness);
+        osg::Vec3 v3 = osg::Vec3(vec0 * (m_radius - m_width * 1.5), -m_thickness);
+        osg::Vec3 v4 = osg::Vec3(vec0 * (m_radius + m_width * 1.5), -m_thickness);
+        osg::Vec3 v5 = osg::Vec3(vec1 * (m_radius + m_width * 0.0), -m_thickness);
 
         osg::Vec3 n0 = osg::Vec3(0.0, 0.0, 1.0);
         osg::Vec3 n1 = osg::Vec3(0.0, 0.0, -1.0);
@@ -1073,12 +1530,12 @@ void osg::CSemiCircularArrowGeometry::update()
         osg::Vec2 vec0 = osg::Vec2(std::cos(osg::DegreesToRadians(angle0)), std::sin(osg::DegreesToRadians(angle0)));
         osg::Vec2 vec1 = osg::Vec2(std::cos(osg::DegreesToRadians(angle1)), std::sin(osg::DegreesToRadians(angle1)));
 
-        osg::Vec3 v0 = osg::Vec3(vec0 * (m_radius - m_width * 1.5f), 0.1f);
-        osg::Vec3 v1 = osg::Vec3(vec0 * (m_radius + m_width * 1.5f), 0.1f);
-        osg::Vec3 v2 = osg::Vec3(vec1 * (m_radius + m_width * 0.0f), 0.1f);
-        osg::Vec3 v3 = osg::Vec3(vec0 * (m_radius - m_width * 1.5f), -0.1f);
-        osg::Vec3 v4 = osg::Vec3(vec0 * (m_radius + m_width * 1.5f), -0.1f);
-        osg::Vec3 v5 = osg::Vec3(vec1 * (m_radius + m_width * 0.0f), -0.1f);
+        osg::Vec3 v0 = osg::Vec3(vec0 * (m_radius - m_width * 1.5f), m_thickness);
+        osg::Vec3 v1 = osg::Vec3(vec0 * (m_radius + m_width * 1.5f), m_thickness);
+        osg::Vec3 v2 = osg::Vec3(vec1 * (m_radius + m_width * 0.0f), m_thickness);
+        osg::Vec3 v3 = osg::Vec3(vec0 * (m_radius - m_width * 1.5f), -m_thickness);
+        osg::Vec3 v4 = osg::Vec3(vec0 * (m_radius + m_width * 1.5f), -m_thickness);
+        osg::Vec3 v5 = osg::Vec3(vec1 * (m_radius + m_width * 0.0f), -m_thickness);
 
         osg::Vec3 n0 = osg::Vec3(0.0, 0.0, 1.0);
         osg::Vec3 n1 = osg::Vec3(0.0, 0.0, -1.0);
@@ -1250,6 +1707,7 @@ void osg::CSemiCircularArrowGeometry::update()
 
 osg::CCubeGeometry::CCubeGeometry() : CCubeGeometry(osg::Vec3(1.0f, 1.0f, 1.0f))
 {
+    setName("CCubeGeometry");
 }
 
 /**

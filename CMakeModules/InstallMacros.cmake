@@ -67,6 +67,45 @@ macro( INSTALL_TRANSLATIONS )
 
 endmacro()
 
+macro(INSTALL_PLUGIN_TRANSLATIONS)
+
+    string( REPLACE Plugin "" folder_name ${TRIDIM_CURRENT_TARGET} )
+
+    find_path(plugin_test_path "${folder_name}" ${CMAKE_SOURCE_DIR}/plugins ${CMAKE_SOURCE_DIR}/oss/plugins NO_DEFAULT_PATH )
+
+
+    if(NOT plugin_test_path)
+        message(WARNING "Plugin's folder ${folder_name} was not found either at ${CMAKE_SOURCE_DIR}/plugins or ${CMAKE_SOURCE_DIR}/oss/plugins.")
+    endif()
+
+    
+    FILE( GLOB files "${plugin_test_path}/${folder_name}/translations/*.ts")
+   
+    #message("${plugin_test_path}")
+    #message("${files}")
+
+    foreach(file ${files})    
+        string(REPLACE ".ts" ".qm" tmp ${file})
+        
+        get_filename_component(qm_file ${tmp} NAME)
+        
+        list(APPEND qm_files "${CMAKE_BINARY_DIR}/${BUILD_PROJECT_NAME}/${qm_file}")
+    endforeach()
+
+
+    #message("${qm_files}")
+
+    #these files can't be GLOBBED for the first time the script is run because they don't exist.. Instead work around it by taking the names that will exist so it works even the first time.
+    #FILE( GLOB files "${CMAKE_BINARY_DIR}/${TRIDIM_CURRENT_TARGET}/?*.qm" )  #processed qm files are output into binary dir from where they have to be moved
+
+    install(FILES ${qm_files} DESTINATION Debug/locale CONFIGURATIONS Debug)
+    install(FILES ${qm_files} DESTINATION RelWithDebInfo/locale CONFIGURATIONS RelWithDebInfo)
+    install(FILES ${qm_files} DESTINATION Release/locale CONFIGURATIONS Release)
+    
+    unset(plugin_test_path CACHE)
+    unset(qm_files)
+
+endmacro()
 
 #-------------------------------------------------------------------------------
 # Install images
@@ -101,15 +140,6 @@ macro( INSTALL_ICONS )
 
 endmacro()
 
-#-------------------------------------------------------------------------------
-# Install python interpret
-
-
-macro( INSTALL_PYTHON )
-  #install( DIRECTORY "${TRIDIM_APPLICATION_SOURCE_FOLDER_PATH}/${TRIDIM_CURRENT_TARGET}" DESTINATION Debug/python CONFIGURATIONS Debug )
-  #install( DIRECTORY "${TRIDIM_APPLICATION_SOURCE_FOLDER_PATH}/${TRIDIM_CURRENT_TARGET}" DESTINATION RelWithDebInfo/python CONFIGURATIONS RelWithDebInfo )
-  #install( DIRECTORY "${TRIDIM_APPLICATION_SOURCE_FOLDER_PATH}/${TRIDIM_CURRENT_TARGET}" DESTINATION Release/python CONFIGURATIONS Release )
-endmacro()
 
 #-------------------------------------------------------------------------------
 # Install documentation
@@ -119,7 +149,6 @@ macro( INSTALL_DOCS )
   install(FILES ${files} DESTINATION  Debug/doc CONFIGURATIONS Debug)
   install(FILES ${files} DESTINATION  RelWithDebInfo/doc CONFIGURATIONS RelWithDebInfo)
   install(FILES ${files} DESTINATION  Release/doc CONFIGURATIONS Release)
-
 endmacro()
 
 #-------------------------------------------------------------------------------
@@ -140,8 +169,10 @@ macro( INSTALL_FONTS )
   install(FILES ${files} DESTINATION  Debug/fonts CONFIGURATIONS Debug)
   install(FILES ${files} DESTINATION  RelWithDebInfo/fonts CONFIGURATIONS RelWithDebInfo)
   install(FILES ${files} DESTINATION  Release/fonts CONFIGURATIONS Release)
-
 endmacro()
+
+#-------------------------------------------------------------------------------
+# Install styles
 
 macro( INSTALL_STYLES )
   FILE( GLOB files "${TRIDIM_APPLICATION_SOURCE_FOLDER_PATH}/${TRIDIM_CURRENT_TARGET}/styles/?*.*" )
@@ -150,21 +181,133 @@ macro( INSTALL_STYLES )
   install(FILES ${files} DESTINATION  Release/styles CONFIGURATIONS Release)
 endmacro()
 
+#-------------------------------------------------------------------------------
+# Install Deep Learning models and tools
 
+#TODO: build newer tensorflow version with working/not buggy build system and remove this macro..
+macro( INSTALL_DEEP_LEARNING )
+
+  message("TODO: build newer tensorflow version with working/not buggy build system and remove INSTALL_DEEP_LEARNING macro..")
+
+
+  set(DEEP_LEARNING_DIR "${TRIDIM_APPLICATION_SOURCE_FOLDER_PATH}/${TRIDIM_CURRENT_TARGET}/deeplearning")
+  install(DIRECTORY ${DEEP_LEARNING_DIR} DESTINATION Debug CONFIGURATIONS Debug)
+  install(DIRECTORY ${DEEP_LEARNING_DIR} DESTINATION RelWithDebInfo CONFIGURATIONS RelWithDebInfo)
+  install(DIRECTORY ${DEEP_LEARNING_DIR} DESTINATION Release CONFIGURATIONS Release)
+  
+  # For some reason the debug version of the plugin tries to load `tensorflow.dll` not `tensorflowd.dll` so
+  install (CODE "
+    if (EXISTS \"bin/Debug/tensorflowd.dll\")
+        message(\"Renaming debug library tensorflowd.dll to tensorflow.dll.\")
+        FILE(RENAME bin/Debug/tensorflowd.dll bin/Debug/tensorflow.dll)
+    endif ()"
+  )
+endmacro()
+
+# Install macro
+macro( TRIDIM_PLUGIN_INSTALL )
+    if( MSVC )
+        install( TARGETS ${TRIDIM_CURRENT_TARGET} RUNTIME DESTINATION Debug/pluginsd CONFIGURATIONS Debug)
+        install( TARGETS ${TRIDIM_CURRENT_TARGET} RUNTIME DESTINATION RelWithDebInfo/plugins CONFIGURATIONS RelWithDebInfo)
+        install( TARGETS ${TRIDIM_CURRENT_TARGET} RUNTIME DESTINATION Release/plugins CONFIGURATIONS Release)
+    endif()
+endmacro()
+
+#-------------------------------------------------------------------------------
+# Install python interpret
+
+
+macro( INSTALL_PYTHON )
+
+    #should get python3.dll and python37.dll (or python38 etc..)
+    FILE( GLOB files "${Python_PATH}/interpret/python?*.dll" )
+
+    INSTALL_FILES_TO_BIN("${files}" "${files}" .)
+
+endmacro()
+
+macro( INSTALL_DIRECTORY_TO_BIN directory_to_install subfolder)
+
+    if(EXISTS ${directory_to_install})
+        install(DIRECTORY ${directory_to_install} DESTINATION Debug/${subfolder}	      CONFIGURATIONS Debug)
+        install(DIRECTORY ${directory_to_install} DESTINATION RelWithDebInfo/${subfolder} CONFIGURATIONS RelWithDebInfo)
+        install(DIRECTORY ${directory_to_install} DESTINATION Release/${subfolder}		  CONFIGURATIONS Release)
+    endif()
+
+endmacro()
+
+#the present components might change from version to version so be safe and check beforehand
 macro( INSTALL_FILES_TO_BIN files_to_install debug_files_to_install subfolder)
 
-    install(FILES ${debug_files_to_install} DESTINATION Debug/${subfolder}			CONFIGURATIONS Debug)
-    install(FILES ${files_to_install}		DESTINATION RelWithDebInfo/${subfolder} CONFIGURATIONS RelWithDebInfo)
-    install(FILES ${files_to_install}		DESTINATION Release/${subfolder}		CONFIGURATIONS Release)
+    foreach(item ${files_to_install})
+    
+        get_filename_component(tmp_directory_path ${item} DIRECTORY)
+        get_filename_component(tmp_item_name ${item} NAME)
+
+        find_file(tmp_result "${tmp_item_name}" "${tmp_directory_path}" NO_DEFAULT_PATH)
+
+        if(tmp_result)
+            install(FILES ${item}		DESTINATION RelWithDebInfo/${subfolder} CONFIGURATIONS RelWithDebInfo)
+            install(FILES ${item}		DESTINATION Release/${subfolder}		CONFIGURATIONS Release)
+        endif()
+        
+        unset(tmp_result CACHE)
+    
+    endforeach()
+    
+    foreach(item ${debug_files_to_install})
+    
+        get_filename_component(tmp_directory_path ${item} DIRECTORY)
+        get_filename_component(tmp_item_name ${item} NAME)
+
+        find_file(tmp_result "${tmp_item_name}" "${tmp_directory_path}" NO_DEFAULT_PATH)
+
+        if(tmp_result)
+            install(FILES ${item} DESTINATION Debug/${subfolder} CONFIGURATIONS Debug)
+        endif()
+
+        unset(tmp_result CACHE)
+    
+    endforeach()
         
 endmacro()
 
 macro( INSTALL_FILES_TO_BIN_NO_DEBUG files_to_install subfolder)
 
+    foreach(item ${files_to_install})
+    
+        get_filename_component(tmp_directory_path ${item} DIRECTORY)
+        get_filename_component(tmp_item_name ${item} NAME)
+
+        find_file(tmp_result "${tmp_item_name}" "${tmp_directory_path}" NO_DEFAULT_PATH)
+
+        if(tmp_result)
+            install(FILES ${item}       DESTINATION Debug/${subfolder}			CONFIGURATIONS Debug)
+            install(FILES ${item}		DESTINATION RelWithDebInfo/${subfolder} CONFIGURATIONS RelWithDebInfo)
+            install(FILES ${item}		DESTINATION Release/${subfolder}		CONFIGURATIONS Release)
+        endif()
+        
+        unset(tmp_result CACHE)
+    
+    endforeach()
+        
+endmacro()
+
+#these versions will fail if any of the given files are missing
+macro( INSTALL_FILES_TO_BIN_NO_CHECK files_to_install debug_files_to_install subfolder)
+
+    install(FILES ${debug_files_to_install} DESTINATION Debug/${subfolder}			CONFIGURATIONS Debug)
+    install(FILES ${files_to_install}		DESTINATION RelWithDebInfo/${subfolder} CONFIGURATIONS RelWithDebInfo)
+    install(FILES ${files_to_install}		DESTINATION Release/${subfolder}		CONFIGURATIONS Release)
+    
+endmacro()
+
+macro( INSTALL_FILES_TO_BIN_NO_DEBUG_NO_CHECK files_to_install subfolder)
+
     install(FILES ${files_to_install}       DESTINATION Debug/${subfolder}			CONFIGURATIONS Debug)
     install(FILES ${files_to_install}		DESTINATION RelWithDebInfo/${subfolder} CONFIGURATIONS RelWithDebInfo)
     install(FILES ${files_to_install}		DESTINATION Release/${subfolder}		CONFIGURATIONS Release)
-        
+    
 endmacro()
 
 #general macro suitable for small libs where you don't want to pick and choose which dlls get installed
@@ -225,9 +368,6 @@ function(INSTALL_LIB libname)
     list(LENGTH debug_libs debug_length)
     list(LENGTH optimized_libs optimized_length)
 
-    #message("debug ${debug_libs}")
-    #message("optimized ${optimized_libs}")
-
     #If there are debug version but their count is not on par with release version, raise a red flag.
     if(NOT "${debug_length}" EQUAL "${optimized_length}" AND "${debug_length}" GREATER 0)
         message(WARNING "Counts of debug and optimized dlls of library ${libname} are different from each other..")
@@ -277,10 +417,7 @@ function(INSTALL_REQUIRED_SYSTEM_LIBS_TO_BIN)
 
         return()
     endif()
-    
-    
-    
-    
+     
     
     set(CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS_SKIP TRUE)    #prevent immediate install
     set(CMAKE_INSTALL_OPENMP_LIBRARIES TRUE)            #to not leave out openMP library
@@ -346,7 +483,7 @@ endmacro()
 #if this function is in any project, it's install script gets run after succesfull build..
 function(RUN_INSTALL_AS_POST_BUILD)
 
-    if(NOT BUILD_RUN_INSTALL_AS_POST_BUILD)
+    if(NOT BUILD_RUN_INSTALL_AS_POST_BUILD OR TARGET ${BUILD_PROJECT_NAME}_CUSTOM_INSTALL_TARGET OR NOT MSVC)
         return()
     endif()
 
@@ -359,39 +496,39 @@ function(RUN_INSTALL_AS_POST_BUILD)
     set(command_string_relwithdebinfo "${CMAKE_COMMAND}" -D CMAKE_INSTALL_CONFIG_NAME:STRING=RelWithDebInfo -P \"${project_install_script_path}\" )
    
     # http://www.easydos.com/dosindex.html
+    # http://nickdademo.blogspot.cz/2015/03/cmake-always-running-post-build-step.html
 
-if (WIN32)
-    add_custom_command(
-        TARGET ${TRIDIM_CURRENT_TARGET} POST_BUILD
-        COMMAND if $<CONFIG:Release> neq 0 ${command_string_release}
-        COMMAND if $<CONFIG:Debug> neq 0 ${command_string_debug}
-        COMMAND if $<CONFIG:RelWithDebInfo> neq 0 ${command_string_relwithdebinfo}
-        USES_TERMINAL
-    )
-else()
-    add_custom_command(
-        TARGET ${TRIDIM_CURRENT_TARGET} POST_BUILD
-        COMMAND ${command_string_release}
-        COMMAND ${command_string_debug}
-        COMMAND ${command_string_relwithdebinfo}
-        USES_TERMINAL
-    )   
-endif()
-
+    if (MSVC)
+        add_custom_target(${BUILD_PROJECT_NAME}_CUSTOM_INSTALL_TARGET ALL
+            COMMAND if $<CONFIG:Release> neq 0 ${command_string_release}
+            COMMAND if $<CONFIG:Debug> neq 0 ${command_string_debug}
+            COMMAND if $<CONFIG:RelWithDebInfo> neq 0 ${command_string_relwithdebinfo}
+            USES_TERMINAL       
+        )
     
-    if(NOT BUILD_RUN_INSTALL_AS_POST_BUILD_EVERYTIME)
-        return()
+        set_target_properties(${BUILD_PROJECT_NAME}_CUSTOM_INSTALL_TARGET PROPERTIES FOLDER CMakePredefinedTargets)
+    
+        #add_custom_command(
+        #    TARGET ${TRIDIM_CURRENT_TARGET} POST_BUILD
+        #    COMMAND if $<CONFIG:Release> neq 0 ${command_string_release}
+        #    COMMAND if $<CONFIG:Debug> neq 0 ${command_string_debug}
+        #    COMMAND if $<CONFIG:RelWithDebInfo> neq 0 ${command_string_relwithdebinfo}
+        #    USES_TERMINAL
+        #)
+
+    else()
+        add_custom_target(${BUILD_PROJECT_NAME}_CUSTOM_INSTALL_TARGET ALL
+            COMMAND if $<CONFIG:Release> ${command_string_release}
+            COMMAND if $<CONFIG:Debug> ${command_string_debug}
+            COMMAND if $<CONFIG:RelWithDebInfo> ${command_string_relwithdebinfo}
+            USES_TERMINAL       
+        )
+    
+        set_target_properties(${BUILD_PROJECT_NAME}_CUSTOM_INSTALL_TARGET PROPERTIES FOLDER CMakePredefinedTargets)
+    
+
     endif()
     
-    # http://nickdademo.blogspot.cz/2015/03/cmake-always-running-post-build-step.html
-    #this makes fake dependency which always touches empty.hpp which triggers post build events everytime but does not cause linking to happen..
-    add_custom_target(ALWAYS_DO_POST_BUILD
-        COMMAND "${CMAKE_COMMAND}" -E echo touching empty.hpp
-        COMMAND "${CMAKE_COMMAND}" -E touch "${CMAKE_BINARY_DIR}/empty.hpp"
-    )
-    
-    set_target_properties(ALWAYS_DO_POST_BUILD PROPERTIES FOLDER CMakePredefinedTargets)
-    
-    add_dependencies(${TRIDIM_CURRENT_TARGET} ALWAYS_DO_POST_BUILD)
-    
 endfunction()
+
+

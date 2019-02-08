@@ -89,9 +89,9 @@ public:
 	typedef std::vector<vpl::sys::tString> tDicomFileList;
 
     //! Set of dicom slice numbers.
-    typedef std::set< int > tDicomNumSet;
+    typedef std::set< double > tDicomNumSet;
 
-	typedef std::map<int, SDCMTkFileNameAndPixelSpacing> tDicomNumToFileinfo;
+	typedef std::map<double, SDCMTkFileNameAndPixelSpacing> tDicomNumToFileinfo;
 
 public:
     //! Default constructor.
@@ -114,7 +114,7 @@ public:
     bool hasSlice( int number ) const;
 
     //! Adds dicom slice to the serie.
-    bool addSlice(int id, double pixelSpacing = 0.0);
+    bool addSlice(double id, double pixelSpacing = 0.0);
 
     //! Sets 8 bit data state
     void setHas8BitData(bool bHasThem) { m_bHas8BitData = bHasThem; }

@@ -37,6 +37,10 @@ namespace scene
 //
 class CCommandEventHandler : public osgGA::GUIEventHandler
 {
+protected:
+    //! Intersections mask currently used
+    osg::Node::NodeMask m_mask;
+
 public:
 	//! Constructor, sort of doesn't do anything
 	CCommandEventHandler();
@@ -50,6 +54,18 @@ public:
                 osg::Object *o,
                 osg::NodeVisitor *nv
                 );
+
+    //! Get currently used node mask.
+    osg::Node::NodeMask getVisitorMask()
+    {
+        return m_mask;
+    }
+
+    //! Set intersection visitor node mask
+    void setVisitorMask(osg::Node::NodeMask mask)
+    {
+        m_mask = mask;
+    }
 };
 
 

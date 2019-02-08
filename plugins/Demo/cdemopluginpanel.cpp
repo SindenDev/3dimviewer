@@ -13,16 +13,47 @@
 #include <drawing/CLineOptimizer.h>
 
 #include <QDebug>
-
+#include <QSettings>
 
 CDemoPluginPanel::CDemoPluginPanel(CAppBindings *pBindings, QWidget *parent) :
-    QWidget(parent),
+    QWidget(parent), CAppBindings(pBindings),
     ui(new Ui::CDemoPluginPanel)
 {
     ui->setupUi(this);
     Q_ASSERT(pBindings);
     setAppMode(pBindings->getAppMode());
     setDataStorage(pBindings->getDataStorage());
+
+    SETUP_COLLAPSIBLE_GROUPBOX(ui->groupBox);
+    SETUP_COLLAPSIBLE_GROUPBOX(ui->groupBox_2);
+    SETUP_COLLAPSIBLE_GROUPBOX(ui->groupBox_3);
+    SETUP_COLLAPSIBLE_GROUPBOX(ui->groupBox_4);
+
+    QSettings settings;
+    settings.beginGroup("DemoPanel");
+
+    if (settings.value("PackGroup1", false).toBool())
+    {
+        ui->groupBox->setChecked(false);
+        packGroupBox(ui->groupBox, false);
+    }
+    if (settings.value("PackGroup2", false).toBool())
+    {
+        ui->groupBox_2->setChecked(false);
+        packGroupBox(ui->groupBox_2, false);
+    }
+    if (settings.value("PackGroup3", false).toBool())
+    {
+        ui->groupBox_3->setChecked(false);
+        packGroupBox(ui->groupBox_3, false);
+    }
+    if (settings.value("PackGroup4", false).toBool())
+    {
+        ui->groupBox_4->setChecked(false);
+        packGroupBox(ui->groupBox_4, false);
+    }
+
+    settings.endGroup();
 
     m_colorComboBox.setCombo(ui->comboBoxRegion);
 
@@ -42,13 +73,40 @@ CDemoPluginPanel::CDemoPluginPanel(CAppBindings *pBindings, QWidget *parent) :
     m_haveFocus = false;
     // Connect to the drawing mode changed signal
     m_conDrawingModeChanged = m_sigDrawingModeChanged.connect( this, &CDemoPluginPanel::OnDrawingModeChanged );
+
 }
 
 CDemoPluginPanel::~CDemoPluginPanel()
 {
+    QSettings settings;
+    settings.beginGroup("DemoPanel");
+
+    settings.setValue("PackGroup1", !ui->groupBox->isChecked());
+    settings.setValue("PackGroup2", !ui->groupBox_2->isChecked());
+    settings.setValue("PackGroup3", !ui->groupBox_3->isChecked());
+    settings.setValue("PackGroup4", !ui->groupBox_4->isChecked());
+
+    settings.endGroup();
+
 	PLUGIN_APP_STORAGE.disconnect(data::Storage::RegionColoring::Id, &m_colorComboBox);
 	PLUGIN_APP_MODE.disconnectAllDrawingHandlers();
     delete ui;
+}
+
+void CDemoPluginPanel::packGroupBox(bool checked)
+{
+    QGroupBox* pWidget = qobject_cast<QGroupBox*>(sender());
+    packGroupBox(pWidget, checked);
+}
+
+void CDemoPluginPanel::packGroupBox(QGroupBox* pWidget, bool checked)
+{
+    if (NULL == pWidget) return;
+    int height = pWidget->property("ProperHeight").toInt();
+    if (checked)
+        pWidget->setMaximumHeight(height);
+    else
+        pWidget->setMaximumHeight(GROUPBOX_HEIGHT);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -343,8 +401,8 @@ void CDemoPluginPanel::on_pushButtonUseModel_clicked()
     data::CObjectPtr< data::CDensityData > pVolumeAux(PLUGIN_APP_STORAGE.getEntry(data::AUX_DATA));
     data::CObjectPtr< data::CDensityData > pVolumePatient(PLUGIN_APP_STORAGE.getEntry(data::PATIENT_DATA));
 
-    data::CDensityData data;
-    pVolumeAux->makeRef(data);
+    data::CDensityData densityData;
+    pVolumeAux->makeRef(densityData);
     pVolumeAux->copyProps(*pVolumePatient.get());
     pVolumeAux->resize(pVolumePatient->getSize());
     //pVolumeAux->fillMargin(0);

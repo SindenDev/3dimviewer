@@ -214,7 +214,7 @@ namespace data
     VPL_ENTITY_NAME(#tpMatrix);		\
     public:																				\
     template< class tpSerializer>                                                   \
-    static void serialize( tpMatrix * m, vpl::mod::CChannelSerializer<tpSerializer> & s )	\
+    static void serialize(const tpMatrix * m, vpl::mod::CChannelSerializer<tpSerializer> & s )	\
     {																				\
     vpl::sys::tInt32 rows(m->getNumOfRows()), columns(m->getNumOfCols());                                                               \
     s.write( rows );                                                        	\

@@ -1,10 +1,10 @@
 ///////////////////////////////////////////////////////////////////////////////
-// $Id$
 //
 // 3DimViewer
 // Lightweight 3D DICOM viewer.
 //
 // Copyright 2008-2016 3Dim Laboratory s.r.o.
+// Copyright 2016-2018 Tescan 3Dim s.r.o.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,6 +24,8 @@
 // Includes
 
 #include <alg/CMarchingCubes.h>
+#include <base/stack_allocator.hpp>
+#include <VPL/Base/Logging.h>
 
 ////////////////////////////////////////////////////////////
 // scheme cubes with numbering conventions of nodes and edges
@@ -1484,7 +1486,7 @@ CMarchingCubes::~CMarchingCubes()
 
 bool CMarchingCubes::generateMesh(
     geometry::CMesh &mesh,
-    IMarchingCubesFunctor *volumeFunctor,
+    const IMarchingCubesFunctor *volumeFunctor,
     bool reduceFlatAreas,
     int numOfIterations,
     bool eliminateNearVertices,
@@ -1492,6 +1494,7 @@ bool CMarchingCubes::generateMesh(
 {
     const int desiredCubesOnEdge = 8;
     vpl::img::CSize3i volumeSize = volumeFunctor->getVolumeDimensions();
+    VPL_LOG_INFO("Generating mesh from " << volumeSize.x() << "x" << volumeSize.y() << "x" << volumeSize.z());    
 
     vpl::img::CSize3i cubeSize;
     cubeSize.x() = (volumeSize.x() + desiredCubesOnEdge - 1) / desiredCubesOnEdge;
@@ -1613,6 +1616,7 @@ bool CMarchingCubes::generateMesh(
 
     bool isTwoManifold = mesh.isTwoManifold();
     assert(isTwoManifold);
+    assert(mesh.isClosed());
 
 #if(0)
     int boundaryEdgesCount = 0;
@@ -1870,13 +1874,10 @@ int CMarchingCubesWorker::cubeCodeNodeNumber(unsigned char cube_code)
     return voxels;
 }
 
-bool CMarchingCubesWorker::generateMesh(IMarchingCubesFunctor *volumeFunctor, bool markFaces)
+bool CMarchingCubesWorker::generateMesh(const IMarchingCubesFunctor *volumeFunctor, bool markFaces)
 {
     m_voxelSize = volumeFunctor->getVoxelSize();
-
-    unsigned char cube_code; // code of actual cube
-    unsigned char *state_matrix_ptr, *cube_code_matrix_ptr; // help pointers on state and code matrix
-    geometry::CMesh::VertexHandle *node_matrix_ptr; // help pointer on node matrix
+    const vpl::img::CSize3i fullvolumeSize = volumeFunctor->getVolumeDimensions();
 
     // save pointer on actual tri mesh
     m_mesh.clear();
@@ -1920,7 +1921,19 @@ bool CMarchingCubesWorker::generateMesh(IMarchingCubesFunctor *volumeFunctor, bo
                 }
 
                 // get volume voxel state and save it into up voxel state matrix
-                m_state_matrix_up[((y + 1) * m_work_matrices_size_x) + x + 1] = volumeFunctor->operator()(x + m_volume_start_x, y + m_volume_start_y, z + m_volume_start_z);
+                const int idx = ((y + 1) * m_work_matrices_size_x) + x + 1;
+                //assert(idx >= 0 && idx < m_work_matrices_size_x * m_work_matrices_size_y);
+                m_state_matrix_up[idx] = volumeFunctor->operator()(x + m_volume_start_x, y + m_volume_start_y, z + m_volume_start_z);
+#if defined(_DEBUG) || defined(QT_DEBUG) || defined(DEBUG) || defined(NNDEBUG)
+                // check functor that it doesn't return non zero values for volume outside - if it does, fix your functor!
+                if (x + m_volume_start_x < 0 || x + m_volume_start_x >= fullvolumeSize.x() ||
+                    y + m_volume_start_y < 0 || y + m_volume_start_y >= fullvolumeSize.y() || 
+                    z + m_volume_start_z < 0 || z + m_volume_start_z >= fullvolumeSize.z())
+                {
+                    assert(0 == m_state_matrix_up[idx]);
+                    m_state_matrix_up[idx] = 0;
+                }
+#endif
             }
         }
 
@@ -1934,7 +1947,8 @@ bool CMarchingCubesWorker::generateMesh(IMarchingCubesFunctor *volumeFunctor, bo
                 {
                     setCodeCoordinateX((x + m_volume_start_x - 0.5) * m_voxelSize.x(), m_voxelSize.x());
 
-                    cube_code = makeCubeCode(x, y);
+                    // code of actual cube
+                    unsigned char cube_code = makeCubeCode(x, y);
 
                     // ignore no cross surface cubes
                     if ((cube_code != 0) && (cube_code != 255))
@@ -1951,12 +1965,12 @@ bool CMarchingCubesWorker::generateMesh(IMarchingCubesFunctor *volumeFunctor, bo
         }
 
         // switch up and down state matrices
-        state_matrix_ptr = m_state_matrix_down;
+        unsigned char *state_matrix_ptr = m_state_matrix_down;
         m_state_matrix_down = m_state_matrix_up;
         m_state_matrix_up = state_matrix_ptr;
 
         // switch up and down node matrices
-        node_matrix_ptr = m_node_matrix_down_h;
+        geometry::CMesh::VertexHandle *node_matrix_ptr = m_node_matrix_down_h;
         m_node_matrix_down_h = m_node_matrix_up_h;
         m_node_matrix_up_h = node_matrix_ptr;
 
@@ -1965,7 +1979,7 @@ bool CMarchingCubesWorker::generateMesh(IMarchingCubesFunctor *volumeFunctor, bo
         m_node_matrix_up_v = node_matrix_ptr;
 
         // switch cube code matrix with down cube code matrix
-        cube_code_matrix_ptr = m_cube_code_matrix;
+        unsigned char *cube_code_matrix_ptr = m_cube_code_matrix;
         m_cube_code_matrix = m_down_cube_code_matrix;
         m_down_cube_code_matrix = cube_code_matrix_ptr;
 
@@ -2217,13 +2231,11 @@ void CMarchingCubesWorker::holeFilling(int x, int y, unsigned char cube_code, bo
                     {
                         m_mesh.property(fProp_flag, face) = 24;
                     }
-                    normal = m_mesh.calc_face_normal(face);
                     face = m_mesh.add_face(hole_vertex[2], hole_vertex[0], hole_vertex[3]);
                     if (markFaces)
                     {
                         m_mesh.property(fProp_flag, face) = 24;
                     }
-                    normal = m_mesh.calc_face_normal(face);
                 }
                 else
                 {
@@ -2234,13 +2246,11 @@ void CMarchingCubesWorker::holeFilling(int x, int y, unsigned char cube_code, bo
                     {
                         m_mesh.property(fProp_flag, face) = 5;
                     }
-                    normal = m_mesh.calc_face_normal(face);
                     face = m_mesh.add_face(hole_vertex[2], hole_vertex[3], hole_vertex[0]);
                     if (markFaces)
                     {
                         m_mesh.property(fProp_flag, face) = 5;
                     }
-                    normal = m_mesh.calc_face_normal(face);
                 }
 
                 break;
@@ -2278,13 +2288,11 @@ void CMarchingCubesWorker::holeFilling(int x, int y, unsigned char cube_code, bo
                     {
                         m_mesh.property(fProp_flag, face) = 21;
                     }
-                    normal = m_mesh.calc_face_normal(face);
                     face = m_mesh.add_face(hole_vertex[2], hole_vertex[0], hole_vertex[1]);
                     if (markFaces)
                     {
                         m_mesh.property(fProp_flag, face) = 21;
                     }
-                    normal = m_mesh.calc_face_normal(face);
                 }
                 else
                 {
@@ -2295,13 +2303,11 @@ void CMarchingCubesWorker::holeFilling(int x, int y, unsigned char cube_code, bo
                     {
                         m_mesh.property(fProp_flag, face) = 11;
                     }
-                    normal = m_mesh.calc_face_normal(face);
                     face = m_mesh.add_face(hole_vertex[2], hole_vertex[1], hole_vertex[0]);
                     if (markFaces)
                     {
                         m_mesh.property(fProp_flag, face) = 11;
                     }
-                    normal = m_mesh.calc_face_normal(face);
                 }
 
                 break;
@@ -2339,13 +2345,11 @@ void CMarchingCubesWorker::holeFilling(int x, int y, unsigned char cube_code, bo
                     {
                         m_mesh.property(fProp_flag, face) = 16;
                     }
-                    normal = m_mesh.calc_face_normal(face);
                     face = m_mesh.add_face(hole_vertex[2], hole_vertex[0], hole_vertex[3]);
                     if (markFaces)
                     {
                         m_mesh.property(fProp_flag, face) = 16;
                     }
-                    normal = m_mesh.calc_face_normal(face);
                 }
                 else
                 {
@@ -2356,13 +2360,11 @@ void CMarchingCubesWorker::holeFilling(int x, int y, unsigned char cube_code, bo
                     {
                         m_mesh.property(fProp_flag, face) = 13;
                     }
-                    normal = m_mesh.calc_face_normal(face);
                     face = m_mesh.add_face(hole_vertex[2], hole_vertex[3], hole_vertex[0]);
                     if (markFaces)
                     {
                         m_mesh.property(fProp_flag, face) = 13;
                     }
-                    normal = m_mesh.calc_face_normal(face);
                 }
 
                 break;
@@ -2935,6 +2937,13 @@ bool CMarchingCubesWorker::eliminateFlatVertex(geometry::CMesh &mesh, geometry::
         vertices.push_back(mesh.point(vvit.handle()));
     }
 
+    // stack based allocator for fvertices vector
+#ifndef _DEBUG
+    const std::size_t stack_size = 3;
+    geometry::CMesh::VertexHandle bufferVH[stack_size];
+    typedef stack_allocator<geometry::CMesh::VertexHandle, stack_size> allocator_type;
+#endif
+
     // try every edge
     for (geometry::CMesh::VertexOHalfedgeIter vohit = mesh.voh_begin(eliminate_vertex); vohit != mesh.voh_end(eliminate_vertex); ++vohit)
     {
@@ -2952,8 +2961,12 @@ bool CMarchingCubesWorker::eliminateFlatVertex(geometry::CMesh &mesh, geometry::
         {
             geometry::CMesh::FaceHandle face = vfit.handle();
             bool hasTarget = false;
-            std::vector<geometry::CMesh::VertexHandle> fvertices;
-
+#ifdef _DEBUG
+            std::vector<geometry::CMesh::VertexHandle> fvertices; 
+#else   // use stack based allocator for better performance
+            std::vector<geometry::CMesh::VertexHandle, allocator_type> fvertices((allocator_type(bufferVH)));
+#endif
+            
             // construct virtual face
             for (geometry::CMesh::FaceVertexIter fvit = mesh.fv_begin(face); fvit != mesh.fv_end(face); ++fvit)
             {
@@ -2979,6 +2992,8 @@ bool CMarchingCubesWorker::eliminateFlatVertex(geometry::CMesh &mesh, geometry::
             {
                 continue;
             }
+
+            assert(fvertices.size() == 3);
 
             // check for flip of normal after possible collapse
             geometry::CMesh::Normal fnormal = mesh.normal(face);

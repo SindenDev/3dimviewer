@@ -37,7 +37,7 @@ namespace osg
 class CSceneManipulator : public osgGA::TrackballManipulator
 {
 public:
-    CSceneManipulator() : osgGA::TrackballManipulator(), m_bUseStoredBB( false ) {}
+    CSceneManipulator() : osgGA::TrackballManipulator(), m_bUseStoredBB( false ), m_enabled(true) {}
 
     virtual bool handle(const osgGA::GUIEventAdapter& ea, osgGA::GUIActionAdapter& us);
 
@@ -46,6 +46,11 @@ public:
 
     //! Store bounding box 
     void storeBB( const osg::BoundingBox & bb ) { m_box = bb; }
+
+    void zoom(double zoomFactor);
+    void pan(osg::Vec2 movement);
+    void rotate(double rotation);
+    void setEnabled(bool value) { m_enabled = value; }
 
     //! Sets manipulator parameters from view matrix and manipulator distance.
     void customSetPosition(const osg::Matrixd &matrix, const double distance);
@@ -74,6 +79,8 @@ protected:
 
     //! Stored bounding box
     osg::BoundingBox m_box;
+
+    bool m_enabled;
 };
 
 

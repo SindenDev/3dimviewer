@@ -72,7 +72,7 @@ bool data::CSerieInfo::hasSlice( int number ) const
 }
 
 //==============================================================================================
-bool data::CSerieInfo::addSlice(int id, double pixelSpacing)
+bool data::CSerieInfo::addSlice(double id, double pixelSpacing)
 {
     SDCMTkFileNameAndPixelSpacing info;
     info.fileInfo = m_DCMTkList.back();
@@ -80,9 +80,14 @@ bool data::CSerieInfo::addSlice(int id, double pixelSpacing)
 
     std::pair<tDicomNumSet::iterator, bool> ret = m_DicomNumSet.insert( id );
 
+    if (!ret.second)
+    {
+        bool damn = true;
+    }
+
     if (ret.second)
     {
-        m_DicomNumToFilenameMap.insert(std::pair<int, SDCMTkFileNameAndPixelSpacing>(id, info));
+        m_DicomNumToFilenameMap.insert(std::pair<double, SDCMTkFileNameAndPixelSpacing>(id, info));
         m_DicomPixelSpacing.push_back(pixelSpacing);
     }
 
@@ -244,13 +249,13 @@ int data::CSerieInfo::loadDicomFile(int FileNum, tDicomSlices& Slices, sExtended
 
 bool data::CSerieInfo::loadDicomFileForPreview(int sliceIndex, vpl::img::CDicomSlice& Slice, sExtendedTags& tags, bool bLoadImageData, double pixelSpacing)
 {
-    int cnt = 0;
+    int cnt = -1;
 
     tDicomNumSet::iterator it = m_DicomNumSet.begin();
 
-    for (it; it != m_DicomNumSet.end(); ++it)
+    for (; it != m_DicomNumSet.end(); ++it)
     {
-        int sliceId = *it;
+        double sliceId = *it;
 
         tDicomNumToFileinfo::iterator map_it = m_DicomNumToFilenameMap.find(sliceId);
         if (map_it != m_DicomNumToFilenameMap.end())

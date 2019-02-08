@@ -26,7 +26,7 @@
 #include "data/CStorageInterface.h"
 #include "CModel.h"
 #include <data/ESnapshotType.h>
-
+#include <data/CColorTable.h>
 
 namespace data
 {
@@ -36,6 +36,9 @@ namespace data
 
 namespace Storage
 {
+
+//! Reference anatomical landmark model.
+DECLARE_OBJECT(ReferenceAnatomicalLandmarkModel, CModel, 2490);
 
 //! Bone tissue model.
 DECLARE_OBJECT(BonesModel, CModel, 2500);
@@ -67,10 +70,10 @@ class CModelSnapshot
 {
 public:
         //! Constructor
-        CModelSnapshot( CUndoProvider * provider = NULL ) : CSnapshot( data::UNDO_MODELS, provider ) {}
+        CModelSnapshot( CUndoProvider * provider = nullptr ) : CSnapshot( data::UNDO_MODELS, provider ) {}
 
         //! Each snapshot object must return its data size in bytes
-        virtual long getDataSize() 
+        virtual long getDataSize() override
         {
             return sizeof( CModel ) * m_modelMap.size(); // up to MAX_MODELS
         }
@@ -197,6 +200,17 @@ public:
     //! Orpedigs stuff - enables multi selection of models - the previously selected models are just not deselected
     void setMultiSelectionEnabled(bool enabled);
 
+    static int findFreeModelId();
+
+    /**
+     * Automatic assign model color
+     *
+     * \param   modelId         Identifier for the model.
+     * \param   doInvalidation  (Optional) True to do storage invalidation automatically.
+     */
+
+    void autoAssignModelColor(int modelId, bool doInvalidation = true);
+
 protected:
     //! Dummy model.
     CModel m_DummyModel;
@@ -209,6 +223,8 @@ protected:
 
     //! Multi selection of models en/disabled.
     bool m_multiSelectionEnabled;
+
+    data::CColorTable m_colorTable;
 
 private:
     //! Private copy constructor.

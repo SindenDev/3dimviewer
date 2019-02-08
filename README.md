@@ -2,7 +2,7 @@
     * This file is part of
     * 
     * 3DimViewer - A lightweight 3D DICOM viewer.
-    * Copyright 2008-2014 3Dim Laboratory s.r.o.
+    * Copyright 2008-2019 TESCAN 3DIM s.r.o.
     * All rights reserved.
     * 
     * Licensed under the Apache License, Version 2.0 (the "License");
@@ -151,6 +151,6 @@ or
 4 Contacts
 ==========
 
-* 3Dim Laboratory s.r.o.
-* E-mail: info@3dim-laboratory.cz
-* Web: http://www.3dim-laboratory.cz/
+* TESCAN 3DIM s.r.o.
+* E-mail: info@t3d.team
+* Web: https://www.tescan3dim.com/

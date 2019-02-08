@@ -26,6 +26,7 @@
 #include "AppConfigure.h"
 
 #include <C3DimApplication.h>
+
 #include <QtGui>
 #include <QDockWidget>
 #include <QLayout>
@@ -37,6 +38,20 @@
 #include <QGroupBox>
 #include <QLineEdit>
 #include <QComboBox>
+#include <QKeyEvent>
+#include <QStackedWidget>
+#include <QHostAddress>
+#include <QNetworkInterface>
+#include <QNetworkSession>
+#include <QNetworkConfigurationManager>
+#include <QNetworkAccessManager>
+#include <QNetworkRequest>
+#include <QSslConfiguration>
+#include <QHostInfo>
+#if QT_VERSION >= QT_VERSION_CHECK(5,0,0)
+    #include <QUrlQuery>
+#endif
+
 #if QT_VERSION >= 0x050000
     #include <QStandardPaths>
 #endif
@@ -47,9 +62,12 @@
 #include <data/CAppSettings.h>
 #include <data/CUndoManager.h>
 #include <data/CRegionData.h>
+#include <data/CRegionColoring.h>
+#include <data/CMultiClassRegionColoring.h>
 #include <data/CImageLoaderInfo.h>
 #include <data/CVolumeTransformation.h>
 #include <data/CVolumeOfInterestData.h>
+#include <data/CPivot.h>
 
 #include <VPL/Module/Progress.h>
 #include <VPL/Module/Serialization.h>
@@ -80,6 +98,9 @@
 #include <dialogs/cprogress.h>
 #include <CCustomUI.h>
 #include <CFilterDialog.h>
+#include <CModelVisualizerEx.h>
+
+#include <cinfodialog.h>
 
 #include <data/CCustomData.h>
 
@@ -87,6 +108,7 @@
 #include <zip/unzip.h>
 
 #include <osg/OSGTreeAnalyser.h>
+#include <osg/CPseudoMaterial.h>
 
 //#define DUMP_OSG_TREE
 
@@ -123,14 +145,22 @@
     #include <notesplugin.h>
     #include <notespluginpanel.h>
 #endif
+#include <CZipLoader.h>
 
 #include <3dim/geometry/base/CTMReader.h>
 #include <3dim/geometry/base/CTMWriter.h>
 
 #ifdef ENABLE_PYTHON
-#include <qtpython\pyconfigure.h>
-#include <qtpython\CPythonInterpretQt.h>
+#include <qtpython/pyconfigure.h>
+#include <qtpython/interpret.h>
+#include "qtpython/settings.h"
 #endif
+
+#include <CSysInfo.h>
+
+#define DEFAULT_PING_URL "https://licreq.t3d.team/flying_feather.php"
+
+#undef interface
 
 //#undef USE_PSVR
 
@@ -138,158 +168,6 @@ bool dockWidgetNameCompare(QDockWidget* left, QDockWidget* right)
 {
     return left->windowTitle().compare(right->windowTitle())<0;
 }
-
-///////////////////////////////////////////////////////////////////////////////
-// simple helper class for dicom data loading from zip archive
-
-class CZipLoader
-{
-protected:
-    QString m_archive;
-    QString m_tempDir;
-public:
-    //! Constructor
-    CZipLoader() {}
-    //! Destructor removes temporary directory with extracted zip contents
-    ~CZipLoader() 
-    {
-        if (!m_tempDir.isEmpty())
-            removeDir(m_tempDir); 
-    }
-    // checks filename for zip extension
-    bool setZipArchive(const QString& fileName)
-    {
-        QFileInfo pathInfo( fileName );
-        QString ext = pathInfo.suffix();
-        if (0==ext.compare("zip",Qt::CaseInsensitive)) // return zip files
-        {
-            m_archive = fileName;
-            return true;    
-        }
-        return false;
-    }
-    //! decompress zip archive to a temporary directory which will be deleted with this object
-    QString decompress()
-    {
-        // get temp dir name
-        {
-            QTemporaryFile file;
-            file.open();
-            m_tempDir = file.fileName();
-            if (m_tempDir.isEmpty())
-            {
-                m_tempDir = QDir::tempPath();
-                m_tempDir+="/bspziptmp";
-            }
-            m_tempDir+="/";
-        }
-       
-        // make sure that the directory exists
-        {
-            QDir dir;
-            bool ok = dir.mkpath(m_tempDir);
-            Q_ASSERT(ok);        
-        }
-
-        bool bDecompressedSomething = false;
-
-        std::string str = m_archive.toStdString();
-        unzFile hZIP = unzOpen(str.c_str());
-        if (hZIP)
-        {
-#define CUSTOM_MAX_PATH 4096
-            char pFileName[CUSTOM_MAX_PATH]={};
-            bool bContinue = (UNZ_OK == unzGoToFirstFile(hZIP));
-            while (bContinue) 
-            {
-                unz_file_info fi = {};
-                memset(pFileName,0,CUSTOM_MAX_PATH*sizeof(char));
-                if (unzGetCurrentFileInfo(hZIP, &fi, pFileName, CUSTOM_MAX_PATH, NULL, 0, NULL, 0) == UNZ_OK) 
-                {
-#undef CUSTOM_MAX_PATH
-                    std::string s = pFileName;
-                    QString file = m_tempDir;
-					if (s.compare("/") != 0 && s.compare("\\") != 0)
-						file += QString::fromStdString(s);
-
-                    if (file.endsWith('/') || file.endsWith('\\'))
-                    {
-                        QDir dir;
-                        bool ok = dir.mkpath(file);
-                        Q_ASSERT(ok);
-                    }
-                    else
-                    {
-						// sometimes it was trying to create a file in non-existing directory,
-						// so make sure the directory is created (just create it)
-						QFileInfo fInfo(file);
-						QString dirPath = fInfo.dir().absolutePath();
-						QDir dir;
-						bool ok = dir.mkpath(dirPath);
-						Q_ASSERT(ok);
-
-                        if (fi.uncompressed_size>0)
-                        {
-                            char* pDecompressed=new char[fi.uncompressed_size];
-                            if (NULL!=pDecompressed)
-                            {
-                                int nRead = 0;
-                                if (unzOpenCurrentFile(hZIP) == UNZ_OK) 
-                                {
-                                    nRead = unzReadCurrentFile(hZIP, pDecompressed, fi.uncompressed_size);
-                                    if (UNZ_CRCERROR == unzCloseCurrentFile(hZIP))
-                                        nRead = 0;
-                                }
-                                if (nRead>0)
-                                {
-                                    QFile f(file);
-                                    if( f.open(QIODevice::WriteOnly) )
-                                    {
-                                        f.write(pDecompressed,fi.uncompressed_size);
-                                        f.close();
-                                        bDecompressedSomething = true;
-                                    }
-                                }
-                                delete pDecompressed;
-                            }
-                        }
-                    }                    
-                }
-                bContinue = (UNZ_OK == unzGoToNextFile(hZIP));
-            }
-            unzClose(hZIP);
-        }
-        if (bDecompressedSomething)
-            return m_tempDir;
-        else
-        {
-            removeDir(m_tempDir);
-            m_tempDir.clear();
-            return m_archive; // return original zip name
-        }
-    }
-    //! removeDir erases specified directory and all subdirectories
-    bool removeDir(const QString& dirName) const
-    {
-        bool result = true;
-        QDir dir(dirName); 
-        if (dir.exists(dirName)) 
-        {
-            Q_FOREACH(QFileInfo info, dir.entryInfoList(QDir::NoDotAndDotDot | QDir::System | QDir::Hidden  | QDir::AllDirs | QDir::Files, QDir::DirsFirst)) 
-            {
-                if (info.isDir()) 
-                    result = removeDir(info.absoluteFilePath());
-                else 
-                    result = QFile::remove(info.absoluteFilePath());
-                if (!result)
-                    return result;
-            }
-            result = dir.rmdir(dirName);
-        }
-        return result;
-    }
-};
-
 
 ///////////////////////////////////////////////////////////////////////////////
 // MainWindow
@@ -301,8 +179,12 @@ MainWindow::MainWindow(QWidget *parent, CPluginManager* pPlugins) :
     ui(new Ui::MainWindow),
 	m_pPlugins(pPlugins),
 	m_segmentationPluginsLoaded(false),
-    m_eventFilter(this)
+    m_eventFilter(this),
+    m_region3DPreviewVisible(false),
+    m_myViewVisibilityChange(false)
 {    
+    this->setObjectName("MainWindow");
+
 	Q_ASSERT(NULL!=m_pPlugins);
     m_pMainWindow = this;
     m_nLayoutType = 0;
@@ -312,9 +194,12 @@ MainWindow::MainWindow(QWidget *parent, CPluginManager* pPlugins) :
     m_OrthoXYSlice = NULL;
     m_OrthoXZSlice = NULL;
     m_OrthoYZSlice = NULL;
+    m_ArbitrarySlice = NULL;
 
     for(int i = 0; i < MAX_IMPORTED_MODELS; ++i)
         m_modelVisualizers[i] = NULL;
+
+    m_region3DPreviewVisualizer = NULL;
 
     m_densityWindowPanel=NULL;
     m_orthoSlicesPanel=NULL;
@@ -332,6 +217,11 @@ MainWindow::MainWindow(QWidget *parent, CPluginManager* pPlugins) :
 
     // setup UI
     ui->setupUi(this);
+
+    installEventFilter(this);
+
+    data::CObjectPtr<data::CRegionData> spOldRegionData(APP_STORAGE.getEntry(data::Storage::RegionData::Id));
+    spOldRegionData->makeDummy(true);
 
     //setDockOptions(QMainWindow::VerticalTabs);
 	setDockOptions(QMainWindow::AllowTabbedDocks | QMainWindow::AllowNestedDocks | QMainWindow::VerticalTabs);
@@ -358,6 +248,10 @@ MainWindow::MainWindow(QWidget *parent, CPluginManager* pPlugins) :
     // create OSG windows
     createOSGStuff();
 
+    /*m_SceneXY->setArbSliceVisibility(false);
+    m_SceneXZ->setArbSliceVisibility(false);
+    m_SceneYZ->setArbSliceVisibility(false);*/
+
 	VPL_SIGNAL(SigSetContoursVisibility).connect(this, &MainWindow::setContoursVisibility);
 	VPL_SIGNAL(SigGetContoursVisibility).connect(this, &MainWindow::getContoursVisibility);
 
@@ -365,8 +259,35 @@ MainWindow::MainWindow(QWidget *parent, CPluginManager* pPlugins) :
 	VPL_SIGNAL(SigGetVolumeOfInterestVisibility).connect(this, &MainWindow::getVOIVisibility);
 
 	VPL_SIGNAL(SigEnableRegionColoring).connect(this, &MainWindow::setRegionsVisibility);
+    VPL_SIGNAL(SigEnableMultiClassRegionColoring).connect(this, &MainWindow::setRegionsVisibility);
 
 	VPL_SIGNAL(SigShowVolumeOfInterestDialog).connect(this, &MainWindow::limitVolume);
+
+    VPL_SIGNAL(SigRegionDataLoaded).connect(this, &MainWindow::moveRegionDataToMulticlass);
+    VPL_SIGNAL(SigRemoveAllModels).connect(this, &MainWindow::removeAllModels);
+
+    VPL_SIGNAL(SigGetModelManager).connect(this, &MainWindow::getModelManager);
+
+    VPL_SIGNAL(SigChangeVRVisibility).connect(this, &MainWindow::changeVRVisibility);
+    VPL_SIGNAL(SigVRVisible).connect(this, &MainWindow::isVRVisible);
+    VPL_SIGNAL(SigVRChanged).connect(this, &MainWindow::onSigVRChanged);
+    VPL_SIGNAL(SigModelsVisible).connect(this, &MainWindow::areModelsVisible);
+    VPL_SIGNAL(SigChangeModelsVisibility).connect(this, &MainWindow::changeModelsVisibility);
+
+    VPL_SIGNAL(SigDrawingInProgress).connect(this, &MainWindow::onDrawingInProgress);
+
+
+    VPL_SIGNAL(SigStrokeOnOffWithCheck).connect(this, &MainWindow::setStrokeOnOff);
+
+    VPL_SIGNAL(SigMakeWindowFloating).connect(this, &MainWindow::makeWndFloating);
+    VPL_SIGNAL(SigShowViewInWindow).connect(this, &MainWindow::showViewInWindow);
+
+    VPL_SIGNAL(SigPythonVolumeLoaded).connect(this, &MainWindow::postOpenActions);
+
+    VPL_SIGNAL(SigPluginLog).connect(this, &MainWindow::pluginLog);
+
+    VPL_SIGNAL(SigSaveScreenshot).connect(this, &MainWindow::saveScreenshot);
+
 
 	QSettings settings;
 
@@ -392,6 +313,7 @@ MainWindow::MainWindow(QWidget *parent, CPluginManager* pPlugins) :
             m_OrthoXYSlice->setBackgroundColor(osgColor);
             m_OrthoXZSlice->setBackgroundColor(osgColor);
             m_OrthoYZSlice->setBackgroundColor(osgColor);
+            m_ArbitrarySlice->setBackgroundColor(osgColor);
         }
 
         // load recent projects
@@ -426,7 +348,53 @@ MainWindow::MainWindow(QWidget *parent, CPluginManager* pPlugins) :
     }
 
     // setup working space
+    m_viewsToShow.clear();
+
+    switch (m_nLayoutType)
+    {
+        case WorkspaceTabs:
+        {
+            m_viewsToShow.push_back(sWindowInfo(View3D, false, true, true));
+            m_viewsToShow.push_back(sWindowInfo(ViewXY, false, true, true));
+            m_viewsToShow.push_back(sWindowInfo(ViewXZ, false, true, true));
+            m_viewsToShow.push_back(sWindowInfo(ViewYZ, false, true, true));
+            m_viewsToShow.push_back(sWindowInfo(ViewARB, false, true, true));
+        }
+        break;
+        case WorkspaceGrid:
+        {
+            m_viewsToShow.push_back(sWindowInfo(ViewXY, false, true, true));
+            m_viewsToShow.push_back(sWindowInfo(View3D, false, true, true));
+            m_viewsToShow.push_back(sWindowInfo(ViewXZ, false, true, true));
+            m_viewsToShow.push_back(sWindowInfo(ViewYZ, false, true, true));
+        }
+        break;
+        case WorkspaceSlices:
+        {
+            m_viewsToShow.push_back(sWindowInfo(ViewXY, false, true, true));
+            m_viewsToShow.push_back(sWindowInfo(ViewARB, false, true, true));
+            m_viewsToShow.push_back(sWindowInfo(ViewXZ, false, true, true));
+            m_viewsToShow.push_back(sWindowInfo(ViewYZ, false, true, true));
+        }
+        break;
+        case Workspace3D:
+        default:
+        {
+            m_viewsToShow.push_back(sWindowInfo(ViewXY, false, true, true));
+            m_viewsToShow.push_back(sWindowInfo(ViewXZ, false, true, true));
+            m_viewsToShow.push_back(sWindowInfo(ViewYZ, false, true, true));
+            m_viewsToShow.push_back(sWindowInfo(ViewARB, false, true, true));
+        }
+        break;
+    }
+    
     setUpWorkspace();
+
+    m_3DView->show();
+    m_OrthoXYSlice->show();
+    m_OrthoXZSlice->show();
+    m_OrthoYZSlice->show();
+    m_ArbitrarySlice->show();
 
     // create panels
     createPanels();
@@ -438,6 +406,51 @@ MainWindow::MainWindow(QWidget *parent, CPluginManager* pPlugins) :
 	vplSignalsTable[VPL_SIGNAL(SigNumberOfRegionsChanged).getId()] = &(VPL_SIGNAL(SigNumberOfRegionsChanged));
 	vplSignalsTable[VPL_SIGNAL(SigVRChanged).getId()] = &(VPL_SIGNAL(SigVRChanged));
 	vplSignalsTable[VPL_SIGNAL(SigManSeg3DChanged).getId()] = &(VPL_SIGNAL(SigManSeg3DChanged));
+    vplSignalsTable[VPL_SIGNAL(SigUpdateVR).getId()] = &(VPL_SIGNAL(SigUpdateVR));
+    vplSignalsTable[VPL_SIGNAL(SigRemoveMeasurements).getId()] = &(VPL_SIGNAL(SigRemoveMeasurements));
+    vplSignalsTable[VPL_SIGNAL(SigDrawingDone).getId()] = &(VPL_SIGNAL(SigDrawingDone));
+    vplSignalsTable[VPL_SIGNAL(SigRegionDataLoaded).getId()] = &(VPL_SIGNAL(SigRegionDataLoaded));
+    vplSignalsTable[VPL_SIGNAL(SigRemoveAllModels).getId()] = &(VPL_SIGNAL(SigRemoveAllModels));
+    vplSignalsTable[VPL_SIGNAL(SigPluginAuxRegionsLoaded).getId()] = &(VPL_SIGNAL(SigPluginAuxRegionsLoaded));
+    vplSignalsTable[VPL_SIGNAL(SigScrollPerformed).getId()] = &(VPL_SIGNAL(SigScrollPerformed));
+    vplSignalsTable[VPL_SIGNAL(SigSetColoring).getId()] = &(VPL_SIGNAL(SigSetColoring));
+    vplSignalsTable[VPL_SIGNAL(SigEnableRegionColoring).getId()] = &(VPL_SIGNAL(SigEnableRegionColoring));
+    vplSignalsTable[VPL_SIGNAL(SigEnableMultiClassRegionColoring).getId()] = &(VPL_SIGNAL(SigEnableMultiClassRegionColoring));
+    vplSignalsTable[VPL_SIGNAL(SigUndoOnColoringPerformed).getId()] = &(VPL_SIGNAL(SigUndoOnColoringPerformed));
+    vplSignalsTable[VPL_SIGNAL(SigGetModelManager).getId()] = &(VPL_SIGNAL(SigGetModelManager));
+    vplSignalsTable[VPL_SIGNAL(SigActiveRegionChanged).getId()] = &(VPL_SIGNAL(SigActiveRegionChanged));
+    vplSignalsTable[VPL_SIGNAL(SigNewRegionSelected).getId()] = &(VPL_SIGNAL(SigNewRegionSelected));
+    vplSignalsTable[VPL_SIGNAL(SigSetActiveRegion3DPreviewVisibility).getId()] = &(VPL_SIGNAL(SigSetActiveRegion3DPreviewVisibility));
+    vplSignalsTable[VPL_SIGNAL(SigChangeVRVisibility).getId()] = &(VPL_SIGNAL(SigChangeVRVisibility));
+    vplSignalsTable[VPL_SIGNAL(SigVRVisible).getId()] = &(VPL_SIGNAL(SigVRVisible));
+    vplSignalsTable[VPL_SIGNAL(SigModelsVisible).getId()] = &(VPL_SIGNAL(SigModelsVisible));
+    vplSignalsTable[VPL_SIGNAL(SigChangeModelsVisibility).getId()] = &(VPL_SIGNAL(SigChangeModelsVisibility));
+    vplSignalsTable[VPL_SIGNAL(SigSetRegion3DPreviewInterval).getId()] = &(VPL_SIGNAL(SigSetRegion3DPreviewInterval));
+    vplSignalsTable[VPL_SIGNAL(SigClearAllLandmarkAnnotationDrawables).getId()] = &(VPL_SIGNAL(SigClearAllLandmarkAnnotationDrawables));
+    vplSignalsTable[VPL_SIGNAL(SigClearLandmarkAnnotationDrawable).getId()] = &(VPL_SIGNAL(SigClearLandmarkAnnotationDrawable));
+    vplSignalsTable[VPL_SIGNAL(SigCreateLandmarkAnnotationDrawable).getId()] = &(VPL_SIGNAL(SigCreateLandmarkAnnotationDrawable));
+    vplSignalsTable[VPL_SIGNAL(SigSetLandmarkAnnotationDrawablesVisibility).getId()] = &(VPL_SIGNAL(SigSetLandmarkAnnotationDrawablesVisibility));
+    vplSignalsTable[VPL_SIGNAL(SigGetModelDraggerModelId).getId()] = &(VPL_SIGNAL(SigGetModelDraggerModelId));
+    vplSignalsTable[VPL_SIGNAL(SigSetModelDraggerModelId).getId()] = &(VPL_SIGNAL(SigSetModelDraggerModelId));
+    vplSignalsTable[VPL_SIGNAL(SigGetModelDraggerVisibility).getId()] = &(VPL_SIGNAL(SigGetModelDraggerVisibility));
+    vplSignalsTable[VPL_SIGNAL(SigSetModelDraggerVisibility).getId()] = &(VPL_SIGNAL(SigSetModelDraggerVisibility));
+    vplSignalsTable[VPL_SIGNAL(SigGetActiveConvObject).getId()] = &(VPL_SIGNAL(SigGetActiveConvObject));
+    vplSignalsTable[VPL_SIGNAL(SigStrokeOnOffWithCheck).getId()] = &(VPL_SIGNAL(SigStrokeOnOffWithCheck));
+    vplSignalsTable[VPL_SIGNAL(SigStrokeOnOff).getId()] = &(VPL_SIGNAL(SigStrokeOnOff));
+    vplSignalsTable[VPL_SIGNAL(SigPythonVolumeLoaded).getId()] = &(VPL_SIGNAL(SigPythonVolumeLoaded));
+    vplSignalsTable[VPL_SIGNAL(SigPluginLog).getId()] = &(VPL_SIGNAL(SigPluginLog));
+    vplSignalsTable[VPL_SIGNAL(SigRegion3DPreviewVisible).getId()] = &(VPL_SIGNAL(SigRegion3DPreviewVisible));
+    vplSignalsTable[VPL_SIGNAL(SigHasCnnModels).getId()] = &(VPL_SIGNAL(SigHasCnnModels));
+    vplSignalsTable[VPL_SIGNAL(SigHasLandmarksDefinition).getId()] = &(VPL_SIGNAL(SigHasLandmarksDefinition));
+
+
+#ifdef ENABLE_PYTHON
+	data::CObjectPtr<data::Interpret> interpret(APP_STORAGE.getEntry(data::Storage::InterpretData::Id));
+	interpret->initialize();
+    settings.setValue("isPythonEnabled", true);
+#else
+    settings.setValue("isPythonEnabled", false);
+#endif
 
     // load plugins
     Q_ASSERT(m_densityWindowPanel && m_densityWindowPanel->parentWidget());
@@ -450,8 +463,11 @@ MainWindow::MainWindow(QWidget *parent, CPluginManager* pPlugins) :
 		m_segmentationPluginsLoaded = true;
 	}
 
+    VPL_SIGNAL(SigPluginAuxRegionsLoaded).invoke(findPluginByID("SegToSmallRegions") != NULL);
+
     // load last known layout
     readLayoutSettings(false);
+    setUpWorkspace();
 
     // set up mouse mode change monitoring
     m_ConnectionModeChanged = APP_MODE.getModeChangedSignal().connect( this, &MainWindow::sigModeChanged );
@@ -463,6 +479,13 @@ MainWindow::MainWindow(QWidget *parent, CPluginManager* pPlugins) :
 
 	VPL_SIGNAL(SigSetModelCutVisibility).connect(this, &MainWindow::setModelCutVisibilitySignal);
 	VPL_SIGNAL(SigGetModelCutVisibility).connect(this, &MainWindow::getModelCutVisibilitySignal);
+    
+    VPL_SIGNAL(SigGetModelDraggerModelId).connect(this, &MainWindow::getModelDraggerModelId);
+    VPL_SIGNAL(SigSetModelDraggerModelId).connect(this, &MainWindow::setModelDraggerModelId);
+    VPL_SIGNAL(SigGetModelDraggerVisibility).connect(this, &MainWindow::getModelDraggerVisibility);
+    VPL_SIGNAL(SigSetModelDraggerVisibility).connect(this, &MainWindow::setModelDraggerVisibility);
+    VPL_SIGNAL(SigAlignmentDraggerMove).connect(this, &MainWindow::onDraggerMove);
+
 
     // set threading mode
     if (1==nThreadingMode)
@@ -472,6 +495,7 @@ MainWindow::MainWindow(QWidget *parent, CPluginManager* pPlugins) :
         m_OrthoXYSlice->enableMultiThreaded();
         m_OrthoXZSlice->enableMultiThreaded();
         m_OrthoYZSlice->enableMultiThreaded();
+        m_ArbitrarySlice->enableMultiThreaded();
     }
 
     {
@@ -517,9 +541,11 @@ MainWindow::MainWindow(QWidget *parent, CPluginManager* pPlugins) :
     //ui->actionVolume_Rendering->setVisible(false);
 
     data::CObjectPtr< data::CUndoManager > ptrManager( APP_STORAGE.getEntry(data::Storage::UndoManager::Id) );
+    ptrManager->setMaxSize(1024 * 1024 * (long)500); // set max space for undo
     ptrManager->getUndoChangedSignal().connect(this, &MainWindow::undoRedoEnabler);
 
-    m_conRegionData = APP_STORAGE.getEntrySignal(data::Storage::RegionData::Id).connect(this, &MainWindow::sigRegionDataChanged);
+    m_conRegionData = APP_STORAGE.getEntrySignal(data::Storage::MultiClassRegionData::Id).connect(this, &MainWindow::sigRegionDataChanged);
+    m_conRegionColoring = APP_STORAGE.getEntrySignal(data::Storage::MultiClassRegionColoring::Id).connect(this, &MainWindow::sigRegionColoringChanged);
 
     for(int i = 0; i < MAX_IMPORTED_MODELS; ++i)
         APP_STORAGE.getEntrySignal(data::Storage::ImportedModel::Id + i).connect(this, &MainWindow::sigBonesModelChanged);
@@ -550,12 +576,14 @@ MainWindow::MainWindow(QWidget *parent, CPluginManager* pPlugins) :
     connectActionsToEventFilter();
 	m_eventFilter.processSettings();
 
+    VPL_SIGNAL(SigActiveRegionChanged).connect(this, &MainWindow::onActiveRegionChanged);
+
 	VPL_SIGNAL(SigShowPreviewDialog).connect(this, &MainWindow::showPreviewDialog);
 	VPL_SIGNAL(SigShowInfoDialog).connect(this, &MainWindow::showInfoDialog);
 
-	VPL_SIGNAL(SigSaveModel).connect(this, &MainWindow::saveSTLById);
+	VPL_SIGNAL(SigSaveModelExt).connect(this, &MainWindow::saveSTLById);
 
-	data::CObjectPtr<data::CRegionData> spRegionData(APP_STORAGE.getEntry(data::Storage::RegionData::Id, data::Storage::NO_UPDATE));
+	data::CObjectPtr<data::CMultiClassRegionData> spRegionData(APP_STORAGE.getEntry(data::Storage::MultiClassRegionData::Id, data::Storage::NO_UPDATE));
 
 	ui->actionRegions_Visible->setChecked(spRegionData->isColoringEnabled());
 
@@ -564,11 +592,16 @@ MainWindow::MainWindow(QWidget *parent, CPluginManager* pPlugins) :
 		ui->actionSend_Data->setVisible(false);
 	}
 
+    setUpRegion3DPreview();
+
+    ui->menuSegmentation->menuAction()->setVisible(false);
+
 	if (!m_segmentationPluginsLoaded)
 	{
 		ui->menuSegmentation->menuAction()->setVisible(false);
 		ui->actionRegions_Contours_Visible->setVisible(false);
 		ui->actionRegions_Visible->setVisible(false);
+        m_modelsPanel->setEnabled(true);
 	}
 	else
 	{
@@ -579,12 +612,24 @@ MainWindow::MainWindow(QWidget *parent, CPluginManager* pPlugins) :
 		m_modelsPanel->setVisible(false);
 		m_modelsPanel->parentWidget()->setEnabled(false);
 		m_modelsPanel->parentWidget()->setVisible(false);
+        m_modelsPanel->setEnabled(false);
+
+        ui->actionSegmentation_Panel->setEnabled(false);
+        ui->actionSegmentation_Panel->setVisible(false);
+        m_segmentationPanel->close();
+        m_segmentationPanel->setEnabled(false);
+        m_segmentationPanel->setVisible(false);
+        m_segmentationPanel->parentWidget()->setEnabled(false);
+        m_segmentationPanel->parentWidget()->setVisible(false);
 	}
 
-	ui->actionRegions_Contours_Visible->setChecked(!settings.value("ContoursVisibility", true).toBool());
-	ui->actionRegions_Contours_Visible->trigger();
+	//ui->actionRegions_Contours_Visible->setChecked(!settings.value("ContoursVisibility", true).toBool());
+    ui->actionRegions_Contours_Visible->setChecked(true);
+	ui->actionRegions_Contours_Visible->trigger();  
+    ui->actionRegions_Contours_Visible->setVisible(false);
 
 	m_Connection = APP_STORAGE.getEntrySignal(data::Storage::ActiveDataSet::Id).connect(this, &MainWindow::onNewDensityData);
+    m_Connection2DCanvasLeave = APP_MODE.getWindowEnterLeaveSignal().connect(this, &MainWindow::sig2DCanvasLeave);
 
 	// show the feedback request
 	settings.beginGroup("Feedback");
@@ -613,6 +658,16 @@ MainWindow::MainWindow(QWidget *parent, CPluginManager* pPlugins) :
 
     }
 #endif
+
+    // just for translations
+    QString regName(QObject::tr("New Region"));
+    QString regName2(QObject::tr("No Region"));
+
+    ui->actionVolume_Rendering_View->setVisible(false);
+
+    data::CObjectPtr< data::CDrawingOptions > spOptions(APP_STORAGE.getEntry(data::Storage::DrawingOptions::Id));
+    spOptions->setDrawingMode(data::CDrawingOptions::DRAW_NOTHING);
+    APP_STORAGE.invalidate(spOptions.getEntryPtr());
 }
 
 MainWindow::~MainWindow()
@@ -641,22 +696,79 @@ MainWindow::~MainWindow()
             }
         }
         settings.endGroup();
-
-#ifdef ENABLE_PYTHON
-        //pythonQt::CPythonInterpretQt::Close();
-#endif
     }
 
-
-    APP_STORAGE.getEntrySignal(data::Storage::RegionData::Id).disconnect(m_conRegionData);
+    APP_STORAGE.getEntrySignal(data::Storage::MultiClassRegionData::Id).disconnect(m_conRegionData);
+    APP_STORAGE.getEntrySignal(data::Storage::MultiClassRegionColoring::Id).disconnect(m_conRegionColoring);
     APP_MODE.getModeChangedSignal().disconnect(m_ConnectionModeChanged);
+    APP_MODE.getModeChangedSignal().disconnect(m_Connection2DCanvasLeave);
     {   // clear undo before plugin unload because it can contain data allocated by plugins
         data::CObjectPtr< data::CUndoManager > ptrManager(APP_STORAGE.getEntry(data::Storage::UndoManager::Id));
         ptrManager->clear();
     }
 	if (NULL!=m_pPlugins)
 		m_pPlugins->disconnectPlugins();
+
+    for (size_t i = 0; i < m_wndViews.size(); ++i)
+    {
+        delete m_wndViews[i];
+        delete m_wndViewsSubstitute[i];
+    }
+
     delete ui;
+
+    destroyRegion3DPreview();
+}
+
+// Just a hack. When pressing ALT, menu bar gets focus and key release doesn't appear in OSGCanvas,
+// so the mouse mode stays active, which is not the behavior we want
+bool MainWindow::eventFilter(QObject *object, QEvent *event)
+{
+    if (event->type() == QKeyEvent::KeyRelease)
+    {
+        QKeyEvent *ke = static_cast<QKeyEvent*>(event);
+
+        if (ke->key() == Qt::Key_Alt)
+        {
+            if (APP_MODE.isTempMode())
+            {
+                APP_MODE.restore();
+                if (0 != (APP_MODE.get() & scene::CAppMode::COMMAND_MODE))
+                {
+                    APP_MODE.setDefault();
+                }
+                APP_MODE.enableHighlight(true);
+            }
+
+            QKeyEvent *escEvent = new QKeyEvent(QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier);
+            QCoreApplication::postEvent(ui->menuBar, escEvent);
+
+            return true;
+        }
+    }
+    else if (event->type() == QKeyEvent::KeyPress)
+    {
+        QKeyEvent *ke = static_cast<QKeyEvent*>(event);
+
+        if (ke->key() == Qt::Key_Alt)
+        {
+            if (APP_MODE.isTempMode())
+            {
+                APP_MODE.restore();
+                if (0 != (APP_MODE.get() & scene::CAppMode::COMMAND_MODE))
+                {
+                    APP_MODE.setDefault();
+                }
+                APP_MODE.enableHighlight(true);
+            }
+
+            APP_MODE.storeAndSet(scene::CAppMode::MODE_DENSITY_WINDOW);
+
+            return true;
+        }
+    }
+
+    return QObject::eventFilter(object, event);
 }
 
 void MainWindow::connectActions()
@@ -673,6 +785,7 @@ void MainWindow::connectActions()
     connect(ui->actionSave_DICOM_Series, SIGNAL(triggered()), this, SLOT(saveDICOM()));
     connect(ui->actionSave_Volumetric_Data, SIGNAL(triggered()), this, SLOT(saveVLMAs()));
     connect(ui->actionSave_STL_Model, SIGNAL(triggered()), this, SLOT(saveSTL()));
+    connect(ui->actionSave_STL_Model_in_DICOM_Coordinates, SIGNAL(triggered()), this, SLOT(saveSTLinDicomCoords()));
     connect(ui->actionPrint, SIGNAL(triggered()), this, SLOT(print()));
     connect(ui->actionShow_Data_Properties, SIGNAL(triggered()), this, SLOT(showDataProperties()));
     connect(ui->actionSend_Data, SIGNAL(triggered()), this, SLOT(sendDataExpressData()));
@@ -704,7 +817,7 @@ void MainWindow::connectActions()
     connect(ui->action3D_View, SIGNAL(triggered(bool)), this, SLOT(show3DView(bool)));
     connect(ui->actionAxial_View, SIGNAL(triggered(bool)), this, SLOT(showAxialView(bool)));
     connect(ui->actionCoronal_View, SIGNAL(triggered(bool)), this, SLOT(showCoronalView(bool)));
-    connect(ui->actionSagittal_View, SIGNAL(triggered(bool)), this, SLOT(showSagittalView(bool)));
+    connect(ui->actionArbitrary_View, SIGNAL(triggered(bool)), this, SLOT(showArbitraryView(bool)));
 
     // Panels
     connect(ui->actionDensity_Window, SIGNAL(triggered(bool)), this, SLOT(showDensityWindowPanel(bool)));
@@ -730,12 +843,20 @@ void MainWindow::connectActions()
     connect(ui->actionAxial_Slice, SIGNAL(triggered(bool)), this, SLOT(showAxialSlice(bool)));
     connect(ui->actionCoronal_Slice, SIGNAL(triggered(bool)), this, SLOT(showCoronalSlice(bool)));
     connect(ui->actionSagittal_Slice, SIGNAL(triggered(bool)), this, SLOT(showSagittalSlice(bool)));
+    connect(ui->actionArbitrary_Slice, SIGNAL(triggered(bool)), this, SLOT(showArbitrarySlice(bool)));
     connect(ui->actionVolume_Rendering, SIGNAL(triggered(bool)), this, SLOT(showMergedVR(bool)));
 
     // Workspace switching
     connect(ui->actionWorkspace3DView, SIGNAL(triggered()), this, SLOT(setUpWorkSpace3D()));
     connect(ui->actionWorkspaceTabs, SIGNAL(triggered()), this, SLOT(setUpWorkSpaceTabs()));
     connect(ui->actionWorkspaceGrid, SIGNAL(triggered()), this, SLOT(setUpWorkSpaceGrid()));
+    connect(ui->actionWorkspaceSlices, SIGNAL(triggered()), this, SLOT(setUpWorkSpaceSlices()));
+
+    connect(ui->actionFloating3D, SIGNAL(triggered(bool)), this, SLOT(makeFloating3D(bool)));
+    connect(ui->actionFloatingAxial, SIGNAL(triggered(bool)), this, SLOT(makeFloatingAxial(bool)));
+    connect(ui->actionFloatingCoronal, SIGNAL(triggered(bool)), this, SLOT(makeFloatingCoronal(bool)));
+    connect(ui->actionFloatingSagittal, SIGNAL(triggered(bool)), this, SLOT(makeFloatingSagittal(bool)));
+    connect(ui->actionFloatingArbitrary, SIGNAL(triggered(bool)), this, SLOT(makeFloatingArbitrary(bool)));
 
     connect(ui->actionLoad_User_Perspective, SIGNAL(triggered()), this, SLOT(loadUserPerspective()));
     connect(ui->actionSave_User_Perspective, SIGNAL(triggered()), this, SLOT(saveUserPerspective()));
@@ -862,6 +983,7 @@ void MainWindow::createToolBars()
     ui->viewsToolBar->addAction(ui->actionAxial_View);
     ui->viewsToolBar->addAction(ui->actionCoronal_View);
     ui->viewsToolBar->addAction(ui->actionSagittal_View);
+    ui->viewsToolBar->addAction(ui->actionArbitrary_View);
 
     ui->mouseToolBar->addAction(ui->actionDensity_Window_Adjusting);
     ui->mouseToolBar->addAction(ui->actionTrackball_Mode);
@@ -873,20 +995,21 @@ void MainWindow::createToolBars()
     ui->visibilityToolBar->addAction(ui->actionAxial_Slice);
     ui->visibilityToolBar->addAction(ui->actionCoronal_Slice);
     ui->visibilityToolBar->addAction(ui->actionSagittal_Slice);
+    ui->visibilityToolBar->addAction(ui->actionArbitrary_Slice);
 
-	QAction *pPanels = ui->panelsToolBar->addAction(QIcon(":/icons/page.png"),tr("Panels"),this, SLOT(showPanelsMenu()));
+	QAction *pPanels = ui->panelsToolBar->addAction(QIcon(":/svg/svg/page.svg"),tr("Panels"),this, SLOT(showPanelsMenu()));
 	pPanels->setToolTip(tr("Change panel visibility"));
     ui->panelsToolBar->addAction(ui->actionDensity_Window);
     ui->panelsToolBar->addAction(ui->actionOrtho_Slices_Panel);
     ui->panelsToolBar->addAction(ui->actionVolume_Rendering_Panel);
-    ui->panelsToolBar->addAction(ui->actionSegmentation_Panel);
 
     if (!m_segmentationPluginsLoaded)
     {
         ui->panelsToolBar->addAction(ui->actionModels_List_Panel);
+        ui->panelsToolBar->addAction(ui->actionSegmentation_Panel);
     }
     
-    QAction* pFullScreen = ui->appToolBar->addAction(QIcon(":/icons/resources/fullscreen.png"),tr("Fullscreen"));
+    QAction* pFullScreen = ui->appToolBar->addAction(QIcon(":/svg/svg/fullscreen.svg"),tr("Fullscreen"));
 	pFullScreen->setObjectName("actionFullScreen");
     pFullScreen->setCheckable(true);
     connect(pFullScreen,SIGNAL(triggered(bool)),this,SLOT(fullscreen(bool)));
@@ -897,46 +1020,526 @@ void MainWindow::workspacesEnabler()
     ui->actionWorkspace3DView->blockSignals(true);
     ui->actionWorkspaceGrid->blockSignals(true);
     ui->actionWorkspaceTabs->blockSignals(true);
+    ui->actionWorkspaceSlices->blockSignals(true);
     ui->actionWorkspace3DView->setChecked(Workspace3D==m_nLayoutType);
     ui->actionWorkspaceGrid->setChecked(WorkspaceGrid==m_nLayoutType);
     ui->actionWorkspaceTabs->setChecked(WorkspaceTabs==m_nLayoutType);
+    ui->actionWorkspaceSlices->setChecked(WorkspaceSlices==m_nLayoutType);
     ui->actionWorkspace3DView->blockSignals(false);
     ui->actionWorkspaceGrid->blockSignals(false);
     ui->actionWorkspaceTabs->blockSignals(false);
+    ui->actionWorkspaceSlices->blockSignals(false);
 }
 
 // setups windows, saves and loads visibility and positions of dock windows from QSettings
 void MainWindow::setUpWorkSpace3D()
 {
-    if (m_nLayoutType==Workspace3D) return;
+    if (m_nLayoutType == Workspace3D)
+    {
+        return;
+    }
+
+    saveFloatingWindowsGeometry();
+
+    makeWndFloating(View3D, false, false);
+    makeWndFloating(ViewXY, false, false);
+    makeWndFloating(ViewXZ, false, false);
+    makeWndFloating(ViewYZ, false, false);
+    makeWndFloating(ViewARB, false, false);
+
+    setUpWorkspace();
+
+    m_viewsToShow.clear();
+    m_viewsToShow.push_back(sWindowInfo(ViewXY, false, true, true));
+    m_viewsToShow.push_back(sWindowInfo(ViewXZ, false, true, true));
+    m_viewsToShow.push_back(sWindowInfo(ViewYZ, false, true, true));
+    m_viewsToShow.push_back(sWindowInfo(ViewARB, false, true, true));
+
     writeLayoutSettings(m_nLayoutType,true);
     m_nLayoutType=Workspace3D;
     setUpdatesEnabled(false); // prevent screen flicker
     setUpWorkspace();
     readLayoutSettings(true);
+    //loadFloatingWindowsGeometry();
     setUpdatesEnabled(true);
 }
 
 void MainWindow::setUpWorkSpaceTabs()
 {
-    if (m_nLayoutType==WorkspaceTabs) return;
+    if (m_nLayoutType == WorkspaceTabs)
+    {
+        return;
+    }
+
+    saveFloatingWindowsGeometry();
+
+    makeWndFloating(View3D, false, false);
+    makeWndFloating(ViewXY, false, false);
+    makeWndFloating(ViewXZ, false, false);
+    makeWndFloating(ViewYZ, false, false);
+    makeWndFloating(ViewARB, false, false);
+
+    setUpWorkspace();
+
+    m_viewsToShow.clear();
+    m_viewsToShow.push_back(sWindowInfo(View3D, false, true, true));
+    m_viewsToShow.push_back(sWindowInfo(ViewXY, false, true, true));
+    m_viewsToShow.push_back(sWindowInfo(ViewXZ, false, true, true));
+    m_viewsToShow.push_back(sWindowInfo(ViewYZ, false, true, true));
+    m_viewsToShow.push_back(sWindowInfo(ViewARB, false, true, true));
+
     writeLayoutSettings(m_nLayoutType,true);
     m_nLayoutType=WorkspaceTabs;
     setUpdatesEnabled(false); // prevent screen flicker
     setUpWorkspace();
     readLayoutSettings(true);
+    //loadFloatingWindowsGeometry();
     setUpdatesEnabled(true);
 }
 
 void MainWindow::setUpWorkSpaceGrid()
 {
-    if (m_nLayoutType==WorkspaceGrid) return;
+    if (m_nLayoutType == WorkspaceGrid)
+    {
+        return;
+    }
+
+    saveFloatingWindowsGeometry();
+
+    makeWndFloating(View3D, false, false);
+    makeWndFloating(ViewXY, false, false);
+    makeWndFloating(ViewXZ, false, false);
+    makeWndFloating(ViewYZ, false, false);
+    makeWndFloating(ViewARB, false, false);
+
+    setUpWorkspace();
+
+    m_viewsToShow.clear();
+    m_viewsToShow.push_back(sWindowInfo(ViewXY, false, true, true));
+    m_viewsToShow.push_back(sWindowInfo(View3D, false, true, true));
+    m_viewsToShow.push_back(sWindowInfo(ViewXZ, false, true, true));
+    m_viewsToShow.push_back(sWindowInfo(ViewYZ, false, true, true));
+
     writeLayoutSettings(m_nLayoutType,true);
     m_nLayoutType=WorkspaceGrid;
     setUpdatesEnabled(false); // prevent screen flicker
     setUpWorkspace();
     readLayoutSettings(true);
+    //loadFloatingWindowsGeometry();
     setUpdatesEnabled(true);
+}
+
+void MainWindow::setUpWorkSpaceSlices()
+{
+    if (m_nLayoutType == WorkspaceSlices)
+    {
+        return;
+    }
+
+    saveFloatingWindowsGeometry();
+
+    makeWndFloating(View3D, false, false);
+    makeWndFloating(ViewXY, false, false);
+    makeWndFloating(ViewXZ, false, false);
+    makeWndFloating(ViewYZ, false, false);
+    makeWndFloating(ViewARB, false, false);
+
+    setUpWorkspace();
+
+    m_viewsToShow.clear();
+    m_viewsToShow.push_back(sWindowInfo(ViewXY, false, true, true));
+    m_viewsToShow.push_back(sWindowInfo(ViewARB, false, true, true));
+    m_viewsToShow.push_back(sWindowInfo(ViewXZ, false, true, true));
+    m_viewsToShow.push_back(sWindowInfo(ViewYZ, false, true, true));
+
+    writeLayoutSettings(m_nLayoutType, true);
+    m_nLayoutType = WorkspaceSlices;
+    setUpdatesEnabled(false); // prevent screen flicker
+    setUpWorkspace();
+    readLayoutSettings(true);
+    //loadFloatingWindowsGeometry();
+    setUpdatesEnabled(true);
+}
+
+void MainWindow::makeFloating3D(bool bFloating)
+{
+    makeWndFloating(View3D, bFloating);
+}
+
+void MainWindow::makeFloatingAxial(bool bFloating)
+{
+    makeWndFloating(ViewXY, bFloating);
+}
+
+void MainWindow::makeFloatingCoronal(bool bFloating)
+{
+    makeWndFloating(ViewXZ, bFloating);
+}
+
+void MainWindow::makeFloatingSagittal(bool bFloating)
+{
+    makeWndFloating(ViewYZ, bFloating);
+}
+
+void MainWindow::makeFloatingArbitrary(bool bFloating)
+{
+    makeWndFloating(ViewARB, bFloating);
+}
+
+int MainWindow::getIndexOfWndInLayout(unsigned int wnd)
+{
+    int index = -1;
+    for (size_t i = 0; i < m_viewsToShow.size(); ++i)
+    {
+        if (m_viewsToShow[i].windowType == wnd)
+        {
+            index = i;
+            break;
+        }
+    }
+
+    return index;
+}
+
+void MainWindow::makeWndFloating(unsigned int wnd, bool bFloating, bool updateWorkspace)
+{
+    if (wnd < 0)
+    {
+        return;
+    }
+
+    switch (wnd)
+    {
+        case View3D:
+        {
+            ui->actionFloating3D->blockSignals(true);
+            ui->actionFloating3D->setChecked(bFloating);
+            ui->actionFloating3D->blockSignals(false);
+        }
+        break;
+        case ViewXY:
+        {
+            ui->actionFloatingAxial->blockSignals(true);
+            ui->actionFloatingAxial->setChecked(bFloating);
+            ui->actionFloatingAxial->blockSignals(false);
+        }
+        break;
+        case ViewXZ:
+        {
+            ui->actionFloatingCoronal->blockSignals(true);
+            ui->actionFloatingCoronal->setChecked(bFloating);
+            ui->actionFloatingCoronal->blockSignals(false);
+        }
+        break;
+        case ViewYZ:
+        {
+            ui->actionFloatingSagittal->blockSignals(true);
+            ui->actionFloatingSagittal->setChecked(bFloating);
+            ui->actionFloatingSagittal->blockSignals(false);
+        }
+        break;
+        case ViewARB:
+        default:
+        {
+            ui->actionFloatingArbitrary->blockSignals(true);
+            ui->actionFloatingArbitrary->setChecked(bFloating);
+            ui->actionFloatingArbitrary->blockSignals(false);
+        }
+        break;
+    }
+
+    saveFloatingWindowsGeometry();
+
+    int index = getIndexOfWndInLayout(wnd);
+
+    if (index >= 0 && index < m_viewsToShow.size())
+    {
+        if (m_viewsToShow[index].bShowSubstitute)
+        {
+            m_viewsToShow[index].windowType = wnd;
+            m_viewsToShow[index].bFloating = bFloating;
+            m_viewsToShow[index].bDirty = true;
+        }
+        else
+        {
+            m_viewsToShow.erase(m_viewsToShow.begin() + index);
+        }
+    }
+    else
+    {
+        m_viewsToShow.push_back(sWindowInfo(wnd, bFloating, false, true));
+    }
+
+    if (updateWorkspace)
+    {
+        setUpWorkspace();
+
+        loadFloatingWindowsGeometry();
+    }
+}
+
+void MainWindow::saveFloatingWindowsGeometry()
+{
+    std::vector<bool> floating;
+    for (size_t i = 0; i < m_wndViews.size(); ++i)
+    {
+        floating.push_back(false);
+    }
+
+    for (size_t i = 0; i < m_viewsToShow.size(); ++i)
+    {
+        if (m_viewsToShow[i].bFloating)
+        {
+            floating[m_viewsToShow[i].windowType] = true;
+        }
+    }
+
+    if (floating[View3D])
+    {
+        QRect geometry(50, 50, 700, 600);
+        bool maximized = false;
+        bool minimized = false;
+        QMainWindow* parent = qobject_cast<QMainWindow*>(m_wndViews[View3D]->parent());
+        if (parent)
+        {
+            geometry = parent->geometry();
+            maximized = parent->isMaximized();
+            minimized = parent->isMinimized();
+        }
+
+        QSettings settings;
+        settings.beginGroup("Floating3D");
+        settings.setValue("geometry", geometry);
+        settings.setValue("maximized", maximized);
+        settings.setValue("minimized", minimized);
+        settings.endGroup();
+    }
+
+    if (floating[ViewXY])
+    {
+        QRect geometry(50, 50, 700, 600);
+        bool maximized = false;
+        bool minimized = false;
+        QMainWindow* parent = qobject_cast<QMainWindow*>(m_wndViews[ViewXY]->parent());
+        if (parent)
+        {
+            geometry = parent->geometry();
+            maximized = parent->isMaximized();
+            minimized = parent->isMinimized();
+        }
+
+        QSettings settings;
+        settings.beginGroup("FloatingXY");
+        settings.setValue("geometry", geometry);
+        settings.setValue("maximized", maximized);
+        settings.setValue("minimized", minimized);
+        settings.endGroup();
+    }
+
+    if (floating[ViewXZ])
+    {
+        QRect geometry(50, 50, 700, 600);
+        bool maximized = false;
+        bool minimized = false;
+        QMainWindow* parent = qobject_cast<QMainWindow*>(m_wndViews[ViewXZ]->parent());
+        if (parent)
+        {
+            geometry = parent->geometry();
+            maximized = parent->isMaximized();
+            minimized = parent->isMinimized();
+        }
+
+        QSettings settings;
+        settings.beginGroup("FloatingXZ");
+        settings.setValue("geometry", geometry);
+        settings.setValue("maximized", maximized);
+        settings.setValue("minimized", minimized);
+        settings.endGroup();
+    }
+
+    if (floating[ViewYZ])
+    {
+        QRect geometry(50, 50, 700, 600);
+        bool maximized = false;
+        bool minimized = false;
+        QMainWindow* parent = qobject_cast<QMainWindow*>(m_wndViews[ViewYZ]->parent());
+        if (parent)
+        {
+            geometry = parent->geometry();
+            maximized = parent->isMaximized();
+            minimized = parent->isMinimized();
+
+        }
+        QSettings settings;
+        settings.beginGroup("FloatingYZ");
+        settings.setValue("geometry", geometry);
+        settings.setValue("maximized", maximized);
+        settings.setValue("minimized", minimized);
+        settings.endGroup();
+    }
+
+    if (floating[ViewARB])
+    {
+        QRect geometry(50, 50, 700, 600);
+        bool maximized = false;
+        bool minimized = false;
+        QMainWindow* parent = qobject_cast<QMainWindow*>(m_wndViews[ViewARB]->parent());
+        if (parent)
+        {
+            geometry = parent->geometry();
+            maximized = parent->isMaximized();
+            minimized = parent->isMinimized();
+
+        }
+        QSettings settings;
+        settings.beginGroup("FloatingARB");
+        settings.setValue("geometry", geometry);
+        settings.setValue("maximized", maximized);
+        settings.setValue("minimized", minimized);
+        settings.endGroup();
+    }
+}
+
+void MainWindow::loadFloatingWindowsGeometry()
+{
+    std::vector<bool> floating;
+    for (size_t i = 0; i < m_wndViews.size(); ++i)
+    {
+        floating.push_back(false);
+    }
+
+    for (size_t i = 0; i < m_viewsToShow.size(); ++i)
+    {
+        if (m_viewsToShow[i].bFloating)
+        {
+            floating[m_viewsToShow[i].windowType] = true;
+        }
+    }
+
+    if (floating[View3D])
+    {
+        QSettings settings;
+        settings.beginGroup("Floating3D");
+        QRect geometry = settings.value("geometry", QRect(50, 50, 700, 600)).toRect();
+        bool maximized = settings.value("maximized", false).toBool();
+        bool minimized = settings.value("minimized", false).toBool();
+        settings.endGroup();
+
+        QMainWindow* parent = qobject_cast<QMainWindow*>(m_wndViews[View3D]->parent());
+        if (parent)
+        {
+            parent->setGeometry(geometry);
+
+            if (maximized)
+            {
+                parent->showMaximized();
+            }
+            if (minimized)
+            {
+                parent->showMinimized();
+            }
+        }
+    }
+
+    if (floating[ViewXY])
+    {
+        QSettings settings;
+        settings.beginGroup("FloatingXY");
+        QRect geometry = settings.value("geometry", QRect(50, 50, 700, 600)).toRect();
+        bool maximized = settings.value("maximized", false).toBool();
+        bool minimized = settings.value("minimized", false).toBool();
+        settings.endGroup();
+
+        QMainWindow* parent = qobject_cast<QMainWindow*>(m_wndViews[ViewXY]->parent());
+        if (parent)
+        {
+            parent->setGeometry(geometry);
+
+            if (maximized)
+            {
+                parent->showMaximized();
+            }
+            if (minimized)
+            {
+                parent->showMinimized();
+            }
+        }
+    }
+
+    if (floating[ViewXZ])
+    {
+        QSettings settings;
+        settings.beginGroup("FloatingXZ");
+        QRect geometry = settings.value("geometry", QRect(50, 50, 700, 600)).toRect();
+        bool maximized = settings.value("maximized", false).toBool();
+        bool minimized = settings.value("minimized", false).toBool();
+        settings.endGroup();
+
+        QMainWindow* parent = qobject_cast<QMainWindow*>(m_wndViews[ViewXZ]->parent());
+        if (parent)
+        {
+            parent->setGeometry(geometry);
+
+            if (maximized)
+            {
+                parent->showMaximized();
+            }
+            if (minimized)
+            {
+                parent->showMinimized();
+            }
+        }
+    }
+
+    if (floating[ViewYZ])
+    {
+        QSettings settings;
+        settings.beginGroup("FloatingYZ");
+        QRect geometry = settings.value("geometry", QRect(50, 50, 700, 600)).toRect();
+        bool maximized = settings.value("maximized", false).toBool();
+        bool minimized = settings.value("minimized", false).toBool();
+        settings.endGroup();
+
+        QMainWindow* parent = qobject_cast<QMainWindow*>(m_wndViews[ViewYZ]->parent());
+        if (parent)
+        {
+            parent->setGeometry(geometry);
+
+            if (maximized)
+            {
+                parent->showMaximized();
+            }
+            if (minimized)
+            {
+                parent->showMinimized();
+            }
+        }
+    }
+
+    if (floating[ViewARB])
+    {
+        QSettings settings;
+        settings.beginGroup("FloatingARB");
+        QRect geometry = settings.value("geometry", QRect(50, 50, 700, 600)).toRect();
+        bool maximized = settings.value("maximized", false).toBool();
+        bool minimized = settings.value("minimized", false).toBool();
+        settings.endGroup();
+
+        QMainWindow* parent = qobject_cast<QMainWindow*>(m_wndViews[ViewARB]->parent());
+        if (parent)
+        {
+            parent->setGeometry(geometry);
+
+            if (maximized)
+            {
+                parent->showMaximized();
+            }
+            if (minimized)
+            {
+                parent->showMinimized();
+            }
+        }
+    }
 }
 
 static void setSliceDockWidgetFeatures(QDockWidget* widget)
@@ -944,6 +1547,8 @@ static void setSliceDockWidgetFeatures(QDockWidget* widget)
     Q_ASSERT(NULL!=widget);
     widget->setAllowedAreas(Qt::NoDockWidgetArea);
     widget->setFeatures(0);
+    //widget->setAllowedAreas(Qt::AllDockWidgetAreas);
+    //widget->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
     widget->setMinimumSize(200,150);
 }
 
@@ -951,15 +1556,24 @@ void MainWindow::removeViewsParentWidget(QWidget* view)
 {
     if (NULL==view) return;
     QDockWidget *pDockW = NULL;
+    QMainWindow* window = NULL;
     QWidget     *pParent = view->parentWidget();
     // find window parent which is a dock window
     while(NULL!=pParent)
     {
-        pDockW=qobject_cast<QDockWidget*>(pParent);
-        if (pDockW)
-            break;
+        if (pDockW == NULL)
+        {
+            pDockW = qobject_cast<QDockWidget*>(pParent);
+        }
+
+        if (window == NULL)
+        {
+            window = qobject_cast<QMainWindow*>(pParent);
+        }
+
         pParent=pParent->parentWidget();
     }
+
     if (NULL!=pDockW)
     {
         // undock dock widget and hide it        
@@ -972,96 +1586,474 @@ void MainWindow::removeViewsParentWidget(QWidget* view)
             pDockW->setTitleBarWidget(NULL);
             delete pCustomTitle;
         }
-        //if (m_realCentralWidget==pDockW)
-        //    m_realCentralWidget=NULL;
     }
+
+    if (NULL != window)
+    {
+        if (window->objectName() == "FloatingWindow")
+        {
+            window->setProperty("StayFloating", true);
+            window->close();
+        }
+    }
+
     Q_ASSERT(pDockW);
+}
+
+void MainWindow::removeDockWidgetAndWindow(QDockWidget* dockWidget)
+{
+    if (NULL == dockWidget)
+    {
+        return;
+    }
+
+    QMainWindow* window = NULL;
+    QWidget     *pParent = dockWidget->parentWidget();
+    // find window parent which is a dock window
+    while (NULL != pParent)
+    {
+        if (window == NULL)
+        {
+            window = qobject_cast<QMainWindow*>(pParent);
+        }
+
+        pParent = pParent->parentWidget();
+    }
+
+    if (NULL != dockWidget)
+    {
+        // undock dock widget and hide it        
+        removeDockWidget(dockWidget);
+        dockWidget->hide();
+        // remove any custom title bar
+        QWidget* pCustomTitle = dockWidget->titleBarWidget();
+        if (NULL != pCustomTitle)
+        {
+            dockWidget->setTitleBarWidget(NULL);
+            delete pCustomTitle;
+        }
+    }
+
+    if (NULL != window)
+    {
+        if (window->objectName() == "FloatingWindow")
+        {
+            window->setProperty("StayFloating", true);
+            window->close();
+        }
+    }
+
+    Q_ASSERT(dockWidget);
 }
 
 QDockWidget* MainWindow::getParentDockWidget(QWidget* view)
 {
     if (NULL==view) return nullptr;
-    QWidget* pParent=view->parentWidget();
-    if (NULL==pParent) return nullptr;
-    QDockWidget* pDockW=qobject_cast<QDockWidget*>(pParent);
+    QDockWidget *pDockW = NULL;
+    QWidget* pParent = view->parentWidget();
+    // find window parent which is a dock window
+    while (NULL != pParent)
+    {
+        pDockW = qobject_cast<QDockWidget*>(pParent);
+        if (pDockW)
+            break;
+        pParent = pParent->parentWidget();
+    }
     return pDockW;
+}
+
+static void removeQLayoutChildren(QLayout* layout)
+{
+    QLayoutItem* child;
+    while (layout->count() != 0)
+    {
+        child = layout->takeAt(0);
+        if (child->layout() != 0)
+        {
+            removeQLayoutChildren(child->layout());
+        }
+        else if (child->widget() != 0)
+        {
+            delete child->widget();
+        }
+
+        delete child;
+    }
+}
+
+CCustomDockWidgetTitle* MainWindow::createTitleBar(unsigned int wnd, unsigned int commonButton, bool showSlider)
+{
+    unsigned int sliderType = DWT_SLIDER_VR;
+
+    switch (wnd)
+    {
+    case ViewARB:
+    {
+        sliderType = DWT_SLIDER_ARB;
+    }
+    break;
+    case ViewXY:
+    {
+        sliderType = DWT_SLIDER_XY;
+    }
+    break;
+    case ViewXZ:
+    {
+        sliderType = DWT_SLIDER_XZ;
+    }
+    break;
+    case ViewYZ:
+    {
+        sliderType = DWT_SLIDER_YZ;
+    }
+    break;
+    case View3D:
+    default:
+    {
+        sliderType = DWT_SLIDER_VR;
+    }
+    break;
+    }
+
+    return new CCustomDockWidgetTitle(wnd, showSlider ? commonButton | sliderType : commonButton);
+}
+
+void MainWindow::showViewInWindow(int view, int window)
+{
+    if (view == window)
+    {
+        makeWndFloating(view, false);
+    }
+    else
+    {
+        // backup
+        std::vector<sWindowInfo> viewToShowBackup = m_viewsToShow;
+
+        saveFloatingWindowsGeometry();
+
+        /*makeWndFloating(View3D, false, false);
+        makeWndFloating(ViewXY, false, false);
+        makeWndFloating(ViewXZ, false, false);
+        makeWndFloating(ViewYZ, false, false);
+        makeWndFloating(ViewARB, false, false);*/
+
+        makeWndFloating(view, false, false);
+
+        setUpWorkspace();
+
+        m_viewsToShow.clear();
+
+        sWindowInfo infoView(-1, false, false, false);
+        sWindowInfo infoWindow(-1, false, false, false);
+
+        bool addReplacedView = true;
+        bool addViewWithoutSubstitute = false;
+
+        for (int i = 0; i < viewToShowBackup.size(); ++i)
+        {
+            if (viewToShowBackup[i].windowType == view)
+            {
+                infoView = viewToShowBackup[i];
+            }
+            else if (viewToShowBackup[i].windowType == window)
+            {
+                infoWindow = viewToShowBackup[i];
+            }
+        }
+
+        if (infoView.windowType == -1)
+        {
+            infoView.windowType = view;
+            infoView.bFloating = false;
+            infoView.bShowSubstitute = true;
+            infoView.bDirty = true;
+
+            if (infoWindow.bFloating)
+            {
+                addViewWithoutSubstitute = true;
+            }
+        }
+        else
+        {
+            if (!infoView.bShowSubstitute)
+            {
+                addReplacedView = false;
+
+                if (infoWindow.bFloating)
+                {
+                    addViewWithoutSubstitute = true;
+                }
+            }
+
+            infoView.bFloating = false;
+            infoView.bShowSubstitute = true;
+            infoView.bDirty = true;
+        }
+
+        /*if (infoWindow.windowType != -1)
+        {
+            if (infoWindow.bFloating)
+            {
+                infoWindow.bShowSubstitute = false;
+            }
+        }*/
+
+        for (int i = 0; i < viewToShowBackup.size(); ++i)
+        {
+            if (viewToShowBackup[i].windowType == view)
+            {
+                if (addReplacedView)
+                {
+                    m_viewsToShow.push_back(infoWindow);
+                }
+            }
+            else if (viewToShowBackup[i].windowType == window)
+            {
+                m_viewsToShow.push_back(infoView);
+            }
+            else
+            {
+                m_viewsToShow.push_back(viewToShowBackup[i]);
+            }
+        }
+
+        if (addViewWithoutSubstitute && infoWindow.bFloating)
+        {
+            infoWindow.bShowSubstitute = false;
+            m_viewsToShow.push_back(infoWindow);
+        }
+
+        //writeLayoutSettings(m_nLayoutType, true);
+        setUpdatesEnabled(false); // prevent screen flicker
+        setUpWorkspace();
+        //readLayoutSettings(true);
+        loadFloatingWindowsGeometry();
+        setUpdatesEnabled(true);
+    }
 }
 
 void MainWindow::setUpWorkspace()
 {
-    Q_ASSERT(NULL!=m_3DView);
-    Q_ASSERT(NULL!=m_OrthoXYSlice);
-    Q_ASSERT(NULL!=m_OrthoXZSlice);
-    Q_ASSERT(NULL!=m_OrthoYZSlice);
+    assert(m_wndViews.size() == m_wndViewsSubstitute.size());
+
+    bool bTimer = m_timer.isActive();
+
+    if (bTimer)
+    {
+        m_timer.stop();
+    }
+
+    QApplication::setOverrideCursor(QCursor(Qt::WaitCursor));
+
+    Q_ASSERT(NULL != m_3DView);
+    Q_ASSERT(NULL != m_OrthoXYSlice);
+    Q_ASSERT(NULL != m_OrthoXZSlice);
+    Q_ASSERT(NULL != m_OrthoYZSlice);
+    Q_ASSERT(NULL != m_ArbitrarySlice);
+
+    ui->actionFloating3D->setVisible(true);
 
     QWidget* oldCentralWidget = m_realCentralWidget;
 
     // remove/hide all existing windows
-    removeViewsParentWidget(m_3DView);
+    /*removeViewsParentWidget(m_3DView);
     removeViewsParentWidget(m_OrthoXYSlice);
     removeViewsParentWidget(m_OrthoXZSlice);
     removeViewsParentWidget(m_OrthoYZSlice);
+    removeViewsParentWidget(m_ArbitrarySlice);*/
+
+    std::vector<bool> viewVisible;
+
+    size_t wndCnt = m_wndViews.size();
+
+    for (size_t i = 0; i < wndCnt; ++i)
+    {
+        sWindowInfo info(i, false, false, false);
+        auto it = std::find(m_viewsToShow.begin(), m_viewsToShow.end(), info);
+        if (it != m_viewsToShow.end())
+        {
+            if (it->bDirty)
+            {
+                removeDockWidgetAndWindow(m_wndViews[i]);
+                m_wndViews[i]->setParent(0);
+                setSliceDockWidgetFeatures(m_wndViews[i]);
+            }
+        }
+        else
+        {
+            removeDockWidgetAndWindow(m_wndViews[i]);
+            m_wndViews[i]->setParent(0);
+            setSliceDockWidgetFeatures(m_wndViews[i]);
+        }
+
+        removeDockWidget(m_wndViewsSubstitute[i]);
+        setSliceDockWidgetFeatures(m_wndViewsSubstitute[i]);
+        viewVisible.push_back(false);
+        m_wndViewsSubstitute[i]->setParent(0);
+
+        QLayout* layout = m_wndViewsSubstitute[i]->widget()->layout();
+        removeQLayoutChildren(layout);
+    }
+
+    bool floating3DView = ui->actionFloating3D->isChecked();
+    bool floatingXYView = ui->actionFloatingAxial->isChecked();
+    bool floatingXZView = ui->actionFloatingCoronal->isChecked();
+    bool floatingYZView = ui->actionFloatingSagittal->isChecked();
+    bool floatingArbitraryView = ui->actionFloatingArbitrary->isChecked();
+
+    if (m_realCentralWidget)
+    {
+        m_centralWidget->layout()->removeWidget(m_realCentralWidget);
+    }
+
+    if (oldCentralWidget && oldCentralWidget != m_wndViews[View3D])
+    {
+        delete oldCentralWidget;
+    }
+
     // recreate dock widgets for all views
     switch(m_nLayoutType)
     {
-    case WorkspaceTabs: {
+    case WorkspaceTabs:
+        {
             QTabWidget* newCenter = new QTabWidget();
-            setSliceDockWidgetFeatures(&m_wnd3DView);
             newCenter->setTabPosition(QTabWidget::South);
-            newCenter->setIconSize(QSize(16,16));
-            newCenter->addTab(&m_wnd3DView,m_wnd3DView.windowTitle());
+            newCenter->setIconSize(QSize(16, 16));
 
-            setSliceDockWidgetFeatures(&m_wndXYView);
-            newCenter->addTab(&m_wndXYView,m_wndXYView.windowTitle());
+            for (size_t i = 0; i < m_viewsToShow.size(); ++i)
+            {
+                const unsigned int viewIndex = m_viewsToShow[i].windowType;
+                const bool viewFloating = m_viewsToShow[i].bFloating;
+                const bool showSubstitute = m_viewsToShow[i].bShowSubstitute;
+                const bool dirty = m_viewsToShow[i].bDirty;
 
-            setSliceDockWidgetFeatures(&m_wndXZView);
-            newCenter->addTab(&m_wndXZView,m_wndXZView.windowTitle());
+                if (viewFloating)
+                {
+                    if (dirty)
+                    {
+                        m_wndViews[viewIndex]->setAllowedAreas(Qt::AllDockWidgetAreas);
 
-            setSliceDockWidgetFeatures(&m_wndYZView);
-            newCenter->addTab(&m_wndYZView,m_wndYZView.windowTitle());
+                        CFloatingMainWindow* w = new CFloatingMainWindow(viewIndex, viewIndex != View3D);
+                        w->setObjectName("FloatingWindow");
+                        w->addDockWidget(Qt::DockWidgetArea::TopDockWidgetArea, m_wndViews[viewIndex]);
+                        m_wndViews[viewIndex]->setParent(w);
+                        m_wndViews[viewIndex]->show();
+                        w->show();
 
-            m_wnd3DView.setTitleBarWidget(new CCustomDockWidgetTitle(DWT_BUTTONS_NONE|DWT_SLIDER_VR));
-            m_wndXYView.setTitleBarWidget(new CCustomDockWidgetTitle(DWT_BUTTONS_NONE|DWT_SLIDER_XY));
-            m_wndXZView.setTitleBarWidget(new CCustomDockWidgetTitle(DWT_BUTTONS_NONE|DWT_SLIDER_XZ));
-            m_wndYZView.setTitleBarWidget(new CCustomDockWidgetTitle(DWT_BUTTONS_NONE|DWT_SLIDER_YZ));
+                        CCustomDockWidgetTitle* title = createTitleBar(viewIndex);
+                        title->setPinned(false);
+                        m_wndViews[viewIndex]->setTitleBarWidget(title);
+                    }
 
-            //setCentralWidget(newCenter);
-            if (m_realCentralWidget)
-                m_centralWidget->layout()->removeWidget(m_realCentralWidget);
+                    m_viewsToShow[i].bDirty = false;
+
+                    if (showSubstitute)
+                    {
+                        viewVisible[viewIndex] = true;
+
+                        CCustomDockWidgetTitle* title = createTitleBar(viewIndex, DWT_BUTTONS_VIEW, false);
+                        m_wndViewsSubstitute[viewIndex]->setTitleBarWidget(title);
+
+                        newCenter->addTab(m_wndViewsSubstitute[viewIndex], m_wndViewsSubstitute[viewIndex]->windowTitle());
+                    }
+                }
+                else
+                {
+                    viewVisible[viewIndex] = true;
+
+                    newCenter->addTab(m_wndViews[viewIndex], m_wndViews[viewIndex]->windowTitle());
+
+                    CCustomDockWidgetTitle* title = createTitleBar(viewIndex, DWT_BUTTONS_PIN | DWT_BUTTONS_VIEW);
+                    title->setPinned(true);
+                    m_wndViews[viewIndex]->setTitleBarWidget(title);
+                }
+            }
+
             m_centralWidget->layout()->addWidget(newCenter);
-            m_realCentralWidget=newCenter;
+            m_realCentralWidget = newCenter;
         }
         break;
     case WorkspaceGrid:
+    case WorkspaceSlices:
         {
+            assert(m_viewsToShow.size() >= 4);
+
             QSplitter* vertical = new QSplitter(Qt::Vertical);
-            CRapedSplitter* horizontalTop = new CRapedSplitter(Qt::Horizontal);
-            CRapedSplitter* horizontalBottom = new CRapedSplitter(Qt::Horizontal);
-            //horizontalTop->setOpaqueResize(false);
+            CSyncedSplitter* horizontalTop = new CSyncedSplitter(Qt::Horizontal);
+            CSyncedSplitter* horizontalBottom = new CSyncedSplitter(Qt::Horizontal);
 
-            setSliceDockWidgetFeatures(&m_wndXYView);
-            horizontalTop->addWidget(&m_wndXYView);
-            m_wndXYView.show();
+            for (size_t i = 0; i < m_viewsToShow.size(); ++i)
+            {
+                const unsigned int viewIndex = m_viewsToShow[i].windowType;
+                const bool viewFloating = m_viewsToShow[i].bFloating;
+                const bool showSubstitute = m_viewsToShow[i].bShowSubstitute;
+                const bool dirty = m_viewsToShow[i].bDirty;
 
-            setSliceDockWidgetFeatures(&m_wndXZView);
-            horizontalBottom->addWidget(&m_wndXZView);
-            m_wndXZView.show();
+                if (viewFloating)
+                {
+                    if (dirty)
+                    {
+                        m_wndViews[viewIndex]->setAllowedAreas(Qt::AllDockWidgetAreas);
 
-            setSliceDockWidgetFeatures(&m_wndYZView);
-            horizontalBottom->addWidget(&m_wndYZView);
-            m_wndYZView.show();
+                        CFloatingMainWindow* w = new CFloatingMainWindow(viewIndex, viewIndex != View3D);
+                        w->setObjectName("FloatingWindow");
+                        w->addDockWidget(Qt::DockWidgetArea::TopDockWidgetArea, m_wndViews[viewIndex]);
+                        m_wndViews[viewIndex]->setParent(w);
+                        m_wndViews[viewIndex]->show();
+                        w->show();
 
-            setSliceDockWidgetFeatures(&m_wnd3DView);
-            horizontalTop->addWidget(&m_wnd3DView);
-            m_wnd3DView.show();
+                        CCustomDockWidgetTitle* title = createTitleBar(viewIndex);
+                        title->setPinned(false);
+                        m_wndViews[viewIndex]->setTitleBarWidget(title);
 
-            m_wndXYView.setTitleBarWidget(new CCustomDockWidgetTitle(DWT_BUTTONS_MAXIMIZE|DWT_SLIDER_XY));
-            m_wndXZView.setTitleBarWidget(new CCustomDockWidgetTitle(DWT_BUTTONS_MAXIMIZE|DWT_SLIDER_XZ));
-            m_wndYZView.setTitleBarWidget(new CCustomDockWidgetTitle(DWT_BUTTONS_MAXIMIZE|DWT_SLIDER_YZ));
-            m_wnd3DView.setTitleBarWidget(new CCustomDockWidgetTitle(DWT_BUTTONS_MAXIMIZE|DWT_SLIDER_VR));
+                        m_viewsToShow[i].bDirty = false;
+                    }
 
-            horizontalTop->setStretchFactor(0,1);
-            horizontalTop->setStretchFactor(1,1);
+                    if (showSubstitute)
+                    {
+                        if (i < 2)
+                        {
+                            viewVisible[viewIndex] = true;
+                            horizontalTop->addWidget(m_wndViewsSubstitute[viewIndex]);
+                        }
+                        else if (i < 4)
+                        {
+                            viewVisible[viewIndex] = true;
+                            horizontalBottom->addWidget(m_wndViewsSubstitute[viewIndex]);
+                        }
+
+
+                        CCustomDockWidgetTitle* title = createTitleBar(viewIndex, DWT_BUTTONS_VIEW, false);
+                        m_wndViewsSubstitute[viewIndex]->setTitleBarWidget(title);
+
+                        m_wndViewsSubstitute[viewIndex]->show();
+                    }
+                }
+                else
+                {
+                    viewVisible[viewIndex] = true;
+
+                    if (i < 2)
+                    {
+                        horizontalTop->addWidget(m_wndViews[viewIndex]);
+                    }
+                    else
+                    {
+                        horizontalBottom->addWidget(m_wndViews[viewIndex]);
+                    }
+
+                    m_wndViews[viewIndex]->show();
+
+                    CCustomDockWidgetTitle* title = createTitleBar(viewIndex, DWT_BUTTONS_MAXIMIZE | DWT_BUTTONS_PIN | DWT_BUTTONS_VIEW);
+                    title->setPinned(true);
+                    m_wndViews[viewIndex]->setTitleBarWidget(title);
+                }
+            }
+
+            horizontalTop->setStretchFactor(0, 1);
+            horizontalTop->setStretchFactor(1, 1);
+            horizontalBottom->setStretchFactor(0, 1);
+            horizontalBottom->setStretchFactor(1, 1);
             vertical->addWidget(horizontalTop);
             vertical->addWidget(horizontalBottom);
             QList<int> sizes;
@@ -1069,58 +2061,583 @@ void MainWindow::setUpWorkspace()
             sizes.append(1);
             horizontalTop->setSizes(sizes);
             horizontalBottom->setSizes(sizes);
-            vertical->setStretchFactor(0,5);
-            vertical->setStretchFactor(1,5);
+            vertical->setStretchFactor(0, 5);
+            vertical->setStretchFactor(1, 5);
 
-            if (m_realCentralWidget)
-                m_centralWidget->layout()->removeWidget(m_realCentralWidget);
             m_centralWidget->layout()->addWidget(vertical);
-            m_realCentralWidget=vertical;
+            m_realCentralWidget = vertical;
 
-            connect(horizontalTop,SIGNAL(splitterMoved(int,int)),this,SLOT(topSplitterMoved(int,int)));
-            connect(horizontalBottom,SIGNAL(splitterMoved(int,int)),this,SLOT(bottomSplitterMoved(int,int)));
+            connect(horizontalTop, SIGNAL(splitterMoved(int, int)), this, SLOT(topSplitterMoved(int, int)));
+            connect(horizontalBottom, SIGNAL(splitterMoved(int, int)), this, SLOT(bottomSplitterMoved(int, int)));
+
+            vertical->handle(1)->setAttribute(Qt::WA_Hover);
+            horizontalTop->handle(1)->setAttribute(Qt::WA_Hover);
+            horizontalBottom->handle(1)->setAttribute(Qt::WA_Hover);
+            
         }
         break;
     case Workspace3D:
     default:
         {
-            setSliceDockWidgetFeatures(&m_wnd3DView);            
-            if (m_realCentralWidget)
-                m_centralWidget->layout()->removeWidget(m_realCentralWidget);
-            m_centralWidget->layout()->addWidget(&m_wnd3DView);
-            m_realCentralWidget=&m_wnd3DView;
-            m_wnd3DView.show();
+            ui->actionFloating3D->setVisible(false);
 
-            m_wndXYView.setAllowedAreas(Qt::AllDockWidgetAreas);
-            m_wndXYView.setFeatures(QDockWidget::DockWidgetClosable|QDockWidget::DockWidgetMovable );
-            addDockWidget(Qt::LeftDockWidgetArea, &m_wndXYView);
-            m_wndXYView.show();
+            {
+                viewVisible[View3D] = true;
 
-            m_wndXZView.setAllowedAreas(Qt::AllDockWidgetAreas);
-            m_wndXZView.setFeatures(QDockWidget::DockWidgetClosable|QDockWidget::DockWidgetMovable );
-            addDockWidget(Qt::LeftDockWidgetArea, &m_wndXZView);
-            m_wndXZView.show();
+                /*if (floating3DView)
+                {
+                    m_wndViews[View3D]->setAllowedAreas(Qt::AllDockWidgetAreas);
 
-            m_wndYZView.setAllowedAreas(Qt::AllDockWidgetAreas);
-            m_wndYZView.setFeatures(QDockWidget::DockWidgetClosable|QDockWidget::DockWidgetMovable );
-            addDockWidget(Qt::LeftDockWidgetArea, &m_wndYZView);
-            m_wndYZView.show();
+                    m_wndViewsSubstitute[View3D]->setAllowedAreas(Qt::AllDockWidgetAreas);
+                    m_wndViewsSubstitute[View3D]->setFeatures(QDockWidget::DockWidgetMovable);
 
-            m_wndYZView.setTitleBarWidget(new CCustomDockWidgetTitle(DWT_BUTTONS_CLOSE|DWT_SLIDER_YZ));
-            m_wndXYView.setTitleBarWidget(new CCustomDockWidgetTitle(DWT_BUTTONS_CLOSE|DWT_SLIDER_XY));
-            m_wndXZView.setTitleBarWidget(new CCustomDockWidgetTitle(DWT_BUTTONS_CLOSE|DWT_SLIDER_XZ));
-            m_wnd3DView.setTitleBarWidget(new CCustomDockWidgetTitle(DWT_BUTTONS_NONE|DWT_SLIDER_VR));
+                    m_centralWidget->layout()->addWidget(m_wndViewsSubstitute[View3D]);
+                    m_realCentralWidget = m_wndViewsSubstitute[View3D];
+                    m_wndViewsSubstitute[View3D]->show();
+
+                    CFloatingMainWindow* w = new CFloatingMainWindow(View3D);
+                    w->setObjectName("FloatingWindow");
+                    w->addDockWidget(Qt::DockWidgetArea::TopDockWidgetArea, m_wndViews[View3D]);
+                    m_wndViews[View3D]->setParent(w);
+                    m_wndViews[View3D]->show();
+                    w->show();
+
+                    CCustomDockWidgetTitle* title = createTitleBar(View3D);
+                    title->setPinned(true);
+                    m_wndViews[View3D]->setTitleBarWidget(title);
+                }
+                else*/
+                {
+                    m_wndViews[View3D]->setAllowedAreas(Qt::AllDockWidgetAreas);
+                    m_wndViews[View3D]->setFeatures(QDockWidget::DockWidgetMovable);
+
+                    m_centralWidget->layout()->addWidget(m_wndViews[View3D]);
+                    m_realCentralWidget = m_wndViews[View3D];
+                    m_wndViews[View3D]->show();
+
+                    CCustomDockWidgetTitle* title = createTitleBar(View3D, 0);
+                    title->setPinned(true);
+                    m_wndViews[View3D]->setTitleBarWidget(title);
+                }
+            }
+
+            for (size_t i = 0; i < m_viewsToShow.size(); ++i)
+            {
+                const unsigned int viewIndex = m_viewsToShow[i].windowType;
+                const bool viewFloating = m_viewsToShow[i].bFloating;
+                const bool viewSubstitute = m_viewsToShow[i].bShowSubstitute;
+                const bool dirty = m_viewsToShow[i].bDirty;
+
+                if (viewFloating)
+                {
+                    m_wndViews[viewIndex]->setAllowedAreas(Qt::AllDockWidgetAreas);
+
+                    if (viewSubstitute)
+                    {
+                        viewVisible[viewIndex] = true;
+
+                        m_wndViewsSubstitute[viewIndex]->setAllowedAreas(Qt::AllDockWidgetAreas);
+                        m_wndViewsSubstitute[viewIndex]->setFeatures(QDockWidget::DockWidgetMovable);
+
+                        CCustomDockWidgetTitle* title = createTitleBar(viewIndex, DWT_BUTTONS_VIEW, false);
+                        title->removeActionFromViewButton(View3D);
+                        m_wndViewsSubstitute[viewIndex]->setTitleBarWidget(title);
+
+                        addDockWidget(Qt::LeftDockWidgetArea, m_wndViewsSubstitute[viewIndex]);
+                        m_wndViewsSubstitute[viewIndex]->show();
+                    }
+
+                    if (dirty)
+                    {
+                        CFloatingMainWindow* w = new CFloatingMainWindow(viewIndex, viewIndex != View3D);
+                        w->setObjectName("FloatingWindow");
+                        w->addDockWidget(Qt::DockWidgetArea::TopDockWidgetArea, m_wndViews[viewIndex]);
+                        m_wndViews[viewIndex]->setParent(w);
+                        m_wndViews[viewIndex]->show();
+                        w->show();
+
+                        CCustomDockWidgetTitle* title = createTitleBar(viewIndex);
+                        title->setPinned(false);
+                        m_wndViews[viewIndex]->setTitleBarWidget(title);
+
+                        m_viewsToShow[i].bDirty = false;
+                    }
+                }
+                else
+                {
+                    viewVisible[viewIndex] = true;
+
+                    m_wndViews[viewIndex]->setAllowedAreas(Qt::AllDockWidgetAreas);
+                    m_wndViews[viewIndex]->setFeatures(QDockWidget::DockWidgetMovable);
+
+                    addDockWidget(Qt::LeftDockWidgetArea, m_wndViews[viewIndex]);
+                    m_wndViews[viewIndex]->show();
+
+                    CCustomDockWidgetTitle* title = createTitleBar(viewIndex, DWT_BUTTONS_PIN | DWT_BUTTONS_VIEW);
+                    title->setPinned(true);
+                    title->removeActionFromViewButton(View3D);
+                    m_wndViews[viewIndex]->setTitleBarWidget(title);
+                }
+            }
         }
         break;
     }
 
-    // delete any previous parent in center area
-    if (oldCentralWidget!=&m_wnd3DView)
-        delete oldCentralWidget;
+    /*if (floating3DView)
+    {
+        QLayout* layout = m_wndViewsSubstitute[View3D]->widget()->layout();
+        removeQLayoutChildren(layout);
+
+        QVBoxLayout* vbLayout = qobject_cast<QVBoxLayout*>(layout);
+        vbLayout->setAlignment(Qt::AlignCenter);
+        if (NULL != vbLayout)
+        {
+            QPushButton* show3D = new QPushButton();
+            show3D->setText("Show 3D View");
+            show3D->setIcon(QIcon(":/svg/svg/icon3d.svg"));
+            show3D->setIconSize(QSize(34, 34));
+            show3D->setProperty("View", View3D);
+            show3D->setProperty("Parent", View3D);
+            show3D->setMinimumHeight(50);
+            show3D->setMinimumWidth(150);
+            QObject::connect(show3D, SIGNAL(clicked()), this, SLOT(showSelectedView()));
+
+            vbLayout->addWidget(show3D);
+
+            if (!viewVisible[ViewXY])
+            {
+                QPushButton* showXY = new QPushButton();
+                showXY->setText("Show Axial View");
+                showXY->setIcon(QIcon(":/svg/svg/iconxy.svg"));
+                showXY->setIconSize(QSize(34, 34));
+                showXY->setProperty("View", ViewXY);
+                showXY->setProperty("Parent", View3D);
+                showXY->setMinimumHeight(50);
+                QObject::connect(showXY, SIGNAL(clicked()), this, SLOT(showSelectedView()));
+
+                vbLayout->addWidget(showXY);
+            }
+
+            if (!viewVisible[ViewXZ])
+            {
+                QPushButton* showXZ = new QPushButton();
+                showXZ->setText("Show Coronal View");
+                showXZ->setIcon(QIcon(":/svg/svg/iconxz.svg"));
+                showXZ->setIconSize(QSize(34, 34));
+                showXZ->setProperty("View", ViewXZ);
+                showXZ->setProperty("Parent", View3D);
+                showXZ->setMinimumHeight(50);
+                QObject::connect(showXZ, SIGNAL(clicked()), this, SLOT(showSelectedView()));
+
+                vbLayout->addWidget(showXZ);
+            }
+
+            if (!viewVisible[ViewYZ])
+            {
+                QPushButton* showYZ = new QPushButton();
+                showYZ->setText("Show Sagittal View");
+                showYZ->setIcon(QIcon(":/svg/svg/iconyz.svg"));
+                showYZ->setIconSize(QSize(34, 34));
+                showYZ->setProperty("View", ViewYZ);
+                showYZ->setProperty("Parent", View3D);
+                showYZ->setMinimumHeight(50);
+                QObject::connect(showYZ, SIGNAL(clicked()), this, SLOT(showSelectedView()));
+
+                vbLayout->addWidget(showYZ);
+            }
+
+            if (!viewVisible[ViewARB])
+            {
+                QPushButton* showArbitrary = new QPushButton();
+                showArbitrary->setText("Show Arbitrary View");
+                showArbitrary->setIcon(QIcon(":/svg/svg/iconarb.svg"));
+                showArbitrary->setIconSize(QSize(34, 34));
+                showArbitrary->setProperty("View", ViewARB);
+                showArbitrary->setProperty("Parent", View3D);
+                showArbitrary->setMinimumHeight(50);
+                QObject::connect(showArbitrary, SIGNAL(clicked()), this, SLOT(showSelectedView()));
+
+                vbLayout->addWidget(showArbitrary);
+            }
+        }
+    }
+
+    if (floatingXYView)
+    {
+        QLayout* layout = m_wndViewsSubstitute[ViewXY]->widget()->layout();
+        removeQLayoutChildren(layout);
+
+        QVBoxLayout* vbLayout = qobject_cast<QVBoxLayout*>(layout);
+        vbLayout->setAlignment(Qt::AlignCenter);
+        if (NULL != vbLayout)
+        {
+            QPushButton* showXY = new QPushButton();
+            showXY->setText("Show Axial View");
+            showXY->setIcon(QIcon(":/svg/svg/iconxy.svg"));
+            showXY->setIconSize(QSize(34, 34));
+            showXY->setProperty("View", ViewXY);
+            showXY->setProperty("Parent", ViewXY);
+            showXY->setMinimumHeight(50);
+            showXY->setMinimumWidth(150);
+            QObject::connect(showXY, SIGNAL(clicked()), this, SLOT(showSelectedView()));
+
+            vbLayout->addWidget(showXY);
+        }
+
+        if (!viewVisible[View3D])
+        {
+            QPushButton* show3D = new QPushButton();
+            show3D->setText("Show 3D View");
+            show3D->setIcon(QIcon(":/svg/svg/icon3d.svg"));
+            show3D->setIconSize(QSize(34, 34));
+            show3D->setProperty("View", View3D);
+            show3D->setProperty("Parent", ViewXY);
+            show3D->setMinimumHeight(50);
+            QObject::connect(show3D, SIGNAL(clicked()), this, SLOT(showSelectedView()));
+
+            vbLayout->addWidget(show3D);
+        }
+
+        if (!viewVisible[ViewXZ])
+        {
+            QPushButton* showXZ = new QPushButton();
+            showXZ->setText("Show Coronal View");
+            showXZ->setIcon(QIcon(":/svg/svg/iconxz.svg"));
+            showXZ->setIconSize(QSize(34, 34));
+            showXZ->setProperty("View", ViewXZ);
+            showXZ->setProperty("Parent", ViewXY);
+            showXZ->setMinimumHeight(50);
+            QObject::connect(showXZ, SIGNAL(clicked()), this, SLOT(showSelectedView()));
+
+            vbLayout->addWidget(showXZ);
+        }
+
+        if (!viewVisible[ViewYZ])
+        {
+            QPushButton* showYZ = new QPushButton();
+            showYZ->setText("Show Sagittal View");
+            showYZ->setIcon(QIcon(":/svg/svg/iconyz.svg"));
+            showYZ->setIconSize(QSize(34, 34));
+            showYZ->setProperty("View", ViewYZ);
+            showYZ->setProperty("Parent", ViewXY);
+            showYZ->setMinimumHeight(50);
+            QObject::connect(showYZ, SIGNAL(clicked()), this, SLOT(showSelectedView()));
+
+            vbLayout->addWidget(showYZ);
+        }
+
+        if (!viewVisible[ViewARB])
+        {
+            QPushButton* showArbitrary = new QPushButton();
+            showArbitrary->setText("Show Arbitrary View");
+            showArbitrary->setIcon(QIcon(":/svg/svg/iconarb.svg"));
+            showArbitrary->setIconSize(QSize(34, 34));
+            showArbitrary->setProperty("View", ViewARB);
+            showArbitrary->setProperty("Parent", ViewXY);
+            showArbitrary->setMinimumHeight(50);
+            QObject::connect(showArbitrary, SIGNAL(clicked()), this, SLOT(showSelectedView()));
+
+            vbLayout->addWidget(showArbitrary);
+        }
+    }
+
+    if (floatingXZView)
+    {
+        QLayout* layout = m_wndViewsSubstitute[ViewXZ]->widget()->layout();
+        removeQLayoutChildren(layout);
+
+        QVBoxLayout* vbLayout = qobject_cast<QVBoxLayout*>(layout);
+        vbLayout->setAlignment(Qt::AlignCenter);
+        if (NULL != vbLayout)
+        {
+            QPushButton* showXZ = new QPushButton();
+            showXZ->setText("Show Coronal View");
+            showXZ->setIcon(QIcon(":/svg/svg/iconxz.svg"));
+            showXZ->setIconSize(QSize(34, 34));
+            showXZ->setProperty("View", ViewXZ);
+            showXZ->setProperty("Parent", ViewXZ);
+            showXZ->setMinimumHeight(50);
+            showXZ->setMinimumWidth(150);
+            QObject::connect(showXZ, SIGNAL(clicked()), this, SLOT(showSelectedView()));
+
+            vbLayout->addWidget(showXZ);
+        }
+
+        if (!viewVisible[View3D])
+        {
+            QPushButton* show3D = new QPushButton();
+            show3D->setText("Show 3D View");
+            show3D->setIcon(QIcon(":/svg/svg/icon3d.svg"));
+            show3D->setIconSize(QSize(34, 34));
+            show3D->setProperty("View", View3D);
+            show3D->setProperty("Parent", ViewXZ);
+            show3D->setMinimumHeight(50);
+            QObject::connect(show3D, SIGNAL(clicked()), this, SLOT(showSelectedView()));
+
+            vbLayout->addWidget(show3D);
+        }
+
+        if (!viewVisible[ViewXY])
+        {
+            QPushButton* showXY = new QPushButton();
+            showXY->setText("Show Axial View");
+            showXY->setIcon(QIcon(":/svg/svg/iconxy.svg"));
+            showXY->setIconSize(QSize(34, 34));
+            showXY->setProperty("View", ViewXY);
+            showXY->setProperty("Parent", ViewXZ);
+            showXY->setMinimumHeight(50);
+            QObject::connect(showXY, SIGNAL(clicked()), this, SLOT(showSelectedView()));
+
+            vbLayout->addWidget(showXY);
+        }
+
+        if (!viewVisible[ViewYZ])
+        {
+            QPushButton* showYZ = new QPushButton();
+            showYZ->setText("Show Sagittal View");
+            showYZ->setIcon(QIcon(":/svg/svg/iconyz.svg"));
+            showYZ->setIconSize(QSize(34, 34));
+            showYZ->setProperty("View", ViewYZ);
+            showYZ->setProperty("Parent", ViewXZ);
+            showYZ->setMinimumHeight(50);
+            QObject::connect(showYZ, SIGNAL(clicked()), this, SLOT(showSelectedView()));
+
+            vbLayout->addWidget(showYZ);
+        }
+
+        if (!viewVisible[ViewARB])
+        {
+            QPushButton* showArbitrary = new QPushButton();
+            showArbitrary->setText("Show Arbitrary View");
+            showArbitrary->setIcon(QIcon(":/svg/svg/iconarb.svg"));
+            showArbitrary->setIconSize(QSize(34, 34));
+            showArbitrary->setProperty("View", ViewARB);
+            showArbitrary->setProperty("Parent", ViewXZ);
+            showArbitrary->setMinimumHeight(50);
+            QObject::connect(showArbitrary, SIGNAL(clicked()), this, SLOT(showSelectedView()));
+
+            vbLayout->addWidget(showArbitrary);
+        }
+    }
+
+    if (floatingYZView)
+    {
+        QLayout* layout = m_wndViewsSubstitute[ViewYZ]->widget()->layout();
+        removeQLayoutChildren(layout);
+
+        QVBoxLayout* vbLayout = qobject_cast<QVBoxLayout*>(layout);
+        vbLayout->setAlignment(Qt::AlignCenter);
+        if (NULL != vbLayout)
+        {
+            QPushButton* showYZ = new QPushButton();
+            showYZ->setText("Show Sagittal View");
+            showYZ->setIcon(QIcon(":/svg/svg/iconyz.svg"));
+            showYZ->setIconSize(QSize(34, 34));
+            showYZ->setProperty("View", ViewYZ);
+            showYZ->setProperty("Parent", ViewYZ);
+            showYZ->setMinimumHeight(50);
+            showYZ->setMinimumWidth(150);
+            QObject::connect(showYZ, SIGNAL(clicked()), this, SLOT(showSelectedView()));
+
+            vbLayout->addWidget(showYZ);
+        }
+
+        if (!viewVisible[View3D])
+        {
+            QPushButton* show3D = new QPushButton();
+            show3D->setText("Show 3D View");
+            show3D->setIcon(QIcon(":/svg/svg/icon3d.svg"));
+            show3D->setIconSize(QSize(34, 34));
+            show3D->setProperty("View", View3D);
+            show3D->setProperty("Parent", ViewYZ);
+            show3D->setMinimumHeight(50);
+            QObject::connect(show3D, SIGNAL(clicked()), this, SLOT(showSelectedView()));
+
+            vbLayout->addWidget(show3D);
+        }
+
+        if (!viewVisible[ViewXY])
+        {
+            QPushButton* showXY = new QPushButton();
+            showXY->setText("Show Axial View");
+            showXY->setIcon(QIcon(":/svg/svg/iconxy.svg"));
+            showXY->setIconSize(QSize(34, 34));
+            showXY->setProperty("View", ViewXY);
+            showXY->setProperty("Parent", ViewYZ);
+            showXY->setMinimumHeight(50);
+            QObject::connect(showXY, SIGNAL(clicked()), this, SLOT(showSelectedView()));
+
+            vbLayout->addWidget(showXY);
+        }
+
+        if (!viewVisible[ViewXZ])
+        {
+            QPushButton* showXZ = new QPushButton();
+            showXZ->setText("Show Coronal View");
+            showXZ->setIcon(QIcon(":/svg/svg/iconxz.svg"));
+            showXZ->setIconSize(QSize(34, 34));
+            showXZ->setProperty("View", ViewXZ);
+            showXZ->setProperty("Parent", ViewYZ);
+            showXZ->setMinimumHeight(50);
+            QObject::connect(showXZ, SIGNAL(clicked()), this, SLOT(showSelectedView()));
+
+            vbLayout->addWidget(showXZ);
+        }
+
+        if (!viewVisible[ViewARB])
+        {
+            QPushButton* showArbitrary = new QPushButton();
+            showArbitrary->setText("Show Arbitrary View");
+            showArbitrary->setIcon(QIcon(":/svg/svg/iconarb.svg"));
+            showArbitrary->setIconSize(QSize(34, 34));
+            showArbitrary->setProperty("View", ViewARB);
+            showArbitrary->setProperty("Parent", ViewYZ);
+            showArbitrary->setMinimumHeight(50);
+            QObject::connect(showArbitrary, SIGNAL(clicked()), this, SLOT(showSelectedView()));
+
+            vbLayout->addWidget(showArbitrary);
+        }
+    }
+
+    if (floatingArbitraryView)
+    {
+        QLayout* layout = m_wndViewsSubstitute[ViewARB]->widget()->layout();
+        removeQLayoutChildren(layout);
+
+        QVBoxLayout* vbLayout = qobject_cast<QVBoxLayout*>(layout);
+        vbLayout->setAlignment(Qt::AlignCenter);
+        if (NULL != vbLayout)
+        {
+            QPushButton* showArbitrary = new QPushButton();
+            showArbitrary->setText("Show Arbitrary View");
+            showArbitrary->setIcon(QIcon(":/svg/svg/iconarb.svg"));
+            showArbitrary->setIconSize(QSize(34, 34));
+            showArbitrary->setProperty("View", ViewARB);
+            showArbitrary->setProperty("Parent", ViewARB);
+            showArbitrary->setMinimumHeight(50);
+            showArbitrary->setMinimumWidth(150);
+            QObject::connect(showArbitrary, SIGNAL(clicked()), this, SLOT(showSelectedView()));
+
+            vbLayout->addWidget(showArbitrary);
+        }
+
+        if (!viewVisible[View3D])
+        {
+            QPushButton* show3D = new QPushButton();
+            show3D->setText("Show 3D View");
+            show3D->setIcon(QIcon(":/svg/svg/icon3d.svg"));
+            show3D->setIconSize(QSize(34, 34));
+            show3D->setProperty("View", View3D);
+            show3D->setProperty("Parent", ViewARB);
+            show3D->setMinimumHeight(50);
+            QObject::connect(show3D, SIGNAL(clicked()), this, SLOT(showSelectedView()));
+
+            vbLayout->addWidget(show3D);
+        }
+
+        if (!viewVisible[ViewXY])
+        {
+            QPushButton* showXY = new QPushButton();
+            showXY->setText("Show Axial View");
+            showXY->setIcon(QIcon(":/svg/svg/iconxy.svg"));
+            showXY->setIconSize(QSize(34, 34));
+            showXY->setProperty("View", ViewXY);
+            showXY->setProperty("Parent", ViewARB);
+            showXY->setMinimumHeight(50);
+            QObject::connect(showXY, SIGNAL(clicked()), this, SLOT(showSelectedView()));
+
+            vbLayout->addWidget(showXY);
+        }
+
+        if (!viewVisible[ViewXZ])
+        {
+            QPushButton* showXZ = new QPushButton();
+            showXZ->setText("Show Coronal View");
+            showXZ->setIcon(QIcon(":/svg/svg/iconxz.svg"));
+            showXZ->setIconSize(QSize(34, 34));
+            showXZ->setProperty("View", ViewXZ);
+            showXZ->setProperty("Parent", ViewARB);
+            showXZ->setMinimumHeight(50);
+            QObject::connect(showXZ, SIGNAL(clicked()), this, SLOT(showSelectedView()));
+
+            vbLayout->addWidget(showXZ);
+        }
+
+        if (!viewVisible[ViewYZ])
+        {
+            QPushButton* showYZ = new QPushButton();
+            showYZ->setText("Show Sagittal View");
+            showYZ->setIcon(QIcon(":/svg/svg/iconyz.svg"));
+            showYZ->setIconSize(QSize(34, 34));
+            showYZ->setProperty("View", ViewYZ);
+            showYZ->setProperty("Parent", ViewARB);
+            showYZ->setMinimumHeight(50);
+            QObject::connect(showYZ, SIGNAL(clicked()), this, SLOT(showSelectedView()));
+
+            vbLayout->addWidget(showYZ);
+        }
+    }*/
 
     // update UI
     afterWorkspaceChange(); // disables some actions in ui for some configurations
     workspacesEnabler(); // update checked states
+
+    QApplication::restoreOverrideCursor();
+
+    if (bTimer)
+    {
+        m_timer.start();
+    }
+}
+
+void MainWindow::showSelectedView()
+{
+    QPushButton* button = qobject_cast<QPushButton*>(sender());
+    if (NULL == button)
+    {
+        return;
+    }
+
+    const unsigned int view = button->property("View").toUInt();
+    const unsigned int parent = button->property("Parent").toUInt();
+
+    int index = getIndexOfWndInLayout(parent);
+
+    if (index < 0 || index >= m_viewsToShow.size())
+    {
+        return;
+    }
+
+    int toRemove = -1;
+    for (size_t i = index + 1; i < m_viewsToShow.size(); ++i)
+    {
+        if (m_viewsToShow[i].windowType == view)
+        {
+            toRemove = i;
+            break;
+        }
+    }
+
+    if (toRemove > 0)
+    {
+        m_viewsToShow.erase(m_viewsToShow.begin() + toRemove);
+    }
+
+    sWindowInfo old = m_viewsToShow[index];
+
+    saveFloatingWindowsGeometry();
+
+    m_viewsToShow[index].windowType = view;
+    m_viewsToShow[index].bFloating = false;
+    m_viewsToShow[index].bShowSubstitute = true;
+
+    if (old.windowType != view && old.bFloating)
+    {
+        old.bShowSubstitute = false;
+        m_viewsToShow.push_back(old);
+    }
+
+    makeWndFloating(view, false);
 }
 
 void MainWindow::createPanels()
@@ -1128,19 +2645,19 @@ void MainWindow::createPanels()
     m_densityWindowPanel = new CDensityWindowWidget();
     QDockWidget *dockDWP = new QDockWidget(tr("Brightness / Contrast"), this);
     dockDWP->setAllowedAreas(Qt::AllDockWidgetAreas);
-    dockDWP->setFeatures(QDockWidget::DockWidgetClosable|QDockWidget::DockWidgetMovable ); // QDockWidget::DockWidgetFloatable
+    dockDWP->setFeatures(QDockWidget::DockWidgetClosable | QDockWidget::DockWidgetMovable); // QDockWidget::DockWidgetFloatable
     dockDWP->setObjectName("Brightness / Contrast Panel");
     dockDWP->setWidget(m_densityWindowPanel);
-	dockDWP->setProperty("Icon",":/icons/resources/density_window_dock.png");
+	dockDWP->setProperty("Icon",":/svg/svg/density_window_dock.svg");
     addDockWidget(Qt::RightDockWidgetArea, dockDWP);
 
     m_orthoSlicesPanel = new COrthoSlicesWidget();
-    QDockWidget *dockOrtho = new QDockWidget(tr("Ortho Slices"), this);
+    QDockWidget *dockOrtho = new QDockWidget(tr("2D Slices"), this);
     dockOrtho->setAllowedAreas(Qt::AllDockWidgetAreas);
-    dockOrtho->setFeatures(QDockWidget::DockWidgetClosable|QDockWidget::DockWidgetMovable );
-    dockOrtho->setObjectName("Ortho Slices Panel");
+    dockOrtho->setFeatures(QDockWidget::DockWidgetClosable | QDockWidget::DockWidgetMovable);
+    dockOrtho->setObjectName("2D Slices Panel");
     dockOrtho->setWidget(m_orthoSlicesPanel);
-	dockOrtho->setProperty("Icon",":/icons/resources/ortho_slices_window_dock.png");
+	dockOrtho->setProperty("Icon",":/svg/svg/ortho_slices_window_dock.svg");
     tabifyDockWidget(dockDWP, dockOrtho);
 
     m_segmentationPanel = new CSegmentationWidget();
@@ -1149,7 +2666,7 @@ void MainWindow::createPanels()
     dockSeg->setFeatures(QDockWidget::DockWidgetClosable|QDockWidget::DockWidgetMovable);
     dockSeg->setObjectName("Quick Tissue Model Creation Panel");
     dockSeg->setWidget(m_segmentationPanel);
-	dockSeg->setProperty("Icon",":/icons/resources/segmentation_window_dock.png");
+	dockSeg->setProperty("Icon",":/svg/svg/segmentation_window_dock.svg");
     tabifyDockWidget(dockDWP, dockSeg);
 
     m_volumeRenderingPanel = new CVolumeRenderingWidget();
@@ -1159,9 +2676,8 @@ void MainWindow::createPanels()
     dockVR->setFeatures(QDockWidget::DockWidgetClosable|QDockWidget::DockWidgetMovable);
     dockVR->setObjectName("Volume Rendering Panel");
     dockVR->setWidget(m_volumeRenderingPanel);
-	dockVR->setProperty("Icon",":/icons/resources/volume_rendering_window2_dock.png");
+	dockVR->setProperty("Icon",":/svg/svg/volume_rendering_window2_dock.svg");
     dockVR->hide();
-//    dockVR->setProperty("Icon",":/icons/");
     tabifyDockWidget(dockDWP, dockVR);
 
     m_modelsPanel = new CModelsWidget();
@@ -1170,7 +2686,7 @@ void MainWindow::createPanels()
     dockModels->setFeatures(QDockWidget::DockWidgetClosable|QDockWidget::DockWidgetMovable);
     dockModels->setObjectName("Models Panel");
     dockModels->setWidget(m_modelsPanel);
-	dockModels->setProperty("Icon",":/icons/resources/models_dock.png");
+	dockModels->setProperty("Icon",":/svg/svg/models_dock.svg");
     tabifyDockWidget(dockDWP, dockModels);
 
     connect(dockDWP, SIGNAL(visibilityChanged(bool)), this, SLOT(dockWidgetVisiblityChanged(bool)));
@@ -1236,6 +2752,16 @@ void MainWindow::writeLayoutSettings(int nLayoutType, bool bInnerLayoutOnly)
         settings.setValue("centralHeight", relSize.height());
         settings.endGroup();
     }
+    if (WorkspaceSlices == nLayoutType)
+    {
+        settings.beginGroup("WorkspaceSlices");
+        settings.setValue("geometryX", saveGeometry().toBase64());
+        settings.setValue("windowStateX", saveState().toBase64());
+        QSizeF relSize = getRelativeSize(centralWidget());
+        settings.setValue("centralWidth", relSize.width());
+        settings.setValue("centralHeight", relSize.height());
+        settings.endGroup();
+    }
 }
 
 // if bInnerLayoutOnly is false, restores not only contents, but also size of
@@ -1253,6 +2779,9 @@ void MainWindow::readLayoutSettings(bool bInnerLayoutOnly)
         break;
     case Workspace3D:
         settings.beginGroup("Workspace3D");
+        break;
+    case WorkspaceSlices:
+        settings.beginGroup("WorkspaceSlices");
         break;
     default:
         Q_ASSERT(false);
@@ -1300,14 +2829,19 @@ void MainWindow::afterWorkspaceChange()
     {
     case WorkspaceTabs:
     case WorkspaceGrid:
+    case WorkspaceSlices:
         ui->actionAxial_View->setEnabled(false);
         ui->actionCoronal_View->setEnabled(false);
         ui->actionSagittal_View->setEnabled(false);
+        ui->actionArbitrary_View->setEnabled(false);
+        ui->viewsToolBar->hide();
         break;
     case Workspace3D:
         ui->actionAxial_View->setEnabled(true);
         ui->actionCoronal_View->setEnabled(true);
         ui->actionSagittal_View->setEnabled(true);
+        ui->actionArbitrary_View->setEnabled(true);
+        ui->viewsToolBar->show();
         break;
     default:
         Q_ASSERT(false);
@@ -1428,6 +2962,7 @@ void MainWindow::showEvent(QShowEvent *event)
     ui->actionAxial_Slice->setChecked(VPL_SIGNAL(SigGetPlaneXYVisibility).invoke2());
     ui->actionCoronal_Slice->setChecked(VPL_SIGNAL(SigGetPlaneXZVisibility).invoke2());
     ui->actionSagittal_Slice->setChecked(VPL_SIGNAL(SigGetPlaneYZVisibility).invoke2());
+    ui->actionArbitrary_Slice->setChecked(VPL_SIGNAL(SigGetPlaneARBVisibility).invoke2());
 
     // Test if any model is visible
     bool bAnyVisible(false);
@@ -1447,20 +2982,52 @@ void MainWindow::closeEvent(QCloseEvent *event)
 {
     if (ui->actionSave_DICOM_Series->isEnabled() || ui->actionSave_Volumetric_Data->isEnabled())
     {
-        if (QMessageBox::Yes!=QMessageBox::question(this,QCoreApplication::applicationName(),
-                                property("SegmentationChanged").toBool()?tr("You have an unsaved segmentation data! All unsaved changes will be lost. Are your sure?"):tr("All unsaved changes will be lost. Are your sure?"),
-                                QMessageBox::Yes|QMessageBox::No))
+        if (property("SegmentationChanged").toBool())
         {
-            event->ignore();
-            return;
+            if (QMessageBox::Yes != QMessageBox::question(this, QCoreApplication::applicationName(),
+                tr("You have an unsaved segmentation data! All unsaved changes will be lost. Do you want to continue?"),
+                QMessageBox::Yes | QMessageBox::No))
+            {
+                event->ignore();
+                return;
+            }
         }
     }
+
+    makeWndFloating(View3D, false, false);
+    makeWndFloating(ViewXY, false, false);
+    makeWndFloating(ViewXZ, false, false);
+    makeWndFloating(ViewYZ, false, false);
+    makeWndFloating(ViewARB, false, false);
+
+    setUpWorkspace();
+
     saveAppSettings();
 	if (0!=(windowState()&Qt::WindowFullScreen))
 		showNormal();
     writeLayoutSettings(m_nLayoutType,false);
 
     QMainWindow::closeEvent(event);
+}
+
+void MainWindow::enterEvent(QEvent* event)
+{
+    //QApplication::setActiveWindow(this);
+
+    /*QPoint posBkp = QApplication::desktop()->cursor().pos();
+    QPoint point = this->pos();
+    int height = this->height(); 
+    int width = this->width();
+
+    setCursor(Qt::BlankCursor);
+
+    QApplication::desktop()->cursor().setPos(point.x() + width * 0.5, point.y() + height - 100);
+    mouse_event(MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_LEFTDOWN | MOUSEEVENTF_LEFTUP, 1, 1, 0, 0);
+    QApplication::desktop()->cursor().setPos(posBkp);
+
+    setCursor(Qt::ArrowCursor);*/
+
+    //QApplication::processEvents();
 }
 
 bool MainWindow::shallUpdateOSGCanvas(OSGCanvas* pCanvas, const QPoint& mousePos)
@@ -1507,6 +3074,8 @@ void MainWindow::show_frame()
         m_OrthoXZSlice->update();
     if (shallUpdateOSGCanvas(m_OrthoYZSlice,mousePos))
         m_OrthoYZSlice->update();
+    if (shallUpdateOSGCanvas(m_ArbitrarySlice, mousePos))
+        m_ArbitrarySlice->update();
     if (renderingTime>10) // if were able to get rendering time of the 3d scene
     {
         // adjust timer interval
@@ -1602,6 +3171,9 @@ bool MainWindow::openDICOMZIP(QString fileName)
 
 bool MainWindow::openDICOM(const QString& fileName, const QString& realName, bool fromFolder)
 {
+    m_region3DPreviewVisualizer->setVisibility(false);
+    m_3DView->Refresh(false);
+
 	setVOIVisibility(false);
 
     QString fileNameIn(fileName);
@@ -1633,20 +3205,23 @@ bool MainWindow::openDICOM(const QString& fileName, const QString& realName, boo
 
     data::sExtendedTags tags = { };
 
+    QSettings settings;
+
     {
         // Show simple progress dialog
         CProgress progress(this);
         progress.setLabelText(tr("Scanning the directory for DICOM datasets, please wait..."));
-        progress.show();
 
         APP_STORAGE.reset();
+
+        progress.show();
 
         data::CDicomLoader Loader;
         Loader.registerProgressFunc( vpl::mod::CProgress::tProgressFunc( &progress, &CProgress::Entry ) );
 
         // preload data from the selected directory
         data::CSeries::tSmartPtr spSeries;
-        QFileInfo fi(fileNameIn);
+        fi = QFileInfo(fileNameIn);
         if (!fi.isDir())
             spSeries = Loader.preLoadFile(vpl::sys::tStringConv::fromUtf8(str));
         else
@@ -1658,17 +3233,29 @@ bool MainWindow::openDICOM(const QString& fileName, const QString& realName, boo
         }
 
         // let the user select the desired series
-		CSeriesSelectionDialog dlg(this, Qt::WindowTitleHint | Qt::WindowSystemMenuHint | Qt::WindowMaximizeButtonHint | Qt::WindowCloseButtonHint);
+		CSeriesSelectionDialog dlg(this, Qt::WindowTitleHint | Qt::WindowSystemMenuHint | Qt::WindowMaximizeButtonHint | Qt::WindowCloseButtonHint | Qt::WindowStaysOnTopHint);
 		if (!dlg.setSeries(spSeries))
 		{
 			QApplication::restoreOverrideCursor();
 			return false;
 		}
+
+        progress.hide();
+
+        settings.beginGroup("SeriesSelectionWindow");
+
+        QRect geometry = settings.value("geometry", QRect(100, 100, 500, 500)).toRect();
+        dlg.setGeometry(geometry);
+
         if (QDialog::Accepted!=dlg.exec())
 		{
 			QApplication::restoreOverrideCursor();
 			return false;
 		}
+
+        settings.setValue("geometry", dlg.geometry());
+        settings.endGroup();
+
         int iSelection=dlg.getSelection();
         if (iSelection<0)
 		{
@@ -1679,6 +3266,8 @@ bool MainWindow::openDICOM(const QString& fileName, const QString& realName, boo
         double ssX, ssY, ssZ;
         dlg.getSubsampling(ssX, ssY, ssZ);
 
+        dlg.hidePreview();
+
         // Load the data (prepare a new method CExamination::load(spSeries.get()))
         data::CSerieInfo::tSmartPtr current_serie = spSeries->getSerie( iSelection );
         if( !current_serie )
@@ -1686,6 +3275,7 @@ bool MainWindow::openDICOM(const QString& fileName, const QString& realName, boo
             return false;
         }
 
+        progress.show();
         progress.setLabelText(tr("Loading input DICOM dataset, please wait..."));
         vpl::mod::CProgress::tProgressFunc ProgressFunc(&progress, &CProgress::Entry);
         if( !m_Examination.loadDicomData(current_serie.get(),
@@ -1712,8 +3302,14 @@ bool MainWindow::openDICOM(const QString& fileName, const QString& realName, boo
     data::CObjectPtr<data::CDensityData> spData( APP_STORAGE.getEntry(data::Storage::PatientData::Id) );    
 
     // and show the limiter dialog
-    CVolumeLimiterDialog vlDlg(this);
+    CVolumeLimiterDialog vlDlg(this, Qt::WindowTitleHint | Qt::WindowSystemMenuHint | Qt::WindowCloseButtonHint | Qt::WindowMinimizeButtonHint | Qt::WindowMaximizeButtonHint | Qt::WindowStaysOnTopHint);
     vlDlg.setVolume(spData.get(), true);
+
+    settings.beginGroup("VolumeLimiterWindow");
+
+    QRect geometry = settings.value("geometry", QRect(100, 100, 500, 500)).toRect();
+    vlDlg.setGeometry(geometry);
+
     if (QDialog::Accepted==vlDlg.exec())
 	{
 		const data::SVolumeOfInterest limits = vlDlg.getLimits();
@@ -1729,6 +3325,9 @@ bool MainWindow::openDICOM(const QString& fileName, const QString& realName, boo
             APP_STORAGE.invalidate(spVolumeTransformation.getEntryPtr());
         }
 	}
+
+    settings.setValue("geometry", vlDlg.geometry());
+    settings.endGroup();
 
     // Change the application title
     if (spData->m_sPatientName.empty())
@@ -1752,17 +3351,73 @@ bool MainWindow::preOpen()
 {
     if (property("SegmentationChanged").toBool())
     {
-        if (QMessageBox::Yes!=QMessageBox::question(this,QCoreApplication::applicationName(),tr("You have an unsaved data! All unsaved changes will be lost. Do you want to continue?"),QMessageBox::Yes|QMessageBox::No))
+        if (QMessageBox::Yes!=QMessageBox::question(this,QCoreApplication::applicationName(),tr("You have an unsaved segmentation data! All unsaved changes will be lost. Do you want to continue?"),QMessageBox::Yes|QMessageBox::No))
             return false;
         setProperty("SegmentationChanged",false);
-    }    
+    }   
+
+    m_region3DPreviewManager->stop();
+
     return true;
 }
-
-void MainWindow::postOpen(const QString& filename, bool bDicomData)
+void MainWindow::pluginLog(int type, const std::string& whatInvoke, const std::string& message)
 {
+    switch(type)
+    {
+    case LL_TRACE:
+        VPL_LOG_TRACE(whatInvoke + ": " + message);
+        break;
+    case LL_DEBUG:
+        VPL_LOG_DEBUG(whatInvoke + ": " + message);
+        break;
+    case LL_INFO:
+        VPL_LOG_INFO(whatInvoke + ": " + message);
+        break;
+    case LL_WARN:
+        VPL_LOG_WARN(whatInvoke + ": " + message);
+        break;
+    case LL_ERROR:
+        VPL_LOG_ERROR(whatInvoke + ": " + message);
+        break;
+    case LL_FATAL:
+        VPL_LOG_FATAL(whatInvoke + ": " + message);
+        break;
+    }
+}
+void MainWindow::postOpenActions()
+{
+    data::CObjectPtr<data::CMultiClassRegionData> spRegionData(APP_STORAGE.getEntry(data::Storage::MultiClassRegionData::Id));
+    if (spRegionData->isDummy())
+    {
+        spRegionData->disableDummyMode();
+        APP_STORAGE.invalidate(spRegionData.getEntryPtr());
+    }
+
+    data::CObjectPtr< data::CActiveDataSet > ptrDataset(APP_STORAGE.getEntry(data::Storage::ActiveDataSet::Id));
+    data::CObjectPtr< data::CDensityData > pVolume(APP_STORAGE.getEntry(ptrDataset->getId()));
+    vpl::img::CSize3d voxelSize(pVolume->getDX(), pVolume->getDY(), pVolume->getDZ());
+
+    m_region3DPreviewManager->init(voxelSize, 0);
+    geometry::Vec3Array vertices;
+    std::vector<int> indicies;
+    m_region3DPreviewVisualizer->setData(vertices, indicies);
+    update3DPreview();
+
+    if (m_region3DPreviewVisible)
+    {
+        m_region3DPreviewManager->run();
+        m_region3DPreviewVisualizer->setVisibility(true);
+        m_3DView->Refresh(false);
+    }
+
     undoRedoEnabler();
     fixBadSliceSliderPos();
+    resetLimit();
+
+}
+void MainWindow::postOpen(const QString& filename, bool bDicomData)
+{
+    postOpenActions();
 	ui->actionSave_Original_DICOM_Series->setEnabled(bDicomData);
     ui->actionSave_DICOM_Series->setEnabled(true);
     ui->actionSave_Volumetric_Data->setEnabled(true);
@@ -1772,7 +3427,6 @@ void MainWindow::postOpen(const QString& filename, bool bDicomData)
     addToRecentFiles(filename);
 	m_savedEntriesVersionList = getVersionList();
 
-	resetLimit();
 }
 
 void MainWindow::postSave(const QString& filename)
@@ -1785,21 +3439,25 @@ void MainWindow::postSave(const QString& filename)
 std::vector<int> MainWindow::getVersionList()
 {
 	int arrWatched[] = { data::Storage::PatientData::Id,
-						 data::Storage::RegionData::Id, 
+						 data::Storage::MultiClassRegionData::Id,
 						 data::Storage::BonesModel::Id,
 						 data::Storage::ImportedModel::Id};
 	const int nEntries = sizeof(arrWatched)/sizeof(arrWatched[0]);
     std::vector<int> res;
-    for(int i = 0; i < nEntries ; i++)
-	{        
-		if (data::Storage::ImportedModel::Id==arrWatched[i])
-		{
-			for(int i = 0; i < MAX_IMPORTED_MODELS; ++i)
-				res.push_back( APP_STORAGE.getEntry( data::Storage::ImportedModel::Id+i ).get()->getLatestVersion());
-		}
-		else
-			res.push_back( APP_STORAGE.getEntry( arrWatched[i] ).get()->getLatestVersion());
-	}
+    for (int i = 0; i < nEntries; i++)
+    {
+        if (data::Storage::ImportedModel::Id == arrWatched[i])
+        {
+            for (int x = 0; x < MAX_IMPORTED_MODELS; ++x)
+            {
+                res.push_back(APP_STORAGE.getEntry(data::Storage::ImportedModel::Id + x).get()->getLatestVersion());
+            }
+        }
+        else
+        {
+            res.push_back(APP_STORAGE.getEntry(arrWatched[i]).get()->getLatestVersion());
+        }
+    }
     return res;
 }
 
@@ -1870,6 +3528,9 @@ public:
 
 bool MainWindow::openVLM(const QString &wsFileName)
 {
+    m_region3DPreviewVisualizer->setVisibility(false);
+    m_3DView->Refresh(false);
+
 	setVOIVisibility(false);
 
     // 2012/03/12: Modified by Majkl (Linux compatible code)
@@ -1945,7 +3606,7 @@ bool MainWindow::openVLM(const QString &wsFileName)
 					}
 				}
 			}
-			catch( const vpl::base::CException Exception )
+			catch( const vpl::base::CException& Exception )
 			{
 				enableMenuActions();
 				return false;	
@@ -2131,9 +3792,9 @@ bool MainWindow::saveDICOM()
 	QString anonymString = "Anonymous";
 	QString anonymID = "";
 	{
-		data::CObjectPtr<data::CRegionColoring> spColoring(APP_STORAGE.getEntry(data::Storage::RegionColoring::Id));
+		data::CObjectPtr<data::CMultiClassRegionColoring> spColoring(APP_STORAGE.getEntry(data::Storage::MultiClassRegionColoring::Id));
 		const int activeRegion(spColoring->getActiveRegion());
-		data::CRegionColoring::tColor color;
+		data::CMultiClassRegionColoring::tColor color;
 		if (activeRegion>=0)
 		{
 			color = spColoring->getColor( activeRegion );
@@ -2343,8 +4004,35 @@ bool MainWindow::openSTL()
     QString previousDir=settings.value("STLdir",QStandardPaths::locate(QStandardPaths::HomeLocation, QString(), QStandardPaths::LocateDirectory)).toString();
 #endif
 
-    previousDir = getSaveLoadPath("STLdir");
-	QString filePath = QFileDialog::getOpenFileName(this, tr("Choose an input binary STL model to load..."), previousDir, tr("Stereo litography model (*.stl);;Polygon file format (*.ply);;OpenCTM compressed  file format (*.ctm)"));
+
+    int defaultFilter = settings.value("ExportedModelsFormat").toInt();
+    QString selectedFilter;
+
+    switch (defaultFilter)
+    {
+    case 0:
+        selectedFilter = "Stereo litography model (*.stl)";
+        previousDir = appendSaveNameHint(previousDir, ".stl");
+        break;
+    case 1:
+        selectedFilter = "Binary Polygon file format (*.ply)";
+        previousDir = appendSaveNameHint(previousDir, ".ply");
+        break;
+    case 2:
+        selectedFilter = "ASCII Polygon file format (*.ply)";
+        previousDir = appendSaveNameHint(previousDir, ".ply");
+        break;
+    case 3:
+        selectedFilter = "OpenCTM compressed file format (*.ctm)";
+        previousDir = appendSaveNameHint(previousDir, ".ctm");
+        break;
+    default:
+        selectedFilter = "Stereo litography model (*.stl)";
+        previousDir = appendSaveNameHint(previousDir, ".stl");
+        break;
+    }
+
+	QString filePath = QFileDialog::getOpenFileName(this, tr("Choose an input polygonal model to load..."), previousDir, tr("Stereo litography model (*.stl);;Binary Polygon file format (*.ply);;ASCII Polygon file format (*.ply);;OpenCTM compressed file format (*.ctm)"), &selectedFilter);
 	if (filePath.isEmpty())
         return false;
 
@@ -2417,10 +4105,10 @@ bool MainWindow::openSTL(const QString& filePath, const QString& fileName)
 
     // get file extension
     std::string extension;
-    std::string::size_type pos(ansiName.rfind("."));    
-    if (pos != std::string::npos)
+    std::string::size_type dotPos(ansiName.rfind("."));    
+    if (dotPos != std::string::npos)
     { 
-        extension = ansiName.substr(pos+1, ansiName.length()-pos-1);
+        extension = ansiName.substr(dotPos +1, ansiName.length()- dotPos -1);
         std::transform( extension.begin(), extension.end(), extension.begin(), tolower );
     }
 
@@ -2486,7 +4174,7 @@ bool MainWindow::openSTL(const QString& filePath, const QString& fileName)
                             // Open model interface
                             data::CObjectPtr< data::CModel > pModel( APP_STORAGE.getEntry( id ) );
                             // get destination mesh
-                            geometry::CMesh *pMesh = pModel->getMesh();
+                            geometry::CMesh *pMesh = pModel->getMesh(true);
                             // get vertices
                             std::vector<geometry::CMesh::VertexHandle> omVertices;
                             omVertices.reserve(nVertices);
@@ -2610,7 +4298,7 @@ bool MainWindow::openSTL(const QString& filePath, const QString& fileName)
             if (nDrawables>0)
             {
                 data::CObjectPtr< data::CModel > pModel( APP_STORAGE.getEntry( id ) );
-                geometry::CMesh *pMesh = pModel->getMesh();
+                geometry::CMesh *pMesh = pModel->getMesh(false);
                 pMesh->delete_isolated_vertices();
                 pMesh->garbage_collection();
                 if (pMesh->n_faces()>0)
@@ -2639,14 +4327,14 @@ bool MainWindow::openSTL(const QString& filePath, const QString& fileName)
         ropt += OpenMesh::IO::Options::Binary;
         result=true;
 
-		const OpenMesh::IO::_CTMReader_ &CTMReader = OpenMesh::IO::_CTMReader_();
+		//const OpenMesh::IO::_CTMReader_ &CTMReader = OpenMesh::IO::_CTMReader_();
 
         if (!OpenMesh::IO::read_mesh(*pMesh, ansiName, ropt))
         {
             delete pMesh;
             result = false;
 			QApplication::restoreOverrideCursor();
-            showMessageBox(QMessageBox::Critical,tr("Failed to load binary STL model!"));
+            showMessageBox(QMessageBox::Critical,tr("Failed to load polygonal model!"));
         }
         else
         {
@@ -2699,10 +4387,18 @@ bool MainWindow::saveSTL()
 	// Try to get selected model id
 	int storage_id((!m_segmentationPluginsLoaded) ? m_modelsPanel->getSelectedModelStorageId() : VPL_SIGNAL(SigGetSelectedModelId).invoke2());
 
-	return saveSTLById(storage_id);
+	return saveSTLById(storage_id, false);
 }
 
-bool MainWindow::saveSTLById(int storage_id)
+bool MainWindow::saveSTLinDicomCoords()
+{
+    // Try to get selected model id
+    int storage_id((!m_segmentationPluginsLoaded) ? m_modelsPanel->getSelectedModelStorageId() : VPL_SIGNAL(SigGetSelectedModelId).invoke2());
+
+    return saveSTLById(storage_id, true);
+}
+
+bool MainWindow::saveSTLById(int storage_id, bool useDicom)
 {
     if(storage_id == -1)
     {
@@ -2734,18 +4430,22 @@ bool MainWindow::saveSTLById(int storage_id)
     data::CObjectPtr<data::CModel> spModel( APP_STORAGE.getEntry(storage_id) );
 
     // Check the model
-    geometry::CMesh *pMesh = spModel->getMesh();
+    geometry::CMesh *pMesh = spModel->getMesh(false);
     if (!pMesh || !(pMesh->n_vertices() > 0) )
     {
-        showMessageBox(QMessageBox::Critical, tr("No STL data!"));
+        showMessageBox(QMessageBox::Critical, tr("No data to save!"));
         return false;
     }
 
-	data::CObjectPtr<data::CDensityData> spVolume( APP_STORAGE.getEntry(data::Storage::PatientData::Id) );
-	QString SeriesID(spVolume->m_sSeriesUid.c_str());	
-	if (SeriesID.isEmpty())
-		SeriesID = "cs" + QString::number(spVolume->getDataCheckSum());
-	spVolume.release();
+    QString SeriesID("");
+    {
+        data::CObjectPtr<data::CDensityData> spVolume(APP_STORAGE.getEntry(data::Storage::PatientData::Id));
+        SeriesID = spVolume->m_sSeriesUid.c_str();
+        if (SeriesID.isEmpty())
+        {
+            SeriesID = "cs" + QString::number(spVolume->getDataCheckSum());
+        }
+    }
 
 	if (!spModel->getProperty("Licensed").empty())
 	{
@@ -2765,11 +4465,36 @@ bool MainWindow::saveSTLById(int storage_id)
 	}
 
     QSettings settings;
-	const bool bUseDicom = settings.value("STLUseDICOMCoord",false).toBool();
+	//const bool bUseDicom = settings.value("STLUseDICOMCoord",false).toBool();
     QString previousDir = getSaveLoadPath("STLdir");
-    previousDir = appendSaveNameHint(previousDir,".stl");
+    int defaultFilter = settings.value("ExportedModelsFormat").toInt();
     QString selectedFilter;
-	QString fileName = QFileDialog::getSaveFileName(this, tr("Please, specify an output file..."), previousDir, tr("Stereo litography model (*.stl);;Binary Polygon file format (*.ply);;ASCII Polygon file format (*.ply);;OpenCTM compressed  file format (*.ctm)"), &selectedFilter);
+
+    switch (defaultFilter)
+    {
+        case 0:
+            selectedFilter = "Stereo litography model (*.stl)";
+            previousDir = appendSaveNameHint(previousDir, ".stl");
+            break;
+        case 1:
+            selectedFilter = "Binary Polygon file format (*.ply)";
+            previousDir = appendSaveNameHint(previousDir, ".ply");
+            break;
+        case 2:
+            selectedFilter = "ASCII Polygon file format (*.ply)";
+            previousDir = appendSaveNameHint(previousDir, ".ply");
+            break;
+        case 3:
+            selectedFilter = "OpenCTM compressed file format (*.ctm)";
+            previousDir = appendSaveNameHint(previousDir, ".ctm");
+            break;
+        default:
+            selectedFilter = "Stereo litography model (*.stl)";
+            previousDir = appendSaveNameHint(previousDir, ".stl");
+            break;
+    }
+
+	QString fileName = QFileDialog::getSaveFileName(this, tr("Please, specify an output file..."), previousDir, tr("Stereo litography model (*.stl);;Binary Polygon file format (*.ply);;ASCII Polygon file format (*.ply);;OpenCTM compressed file format (*.ctm)"), &selectedFilter);
     if (fileName.isEmpty())
         return false;
 
@@ -2793,7 +4518,7 @@ bool MainWindow::saveSTLById(int storage_id)
 
 	data::CObjectPtr<data::CVolumeTransformation> spVolumeTransformation(APP_STORAGE.getEntry(data::Storage::VolumeTransformation::Id));
 	osg::Matrix volTransform = spVolumeTransformation->getTransformation();	
-	if (bUseDicom)
+	if (useDicom)
 	{		
 		// apply transformation matrix
 		data::CObjectPtr<data::CDensityData> spVolume( APP_STORAGE.getEntry(data::Storage::PatientData::Id) );
@@ -2842,7 +4567,7 @@ bool MainWindow::saveSTLById(int storage_id)
     if (!OpenMesh::IO::write_mesh(*pMesh, ansiName, wopt))
     {
         result = false;
-        showMessageBox(QMessageBox::Critical, tr("Failed to save binary STL model!"));
+        showMessageBox(QMessageBox::Critical, tr("Failed to save polygonal model!"));
     }
     else
 	{
@@ -2939,19 +4664,30 @@ void MainWindow::sigModeChanged( scene::CAppMode::tMode mode )
     ui->actionScale_Scene->setChecked(scene::CAppMode::COMMAND_SCENE_ZOOM==mode);
     ui->actionMeasure_Density_Value->setChecked(scene::CAppMode::COMMAND_DENSITY_MEASURE==mode);
     ui->actionMeasure_Distance->setChecked(scene::CAppMode::COMMAND_DISTANCE_MEASURE==mode);
+
+    m_3DView->Refresh(false);
 }
 
 void MainWindow::actionsEnabler()
 {
-    // Views
-    if (NULL!=m_3DView && NULL!=m_3DView->parentWidget())
-        ui->action3D_View->setChecked(m_3DView->parentWidget()->isVisible());
-    if (NULL!=m_OrthoXYSlice && NULL!=m_OrthoXYSlice->parentWidget())
-        ui->actionAxial_View->setChecked(m_OrthoXYSlice->parentWidget()->isVisible());
-    if (NULL!=m_OrthoXZSlice && NULL!=m_OrthoXZSlice->parentWidget())
-        ui->actionCoronal_View->setChecked(m_OrthoXZSlice->parentWidget()->isVisible());
-    if (NULL!=m_OrthoYZSlice && NULL!=m_OrthoYZSlice->parentWidget())
-        ui->actionSagittal_View->setChecked(m_OrthoYZSlice->parentWidget()->isVisible());
+    if (!m_myViewVisibilityChange)
+    {
+        // Views
+        /*if (NULL!=m_3DView && NULL!=m_3DView->parentWidget())
+            ui->action3D_View->setChecked(m_3DView->parentWidget()->isVisible());
+        if (NULL!=m_OrthoXYSlice && NULL!=m_OrthoXYSlice->parentWidget())
+            ui->actionAxial_View->setChecked(m_OrthoXYSlice->parentWidget()->isVisible());
+        if (NULL!=m_OrthoXZSlice && NULL!=m_OrthoXZSlice->parentWidget())
+            ui->actionCoronal_View->setChecked(m_OrthoXZSlice->parentWidget()->isVisible());
+        if (NULL!=m_OrthoYZSlice && NULL!=m_OrthoYZSlice->parentWidget())
+            ui->actionSagittal_View->setChecked(m_OrthoYZSlice->parentWidget()->isVisible());*/
+
+        ui->action3D_View->setChecked(m_wndViews[View3D]->isVisible() || m_wndViewsSubstitute[View3D]->isVisible());
+        ui->actionAxial_View->setChecked(m_wndViews[ViewXY]->isVisible() || m_wndViewsSubstitute[ViewXY]->isVisible());
+        ui->actionCoronal_View->setChecked(m_wndViews[ViewXZ]->isVisible() || m_wndViewsSubstitute[ViewXZ]->isVisible());
+        ui->actionSagittal_View->setChecked(m_wndViews[ViewYZ]->isVisible() || m_wndViewsSubstitute[ViewYZ]->isVisible());
+        ui->actionArbitrary_View->setChecked(m_wndViews[ViewARB]->isVisible() || m_wndViewsSubstitute[ViewARB]->isVisible());
+    }
 
     // Panels
     if (NULL!=m_densityWindowPanel && NULL!=m_densityWindowPanel->parentWidget())
@@ -2976,52 +4712,109 @@ void   MainWindow::undoRedoEnabler()
     ui->actionRedo->setEnabled(ptrManager->canRedo());
 }
 
-void MainWindow::show3DView(bool bShow)
+void MainWindow::showAnyView(bool bShow, QWidget* pView)
 {
+    if (NULL == pView) return;
+    QDockWidget *pDockW = NULL;
+    QWidget     *pParent = pView->parentWidget();
+    Q_ASSERT(pParent); // parent missing!
+                       // find window parent which is a dock window
+    while (NULL != pParent)
+    {
+        pDockW = qobject_cast<QDockWidget*>(pParent);
+        if (pDockW)
+            break;
+        pParent = pParent->parentWidget();
+    }
+    if (!pDockW) return;
+
+    if (bShow && pDockW->isVisible() || !bShow && !pDockW->isVisible())
+    {
+        return;
+    }
+
     if (bShow)
     {
-        QWidget* pParent=m_3DView->parentWidget();
-        pParent->show();
-        pParent->raise();
+        pDockW->show();
+        pDockW->raise();
     }
     else
-        m_3DView->parentWidget()->hide();
+        pDockW->hide();
+}
+
+void MainWindow::show3DView(bool bShow)
+{
+    m_myViewVisibilityChange = true;
+
+    makeWndFloating(View3D, false); // adds all hidden windows, so we need to hide them again
+
+    showAnyView(bShow, m_3DView);
+    showAnyView(ui->actionAxial_View->isChecked(), m_OrthoXYSlice);
+    showAnyView(ui->actionCoronal_View->isChecked(), m_OrthoXZSlice);
+    showAnyView(ui->actionSagittal_View->isChecked(), m_OrthoYZSlice);
+    showAnyView(ui->actionArbitrary_View->isChecked(), m_ArbitrarySlice);
+
+    m_myViewVisibilityChange = false;
 }
 
 void MainWindow::showAxialView(bool bShow)
 {
-    if (bShow)
-    {
-        QWidget* pParent=m_OrthoXYSlice->parentWidget();
-        pParent->show();
-        pParent->raise();
-    }
-    else
-        m_OrthoXYSlice->parentWidget()->hide();
+    m_myViewVisibilityChange = true;
+
+    makeWndFloating(ViewXY, false); // adds all hidden windows, so we need to hide them again
+
+    showAnyView(bShow, m_OrthoXYSlice);
+    showAnyView(ui->action3D_View->isChecked(), m_3DView);
+    showAnyView(ui->actionCoronal_View->isChecked(), m_OrthoXZSlice);
+    showAnyView(ui->actionSagittal_View->isChecked(), m_OrthoYZSlice);
+    showAnyView(ui->actionArbitrary_View->isChecked(), m_ArbitrarySlice);
+
+    m_myViewVisibilityChange = false;
 }
 
 void MainWindow::showCoronalView(bool bShow)
 {
-    if (bShow)
-    {
-        QWidget* pParent=m_OrthoXZSlice->parentWidget();
-        pParent->show();
-        pParent->raise();
-    }
-    else
-        m_OrthoXZSlice->parentWidget()->hide();
+    m_myViewVisibilityChange = true;
+
+    makeWndFloating(ViewXZ, false); // adds all hidden windows, so we need to hide them again
+
+    showAnyView(bShow, m_OrthoXZSlice);
+    showAnyView(ui->actionAxial_View->isChecked(), m_OrthoXYSlice);
+    showAnyView(ui->action3D_View->isChecked(), m_3DView);
+    showAnyView(ui->actionSagittal_View->isChecked(), m_OrthoYZSlice);
+    showAnyView(ui->actionArbitrary_View->isChecked(), m_ArbitrarySlice);
+
+    m_myViewVisibilityChange = false;
 }
 
 void MainWindow::showSagittalView(bool bShow)
 {
-    if (bShow)
-    {
-        QWidget* pParent=m_OrthoYZSlice->parentWidget();
-        pParent->show();
-        pParent->raise();
-    }
-    else
-        m_OrthoYZSlice->parentWidget()->hide();
+    m_myViewVisibilityChange = true;
+
+    makeWndFloating(ViewYZ, false); // adds all hidden windows, so we need to hide them again
+
+    showAnyView(bShow, m_OrthoYZSlice);
+    showAnyView(ui->actionAxial_View->isChecked(), m_OrthoXYSlice);
+    showAnyView(ui->actionCoronal_View->isChecked(), m_OrthoXZSlice);
+    showAnyView(ui->action3D_View->isChecked(), m_3DView);
+    showAnyView(ui->actionArbitrary_View->isChecked(), m_ArbitrarySlice);
+
+    m_myViewVisibilityChange = false;
+}
+
+void MainWindow::showArbitraryView(bool bShow)
+{
+    m_myViewVisibilityChange = true;
+
+    makeWndFloating(ViewARB, false); // adds all hidden windows, so we need to hide them again
+
+    showAnyView(bShow, m_ArbitrarySlice);
+    showAnyView(ui->actionAxial_View->isChecked(), m_OrthoXYSlice);
+    showAnyView(ui->actionCoronal_View->isChecked(), m_OrthoXZSlice);
+    showAnyView(ui->actionSagittal_View->isChecked(), m_OrthoYZSlice);
+    showAnyView(ui->action3D_View->isChecked(), m_3DView);
+
+    m_myViewVisibilityChange = false;
 }
 
 void MainWindow::showDensityWindowPanel(bool bShow)
@@ -3107,27 +4900,74 @@ void MainWindow::createOSGStuff()
 
     QSettings settings;
 
-    const bool bAntialiasing = settings.value("AntialiasingEnabled", DEFAULT_ANTIALIASING).toBool();
-
-    if (bAntialiasing)
+    // Transfer QSurfaceFormat setting into osg::DisplaySettings
     {
-        VPL_LOG_INFO("Antialiasing enabled");
+        QSurfaceFormat format = QSurfaceFormat::defaultFormat();
 
-        osg::DisplaySettings::instance()->setNumMultiSamples(8);
+        bool debugContext = format.options() & QSurfaceFormat::DebugContext;
+
+        osg::DisplaySettings::instance()->setGLContextVersion(std::to_string(format.majorVersion()) + "." + std::to_string(format.minorVersion()));
+        osg::DisplaySettings::instance()->setNumMultiSamples(format.samples());
+        osg::DisplaySettings::instance()->setGLContextFlags(GL_CONTEXT_FLAG_FORWARD_COMPATIBLE_BIT | (debugContext ? GL_CONTEXT_FLAG_DEBUG_BIT : 0));
+        osg::DisplaySettings::instance()->setGLContextProfileMask(GL_CONTEXT_CORE_PROFILE_BIT);
     }
+
+    
+
+        m_ArbitrarySlice = new OSGOrtho2DCanvas(nullptr);
+        m_ArbitrarySlice->hide();
+
+        m_SceneArb = new scene::CArbitrarySliceScene(m_ArbitrarySlice);
+
+        m_ArbitrarySlice->setScene(m_SceneArb.get());
+        m_ArbitrarySlice->centerAndScale();
+        m_ArbitrarySlice->getManipulator()->m_sigUpDown.connect(m_SceneArb, &scene::CArbitrarySliceScene::sliceUpDown);
+        // Drawing event handler
+        m_drawARBEH = new osgGA::CISSceneARBEH(m_ArbitrarySlice, m_SceneArb.get());
+        m_ArbitrarySlice->addEventHandler(m_drawARBEH.get());
+        /*// Measurements event handler
+        m_measurementsXYEH = new scene::CMeasurementsXYEH(m_ArbitrarySlice, m_SceneXY.get());
+        m_measurementsXYEH->setHandleDensityUnderCursor(true);
+        m_ArbitrarySlice->addEventHandler(m_measurementsXYEH.get());
+
+        for (int i = 0; i < MAX_IMPORTED_MODELS; ++i)
+        {
+        m_importedModelCutSliceXY[i] = new osg::CModelCutVisualizerSliceXY(data::Storage::ImportedModelCutSliceXY::Id + i, m_ArbitrarySlice);
+        m_importedModelCutSliceXY[i]->setVisibility(false);
+        m_importedModelCutSliceXY[i]->setColor(osg::Vec4(1.0, 1.0, 0.0, 1.0));
+        m_SceneXY->addChild(m_importedModelCutSliceXY[i]);
+        }
+
+        //m_xyVizualizer = new osg::CRegionsVisualizerForSliceXY(osg::Matrix::identity(), data::Storage::SliceXY::Id, m_ArbitrarySlice);
+        //m_SceneXY->addChild(m_xyVizualizer);
+        m_xyVizualizer = new osg::CMultiClassRegionsVisualizerForSliceXY(osg::Matrix::identity(), data::Storage::SliceXY::Id, m_ArbitrarySlice);
+        m_SceneXY->addChild(m_xyVizualizer);*/
+
+        //m_arbVOIVizualizer = new osg::CVolumeOfInterestVisualizerForSliceXY(osg::Matrix::identity(), data::Storage::SliceXY::Id, m_ArbitrarySlice);
+        //m_sceneArb->addChild(m_arbVOIVizualizer);
 
 	// 3D view
 	{
-		m_3DView = new CVolumeRendererWindow(nullptr, bAntialiasing);
+		m_3DView = new CVolumeRendererWindow(nullptr);
         m_Scene3D = new scene::CScene3D(m_3DView);
         m_Scene3D->setRenderer(&m_3DView->getRenderer());
         m_3DView->hide();
         m_3DView->setScene(m_Scene3D.get());
 
+        //m_3DViewSubstitute = new OSGOrtho2DCanvas(nullptr);
+        //m_3DViewSubstitute->hide();
+
+        m_arbSliceVisualizer = new osg::CArbitrarySliceVisualizer(m_3DView, data::Storage::ArbitrarySlice::Id);
+        m_Scene3D->anchorToScene(m_arbSliceVisualizer.get(), false);
+        m_arbSliceVisualizer->setCanvas(m_3DView);
+
 		// Initialize the model manager
 		for(int i = 0; i < MAX_IMPORTED_MODELS; ++i)
 		{
 			m_modelVisualizers[i] = new osg::CModelVisualizerEx(data::Storage::ImportedModel::Id + i);
+            m_modelVisualizers[i]->m_materialRegular->applySingleLightSetup();
+            m_modelVisualizers[i]->m_materialRegular->uniform("Shininess")->set(20.0f);
+            m_modelVisualizers[i]->m_materialRegular->uniform("Specularity")->set(0.5f);
 
 			osg::ref_ptr<osg::MatrixTransform> pModelTransform = new osg::MatrixTransform();
 			pModelTransform->addChild(m_modelVisualizers[i]);
@@ -3135,6 +4975,64 @@ void MainWindow::createOSGStuff()
 			m_Scene3D->anchorToScene(pModelTransform.get(), true);
 			m_modelVisualizers[i]->setCanvas(m_3DView);
 		}
+
+#ifdef ENABLE_DEEPLEARNING
+        // Initialize Reference Anatomical Landmark Model Visualizer
+        {
+            m_referenceAnatomicalLandmarkModelVisualizer = new osg::CModelVisualizerEx(data::Storage::ReferenceAnatomicalLandmarkModel::Id);
+            m_referenceAnatomicalLandmarkModelVisualizer->m_materialRegular->applySingleLightSetup();
+            m_referenceAnatomicalLandmarkModelVisualizer->m_materialRegular->uniform("Shininess")->set(20.0f);
+            m_referenceAnatomicalLandmarkModelVisualizer->m_materialRegular->uniform("Specularity")->set(0.5f);
+
+            osg::ref_ptr<osg::MatrixTransform> pModelTransform = new osg::MatrixTransform();
+            pModelTransform->addChild(m_referenceAnatomicalLandmarkModelVisualizer);
+
+            m_Scene3D->anchorToScene(pModelTransform.get(), true);
+            m_referenceAnatomicalLandmarkModelVisualizer->setCanvas(m_3DView);
+
+            m_referenceAnatomicalLandmarkModelVisualizer->setModelVisualization(osg::CModelVisualizerEx::EMV_SMOOTH);
+        }
+#endif
+
+        // dragger for STL model
+        {
+            osg::Vec3 sceneSize;
+            osg::Matrix modelPos;
+            data::CObjectPtr<data::CDensityData> spVolume(APP_STORAGE.getEntry(data::Storage::PatientData::Id));
+            sceneSize = osg::Vec3
+            (spVolume->getXSize() * spVolume->getDX(),
+                spVolume->getYSize() * spVolume->getDY(),
+                spVolume->getZSize() * spVolume->getDZ()
+            );
+            spVolume.release();
+            modelPos.makeTranslate(osg::Vec3(sceneSize.x() / 2, sceneSize.y() / 2, sceneSize.z() / 2));
+
+            m_draggerPivot = new osg::CPivotDraggerHolder();
+            m_draggerModel = new osg::C3DModelDraggerHolder(data::Storage::ReferenceAnatomicalLandmarkModel::Id, modelPos, sceneSize, true, true);
+            m_draggerModel->setPivotDragger(m_draggerPivot);
+#ifdef ENABLE_DEEPLEARNING
+            m_draggerModel->addTransformUpdating(m_referenceAnatomicalLandmarkModelVisualizer->getModelTransform().get());
+#endif
+            m_switchDraggerModel = new osg::COnOffNode();
+            m_switchDraggerModel->setName("Model dragger");
+            m_switchDraggerModel->addChild(m_draggerModel.get());
+            m_switchDraggerModel->addChild(m_draggerPivot.get());
+            m_switchDraggerModel->hide();
+            m_Scene3D->anchorToScene(m_switchDraggerModel.get(), true);
+        }
+
+        // Set implant draggers higher priority
+        //m_3DView->addEventHandler(new scene::CDraggerEventHandler(true));
+        m_3DView->addEventHandler(new scene::CDraggerEventHandler(m_3DView));
+
+        // Region preview visualizer
+        {
+            m_region3DPreviewVisualizer = new osg::CRegion3DPreviewVisualizer;
+
+            osg::ref_ptr<osg::MatrixTransform> pPreviewTransform = new osg::MatrixTransform();
+            pPreviewTransform->addChild(m_region3DPreviewVisualizer);
+            m_Scene3D->anchorToScene(pPreviewTransform.get(), true);
+        }
 
         {
             //add subtree for display of drawn notes
@@ -3149,6 +5047,8 @@ void MainWindow::createOSGStuff()
 			showMessageBox(QMessageBox::Critical,tr("VR Error!"));
 		}
 
+        m_3DView->addEventHandler(new scene::CDraggerEventHandler(m_3DView));
+
 		// Drawing event handler
 		m_draw3DEH = new osgGA::CISScene3DEH( m_3DView, m_Scene3D.get() );
 		m_3DView->addEventHandler( m_draw3DEH.get() );
@@ -3158,6 +5058,9 @@ void MainWindow::createOSGStuff()
 		{
 			m_draw3DEH->AddNode(m_modelVisualizers[i]);
 		}
+#ifdef ENABLE_DEEPLEARNING
+        m_draw3DEH->AddNode(m_referenceAnatomicalLandmarkModelVisualizer);
+#endif
 
 		// Window drawing event handler
 		m_drawW3DEH = new osgGA::CISWindowEH(m_3DView, m_Scene3D.get());
@@ -3166,17 +5069,24 @@ void MainWindow::createOSGStuff()
         m_drawW3DEH->setLineFlags(osg::CLineGeode::USE_RENDER_BIN | osg::CLineGeode::DISABLE_DEPTH_TEST | osg::CLineGeode::ENABLE_TRANSPARENCY );
 		m_drawW3DEH->setZ( 0.5 );
 
-		m_3DView->addEventHandler( m_drawW3DEH.get() );
+		//m_3DView->addEventHandler( m_drawW3DEH.get() );
 
 		// Measurements EH
 		m_measurements3DEH = new scene::CMeasurements3DEH( m_3DView, m_Scene3D.get() );
 		m_measurements3DEH->setHandleDensityUnderCursor(true);
 		m_3DView->addEventHandler( m_measurements3DEH.get() );
+
+#ifdef ENABLE_DEEPLEARNING
+        // Landmark annotations EH
+        m_landmarkAnnotations3DEH = new scene::CLandmarkAnnotations3DEH(m_3DView, m_Scene3D.get());
+        m_3DView->addEventHandler(m_landmarkAnnotations3DEH.get());
+#endif
+
 	}
 
     // XY Slice
 	{
-		m_OrthoXYSlice = new OSGOrtho2DCanvas(nullptr, bAntialiasing);
+		m_OrthoXYSlice = new OSGOrtho2DCanvas(nullptr);
 		m_OrthoXYSlice->hide();
 		m_SceneXY = new scene::CSceneXY(m_OrthoXYSlice);
 		m_OrthoXYSlice->setScene(m_SceneXY.get());
@@ -3189,6 +5099,15 @@ void MainWindow::createOSGStuff()
 		m_measurementsXYEH = new scene::CMeasurementsXYEH( m_OrthoXYSlice, m_SceneXY.get() );
 		m_measurementsXYEH->setHandleDensityUnderCursor(true);
 		m_OrthoXYSlice->addEventHandler( m_measurementsXYEH.get() );
+#ifdef ENABLE_DEEPLEARNING
+        // Landmark annotations event handler
+        m_landmarkAnnotationsXYEH = new scene::CLandmarkAnnotationsXYEH(m_OrthoXYSlice, m_SceneXY.get());
+        m_OrthoXYSlice->addEventHandler(m_landmarkAnnotationsXYEH.get());
+#endif
+
+        //m_OrthoXYSliceSubstitute = new OSGOrtho2DCanvas(nullptr);
+        //m_OrthoXYSliceSubstitute->hide();
+
 		for(int i = 0; i < MAX_IMPORTED_MODELS; ++i)
 		{
 			m_importedModelCutSliceXY[i] = new osg::CModelCutVisualizerSliceXY(data::Storage::ImportedModelCutSliceXY::Id + i, m_OrthoXYSlice);
@@ -3197,16 +5116,18 @@ void MainWindow::createOSGStuff()
 			m_SceneXY->addChild(m_importedModelCutSliceXY[i]);
 		}
 
-		m_xyVizualizer = new osg::CRegionsVisualizerForSliceXY(osg::Matrix::identity(), data::Storage::SliceXY::Id, m_OrthoXYSlice);
-		m_SceneXY->addChild(m_xyVizualizer);
+		//m_xyVizualizer = new osg::CRegionsVisualizerForSliceXY(osg::Matrix::identity(), data::Storage::SliceXY::Id, m_OrthoXYSlice);
+		//m_SceneXY->addChild(m_xyVizualizer);
+        m_xyVizualizer = new osg::CMultiClassRegionsVisualizerForSliceXY(osg::Matrix::identity(), data::Storage::SliceXY::Id, m_OrthoXYSlice);
+        m_SceneXY->addChild(m_xyVizualizer);
 
 		m_xyVOIVizualizer = new osg::CVolumeOfInterestVisualizerForSliceXY(osg::Matrix::identity(), data::Storage::SliceXY::Id, m_OrthoXYSlice);
-		m_SceneXY->addChild(m_xyVOIVizualizer);
+		//m_SceneXY->addChild(m_xyVOIVizualizer);
 	}
 
     // XZ Slice
 	{
-		m_OrthoXZSlice = new OSGOrtho2DCanvas(nullptr, bAntialiasing);
+		m_OrthoXZSlice = new OSGOrtho2DCanvas(nullptr);
 		m_OrthoXZSlice->hide();
 		m_SceneXZ = new scene::CSceneXZ(m_OrthoXZSlice);
 		m_OrthoXZSlice->setScene(m_SceneXZ.get());
@@ -3219,6 +5140,15 @@ void MainWindow::createOSGStuff()
 		m_measurementsXZEH = new scene::CMeasurementsXZEH( m_OrthoXZSlice, m_SceneXZ.get() );
 		m_measurementsXZEH->setHandleDensityUnderCursor(true);
 		m_OrthoXZSlice->addEventHandler( m_measurementsXZEH.get() );
+#ifdef ENABLE_DEEPLEARNING
+        // Landmark annotations event handler
+        m_landmarkAnnotationsXZEH = new scene::CLandmarkAnnotationsXZEH(m_OrthoXZSlice, m_SceneXZ.get());
+        m_OrthoXZSlice->addEventHandler(m_landmarkAnnotationsXZEH.get());
+#endif
+
+        //m_OrthoXZSliceSubstitute = new OSGOrtho2DCanvas(nullptr);
+        //m_OrthoXZSliceSubstitute->hide();
+
 		for(int i = 0; i < MAX_IMPORTED_MODELS; ++i)
 		{
 			m_importedModelCutSliceXZ[i] = new osg::CModelCutVisualizerSliceXZ(data::Storage::ImportedModelCutSliceXZ::Id + i, m_OrthoXZSlice);
@@ -3227,16 +5157,18 @@ void MainWindow::createOSGStuff()
 			m_SceneXZ->addChild(m_importedModelCutSliceXZ[i]);
 		}
 
-		m_xzVizualizer = new osg::CRegionsVisualizerForSliceXZ(osg::Matrix::rotate(osg::DegreesToRadians(-90.0), osg::Vec3(1.0, 0.0, 0.0)), data::Storage::SliceXZ::Id, m_OrthoXZSlice);
-		m_SceneXZ->addChild(m_xzVizualizer);
+		//m_xzVizualizer = new osg::CRegionsVisualizerForSliceXZ(osg::Matrix::rotate(osg::DegreesToRadians(-90.0), osg::Vec3(1.0, 0.0, 0.0)), data::Storage::SliceXZ::Id, m_OrthoXZSlice);
+		//m_SceneXZ->addChild(m_xzVizualizer);
+        m_xzVizualizer = new osg::CMultiClassRegionsVisualizerForSliceXZ(osg::Matrix::rotate(osg::DegreesToRadians(-90.0), osg::Vec3(1.0, 0.0, 0.0)), data::Storage::SliceXZ::Id, m_OrthoXZSlice);
+        m_SceneXZ->addChild(m_xzVizualizer);
 
 		m_xzVOIVizualizer = new osg::CVolumeOfInterestVisualizerForSliceXZ(osg::Matrix::rotate(osg::DegreesToRadians(-90.0), osg::Vec3(1.0, 0.0, 0.0)), data::Storage::SliceXZ::Id, m_OrthoXZSlice);
-		m_SceneXZ->addChild(m_xzVOIVizualizer);
+		//m_SceneXZ->addChild(m_xzVOIVizualizer);
 	}
 
     // YZ Slice
 	{
-		m_OrthoYZSlice = new OSGOrtho2DCanvas(nullptr, bAntialiasing);
+		m_OrthoYZSlice = new OSGOrtho2DCanvas(nullptr);
 		m_OrthoYZSlice->hide();
 		m_SceneYZ = new scene::CSceneYZ(m_OrthoYZSlice);
 		m_OrthoYZSlice->setScene(m_SceneYZ.get());
@@ -3249,6 +5181,15 @@ void MainWindow::createOSGStuff()
 		m_measurementsYZEH = new scene::CMeasurementsYZEH( m_OrthoYZSlice, m_SceneYZ.get() );
 		m_measurementsYZEH->setHandleDensityUnderCursor(true);
 		m_OrthoYZSlice->addEventHandler( m_measurementsYZEH.get() );
+#ifdef ENABLE_DEEPLEARNING
+        // Landmark annotations event handler
+        m_landmarkAnnotationsYZEH = new scene::CLandmarkAnnotationsYZEH(m_OrthoYZSlice, m_SceneYZ.get());
+        m_OrthoYZSlice->addEventHandler(m_landmarkAnnotationsYZEH.get());
+#endif
+
+        //m_OrthoYZSliceSubstitute = new OSGOrtho2DCanvas(nullptr);
+        //m_OrthoYZSliceSubstitute->hide();
+
 		for(int i = 0; i < MAX_IMPORTED_MODELS; ++i)
 		{
 			m_importedModelCutSliceYZ[i] = new osg::CModelCutVisualizerSliceYZ(data::Storage::ImportedModelCutSliceYZ::Id + i, m_OrthoYZSlice);
@@ -3257,11 +5198,13 @@ void MainWindow::createOSGStuff()
 			m_SceneYZ->addChild(m_importedModelCutSliceYZ[i]);
 		}
 
-		m_yzVizualizer = new osg::CRegionsVisualizerForSliceYZ(osg::Matrix::rotate(osg::DegreesToRadians(-90.0), osg::Vec3(1.0, 0.0, 0.0)) * osg::Matrix::rotate(osg::DegreesToRadians(-90.0), osg::Vec3(0.0, 1.0, 0.0)), data::Storage::SliceYZ::Id, m_OrthoYZSlice);
-		m_SceneYZ->addChild(m_yzVizualizer);
+		//m_yzVizualizer = new osg::CRegionsVisualizerForSliceYZ(osg::Matrix::rotate(osg::DegreesToRadians(-90.0), osg::Vec3(1.0, 0.0, 0.0)) * osg::Matrix::rotate(osg::DegreesToRadians(-90.0), osg::Vec3(0.0, 1.0, 0.0)), data::Storage::SliceYZ::Id, m_OrthoYZSlice);
+		//m_SceneYZ->addChild(m_yzVizualizer);
+        m_yzVizualizer = new osg::CMultiClassRegionsVisualizerForSliceYZ(osg::Matrix::rotate(osg::DegreesToRadians(-90.0), osg::Vec3(1.0, 0.0, 0.0)) * osg::Matrix::rotate(osg::DegreesToRadians(-90.0), osg::Vec3(0.0, 1.0, 0.0)), data::Storage::SliceYZ::Id, m_OrthoYZSlice);
+        m_SceneYZ->addChild(m_yzVizualizer);
 
 		m_yzVOIVizualizer = new osg::CVolumeOfInterestVisualizerForSliceYZ(osg::Matrix::rotate(osg::DegreesToRadians(-90.0), osg::Vec3(1.0, 0.0, 0.0)) * osg::Matrix::rotate(osg::DegreesToRadians(-90.0), osg::Vec3(0.0, 1.0, 0.0)), data::Storage::SliceYZ::Id, m_OrthoYZSlice);
-		m_SceneYZ->addChild(m_yzVOIVizualizer);
+		//m_SceneYZ->addChild(m_yzVOIVizualizer);
 	}
 
 	m_contoursVisible = true;
@@ -3272,50 +5215,259 @@ void MainWindow::createOSGStuff()
 
 ///////////////////////////////////////////////////////////////////////////////
 
+// Whenever the widget or a parent of it gets reparented so that the top-level window becomes different, 
+// the widget's associated context is destroyed and a new one is created. This is then followed by a call 
+// to initializeGL() where all OpenGL resources must get reinitialized. 
+QWidget* createGlWindowContainer(QWidget* pChild, int nIter = 1)
+{
+    if (nIter == 0)
+        return pChild;
+    QFrame* pContainer = new QFrame();
+    pContainer->setFrameStyle(QFrame::Panel | QFrame::Sunken);
+    pContainer->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Ignored);
+    QGridLayout * layout = new QGridLayout();
+    layout->setSpacing(1);
+    layout->setContentsMargins(0, 0, 0, 0);
+    pContainer->setLayout(layout);
+    QWidget * pW = createGlWindowContainer(pChild, nIter - 1);
+    layout->addWidget(pW,0,0);     
+    return pContainer;
+}
+
 void MainWindow::setupDockWindows()
 {
-    m_wnd3DView.setWindowTitle(tr("3D"));    
-    m_wnd3DView.setAllowedAreas(Qt::NoDockWidgetArea);
-    m_wnd3DView.setFeatures(0);
-    m_wnd3DView.setObjectName("3D View");
-    m_wnd3DView.setMinimumSize(200,150);
-    m_wnd3DView.setWidget(m_3DView);
-    m_wnd3DView.setProperty("Icon",":/icons/icon3d.png");    
+    QSettings settings;
+    QColor color = settings.value("BGColor", DEFAULT_BACKGROUND_COLOR).toUInt();
 
-    m_wndXYView.setWindowTitle(tr("Axial / XY"));
-    m_wndXYView.setAllowedAreas(Qt::NoDockWidgetArea);
-    m_wndXYView.setFeatures(0);
-    m_wndXYView.setObjectName("Axial View");
-    m_wndXYView.setMinimumSize(200,150);
-    m_wndXYView.setWidget(m_OrthoXYSlice);
-    m_wndXYView.setProperty("Icon",":/icons/iconxy.png");
+    QPalette pal = palette();
+    pal.setColor(QPalette::Background, color);
 
-    m_wndXZView.setWindowTitle(tr("Coronal / XZ"));
-    m_wndXZView.setAllowedAreas(Qt::NoDockWidgetArea);
-    m_wndXZView.setFeatures(0);
-    m_wndXZView.setObjectName("Coronal View");
-    m_wndXZView.setMinimumSize(200,150);
-    m_wndXZView.setWidget(m_OrthoXZSlice);
-    m_wndXZView.setProperty("Icon",":/icons/iconxz.png");
+    /************************ 3D ********************************/
+    CCustomDockWidget* wnd3DView = new CCustomDockWidget(View3D);
+    wnd3DView->setWindowTitle(tr("3D"));    
+    wnd3DView->setAllowedAreas(Qt::NoDockWidgetArea);
+    wnd3DView->setFeatures(0);
+    wnd3DView->setObjectName("3D View");
+    wnd3DView->setMinimumSize(200, 150);
+    //wnd3DView->setWidget(createGlWindowContainer(m_3DView));
+    wnd3DView->setProperty("Icon",":/svg/svg/icon3d.svg");
+    wnd3DView->setProperty("View", View3D);
 
-    m_wndYZView.setWindowTitle(tr("Sagittal / YZ"));
-    m_wndYZView.setAllowedAreas(Qt::NoDockWidgetArea);
-    m_wndYZView.setFeatures(0);
-    m_wndYZView.setObjectName("Sagittal View");
-    m_wndYZView.setMinimumSize(200,150);
-    m_wndYZView.setWidget(m_OrthoYZSlice);
-    m_wndYZView.setProperty("Icon",":/icons/iconyz.png");
+    QWidget* inner3D = new QWidget(wnd3DView);
+    QVBoxLayout* layout3D = new QVBoxLayout();
+    layout3D->setMargin(0);
+    layout3D->setSpacing(0);
+    QWidget* container3D = createGlWindowContainer(m_3DView);
+    container3D->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    layout3D->addWidget(container3D);
+    inner3D->setLayout(layout3D);
+    wnd3DView->setWidget(inner3D);
 
-    connect(&m_wnd3DView, SIGNAL(visibilityChanged(bool)), this, SLOT(dockWidgetVisiblityChanged(bool)));
-    connect(&m_wndXYView, SIGNAL(visibilityChanged(bool)), this, SLOT(dockWidgetVisiblityChanged(bool)));
-    connect(&m_wndXZView, SIGNAL(visibilityChanged(bool)), this, SLOT(dockWidgetVisiblityChanged(bool)));
-    connect(&m_wndYZView, SIGNAL(visibilityChanged(bool)), this, SLOT(dockWidgetVisiblityChanged(bool)));
+    QDockWidget* wnd3DViewSubstitute = new QDockWidget();
+    //wnd3DViewSubstitute->setWindowTitle(tr("3D"));
+    wnd3DViewSubstitute->setAllowedAreas(Qt::NoDockWidgetArea);
+    wnd3DViewSubstitute->setFeatures(0);
+    wnd3DViewSubstitute->setObjectName("3D View Substitute");
+    wnd3DViewSubstitute->setMinimumSize(200, 150);
+    //wnd3DViewSubstitute->setProperty("Icon", ":/svg/svg/icon3d.svg");
 
-    // connect before docking
-    connect(&m_wnd3DView,SIGNAL(dockLocationChanged(Qt::DockWidgetArea)),this,SLOT(dockLocationChanged(Qt::DockWidgetArea))); 
-    connect(&m_wndXYView,SIGNAL(dockLocationChanged(Qt::DockWidgetArea)),this,SLOT(dockLocationChanged(Qt::DockWidgetArea)));
-    connect(&m_wndXZView,SIGNAL(dockLocationChanged(Qt::DockWidgetArea)),this,SLOT(dockLocationChanged(Qt::DockWidgetArea)));
-    connect(&m_wndYZView,SIGNAL(dockLocationChanged(Qt::DockWidgetArea)),this,SLOT(dockLocationChanged(Qt::DockWidgetArea)));
+    QWidget* inner3DSubstitute = new QWidget();
+
+    inner3DSubstitute->setAutoFillBackground(true);
+    inner3DSubstitute->setPalette(pal);
+
+    QVBoxLayout* layout3DSubstitute = new QVBoxLayout();
+    inner3DSubstitute->setLayout(layout3DSubstitute);
+    wnd3DViewSubstitute->setWidget(inner3DSubstitute);
+
+    /************************************************************/
+
+    /************************ XY ********************************/
+    CCustomDockWidget* wndXYView = new CCustomDockWidget(ViewXY);
+    wndXYView->setWindowTitle(tr("Axial / XY"));
+    wndXYView->setAllowedAreas(Qt::NoDockWidgetArea);
+    wndXYView->setFeatures(0);
+    wndXYView->setObjectName("Axial View");
+    wndXYView->setMinimumSize(200,150);
+    //wndXYView->setWidget(createGlWindowContainer(m_OrthoXYSlice));
+    wndXYView->setProperty("Icon",":/svg/svg/iconxy.svg");
+    wndXYView->setProperty("View", ViewXY);
+
+    QWidget* innerXY = new QWidget(wndXYView);
+    QVBoxLayout* layoutXY = new QVBoxLayout();
+    layoutXY->setMargin(0);
+    layoutXY->setSpacing(0);
+    QWidget* containerXY = createGlWindowContainer(m_OrthoXYSlice);
+    containerXY->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    layoutXY->addWidget(containerXY);
+    innerXY->setLayout(layoutXY);
+    wndXYView->setWidget(innerXY);
+
+    QDockWidget* wndXYViewSubstitute = new QDockWidget();
+    //wndXYViewSubstitute->setWindowTitle(tr("Axial / XY"));
+    wndXYViewSubstitute->setAllowedAreas(Qt::NoDockWidgetArea);
+    wndXYViewSubstitute->setFeatures(0);
+    wndXYViewSubstitute->setObjectName("Axial View Substitute");
+    wndXYViewSubstitute->setMinimumSize(200, 150);
+    //wndXYViewSubstitute->setProperty("Icon", ":/svg/svg/iconxy.svg");
+
+    QWidget* innerXYSubstitute = new QWidget();
+
+    innerXYSubstitute->setAutoFillBackground(true);
+    innerXYSubstitute->setPalette(pal);
+
+    QVBoxLayout* layoutXYSubstitute = new QVBoxLayout();
+    innerXYSubstitute->setLayout(layoutXYSubstitute);
+    wndXYViewSubstitute->setWidget(innerXYSubstitute);
+
+    /************************************************************/
+
+    /************************ XZ ********************************/
+    CCustomDockWidget* wndXZView = new CCustomDockWidget(ViewXZ);
+    wndXZView->setWindowTitle(tr("Coronal / XZ"));
+    wndXZView->setAllowedAreas(Qt::NoDockWidgetArea);
+    wndXZView->setFeatures(0);
+    wndXZView->setObjectName("Coronal View");
+    wndXZView->setMinimumSize(200,150);
+    //wndXZView->setWidget(createGlWindowContainer(m_OrthoXZSlice));
+    wndXZView->setProperty("Icon",":/svg/svg/iconxz.svg");
+    wndXZView->setProperty("View", ViewXZ);
+
+    QWidget* innerXZ = new QWidget(wndXZView);
+    QVBoxLayout* layoutXZ = new QVBoxLayout();
+    layoutXZ->setMargin(0);
+    layoutXZ->setSpacing(0);
+    QWidget* containerXZ = createGlWindowContainer(m_OrthoXZSlice);
+    containerXZ->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    layoutXZ->addWidget(containerXZ);
+    innerXZ->setLayout(layoutXZ);
+    wndXZView->setWidget(innerXZ);
+
+    QDockWidget* wndXZViewSubstitute = new QDockWidget();
+    //wndXZViewSubstitute->setWindowTitle(tr("Coronal / XZ"));
+    wndXZViewSubstitute->setAllowedAreas(Qt::NoDockWidgetArea);
+    wndXZViewSubstitute->setFeatures(0);
+    wndXZViewSubstitute->setObjectName("Coronal View Substitute");
+    wndXZViewSubstitute->setMinimumSize(200, 150);
+    //wndXZViewSubstitute->setProperty("Icon", ":/svg/svg/iconxz.svg");
+
+    QWidget* innerXZSubstitute = new QWidget();
+
+    innerXZSubstitute->setAutoFillBackground(true);
+    innerXZSubstitute->setPalette(pal);
+
+    QVBoxLayout* layoutXZSubstitute = new QVBoxLayout();
+    innerXZSubstitute->setLayout(layoutXZSubstitute);
+    wndXZViewSubstitute->setWidget(innerXZSubstitute);
+
+    /************************************************************/
+
+    /************************ YZ ********************************/
+    CCustomDockWidget* wndYZView = new CCustomDockWidget(ViewYZ);
+    wndYZView->setWindowTitle(tr("Sagittal / YZ"));
+    wndYZView->setAllowedAreas(Qt::NoDockWidgetArea);
+    wndYZView->setFeatures(0);
+    wndYZView->setObjectName("Sagittal View");
+    wndYZView->setMinimumSize(200,150);
+    //wndYZView->setWidget(createGlWindowContainer(m_OrthoYZSlice));
+    wndYZView->setProperty("Icon",":/svg/svg/iconyz.svg");
+    wndYZView->setProperty("View", ViewYZ);
+
+    QWidget* innerYZ = new QWidget(wndYZView);
+    QVBoxLayout* layoutYZ = new QVBoxLayout();
+    layoutYZ->setMargin(0);
+    layoutYZ->setSpacing(0);
+    QWidget* containerYZ = createGlWindowContainer(m_OrthoYZSlice);
+    containerYZ->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    layoutYZ->addWidget(containerYZ);
+    innerYZ->setLayout(layoutYZ);
+    wndYZView->setWidget(innerYZ);
+
+    QDockWidget* wndYZViewSubstitute = new QDockWidget();
+    //wndYZViewSubstitute->setWindowTitle(tr("Sagittal / YZ"));
+    wndYZViewSubstitute->setAllowedAreas(Qt::NoDockWidgetArea);
+    wndYZViewSubstitute->setFeatures(0);
+    wndYZViewSubstitute->setObjectName("Sagittal View Substitute");
+    wndYZViewSubstitute->setMinimumSize(200, 150);
+    //wndYZViewSubstitute->setProperty("Icon", ":/svg/svg/iconyz.svg");
+
+    QWidget* innerYZSubstitute = new QWidget();
+
+    innerYZSubstitute->setAutoFillBackground(true);
+    innerYZSubstitute->setPalette(pal);
+
+    QVBoxLayout* layoutYZSubstitute = new QVBoxLayout();
+    innerYZSubstitute->setLayout(layoutYZSubstitute);
+    wndYZViewSubstitute->setWidget(innerYZSubstitute);
+
+    /************************************************************/
+
+    /********************* Arbitrary ****************************/
+    CCustomDockWidget* wndArbitraryView = new CCustomDockWidget(ViewARB);
+    wndArbitraryView->setWindowTitle(tr("Arbitrary"));
+    wndArbitraryView->setAllowedAreas(Qt::NoDockWidgetArea);
+    wndArbitraryView->setFeatures(0);
+    wndArbitraryView->setObjectName("Arbitrary View");
+    wndArbitraryView->setMinimumSize(200, 150);
+    //wndArbitraryView->setWidget(createGlWindowContainer(m_ArbitrarySlice));
+    wndArbitraryView->setProperty("Icon", ":/svg/svg/iconarb.svg");
+    wndArbitraryView->setProperty("View", ViewARB);
+
+    QWidget* innerArbitrary = new QWidget(wndArbitraryView);
+    QVBoxLayout* layoutArbitrary = new QVBoxLayout();
+    layoutArbitrary->setMargin(0);
+    layoutArbitrary->setSpacing(0);
+    QWidget* containerArbitrary = createGlWindowContainer(m_ArbitrarySlice);
+    containerArbitrary->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    layoutArbitrary->addWidget(containerArbitrary);
+    innerArbitrary->setLayout(layoutArbitrary);
+    wndArbitraryView->setWidget(innerArbitrary);
+
+    QDockWidget* wndArbitraryViewSubstitute = new QDockWidget();
+    //wndArbitraryViewSubstitute->setWindowTitle(tr("Arbitrary"));
+    wndArbitraryViewSubstitute->setAllowedAreas(Qt::NoDockWidgetArea);
+    wndArbitraryViewSubstitute->setFeatures(0);
+    wndArbitraryViewSubstitute->setObjectName("Arbitrary View Substitute");
+    wndArbitraryViewSubstitute->setMinimumSize(200, 150);
+    //wndArbitraryViewSubstitute->setProperty("Icon", ":/svg/svg/iconarb.svg");
+
+    QWidget* innerArbitrarySubstitute = new QWidget();
+
+    innerArbitrarySubstitute->setAutoFillBackground(true);
+    innerArbitrarySubstitute->setPalette(pal);
+
+    QVBoxLayout* layoutArbitrarySubstitute = new QVBoxLayout();
+    innerArbitrarySubstitute->setLayout(layoutArbitrarySubstitute);
+    wndArbitraryViewSubstitute->setWidget(innerArbitrarySubstitute);
+
+    /************************************************************/
+
+    m_wndViews.push_back(wnd3DView);
+    m_wndViews.push_back(wndXYView);
+    m_wndViews.push_back(wndXZView);
+    m_wndViews.push_back(wndYZView);
+    m_wndViews.push_back(wndArbitraryView);
+
+    m_wndViewsSubstitute.push_back(wnd3DViewSubstitute);
+    m_wndViewsSubstitute.push_back(wndXYViewSubstitute);
+    m_wndViewsSubstitute.push_back(wndXZViewSubstitute);
+    m_wndViewsSubstitute.push_back(wndYZViewSubstitute);
+    m_wndViewsSubstitute.push_back(wndArbitraryViewSubstitute);
+
+    assert(m_wndViews.size() == m_wndViewsSubstitute.size());
+
+    for (size_t i = 0; i < m_wndViews.size(); ++i)
+    {
+        connect(m_wndViews[i], SIGNAL(visibilityChanged(bool)), this, SLOT(dockWidgetVisiblityChanged(bool)));
+        connect(m_wndViews[i], SIGNAL(dockLocationChanged(Qt::DockWidgetArea)), this, SLOT(dockLocationChanged(Qt::DockWidgetArea)));
+        //connect(m_wndViews[i], SIGNAL(topLevelChanged(bool)), this, SLOT(dockWidget_topLevelChanged(bool)));
+        //m_wndViews[i]->setWindowFlags(Qt::Window | Qt::WindowMinimizeButtonHint | Qt::WindowMaximizeButtonHint | Qt::WindowCloseButtonHint);
+
+        connect(m_wndViewsSubstitute[i], SIGNAL(visibilityChanged(bool)), this, SLOT(dockWidgetVisiblityChanged(bool)));
+        connect(m_wndViewsSubstitute[i], SIGNAL(dockLocationChanged(Qt::DockWidgetArea)), this, SLOT(dockLocationChanged(Qt::DockWidgetArea)));
+        //connect(m_wndViewsSubstitute[i], SIGNAL(topLevelChanged(bool)), this, SLOT(dockWidget_topLevelChanged(bool)));
+        //m_wndViewsSubstitute[i]->setWindowFlags(Qt::Window | Qt::WindowMinimizeButtonHint | Qt::WindowMaximizeButtonHint | Qt::WindowCloseButtonHint);
+    }
 }
 
 void MainWindow::dockWidgetVisiblityChanged(bool visible)
@@ -3328,6 +5480,26 @@ void MainWindow::dockWidgetVisiblityChanged(bool visible)
 void MainWindow::dockLocationChanged ( Qt::DockWidgetArea area )
 {
     updateTabIcons();
+}
+
+void MainWindow::dockWidget_topLevelChanged(bool changed)
+{
+    CCustomDockWidget* dw = static_cast<CCustomDockWidget*>(QObject::sender());
+
+    unsigned int view = dw->property("View").toUInt();
+
+    int index = getIndexOfWndInLayout(view);
+
+    if (index < 0 || index >= m_viewsToShow.size())
+    {
+        return;
+    }
+
+    if (m_viewsToShow[index].bFloating && m_viewsToShow[index].bShowSubstitute)
+    {
+        dw->setWindowFlags(Qt::Window | Qt::WindowMinimizeButtonHint | Qt::WindowMaximizeButtonHint | Qt::WindowCloseButtonHint);
+        dw->show();
+    }
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -3351,31 +5523,163 @@ std::string MainWindow::wcs2ACP(const std::wstring &filename)
                 buffer[sizeC]=0;
                 convFilename=buffer;
             }
-            delete buffer;
+            delete [] buffer;
         }
     }
     return convFilename;
 }
 #endif
 
-void MainWindow::mouseModeDensityWindow(bool)
+bool MainWindow::getModelDraggerVisibility()
 {
-    APP_MODE.setAndStore(scene::CAppMode::MODE_DENSITY_WINDOW);
+    return m_switchDraggerModel->isVisible();
 }
 
-void MainWindow::mouseModeTrackball(bool)
+void MainWindow::setModelDraggerVisibility(bool visible)
 {
-    APP_MODE.setAndStore(scene::CAppMode::MODE_TRACKBALL);
+    m_switchDraggerModel->setOnOffState(visible);
 }
 
-void MainWindow::mouseModeObjectManipulation(bool)
+int MainWindow::getModelDraggerModelId()
 {
-    APP_MODE.setAndStore(scene::CAppMode::MODE_SLICE_MOVE);
+    return m_draggerModel->getModelID();
 }
 
-void MainWindow::mouseModeZoom(bool)
+void MainWindow::setModelDraggerModelId(int modelId, bool on)
 {
-    APP_MODE.set(scene::CAppMode::COMMAND_SCENE_ZOOM);
+    if (-1 == modelId && !on && m_switchDraggerModel.get())
+    {
+        if (!m_switchDraggerModel->isVisible())
+            return;
+    }
+
+    // unplug dragger from previous models
+    for (int i = 0; i < MAX_IMPORTED_MODELS; i++)
+    {
+        m_draggerModel->removeTransformUpdating(m_modelVisualizers[i]->getModelTransform().get());
+    }
+#ifdef ENABLE_DEEPLEARNING
+    m_draggerModel->removeTransformUpdating(m_referenceAnatomicalLandmarkModelVisualizer->getModelTransform().get());
+#endif
+
+    // hide dragger
+    if (!on)
+        m_switchDraggerModel->hide();
+
+    if (on && modelId >= 0)
+    {
+        data::CObjectPtr<data::CModel> spModel(APP_STORAGE.getEntry(modelId, data::Storage::NO_UPDATE));
+        const geometry::CMesh* pMesh = spModel->getMesh();
+        if (pMesh && pMesh->n_vertices() > 0)
+        {
+            bool setPivot = true;
+            m_draggerModel->setModelID(modelId, setPivot);
+
+            switch (modelId)
+            {
+#ifdef ENABLE_DEEPLEARNING
+            case data::Storage::ReferenceAnatomicalLandmarkModel::Id:
+                m_draggerModel->addTransformUpdating(m_referenceAnatomicalLandmarkModelVisualizer->getModelTransform().get());
+                break;
+#endif
+
+            default:
+                Q_ASSERT(modelId >= data::Storage::ImportedModel::Id && modelId<data::Storage::ImportedModel::Id + MAX_IMPORTED_MODELS);
+                m_draggerModel->addTransformUpdating(m_modelVisualizers[modelId - data::Storage::ImportedModel::Id]->getModelTransform().get());
+                break;
+            }
+
+            m_switchDraggerModel->show();
+        }
+    }
+
+    // refresh 3D window
+    m_3DView->Refresh(false);
+}
+
+void MainWindow::onDraggerMove(int eventType, bool setMatrix)
+{
+    // store undo record
+    if (scene::CAppMode::PUSH == eventType)
+    {
+        int idModel = m_draggerModel->getModelID();
+        data::CObjectPtr<data::CPivot> spPivot(APP_STORAGE.getEntry(data::Storage::ModelPivot::Id));
+        std::vector<int> modelList;
+        if (idModel>0)
+            modelList.push_back(idModel);
+        m_ModelManager.createAndStoreSnapshot(modelList, false, spPivot->getSnapshot(NULL));
+    }
+
+    // invalidate model to update cuts
+    if ((setMatrix) && (scene::CAppMode::RELEASE == eventType || scene::CAppMode::DRAG == eventType))
+    {
+        if (!m_switchDraggerModel->isVisible())
+            return;
+        int idModel = m_draggerModel->getModelID();
+        data::CObjectPtr<data::CModel> spModel(APP_STORAGE.getEntry(idModel, data::Storage::NO_UPDATE));
+        if (spModel->getMesh())
+        {
+            // update model matrix
+#ifdef ENABLE_DEEPLEARNING
+            if (data::Storage::ReferenceAnatomicalLandmarkModel::Id == idModel)
+                spModel->setTransformationMatrix(m_referenceAnatomicalLandmarkModelVisualizer->getModelTransform()->getMatrix());
+#endif
+            if (idModel >= data::Storage::ImportedModel::Id)
+                spModel->setTransformationMatrix(m_modelVisualizers[idModel - data::Storage::ImportedModel::Id]->getModelTransform()->getMatrix());
+            // invalidate model
+            APP_STORAGE.invalidate(spModel.getEntryPtr(), data::CModel::POSITION_CHANGED);
+        }
+    }
+}
+
+void MainWindow::mouseModeDensityWindow(bool checked)
+{
+    if (checked)
+    {
+        APP_MODE.setAndStore(scene::CAppMode::MODE_DENSITY_WINDOW);
+        //APP_MODE.storeAndSet(scene::CAppMode::MODE_DENSITY_WINDOW);
+        //APP_MODE.set(scene::CAppMode::MODE_DENSITY_WINDOW);
+    }
+    else
+    {
+        APP_MODE.setAndStore(scene::CAppMode::MODE_TRACKBALL);
+    }
+}
+
+void MainWindow::mouseModeTrackball(bool checked)
+{
+    if (checked)
+    {
+        APP_MODE.setAndStore(scene::CAppMode::MODE_TRACKBALL);
+        //APP_MODE.storeAndSet(scene::CAppMode::MODE_TRACKBALL);
+        //APP_MODE.set(scene::CAppMode::MODE_TRACKBALL);
+    }
+}
+
+void MainWindow::mouseModeObjectManipulation(bool checked)
+{
+    if (checked)
+    {
+        APP_MODE.setAndStore(scene::CAppMode::MODE_SLICE_MOVE);
+        //APP_MODE.storeAndSet(scene::CAppMode::MODE_SLICE_MOVE);
+        //APP_MODE.set(scene::CAppMode::MODE_SLICE_MOVE);
+    }
+    else
+    {
+        APP_MODE.setAndStore(scene::CAppMode::MODE_TRACKBALL);
+    }
+}
+
+void MainWindow::mouseModeZoom(bool checked)
+{
+    if (checked)
+    {
+        APP_MODE.set(scene::CAppMode::COMMAND_SCENE_ZOOM);
+    }
+    else
+    {
+        APP_MODE.setAndStore(scene::CAppMode::MODE_TRACKBALL);
+    }
 }
 
 void MainWindow::performUndo()
@@ -3435,6 +5739,12 @@ void MainWindow::showSagittalSlice(bool bShow)
     m_3DView->Refresh(false);
 }
 
+void MainWindow::showArbitrarySlice(bool bShow)
+{
+    VPL_SIGNAL(SigSetPlaneARBVisibility).invoke(bShow);
+    m_3DView->Refresh(false);
+}
+
 void MainWindow::showSurfaceModel(bool bShow)
 {
     for(size_t i = 0; i < MAX_IMPORTED_MODELS; ++i)
@@ -3446,30 +5756,35 @@ void MainWindow::showSurfaceModel(bool bShow)
 void MainWindow::createSurfaceModel()
 {
     // Find unused id
-	int id(findPossibleModelId());
-	if(id < 0)
-		return;
+    int id(findPossibleModelId());
+    if (id < 0)
+        return;
 
-    CProgress progress(this);
-    progress.setLabelText(tr("Creating surface model, please wait..."));
-    progress.show();
+    CProgress *progress = new CProgress(this);
+    progress->setLabelText(tr("Reducing small submeshes, please wait..."));
+    progress->show();
+    progress->setLoopsCnt(4);
+
+    progress->setCurrentLoopIndex(0);
+    progress->setLabelText(tr("Creating model, please wait..."));
+    progress->show();
 
     {   // if there is already an existing model which is large, free it to save memory
-        data::CObjectPtr<data::CModel> spModel( APP_STORAGE.getEntry(id) );
-        geometry::CMesh* pMesh=spModel->getMesh();
-        if (NULL!=pMesh && pMesh->n_vertices() > 1000000)
+        data::CObjectPtr<data::CModel> spModel(APP_STORAGE.getEntry(id));
+        const geometry::CMesh* pMesh = spModel->getMesh();
+        if (NULL != pMesh && pMesh->n_vertices() > 1000000)
         {
             spModel->setMesh(new geometry::CMesh());
-			spModel->clearAllProperties();
-            APP_STORAGE.invalidate( spModel.getEntryPtr() );
+            spModel->clearAllProperties();
+            APP_STORAGE.invalidate(spModel.getEntryPtr());
         }
     }
 
-    data::CObjectPtr<data::CDensityData> spVolume( APP_STORAGE.getEntry(m_Examination.getActiveDataSet()) );
+    data::CObjectPtr<data::CDensityData> spVolume(APP_STORAGE.getEntry(m_Examination.getActiveDataSet()));
 
     vpl::img::tDensityPixel Low = 500;
     vpl::img::tDensityPixel Hi = 2000;
-    if (NULL!=m_segmentationPanel)
+    if (NULL != m_segmentationPanel)
     {
         Low = m_segmentationPanel->getLo();
         Hi = m_segmentationPanel->getHi();
@@ -3478,82 +5793,93 @@ void MainWindow::createSurfaceModel()
     geometry::CMesh* pMesh = new geometry::CMesh;
 
     CMarchingCubes mc;
-    mc.registerProgressFunc(vpl::mod::CProgress::tProgressFunc(&progress, &CProgress::Entry));
+    mc.registerProgressFunc(vpl::mod::CProgress::tProgressFunc(progress, &CProgress::Entry));
     vpl::img::CSize3d voxelSize = vpl::img::CSize3d(spVolume->getDX(), spVolume->getDY(), spVolume->getDZ());
     CThresholdFunctor<vpl::img::CDensityVolume, vpl::img::tDensityPixel> ThresholdFunc(Low, Hi, &(*spVolume), voxelSize);
 
-    if( !mc.generateMesh(*pMesh, &ThresholdFunc, true) )
+    if (!mc.generateMesh(*pMesh, &ThresholdFunc, true))
     {
         delete pMesh;
+        delete progress;
         return;
     }
 
     spVolume.release();
 
-    progress.restart(tr("Reducing small areas, please wait..."));
+    progress->setCurrentLoopIndex(1);
+    progress->setLabelText(tr("Reducing small areas, please wait..."));
+    progress->show();
 
     CSmallSubmeshReducer rc;
     rc.reduce(*pMesh, 500);
 
-    progress.restart(tr("Smoothing model, please wait..."));
+    progress->setCurrentLoopIndex(2);
+    progress->setLabelText(tr("Smoothing model, please wait..."));
+    progress->show();
 
     // Smooth model
     CSmoothing sm;
-    sm.registerProgressFunc(vpl::mod::CProgress::tProgressFunc(&progress, &CProgress::Entry));
-//    double p1 = 0.6073;
-//    double p2 = 0.1;
+    sm.registerProgressFunc(vpl::mod::CProgress::tProgressFunc(progress, &CProgress::Entry));
+    //    double p1 = 0.6073;
+    //    double p2 = 0.1;
     if (!sm.Smooth(*pMesh, 10))
     {
         delete pMesh;
+        delete progress;
         return;
     }
 
-    progress.restart(tr("Decimating model, please wait..."));
+    progress->setCurrentLoopIndex(3);
+    progress->setLabelText(tr("Decimating model, please wait..."));
+    progress->show();
 
     // Decimate model
     CDecimator dc;
-    dc.registerProgressFunc(vpl::mod::CProgress::tProgressFunc(&progress, &CProgress::Entry));
-    int output_mesh_size_tri = ( pMesh->n_faces() * 20 ) / 100;
+    dc.registerProgressFunc(vpl::mod::CProgress::tProgressFunc(progress, &CProgress::Entry));
+    int output_mesh_size_tri = (pMesh->n_faces() * 20) / 100;
     int output_mesh_size_vert = 1;
-    if( !dc.Reduce( *pMesh, output_mesh_size_vert, output_mesh_size_tri) )
+    if (!dc.Reduce(*pMesh, output_mesh_size_vert, output_mesh_size_tri))
     {
         delete pMesh;
+        delete progress;
         return;
     }
 
-    data::CObjectPtr<data::CModel> spModel( APP_STORAGE.getEntry(id) );
+    delete progress;
+
+    data::CObjectPtr<data::CModel> spModel(APP_STORAGE.getEntry(id));
     spModel->setMesh(pMesh);
-	spModel->setLabel(m_modelLabel);
-	spModel->setColor(m_modelColor);
-	spModel->clearAllProperties();
-	spModel->setProperty("Created","1");
-	spModel->setTransformationMatrix(osg::Matrix::identity());
+    spModel->setLabel(m_modelLabel);
+    spModel->setColor(m_modelColor);
+    spModel->clearAllProperties();
+    spModel->setProperty("Created", "1");
+    spModel->setTransformationMatrix(osg::Matrix::identity());
     spModel->setVisibility(true);
-	spModel->setLinkedWithRegion(false);
-	spModel->setRegionId(-1);
+    spModel->setLinkedWithRegion(false);
+    spModel->setRegionId(-1);
     APP_STORAGE.invalidate(spModel.getEntryPtr());
 
-	// if model-region linking is not enabled, hide previously created models on creation of a new one
-	QSettings settings;
-	bool bModelsLinked = settings.value("ModelRegionLinkEnabled", QVariant(DEFAULT_MODEL_REGION_LINK)).toBool();
-	if (!bModelsLinked)
-	{
-		for(int i = 0; i < MAX_IMPORTED_MODELS; ++i)
-		{
-			if (data::Storage::ImportedModel::Id + i == id) continue;
-			data::CObjectPtr<data::CModel> spModel( APP_STORAGE.getEntry(data::Storage::ImportedModel::Id + i) );
-			if (spModel->isVisible())
-			{
-				std::string created = spModel->getProperty("Created");
-				if (!created.empty())
-					VPL_SIGNAL(SigSetModelVisibility).invoke(data::Storage::ImportedModel::Id + i, false);
-			}
-		}
-	}
+    // if model-region linking is not enabled, hide previously created models on creation of a new one
+    QSettings settings;
+    bool bModelsLinked = settings.value("ModelRegionLinkEnabled", QVariant(DEFAULT_MODEL_REGION_LINK)).toBool();
+    if (!bModelsLinked)
+    {
+        for (int i = 0; i < MAX_IMPORTED_MODELS; ++i)
+        {
+            if (data::Storage::ImportedModel::Id + i == id) continue;
+            data::CObjectPtr<data::CModel> spModel2(APP_STORAGE.getEntry(data::Storage::ImportedModel::Id + i));
+            if (spModel2->isVisible())
+            {
+                std::string created = spModel2->getProperty("Created");
+                if (!created.empty())
+                    VPL_SIGNAL(SigSetModelVisibility).invoke(data::Storage::ImportedModel::Id + i, false);
+            }
+        }
+    }
 
     bool bAnyVisible(false);
-    for(int i = 0; i < MAX_IMPORTED_MODELS; ++i)
-        if(VPL_SIGNAL(SigGetModelVisibility).invoke2(data::Storage::ImportedModel::Id + i))
+    for (int i = 0; i < MAX_IMPORTED_MODELS; ++i)
+        if (VPL_SIGNAL(SigGetModelVisibility).invoke2(data::Storage::ImportedModel::Id + i))
         {
             bAnyVisible = true;
             break;
@@ -3586,6 +5912,7 @@ void MainWindow::showPreferencesDialog()
             m_OrthoXYSlice->setBackgroundColor(osgColor);
             m_OrthoXZSlice->setBackgroundColor(osgColor);
             m_OrthoYZSlice->setBackgroundColor(osgColor);
+            m_ArbitrarySlice->setBackgroundColor(osgColor);
         }
 		if (dlg.shortcutsChanged())
 		{
@@ -3621,12 +5948,17 @@ void MainWindow::showAbout()
 	QObject::connect(feedbackButton, SIGNAL(clicked()), this, SLOT(showFeedback()));
 	msgBox.setDefaultButton(feedbackButton);
 	msgBox.setEscapeButton(QMessageBox::Ok);
-    msgBox.setIconPixmap(QPixmap(":/icons/3dim.ico"));
+    msgBox.setIconPixmap(QPixmap(":/svg/svg/3dim.svg"));
     msgBox.setWindowTitle(tr("About ") + QCoreApplication::applicationName());
     msgBox.setText(product + "\n"
-                   + tr("Lightweight 3D DICOM viewer.\n\n")
-                   + QObject::trUtf8("Copyright %1 2008-%2 by 3Dim Laboratory s.r.o.").arg(QChar(169)).arg(QDate::currentDate().year()) + "\n" 
-                   + tr("http://www.3dim-laboratory.cz/")
+                   + tr("Lightweight 3D DICOM viewer.\n")
+#ifdef TRIDIM_USE_GDCM
+                   + tr("GDCM version.\n\n")
+#else
+                   + tr("DCMTK version.\n\n")
+#endif
+                   + QObject::trUtf8("Copyright %1 2008-%2 by TESCAN 3DIM s.r.o.").arg(QChar(169)).arg(QDate::currentDate().year()) + "\n" 
+                   + tr("https://www.tescan3dim.com/")
                    );
     msgBox.setDetailedText(tr(
         "Licensed under the Apache License, Version 2.0 (the \"License\");\n"
@@ -3647,7 +5979,7 @@ void MainWindow::showAbout()
 
 void MainWindow::showFeedback()
 {
-	QDesktopServices::openUrl(QUrl("http://www.3dim-laboratory.cz/en/software/3dimviewer/usersurvey/"));
+	QDesktopServices::openUrl(QUrl("https://goo.gl/forms/bs1va1HIvubCeA5S2"));
 }
 
 void MainWindow::showTutorials()
@@ -4075,12 +6407,11 @@ void MainWindow::filterSharpen()
 			int maxDensity = data::CDensityWindow::getMaxDensity();
 			int strength = dlg.getStrength();
 		#pragma omp parallel for
-			for(int z=0;z<zSize;z++)
+			for(vpl::tSize z=0;z<zSize;z++)
 			{
-				for(int y=0;y<ySize;y++)
+				for(vpl::tSize y=0;y<ySize;y++)
 				{
-					vpl::img::CVolumeGauss3Filter<vpl::img::CDensityVolume> Filter; // getResponse can't run in parallel, therefore instance for each thread
-					for(int x=0;x<xSize;x++)
+					for(vpl::tSize x=0;x<xSize;x++)
 					{
 						int oval = spVolume->at(x,y,z);
 						int val = spFiltered->at(x,y,z);
@@ -4123,13 +6454,13 @@ void  MainWindow::topSplitterMoved( int pos, int index )
     QSplitter* vSplitter = qobject_cast<QSplitter*>(m_realCentralWidget);
     if (vSplitter)
     {
-        CRapedSplitter* tSplitter = qobject_cast<CRapedSplitter*>(vSplitter->widget(0));
+        CSyncedSplitter* tSplitter = qobject_cast<CSyncedSplitter*>(vSplitter->widget(0));
         if (tSplitter)
         {
             if (tSplitter->ignoreMove()) return;
             tSplitter->setIgnoreMove(true);
         }
-        CRapedSplitter* bSplitter = qobject_cast<CRapedSplitter*>(vSplitter->widget(1));
+        CSyncedSplitter* bSplitter = qobject_cast<CSyncedSplitter*>(vSplitter->widget(1));
         if (bSplitter)
             bSplitter->moveSplitter(pos,index);
         if (tSplitter)
@@ -4144,13 +6475,13 @@ void  MainWindow::bottomSplitterMoved( int pos, int index )
     QSplitter* vSplitter = qobject_cast<QSplitter*>(m_realCentralWidget);
     if (vSplitter)
     {
-        CRapedSplitter* bSplitter = qobject_cast<CRapedSplitter*>(vSplitter->widget(1));
+        CSyncedSplitter* bSplitter = qobject_cast<CSyncedSplitter*>(vSplitter->widget(1));
         if (bSplitter)
         {
             if (bSplitter->ignoreMove()) return;
             bSplitter->setIgnoreMove(true);
         }
-        CRapedSplitter* tSplitter = qobject_cast<CRapedSplitter*>(vSplitter->widget(0));
+        CSyncedSplitter* tSplitter = qobject_cast<CSyncedSplitter*>(vSplitter->widget(0));
         if (tSplitter)
             tSplitter->moveSplitter(pos,index);
         if (bSplitter)
@@ -4182,7 +6513,7 @@ void MainWindow::print()
 
         QPainter painter (&printer);
 
-        BASEGLWidget* myWidget=m_3DView;
+        QOpenGLWidget* myWidget=m_3DView;
         double xscale = printer.pageRect().width()/double(myWidget->width());
         double yscale = printer.pageRect().height()/double(myWidget->height());
         double scale = qMin(xscale, yscale);
@@ -4356,23 +6687,17 @@ void MainWindow::loadAppSettings()
 
     renderer.enable(settings.value("VREnabled",false).toBool());
     renderer.setQuality(settings.value("VRQuality", renderer.getQuality()).toInt());
-
-	int savedShader = settings.value("VRShader", static_cast<int>(renderer.getShader())).toInt();
-
 	renderer.setShader(static_cast<PSVR::PSVolumeRendering::EShaders>(settings.value("VRShader", static_cast<int>(PSVR::PSVolumeRendering::EShaders::SURFACE)).toInt()));
 	renderer.setLut(static_cast<PSVR::PSVolumeRendering::ELookups>(settings.value("VRLUT", static_cast<int>(renderer.getLut())).toInt()));
 
     VPL_SIGNAL(SigSetPlaneXYVisibility).invoke(settings.value("ShowXYSlice", false /*VPL_SIGNAL(SigGetPlaneXYVisibility).invoke2()*/).toBool());
     VPL_SIGNAL(SigSetPlaneXZVisibility).invoke(settings.value("ShowZXSlice", false /*VPL_SIGNAL(SigGetPlaneXZVisibility).invoke2()*/).toBool());
     VPL_SIGNAL(SigSetPlaneYZVisibility).invoke(settings.value("ShowYZSlice", false /*VPL_SIGNAL(SigGetPlaneYZVisibility).invoke2()*/).toBool());
+    VPL_SIGNAL(SigSetPlaneARBVisibility).invoke(settings.value("ShowARBSlice", false /*VPL_SIGNAL(SigGetPlaneARBVisibility).invoke2()*/).toBool());
 
     ui->actionVolume_Rendering->setChecked(renderer.isEnabled());
 
-#ifdef ENABLE_PYTHON
-    pythonQt::CPythonInterpretQt::Initialize();
-#else
-    settings.setValue("isPythonEnabled", false);
-#endif
+
 }
 
 void MainWindow::saveLookupTables(QSettings &settings, std::map<std::string, CLookupTable> &luts)
@@ -4431,6 +6756,7 @@ void MainWindow::saveAppSettings()
     settings.setValue("ShowXYSlice",VPL_SIGNAL(SigGetPlaneXYVisibility).invoke2());
     settings.setValue("ShowZXSlice",VPL_SIGNAL(SigGetPlaneXZVisibility).invoke2());
     settings.setValue("ShowYZSlice",VPL_SIGNAL(SigGetPlaneYZVisibility).invoke2());
+    settings.setValue("ShowARBSlice",VPL_SIGNAL(SigGetPlaneARBVisibility).invoke2());
 
     // save VR lookup tables
     saveLookupTables(settings, renderer.getLookupTables());
@@ -4468,6 +6794,11 @@ void MainWindow::firstEvent()
         else
             openDICOM(wsDICOMName, wsDICOMName, true);
     }
+
+    //QSettings settings;
+    //bool bPing = settings.value("Ping", QVariant(true)).toBool();
+    //if (bPing)
+        pingOurServer();
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////
@@ -4566,7 +6897,42 @@ QImage* MainWindow::canvasScreenShotToQImage(OSGCanvas* pCanvas, int nRenderingS
     return im;
 }
 
-void  MainWindow::saveScreenshot(OSGCanvas* pCanvas)
+void MainWindow::saveScreenshot(int viewType)
+{
+    switch (viewType)
+    {
+        case ViewARB:
+        {
+            saveScreenshotOfCanvas(m_ArbitrarySlice);
+        }
+        break;
+        case ViewXY:
+        {
+            saveScreenshotOfCanvas(m_OrthoXYSlice);
+        }
+        break;
+        case ViewXZ:
+        {
+            saveScreenshotOfCanvas(m_OrthoXZSlice);
+        }
+        break;
+        case ViewYZ:
+        {
+            saveScreenshotOfCanvas(m_OrthoYZSlice);
+        }
+        break;
+        case View3D:
+        {
+            saveScreenshotOfCanvas(m_3DView);
+        }
+        default:
+        {
+        }
+        break;
+    }
+}
+
+void  MainWindow::saveScreenshotOfCanvas(OSGCanvas* pCanvas)
 {
     QImage* pImage = canvasScreenShotToQImage(pCanvas,100,true);
     if (NULL!=pImage)
@@ -4727,13 +7093,35 @@ void MainWindow::sigRegionDataChanged( data::CStorageEntry *pEntry )
     unsigned int ver = pEntry->getLatestVersion();
     if (ver>0 && pEntry->getChanges(ver-1,changes))
     {        
-        if (changes.checkFlagAny(data::StorageEntry::DESERIALIZED))
+        if (changes.checkFlagAny(data::StorageEntry::DESERIALIZED) || changes.checkFlagAny(data::Storage::STORAGE_RESET))
         {
             setProperty("SegmentationChanged",false);
             return;
         }
+        else
+        {
+            m_region3DPreviewManager->regionDataChanged();
+        }
+
     }
     setProperty("SegmentationChanged",true);
+}
+
+void MainWindow::sigRegionColoringChanged(data::CStorageEntry *pEntry)
+{
+    data::CChangedEntries changes;
+    unsigned int ver = pEntry->getLatestVersion();
+    if (ver > 0 && pEntry->getChanges(ver - 1, changes))
+    {
+        if (changes.checkFlagAny(data::StorageEntry::DESERIALIZED) || changes.checkFlagAny(data::Storage::STORAGE_RESET))
+        {
+            return;
+        }
+        else
+        {
+            m_region3DPreviewManager->regionDataChanged();
+        }
+    }
 }
 
 void MainWindow::sigBonesModelChanged( data::CStorageEntry *pEntry )
@@ -4849,6 +7237,11 @@ QMenu * MainWindow::createPopupMenu ()
 			continue;
 		}
 
+        if (dw->objectName() == "Quick Tissue Model Creation Panel" && m_segmentationPluginsLoaded)
+        {
+            continue;
+        }
+
         if (dw->toggleViewAction()->isEnabled())
             pPanelsMenu->addAction(dw->toggleViewAction());            
     }
@@ -4891,7 +7284,14 @@ void MainWindow::showPanelsMenu()
     qSort(dws.begin(),dws.end(),dockWidgetNameCompare);
     foreach (QDockWidget * dw, dws)
     {
-        if (m_segmentationPluginsLoaded && dw->objectName() == "Models Panel")
+        qDebug() << dw->objectName();
+
+        if (dw->objectName() == "Models Panel" && m_segmentationPluginsLoaded)
+        {
+            continue;
+        }
+
+        if (dw->objectName() == "Quick Tissue Model Creation Panel" && m_segmentationPluginsLoaded)
         {
             continue;
         }
@@ -4944,9 +7344,9 @@ bool MainWindow::canAcceptEvent(QDropEvent* event)
     {
         const QString modelFormats = "stl stla stlb obj ply 3ds dxf lwo";
         QList<QUrl> urlList = mimeData->urls();     
-        for (int i = 0; i < urlList.size(); ++i)
+        for (int s = 0; s < urlList.size(); ++s)
         {
-            QString path = urlList.at(i).toLocalFile();            
+            QString path = urlList.at(s).toLocalFile();            
             if (path.endsWith(".vlm",Qt::CaseInsensitive) || path.endsWith(".zip",Qt::CaseInsensitive) ||
                 path.endsWith(".dcm",Qt::CaseInsensitive) || path.endsWith(".dicom",Qt::CaseInsensitive))
             {
@@ -5045,10 +7445,10 @@ void MainWindow::processSurfaceModelExtern()
 
     {   // Check the model
         data::CObjectPtr<data::CModel> spModel( APP_STORAGE.getEntry(model_id) );        
-        geometry::CMesh *pMesh = spModel->getMesh();
+        const geometry::CMesh *pMesh = spModel->getMesh();
         if (!pMesh || !(pMesh->n_vertices() > 0) )
         {
-            showMessageBox(QMessageBox::Critical, tr("No STL data!"));
+            showMessageBox(QMessageBox::Critical, tr("No data!"));
             return;
         }
     }
@@ -5097,7 +7497,7 @@ void MainWindow::processSurfaceModelExtern()
     {
         QApplication::setOverrideCursor(QCursor(Qt::WaitCursor));
         data::CObjectPtr<data::CModel> spModel(APP_STORAGE.getEntry(model_id));
-        geometry::CMesh* pMesh = spModel->getMesh();
+        const geometry::CMesh* pMesh = spModel->getMesh();
 
         // will write to temp file
         QString fileName = QDir::tempPath();
@@ -5235,7 +7635,7 @@ int MainWindow::findPossibleModelId()
 	if (settings.value("ModelRegionLinkEnabled", QVariant(DEFAULT_MODEL_REGION_LINK)).toBool())
 	{
 		// Get active region
-		data::CObjectPtr<data::CRegionColoring> spColoring(APP_STORAGE.getEntry(data::Storage::RegionColoring::Id));
+		data::CObjectPtr<data::CRegionColoring> spColoring(APP_STORAGE.getEntry(data::Storage::MultiClassRegionColoring::Id));
 		int active_region(spColoring->getActiveRegion());
 
 		if(active_region >= 0 && active_region < MAX_IMPORTED_MODELS)
@@ -5301,7 +7701,6 @@ bool MainWindow::getModelCutVisibilitySignal(int id)
 
 void MainWindow::aboutToShowViewFilterMenu()
 {
-	QMenu* pMenu = qobject_cast<QMenu*>(sender());
 	data::CObjectPtr<data::CAppSettings> settings( APP_STORAGE.getEntry(data::Storage::AppSettings::Id) );
 	ui->actionViewEqualize->blockSignals(true);
 	ui->actionViewSharpen->blockSignals(true);
@@ -5588,6 +7987,7 @@ void MainWindow::onMenuContoursVisibleToggled(bool visible)
 void MainWindow::onMenuRegionsVisibleToggled(bool visible)
 {
 	VPL_SIGNAL(SigEnableRegionColoring).invoke(visible);
+    VPL_SIGNAL(SigEnableMultiClassRegionColoring).invoke(visible);
 }
 
 void MainWindow::onMenuVOIVisibleToggled(bool visible)
@@ -5628,7 +8028,7 @@ void MainWindow::setContoursVisibility(bool visible)
 		m_contoursVisible = false;
 	}
 
-	data::CObjectPtr<data::CRegionColoring> spColoring(APP_STORAGE.getEntry(data::Storage::RegionColoring::Id));
+	data::CObjectPtr<data::CMultiClassRegionColoring> spColoring(APP_STORAGE.getEntry(data::Storage::MultiClassRegionColoring::Id));
 
 	APP_STORAGE.invalidate(spColoring.getEntryPtr());
 }
@@ -5643,9 +8043,9 @@ bool MainWindow::getVOIVisibility()
 	return m_VOIVisible;
 }
 
-void MainWindow::showPreviewDialog(const QString& title, CPreviewDialogData& data, int dataType)
+void MainWindow::showPreviewDialog(const QString& title, CPreviewDialogData& dialogData, int dataType)
 {
-	CPreviewDialog dlg(this, title, data);
+	CPreviewDialog dlg(this, title, dialogData);
 
 	bool accepted = false;
 
@@ -5658,7 +8058,7 @@ void MainWindow::showPreviewDialog(const QString& title, CPreviewDialogData& dat
 		accepted = false;
 	}
 
-	VPL_SIGNAL(SigPreviewDialogClosed).invoke(accepted, data, dataType);
+	VPL_SIGNAL(SigPreviewDialogClosed).invoke(accepted, dialogData, dataType);
 }
 
 void MainWindow::showInfoDialog(const QString& title, const QString& rowsTitles, const QString& rowsValues, const QColor& color)
@@ -5699,9 +8099,20 @@ void MainWindow::setVOIVisibility(bool visible)
 	}
 	else if (!visible && m_VOIVisible)
 	{
-		m_SceneXY->removeChild(m_xyVOIVizualizer);
-		m_SceneXZ->removeChild(m_xzVOIVizualizer);
-		m_SceneYZ->removeChild(m_yzVOIVizualizer);
+        if (m_SceneXY->getChildIndex(m_xyVOIVizualizer) != m_SceneXY->getNumChildren())
+        {
+            m_SceneXY->removeChild(m_xyVOIVizualizer);
+        }
+
+        if (m_SceneXZ->getChildIndex(m_xzVOIVizualizer) != m_SceneXZ->getNumChildren())
+        {
+            m_SceneXZ->removeChild(m_xzVOIVizualizer);
+        }
+
+        if (m_SceneYZ->getChildIndex(m_yzVOIVizualizer) != m_SceneYZ->getNumChildren())
+        {
+            m_SceneYZ->removeChild(m_yzVOIVizualizer);
+        }
 
 		m_VOIVisible = false;
 		spVOI->setSetFlag(false);
@@ -5891,7 +8302,7 @@ void MainWindow::showFeedbackRequestDialog()
 	QPushButton* feedbackButton = msgBox.addButton(tr("Give Us Your Feedback..."), QMessageBox::YesRole);
 	QObject::connect(feedbackButton, SIGNAL(clicked()), this, SLOT(showFeedback()));
 	msgBox.setDefaultButton(feedbackButton);
-	msgBox.setIconPixmap(QPixmap(":/icons/3dim.ico"));
+	msgBox.setIconPixmap(QPixmap(":/svg/svg/3dim.svg"));
 	msgBox.setWindowTitle(QCoreApplication::applicationName());
 	msgBox.setText(tr("We are surveying users about their experience and satisfaction with 3DimViewer. We appreciate your response. Thank you."));
 
@@ -5957,4 +8368,669 @@ void MainWindow::autoTabPanels()
             tabifyDockWidget(dwa[i][0],dwa[i][j]);
         }
     }
+}
+
+
+void MainWindow::moveRegionDataToMulticlass()
+{
+    data::CObjectPtr<data::CRegionData> spRegionData(APP_STORAGE.getEntry(data::Storage::RegionData::Id));
+    data::CObjectPtr<data::CRegionColoring> spRegionColoring(APP_STORAGE.getEntry(data::Storage::RegionColoring::Id));
+
+    if (spRegionData->hasData())
+    {
+        data::CObjectPtr<data::CMultiClassRegionData> spMultiClassRegionData(APP_STORAGE.getEntry(data::Storage::MultiClassRegionData::Id));
+        data::CObjectPtr<data::CMultiClassRegionColoring> spMultiClassRegionColoring(APP_STORAGE.getEntry(data::Storage::MultiClassRegionColoring::Id));
+
+        vpl::img::CVolSize vSize = spRegionData->getSize();
+
+        const vpl::tSize sx = vSize.x();
+        const vpl::tSize sy = vSize.y();
+        const vpl::tSize sz = vSize.z();
+
+        std::set<int> labels;
+
+        for (vpl::tSize k = 0; k < sz; ++k)
+        {
+            for (vpl::tSize j = 0; j < sy; ++j)
+            {
+                for (vpl::tSize i = 0; i < sx; ++i)
+                {
+                    data::CRegionData::tVoxel val = spRegionData->at(i, j, k);
+
+                    if (val > 0)
+                    {
+                        labels.insert(val);
+                    }
+                }
+            }
+        }
+
+        spMultiClassRegionData->fillEntire(0);
+        spMultiClassRegionColoring->init();
+        spMultiClassRegionColoring->resize(labels.size());
+
+        auto it = labels.begin();
+        for (int i = 0; i < spMultiClassRegionColoring->getNumOfRegions(); ++i, ++it)
+        {
+            data::CRegionInfo oldInfo = spRegionColoring->getRegionInfo(*it);
+            data::CMultiClassRegionInfo multiClassInfo(oldInfo.getName());
+
+            spMultiClassRegionColoring->setRegionInfo(i, multiClassInfo);
+            spMultiClassRegionColoring->setColor(i, spRegionColoring->getColor(*it));
+        }
+
+        spMultiClassRegionData->fillFromVolume(*spRegionData.get());
+
+        spRegionData->init();
+        spRegionColoring->init();
+
+        VPL_SIGNAL(SigEnableMultiClassRegionColoring).invoke(true);
+
+        APP_STORAGE.invalidate(spRegionData.getEntryPtr());
+        APP_STORAGE.invalidate(spRegionColoring.getEntryPtr());
+        APP_STORAGE.invalidate(spMultiClassRegionData.getEntryPtr());
+        APP_STORAGE.invalidate(spMultiClassRegionColoring.getEntryPtr());
+    }
+}
+
+void MainWindow::removeAllModels()
+{
+    for (int i = 0; i < MAX_IMPORTED_MODELS; ++i)
+    {
+        data::CObjectPtr<data::CModel> spModel(APP_STORAGE.getEntry(data::Storage::ImportedModel::Id + i));
+        if (spModel->hasData())
+        {
+            spModel->init();
+            APP_STORAGE.invalidate(spModel.getEntryPtr());
+        }
+    }
+}
+
+void MainWindow::setActiveRegion3DPreviewVisibility(bool visible)
+{
+    if (visible)
+    {
+        data::CObjectPtr< data::CActiveDataSet > ptrDataset(APP_STORAGE.getEntry(data::Storage::ActiveDataSet::Id));
+        data::CObjectPtr< data::CDensityData > pVolume(APP_STORAGE.getEntry(ptrDataset->getId()));
+        vpl::img::CSize3d voxelSize(pVolume->getDX(), pVolume->getDY(), pVolume->getDZ());
+
+        data::CObjectPtr<data::CMultiClassRegionColoring> spMultiClassRegionColoring(APP_STORAGE.getEntry(data::Storage::MultiClassRegionColoring::Id));
+        data::CMultiClassRegionData::tVoxel activeRegion = spMultiClassRegionColoring->getActiveRegion();
+
+        m_region3DPreviewManager->init(voxelSize, activeRegion);
+        m_region3DPreviewManager->run();
+    }
+    else
+    {
+        m_region3DPreviewManager->stop();
+    }
+
+    m_region3DPreviewVisualizer->setVisibility(visible);
+    m_3DView->Refresh(false);
+
+    m_region3DPreviewVisible = visible;
+}
+
+bool MainWindow::getActiveRegion3DPreviewVisibility()
+{
+    return m_region3DPreviewVisible;
+}
+
+void MainWindow::setActiveRegion3DPreviewInterval(int value)
+{
+    m_region3DPreviewManager->setRedrawInterval(value);
+}
+
+void MainWindow::setUpRegion3DPreview()
+{
+    VPL_SIGNAL(SigSetActiveRegion3DPreviewVisibility).connect(this, &MainWindow::setActiveRegion3DPreviewVisibility);
+    VPL_SIGNAL(SigSetRegion3DPreviewInterval).connect(this, &MainWindow::setActiveRegion3DPreviewInterval);
+    VPL_SIGNAL(SigRegion3DPreviewVisible).connect(this, &MainWindow::getActiveRegion3DPreviewVisibility);
+
+    m_region3DPreviewManager = new data::CRegion3DPreviewManager;
+
+    m_on3DPreviewStart = new vpl::base::CFunctor<void>(this, &MainWindow::on3DPreviewStart);
+    m_on3DPreviewUpdate = new vpl::base::CFunctor<void>(this, &MainWindow::on3DPreviewUpdate);
+    m_on3DPreviewStop = new vpl::base::CFunctor<void, geometry::CTrianglesContainer&>(this, &MainWindow::on3DPreviewStop);
+
+    m_region3DPreviewManager->onStart = m_on3DPreviewStart;
+    m_region3DPreviewManager->onUpdate = m_on3DPreviewUpdate;
+    m_region3DPreviewManager->onStop = m_on3DPreviewStop;
+}
+
+void MainWindow::destroyRegion3DPreview()
+{
+    delete m_region3DPreviewManager;
+    delete m_on3DPreviewStart;
+    delete m_on3DPreviewUpdate;
+    delete m_on3DPreviewStop;
+}
+
+void MainWindow::on3DPreviewStart()
+{
+
+}
+
+void MainWindow::on3DPreviewUpdate()
+{
+
+}
+
+void MainWindow::on3DPreviewStop(geometry::CTrianglesContainer& container)
+{
+    m_region3DPreviewVisualizer->setData(container.getVertices(), container.getIndicies());
+
+    QMetaObject::invokeMethod(this, "update3DPreview");
+}
+
+void MainWindow::update3DPreview()
+{
+    data::CObjectPtr<data::CMultiClassRegionColoring> spMultiClassRegionColoring(APP_STORAGE.getEntry(data::Storage::MultiClassRegionColoring::Id));
+    data::CMultiClassRegionData::tVoxel activeRegion = spMultiClassRegionColoring->getActiveRegion();
+    data::CMultiClassRegionColoring::tColor rc = spMultiClassRegionColoring->getColor(activeRegion);
+
+    m_region3DPreviewVisualizer->update(osg::Vec4(rc.getR() / 255.0f, rc.getG() / 255.0f, rc.getB() / 255.0f, rc.getA() / 255.0f));
+    m_3DView->Refresh(false);
+}
+
+void MainWindow::onActiveRegionChanged()
+{
+    data::CObjectPtr<data::CMultiClassRegionColoring> spMultiClassRegionColoring(APP_STORAGE.getEntry(data::Storage::MultiClassRegionColoring::Id));
+    data::CMultiClassRegionData::tVoxel activeRegion = spMultiClassRegionColoring->getActiveRegion();
+
+    m_region3DPreviewManager->setRegionIndex(activeRegion);
+}
+
+void MainWindow::changeVRVisibility(bool visible)
+{
+    ui->actionVolume_Rendering->blockSignals(true);
+    ui->actionVolume_Rendering->setChecked(visible);
+    ui->actionVolume_Rendering->blockSignals(false);
+    showMergedVR(visible);
+}
+
+void MainWindow::changeModelsVisibility(bool visible)
+{
+    ui->actionShow_Surface_Model->blockSignals(true);
+    ui->actionShow_Surface_Model->setChecked(visible);
+    ui->actionShow_Surface_Model->blockSignals(false);
+    //showSurfaceModel(visible);
+
+    if (!visible)
+    {
+        m_visibleModelsBefore3Dseg.clear();
+        for (size_t i = 0; i < MAX_IMPORTED_MODELS; ++i)
+        {
+            data::CObjectPtr<data::CModel> spModel(APP_STORAGE.getEntry(data::Storage::ImportedModel::Id + i, data::Storage::NO_UPDATE));
+            if (spModel->hasData() && spModel->isVisible())
+            {
+                m_visibleModelsBefore3Dseg.push_back(i);
+                spModel->hide();
+                APP_STORAGE.invalidate(spModel.getEntryPtr(), data::CModel::VISIBILITY_CHANGED);
+            }
+        }
+    }
+    else
+    {
+        for (size_t i = 0; i < m_visibleModelsBefore3Dseg.size(); ++i)
+        {
+            data::CObjectPtr<data::CModel> spModel(APP_STORAGE.getEntry(data::Storage::ImportedModel::Id + m_visibleModelsBefore3Dseg.at(i), data::Storage::NO_UPDATE));
+            if (spModel->hasData() && !spModel->isVisible())
+            {
+                spModel->show();
+                APP_STORAGE.invalidate(spModel.getEntryPtr(), data::CModel::VISIBILITY_CHANGED);
+            }
+        }
+    }
+
+    m_3DView->Refresh(false);
+}
+
+bool MainWindow::isVRVisible()
+{
+    return ui->actionVolume_Rendering->isChecked();
+}
+
+void MainWindow::onSigVRChanged()
+{
+    if (m_3DView->getRenderer().getShader() == PSVR::PSVolumeRendering::EShaders::CUSTOM)
+    {
+        m_3DView->addEventHandler(m_drawW3DEH.get());
+    }
+    else
+    {
+        m_3DView->removeEventHandler(m_drawW3DEH.get());
+    }
+}
+
+bool MainWindow::areModelsVisible()
+{
+    return ui->actionShow_Surface_Model->isChecked();
+}
+
+void MainWindow::onDrawingInProgress(bool drawingInProgress)
+{
+    m_region3DPreviewManager->setCanUpdate(!drawingInProgress);
+
+    if (!drawingInProgress)
+    {
+        data::CObjectPtr< data::COrthoSliceXY > ptrSliceXY(APP_STORAGE.getEntry(data::Storage::SliceXY::Id));
+        data::CObjectPtr< data::COrthoSliceXZ > ptrSliceXZ(APP_STORAGE.getEntry(data::Storage::SliceXZ::Id));
+        data::CObjectPtr< data::COrthoSliceYZ > ptrSliceYZ(APP_STORAGE.getEntry(data::Storage::SliceYZ::Id));
+        data::CObjectPtr< data::CArbitrarySlice > ptrSliceARB(APP_STORAGE.getEntry(data::Storage::ArbitrarySlice::Id));
+        ptrSliceXY->setUpdatesEnabled(true);
+        ptrSliceXZ->setUpdatesEnabled(true);
+        ptrSliceYZ->setUpdatesEnabled(true);
+        ptrSliceARB->setUpdatesEnabled(true);
+        APP_STORAGE.invalidate(ptrSliceXY.getEntryPtr());
+        APP_STORAGE.invalidate(ptrSliceXZ.getEntryPtr());
+        APP_STORAGE.invalidate(ptrSliceYZ.getEntryPtr());
+        APP_STORAGE.invalidate(ptrSliceARB.getEntryPtr());
+    }
+}
+
+void MainWindow::sig2DCanvasLeave(OSGCanvas* pCanvas, bool bLeave)
+{
+    data::CObjectPtr< data::CDrawingOptions > ptrOptions(APP_STORAGE.getEntry(data::Storage::DrawingOptions::Id));
+    if (APP_MODE.isContinuousDrawingEnabled() && ptrOptions->getDrawingMode() == data::CDrawingOptions::DRAW_STROKE)
+    {
+        if (bLeave)
+        {
+            if (pCanvas == m_OrthoXYSlice || pCanvas == m_OrthoXZSlice || pCanvas == m_OrthoYZSlice)
+            {
+                VPL_SIGNAL(SigDrawingInProgress).invoke(false);
+            }
+        }
+    }
+}
+
+bool MainWindow::setStrokeOnOff(bool on, int region)
+{
+    if (!findPluginByID("ManualSeg"))
+    {
+        return false;
+    }
+
+    VPL_SIGNAL(SigStrokeOnOff).invoke(on, region);
+
+    return true;
+}
+
+QString MainWindow::QStringFromWString(const std::wstring & wsString)
+{
+#ifdef _MSC_VER
+    QString qtString = QString::fromUtf16((const ushort *)wsString.c_str());
+#else
+    QString qtString = QString::fromStdWString(wsString);
+#endif
+    //qDebug() << qtString;
+    return qtString;
+}
+
+QString MainWindow::getMacAddress()
+{
+    foreach(QNetworkInterface networkInterface, QNetworkInterface::allInterfaces())
+    {
+        // Return only the first non-loopback MAC Address
+        if (!(networkInterface.flags() & QNetworkInterface::IsLoopBack))
+        {
+            QString wsAddr = networkInterface.hardwareAddress();
+            if (wsAddr.isEmpty())
+                continue;
+            return wsAddr;
+        }
+    }
+    return QString();
+}
+
+quint32 MainWindow::getIPAddress()
+{
+    QNetworkConfigurationManager mgr;
+    QNetworkConfiguration nconfig = mgr.defaultConfiguration();
+    QNetworkSession session(nconfig);
+    QNetworkInterface ninter = session.interface();
+
+    quint32 result = 0;
+    QHostInfo hostInfo = QHostInfo::fromName(QHostInfo::localHostName());
+    QList<QHostAddress> hostNameLookupAddressList = hostInfo.addresses();
+    QList<QHostAddress> interfaceAddressList = QNetworkInterface::allAddresses();
+    QString hostIpStr;
+
+    foreach(QHostAddress addr, hostNameLookupAddressList)
+    {
+        if (addr.protocol() == QAbstractSocket::IPv4Protocol && interfaceAddressList.contains(addr))
+        {
+            qDebug() << addr.toString();
+            result = addr.toIPv4Address();
+            return result;
+        }
+    }
+
+    // this provides two ip addresses (1 ipv4 and 1 ipv6) at least on my machine
+    QList<QNetworkAddressEntry> laddr = ninter.addressEntries();
+    foreach(QNetworkAddressEntry addr, laddr)
+    {
+        QHostAddress ha = addr.ip();
+        if (QAbstractSocket::IPv4Protocol == ha.protocol())
+        {
+            qDebug() << ha << endl;
+            result = ha.toIPv4Address();
+            break;
+        }
+    }
+
+    return result;
+}
+
+#ifdef _WIN32
+std::wstring MainWindow::getHardDiskSerialNumber()
+{
+    // Result
+    std::wstring wsSerialAddr;
+
+    // Obtain the initial locator to WMI
+    IWbemLocator *pLoc = NULL;
+
+    HRESULT hres = CoCreateInstance(
+        CLSID_WbemLocator,
+        0,
+        CLSCTX_INPROC_SERVER,
+        IID_IWbemLocator,
+        (LPVOID *)&pLoc
+    );
+    if (FAILED(hres))
+    {
+        return wsSerialAddr;
+    }
+
+    // Connect to WMI through the IWbemLocator::ConnectServer method
+    IWbemServices *pSvc = NULL;
+
+    // Connect to the root\cimv2 namespace with
+    // the current user and obtain pointer pSvc
+    // to make IWbemServices calls.
+    hres = pLoc->ConnectServer(
+        _bstr_t(L"root\\cimv2"), // Object path of WMI namespace
+        NULL,                    // User name. NULL = current user
+        NULL,                    // User password. NULL = current
+        0,                       // Locale. NULL indicates current
+        NULL,                    // Security flags.
+        0,                       // Authority (e.g. Kerberos)
+        0,                       // Context object 
+        &pSvc                    // pointer to IWbemServices proxy
+    );
+    if (FAILED(hres))
+    {
+        pLoc->Release();
+        return wsSerialAddr;
+    }
+
+    // Set security levels on the proxy
+    hres = CoSetProxyBlanket(
+        pSvc,                        // Indicates the proxy to set
+        RPC_C_AUTHN_WINNT,           // RPC_C_AUTHN_xxx
+        RPC_C_AUTHZ_NONE,            // RPC_C_AUTHZ_xxx
+        NULL,                        // Server principal name 
+        RPC_C_AUTHN_LEVEL_CALL,      // RPC_C_AUTHN_LEVEL_xxx 
+        RPC_C_IMP_LEVEL_IMPERSONATE, // RPC_C_IMP_LEVEL_xxx
+        NULL,                        // client identity
+        EOAC_NONE                    // proxy capabilities 
+    );
+    if (FAILED(hres))
+    {
+        pSvc->Release();
+        pLoc->Release();
+        return wsSerialAddr;
+    }
+
+    // Use the IWbemServices pointer to make requests of WMI
+    IEnumWbemClassObject* pEnumerator = NULL;
+
+    {
+        // Get serial number of the first physical disk
+        hres = pSvc->ExecQuery(
+            bstr_t("WQL"),
+            bstr_t("SELECT MediaType, DeviceID FROM Win32_DiskDrive"),
+            WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY,
+            NULL,
+            &pEnumerator
+        );
+
+        if (FAILED(hres))
+        {
+            pSvc->Release();
+            pLoc->Release();
+            return wsSerialAddr;
+        }
+
+        // Get the data from the query
+        IWbemClassObject *pclsObj = 0;
+        ULONG uReturn = 0;
+
+        std::wstring wsDiskSerial;
+        while (pEnumerator)
+        {
+            HRESULT hr = pEnumerator->Next(WBEM_INFINITE, 1, &pclsObj, &uReturn);
+            if (uReturn == 0)
+            {
+                break;
+            }
+
+            VARIANT vtProp;
+
+            // Get the MediaType property
+            hr = pclsObj->Get(L"MediaType", 0, &vtProp, 0, 0);
+            if (FAILED(hr) || vtProp.vt == VT_NULL)
+            {
+                pclsObj->Release();
+                continue;
+            }
+            std::wstring wsMedia = vtProp.bstrVal;
+            VariantClear(&vtProp);
+
+            // Check if the first disk was found
+            if (wsMedia.find(L"Fixed") == std::wstring::npos
+                || wsMedia.find(L"hard") == std::wstring::npos)
+                //                || wsMedia.find(L"media") == std::wstring::npos )
+            {
+                pclsObj->Release();
+                continue;
+            }
+
+            // Get the SerialNumber property
+/*            hr = pclsObj->Get(L"SerialNumber", 0, &vtProp, 0, 0);
+            if( FAILED(hr) || vtProp.vt == VT_NULL )
+            {
+                pclsObj->Release();
+                continue;
+            }
+            std::wstring wsSerial = vtProp.bstrVal;
+            VariantClear(&vtProp);*/
+
+            // Get the DeviceID
+            hr = pclsObj->Get(L"DeviceID", 0, &vtProp, 0, 0);
+            if (FAILED(hr) || vtProp.vt == VT_NULL)
+            {
+                pclsObj->Release();
+                continue;
+            }
+
+            // Prepare query for the SerialNumber
+            std::wstring wsDeviceIDQuery = L"ASSOCIATORS OF {Win32_DiskDrive.DeviceID='";
+            wsDeviceIDQuery += vtProp.bstrVal;
+            wsDeviceIDQuery += L"'} WHERE ResultClass=Win32_PhysicalMedia";
+            VariantClear(&vtProp);
+
+            // "join" Win32_DiskDrive to Win32_PhysicalMedia
+            IEnumWbemClassObject* pEnumerator2 = NULL;
+            hres = pSvc->ExecQuery(
+                bstr_t("WQL"),
+                bstr_t(wsDeviceIDQuery.c_str()),
+                WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY,
+                NULL,
+                &pEnumerator2
+            );
+            if (FAILED(hres))
+            {
+                pclsObj->Release();
+                continue;
+            }
+
+            // Get the data from the query
+            IWbemClassObject *pclsObj2 = 0;
+            ULONG uReturn2 = 0;
+
+            while (pEnumerator2)
+            {
+                HRESULT hr = pEnumerator2->Next(WBEM_INFINITE, 1, &pclsObj2, &uReturn2);
+                if (uReturn2 == 0)
+                {
+                    break;
+                }
+
+                VARIANT vtProp2;
+                hr = pclsObj2->Get(L"SerialNumber", 0, &vtProp2, 0, 0);
+                if (FAILED(hr) || vtProp2.vt == VT_NULL)
+                {
+                    pclsObj2->Release();
+                    continue;
+                }
+
+                std::wstring wsSerial = vtProp2.bstrVal;
+                VariantClear(&vtProp2);
+                pclsObj2->Release();
+
+                wsDiskSerial = wsSerial;
+                if (!wsSerialAddr.empty())
+                {
+                    wsSerialAddr += L", ";
+                }
+                wsSerialAddr += wsDiskSerial;
+                break;
+            }
+
+            pclsObj->Release();
+
+            // Return the found address
+            if (!wsDiskSerial.empty())
+            {
+                break;
+            }
+        }
+
+        pEnumerator->Release();
+    }
+
+    // Cleanup
+    pSvc->Release();
+    pLoc->Release();
+
+    return wsSerialAddr;
+}
+#else
+
+#include <IOKit/IOKitLib.h>
+
+std::wstring CF2W(CFStringRef str)
+{
+    CFIndex length = CFStringGetLength(str);
+    if (!length) return L"";
+    std::vector<UniChar> buffer(length);
+    CFRange range = {0,length};
+    CFStringGetCharacters(str,range,&buffer[0]);
+    return std::wstring(buffer.begin(),buffer.end());
+}
+
+std::wstring MainWindow::getHardDiskSerialNumber()
+{
+    // on MAC we get platform uuid instead
+    std::wstring result;
+    io_registry_entry_t ioRegistryRoot = IORegistryEntryFromPath(kIOMasterPortDefault, "IOService:/");
+    CFStringRef uuidCf = (CFStringRef) IORegistryEntryCreateCFProperty(ioRegistryRoot, CFSTR(kIOPlatformUUIDKey), kCFAllocatorDefault, 0);
+    IOObjectRelease(ioRegistryRoot);
+    result = CF2W(uuidCf);
+    CFRelease(uuidCf);
+    
+    return result;
+}
+
+#endif
+
+void MainWindow::pingOurServer()
+{
+    QSettings settings;
+    // check only once per day
+    QDate lastCheck = settings.value("LastPing").toDate();
+    if (lastCheck < QDate::currentDate())
+    {
+        settings.setValue("LastPing", QDate::currentDate());
+        m_networkManager.disconnect(this);
+        { // ping
+#if QT_VERSION >= QT_VERSION_CHECK(5,0,0)
+            QUrlQuery params;
+#else
+            QUrl params;
+#endif
+            QString software = CSysInfo::instance()->getApplicationName("");
+            QString operatingSystemString = CSysInfo::instance()->m_sOperatingSystem;
+            QString wsMacAddress = getMacAddress();
+            quint32 ipAdr = getIPAddress();
+            QString wsDiskID = QStringFromWString(getHardDiskSerialNumber());
+
+            QSettings settings;
+            QString requestUrl = settings.value("PingURL", DEFAULT_PING_URL).toString();
+            settings.beginGroup("License");
+            QString licNum = settings.value("RegNum").toString();
+
+            params.addQueryItem("form_id", "flying_feather_sw");
+            params.addQueryItem("software", software);
+            params.addQueryItem("platform", operatingSystemString);
+            params.addQueryItem("ip_address", QHostAddress(ipAdr).toString());
+            params.addQueryItem("mac_address", wsMacAddress);
+            params.addQueryItem("disk_id", wsDiskID);
+
+            if (!licNum.isEmpty())
+            {
+                params.addQueryItem("lic_num", licNum);
+            }
+
+            QNetworkRequest request(requestUrl);
+            request.setHeader(QNetworkRequest::ContentTypeHeader, "application/x-www-form-urlencoded");
+
+            m_networkManager.disconnect(this);
+#if QT_VERSION >= QT_VERSION_CHECK(5,0,0)
+            QNetworkReply *pReply = m_networkManager.post(request, params.query(QUrl::FullyEncoded).toUtf8());
+            qDebug() << requestUrl << " " << params.query(QUrl::FullyEncoded).toUtf8();
+#else
+            QNetworkReply *pReply = m_networkManager.post(request, params.encodedQuery());
+#endif
+            connect(&m_networkManager, SIGNAL(finished(QNetworkReply*)), SLOT(pingFinished(QNetworkReply*)));
+            connect(&m_networkManager, SIGNAL(sslErrors(QNetworkReply*, const QList<QSslError> &)), this, SLOT(sslErrorHandler(QNetworkReply*, const QList<QSslError> &)));
+        }
+    }
+}
+
+void MainWindow::pingFinished(QNetworkReply* reply)
+{
+    QByteArray downloadedData;
+
+    QNetworkReply::NetworkError err = reply->error();
+    if (err == QNetworkReply::NoError)
+    {
+        int httpstatuscode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toUInt();
+        if (reply->isReadable())
+        {
+            downloadedData = reply->readAll();
+        }
+    }
+    reply->deleteLater();
+    if (!downloadedData.isEmpty())
+    {
+        qDebug() << downloadedData;
+    }
+}
+
+void MainWindow::sslErrorHandler(QNetworkReply* reply, const QList<QSslError> & errlist)
+{
+    reply->ignoreSslErrors();
 }

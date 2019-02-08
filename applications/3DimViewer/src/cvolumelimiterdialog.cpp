@@ -28,8 +28,8 @@
 #include "cpreferencesdialog.h"
 
 
-CVolumeLimiterDialog::CVolumeLimiterDialog(QWidget* parent) :
-	QDialog(parent, Qt::WindowTitleHint | Qt::WindowSystemMenuHint | Qt::WindowCloseButtonHint | Qt::WindowMinimizeButtonHint | Qt::WindowMaximizeButtonHint),
+CVolumeLimiterDialog::CVolumeLimiterDialog(QWidget* parent, Qt::WindowFlags f) :
+	QDialog(parent, f),
     ui(new Ui::CVolumeLimiterDialog)
 {
     ui->setupUi(this);
@@ -43,7 +43,9 @@ CVolumeLimiterDialog::CVolumeLimiterDialog(QWidget* parent) :
     // restore last known size
     QSettings settings;
     settings.beginGroup("VolumeLimiterWindow");
-    resize(settings.value("size").toSize());
+    QRect geometry = settings.value("geometry", QRect(100, 100, 500, 500)).toRect();
+    setGeometry(geometry);
+    //resize(settings.value("size").toSize());
     settings.endGroup();
 
     // set app mode to slice manipulation
@@ -64,31 +66,28 @@ CVolumeLimiterDialog::~CVolumeLimiterDialog()
     // save window size
     QSettings settings;
     settings.beginGroup("VolumeLimiterWindow");
-    settings.setValue("size",size());
+    settings.setValue("geometry", geometry());
+    //settings.setValue("size",size());
     settings.endGroup();
     delete ui;
 }
 
 void   CVolumeLimiterDialog::createControls()
 {
-    QSettings settings;
-
-    const bool antialiasing = settings.value("AntialiasingEnabled", DEFAULT_ANTIALIASING).toBool();
-
     // XY
-    m_OrthoXYSlice = new OSGOrtho2DCanvas(this, antialiasing);
+    m_OrthoXYSlice = new OSGOrtho2DCanvas(this);
     m_SceneXY = new scene::CLimiterXY(m_OrthoXYSlice);
     m_OrthoXYSlice->setScene(m_SceneXY.get());
     m_OrthoXYSlice->centerAndScale();
 
     // XZ
-    m_OrthoXZSlice = new OSGOrtho2DCanvas(this, antialiasing);
+    m_OrthoXZSlice = new OSGOrtho2DCanvas(this);
     m_SceneXZ = new scene::CLimiterXZ(m_OrthoXZSlice);
     m_OrthoXZSlice->setScene(m_SceneXZ.get());
     m_OrthoXZSlice->centerAndScale();
 
     // YZ
-    m_OrthoYZSlice = new OSGOrtho2DCanvas(this, antialiasing);
+    m_OrthoYZSlice = new OSGOrtho2DCanvas(this);
     m_SceneYZ = new scene::CLimiterYZ(m_OrthoYZSlice);
     m_OrthoYZSlice->setScene(m_SceneYZ.get());
     m_OrthoYZSlice->centerAndScale();

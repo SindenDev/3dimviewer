@@ -38,6 +38,8 @@
 #include "data/CObjectHolder.h"
 #include "data/CObjectPtr.h"
 
+#include <data/CMultiClassRegionData.h>
+
 
 namespace data
 {
@@ -459,12 +461,15 @@ public:
     //! Returns density value if inside, or -1000 if outside
     double getDensity(int x, int y) const;
 
+    void setUpdatesEnabled(bool enabled);
+
 protected:
     //! Density data.
     vpl::img::CDImage m_DensityData;
     
     //! Segmented/labelled density data.
     vpl::img::CImage16 m_RegionData;
+    vpl::img::CImage<data::tRegionVoxel> m_multiClassRegionData;
 
     //! Custom properties
     CSlicePropertyContainer m_properties;
@@ -481,6 +486,8 @@ protected:
     float m_fTextureWidth, m_fTextureHeight;
 
 	vpl::tSize m_minX, m_minY, m_maxX, m_maxY;
+
+    bool m_updateEnabled;
 
 protected:
     //! Initializes all texture properties.

@@ -28,7 +28,8 @@
 
 #include <data/CDataStorage.h>
 #include <data/CSavedEntries.h>
-#include "data/CStorageIdRemapper.h"
+#include "data/CStorageIdRemapperBase.h"
+#include <memory>
 
 #define SERIALIZER_CURRENT_VERSION 60
 
@@ -80,8 +81,8 @@ public:
     typedef std::set< vpl::sys::tInt32 > tIdVector;
 
 public:
-    //! Constructor
-    CSerializationManager( data::CDataStorage * dataStorage, data::CStorageIdRemapper* mapper);
+    //! Takes ownership of mapper through unique ptr
+    CSerializationManager( data::CDataStorage * dataStorage, data::CStorageIdRemapperBase* mapper);
     ~CSerializationManager();
 
     //! Serialize
@@ -103,7 +104,7 @@ protected:
     //! Version number
     vpl::sys::tInt32 m_version;
 
-    data::CStorageIdRemapper* m_idMapper;
+    std::unique_ptr<data::CStorageIdRemapperBase> m_idMapper;
 };
 
 

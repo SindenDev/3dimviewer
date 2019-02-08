@@ -28,6 +28,7 @@
 #include <sstream>
 #include <app/Signals.h>
 #include <osg/CThickLineMaterial.h>
+#include <iomanip>
 
 using namespace scene;
 
@@ -601,7 +602,7 @@ CRulerGizmo::CRulerGizmo()
 
 
 	m_text->setAutoRotateToScreen(true);
-	
+    m_text->setDataVariance(osg::Object::DYNAMIC);
 	m_text->setCharacterSizeMode( osgText::Text::SCREEN_COORDS );
 	m_text->setFontResolution( 20, 20 );
 	m_text->setCharacterSize( ptrOptions->GetRulerFontSize() );

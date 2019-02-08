@@ -50,12 +50,17 @@
 
 #include <float.h>
 #include <fstream>
+#include <iostream>
 
 // OpenMesh
 #include <OpenMesh/Core/IO/BinaryHelper.hh>
 #include <OpenMesh/Core/IO/IOManager.hh>
 #include <OpenMesh/Core/System/omstream.hh>
 #include <OpenMesh/Core/IO/importer/BaseImporter.hh>
+
+#include <physfs.h>
+
+#include <VPL/Base/Logging.h>
 
 //=== NAMESPACES ==============================================================
 
@@ -78,6 +83,11 @@ namespace OpenMesh
             : eps_(FLT_MIN)
         {
             IOManager().register_module(this);
+
+            if (PHYSFS_isInit() == 0)
+            {
+                PHYSFS_init(NULL);
+            }
         }
 
         //-----------------------------------------------------------------------------
@@ -88,6 +98,28 @@ namespace OpenMesh
             const CTMuint *indices;
             const CTMfloat *vertices, *normals = nullptr;
             bool hasNormals;
+
+            // support for reading from zip via PhysFS
+
+            bool origReadFromPhysFS = readFromPhysFS;
+
+            std::string filename = _filename;
+            std::string suffix = EXT_SUFFIX_PHYSFS;
+            int startIndex = filename.length() - suffix.length();
+            if ((startIndex >= 0) && (filename.substr(startIndex) == EXT_SUFFIX_PHYSFS))
+            {
+                readFromPhysFS = true;
+                filename = filename.substr(0, startIndex);
+            }
+
+            if (readFromPhysFS)
+            {
+                bool result = read_ctm_physfs(filename, _bi, _opt);
+            
+                readFromPhysFS = origReadFromPhysFS;
+            
+                return result;
+            }
 
             // Create a new importer context
             context = ctmNewContext(CTM_IMPORT);
@@ -158,6 +190,10 @@ namespace OpenMesh
                 OpenMesh::Vec3f vertex = OpenMesh::Vec3f(*value, *(value + 1), *(value + 2));
 
                 handle = _bi.add_vertex(vertex);
+                if (!handle.is_valid())
+                {
+                    VPL_LOG_INFO("invalid vertex " << value[0] << " " << value[1] << " " << value[2]);
+                }
                 vhandles.push_back(handle);
             }
 
@@ -175,21 +211,34 @@ namespace OpenMesh
                     tmpvhandles.push_back(vhandles[indices[first + 2]]);
 
                     face_handle = _bi.add_face(tmpvhandles);
+                    if (!face_handle.is_valid())
+                    {
+                        //VPL_LOG_INFO("trying different vertices order");
+                        tmpvhandles.clear();
+                        tmpvhandles.push_back(vhandles[indices[first + 0]]);
+                        tmpvhandles.push_back(vhandles[indices[first + 2]]);
+                        tmpvhandles.push_back(vhandles[indices[first + 1]]);
+                        face_handle = _bi.add_face(tmpvhandles);
+                    }
+                    if (face_handle.is_valid())
+                    {
+                        //convert per-vertex normals to per face normals...
+                        const CTMfloat *n1 = &normals[indices[first + 0] * 3];
+                        const CTMfloat *n2 = &normals[indices[first + 1] * 3];
+                        const CTMfloat *n3 = &normals[indices[first + 2] * 3];
 
-                    //convert per-vertex normals to per face normals...
-                    const CTMfloat *n1 = &normals[indices[first + 0] * 3];
-                    const CTMfloat *n2 = &normals[indices[first + 1] * 3];
-                    const CTMfloat *n3 = &normals[indices[first + 2] * 3];
+                        OpenMesh::Vec3f normal1(*n1, *(n1 + 1), *(n1 + 2));
+                        OpenMesh::Vec3f normal2(*n2, *(n2 + 1), *(n2 + 2));
+                        OpenMesh::Vec3f normal3(*n3, *(n3 + 1), *(n3 + 2));
 
-                    OpenMesh::Vec3f normal1(*n1, *(n1 + 1), *(n1 + 2));
-                    OpenMesh::Vec3f normal2(*n2, *(n2 + 1), *(n2 + 2));
-                    OpenMesh::Vec3f normal3(*n3, *(n3 + 1), *(n3 + 2));
+                        OpenMesh::Vec3f face_normal = (normal1 + normal2 + normal3) / 3.0f;
 
-                    OpenMesh::Vec3f normal;
-
-                    normal = (normal1 + normal2 + normal3) / 3.0f;
-
-                    _bi.set_normal(face_handle, normal);
+                        _bi.set_normal(face_handle, face_normal);
+                    }
+                    else
+                    {
+                        VPL_LOG_INFO("Invalid face in " << _filename);
+                    }
 
                     tmpvhandles.clear();
                 }
@@ -292,6 +341,10 @@ namespace OpenMesh
                 OpenMesh::Vec3f vertex = OpenMesh::Vec3f(*value, *(value + 1), *(value + 2));
 
                 handle = _bi.add_vertex(vertex);
+                if (!handle.is_valid())
+                {
+                    VPL_LOG_INFO("invalid vertex " << value[0] << " " << value[1] << " " << value[2]);
+                }
                 vhandles.push_back(handle);
             }
 
@@ -309,21 +362,35 @@ namespace OpenMesh
                     tmpvhandles.push_back(vhandles[indices[first + 2]]);
 
                     face_handle = _bi.add_face(tmpvhandles);
+                    if (!face_handle.is_valid())
+                    {
+                        //VPL_LOG_INFO("trying different vertices order");
+                        tmpvhandles.clear();
+                        tmpvhandles.push_back(vhandles[indices[first + 0]]);
+                        tmpvhandles.push_back(vhandles[indices[first + 2]]);
+                        tmpvhandles.push_back(vhandles[indices[first + 1]]);
+                        face_handle = _bi.add_face(tmpvhandles);
+                    }
+                    if (face_handle.is_valid())
+                    {
 
-                    //convert per-vertex normals to per face normals...
-                    const CTMfloat *n1 = &normals[indices[first + 0] * 3];
-                    const CTMfloat *n2 = &normals[indices[first + 1] * 3];
-                    const CTMfloat *n3 = &normals[indices[first + 2] * 3];
+                        //convert per-vertex normals to per face normals...
+                        const CTMfloat *n1 = &normals[indices[first + 0] * 3];
+                        const CTMfloat *n2 = &normals[indices[first + 1] * 3];
+                        const CTMfloat *n3 = &normals[indices[first + 2] * 3];
 
-                    OpenMesh::Vec3f normal1(*n1, *(n1 + 1), *(n1 + 2));
-                    OpenMesh::Vec3f normal2(*n2, *(n2 + 1), *(n2 + 2));
-                    OpenMesh::Vec3f normal3(*n3, *(n3 + 1), *(n3 + 2));
+                        OpenMesh::Vec3f normal1(*n1, *(n1 + 1), *(n1 + 2));
+                        OpenMesh::Vec3f normal2(*n2, *(n2 + 1), *(n2 + 2));
+                        OpenMesh::Vec3f normal3(*n3, *(n3 + 1), *(n3 + 2));
 
-                    OpenMesh::Vec3f normal;
+                        OpenMesh::Vec3f face_normal = (normal1 + normal2 + normal3) / 3.0f;
 
-                    normal = (normal1 + normal2 + normal3) / 3.0f;
-
-                    _bi.set_normal(face_handle, normal);
+                        _bi.set_normal(face_handle, face_normal);
+                    }
+                    else
+                    {
+                        VPL_LOG_INFO("Invalid face in ctm");
+                    }
 
                     tmpvhandles.clear();
                 }
@@ -348,6 +415,37 @@ namespace OpenMesh
             // Free the context
             ctmFreeContext(context);
             return true;
+        }
+
+        bool _CTMReader_::read_ctm_physfs(const std::string & _filename, BaseImporter & _bi, Options& _opt)
+        {
+            // open file
+            omlog() << "[STLReader] : read binary file\n";
+
+            PHYSFS_File *in = PHYSFS_openRead(_filename.c_str());
+            if (!in)
+            {
+                omerr() << "[STLReader] : cannot not open file " << _filename << std::endl;
+                return false;
+            }
+
+            std::stringstream str(std::ios_base::in | std::ios_base::out | std::ios_base::binary);
+            str >> std::noskipws;
+            char buffer[1000];
+
+            // read file into stream
+            unsigned int bytesRead = 0;
+            PHYSFS_seek(in, 0);
+            while (!PHYSFS_eof(in))
+            {
+                bytesRead = PHYSFS_readBytes(in, buffer, 1000);
+                str.write(buffer, bytesRead);
+            }
+            PHYSFS_close(in);
+
+            // read the mesh from stream
+            str.seekg(0);
+            return read(str, _bi, _opt);
         }
 
         //-----------------------------------------------------------------------------

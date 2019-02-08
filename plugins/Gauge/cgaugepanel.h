@@ -10,6 +10,8 @@
 
 #include <qtplugin/PluginInterface.h>
 
+#include <controls/ccollapsiblegroupbox.h>
+
 namespace Ui {
 class CGaugePanel;
 }
@@ -32,12 +34,15 @@ public:
 	void onNewDensityData(data::CStorageEntry *pEntry);
 
 	void updateButtons(scene::CAppMode::tMode mode);
-    
+
 private slots:
     void on_comboBoxMeasuringMode_currentIndexChanged(int index);
 	void on_pushButtonDensity_toggled(bool checked);
 	void on_pushButtonDistance_toggled(bool checked);
 	void on_pushButtonClear_clicked();
+
+    void packGroupBox(bool checked);
+    void packGroupBox(QGroupBox* pWidget, bool checked);
 
 private:
     Ui::CGaugePanel *ui;

@@ -57,6 +57,10 @@ public:
     void onMouseLeave() override;
 
 protected:
+    //! Revert line rotation given by matrix transformations - used for view aligned draggers
+    virtual void revertTransformsOnLine() {}
+
+protected:
     virtual ~CTranslate1DDragger();
 
     osg::ref_ptr< LineProjector >   _projector;

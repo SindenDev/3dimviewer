@@ -41,6 +41,16 @@ CScaledCursor::CScaledCursor(size_t min_size, size_t max_size)
 	
 }
 
+void CScaledCursor::setMinSize(size_t min_size)
+{
+    m_min_size = min_size;
+}
+
+void CScaledCursor::setMaxSize(size_t max_size)
+{
+    m_max_size = max_size;
+}
+
 void CScaledCursor::setPenSize(int size)
 {
 	m_pen_size = size;
@@ -84,5 +94,88 @@ void CScaledCursor::render(size_t pixmap_size)
 CScaledCursor::~CScaledCursor()
 {
     if(m_cursor != 0)
+        delete m_cursor;
+}
+
+
+
+
+CScaledCursorDoubleCircle::CScaledCursorDoubleCircle(size_t min_size, size_t max_size)
+{
+    // Store cursor pixmap limits
+    m_min_size = std::max<size_t>(MIN_CURSOR_PIXMAP_SIZE, std::min<size_t>(min_size, MAX_CURSOR_PIXMAP_SIZE));
+    m_max_size = std::max<size_t>(MIN_CURSOR_PIXMAP_SIZE, std::min<size_t>(max_size, MAX_CURSOR_PIXMAP_SIZE));
+    m_pen_size_outer = 3;
+    m_pen_size_inner = 2;
+    m_cursor = new QCursor;
+    m_color = QColor(230, 230, 0);
+
+}
+
+void CScaledCursorDoubleCircle::setMinSize(size_t min_size)
+{
+    m_min_size = min_size;
+}
+
+void CScaledCursorDoubleCircle::setMaxSize(size_t max_size)
+{
+    m_max_size = max_size;
+}
+
+void CScaledCursorDoubleCircle::setPenSize(int size_outer, int size_inner)
+{
+    m_pen_size_outer = size_outer;
+    m_pen_size_inner = size_inner;
+}
+
+void CScaledCursorDoubleCircle::resize(float new_size_outer, float new_size_inner)
+{
+    if (new_size_outer < 0.0 || new_size_inner < 0.0)
+        return;
+
+    // Compute new used size
+    size_t pixmap_size(std::max(new_size_outer, new_size_inner) + 0.5);
+    pixmap_size = std::max<size_t>(m_min_size, std::min<size_t>(pixmap_size, m_max_size));
+
+    // Render cursor
+    render(pixmap_size, new_size_outer, new_size_inner);
+}
+
+
+void CScaledCursorDoubleCircle::render(size_t pixmap_size, size_t size_outer, size_t size_inner)
+{
+    // Create pixmap
+    QPixmap pixmap(pixmap_size, pixmap_size);
+    pixmap.fill(QColor(0, 0, 0, 0));
+
+    int pen_width_outer(m_pen_size_outer);
+    int pen_width_inner(m_pen_size_inner);
+    int hpw_outer(pen_width_outer / 2);
+    int hpw_inner(pen_width_inner / 2);
+
+    // Set pen and brush
+    QPen pen_outer(m_color);
+    pen_outer.setWidth(pen_width_outer);
+
+    QPen pen_inner(m_color);
+    pen_inner.setWidth(pen_width_inner);
+
+    size_t final_size_outer = std::min(size_outer, pixmap_size);
+    size_t final_size_inner = std::min(size_inner, pixmap_size);
+
+    // Draw circle
+    QPainter painter(&pixmap);
+    painter.setPen(pen_outer);
+    painter.drawArc(hpw_outer + (pixmap_size - final_size_outer) * 0.5, hpw_outer + (pixmap_size - final_size_outer) * 0.5, final_size_outer - pen_width_outer, final_size_outer - pen_width_outer, 0, 16 * 360);
+    painter.setPen(pen_inner);
+    painter.drawArc(hpw_inner + (pixmap_size - final_size_inner) * 0.5, hpw_inner + (pixmap_size - final_size_inner) * 0.5, final_size_inner - pen_width_inner, final_size_inner - pen_width_inner, 0, 16 * 360);
+
+    // Create cursor
+    *m_cursor = QCursor(pixmap);
+}
+
+CScaledCursorDoubleCircle::~CScaledCursorDoubleCircle()
+{
+    if (m_cursor != 0)
         delete m_cursor;
 }

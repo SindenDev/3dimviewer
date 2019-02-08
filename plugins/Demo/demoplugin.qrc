@@ -7,4 +7,12 @@
         <file>icons/4.png</file>
         <file>icons/demoplugin_dock.png</file>
     </qresource>
+	<qresource prefix="/svg">
+		<file>svg/demoplugin.svg</file>
+		<file>svg/1.svg</file>
+		<file>svg/2.svg</file>
+		<file>svg/3.svg</file>
+		<file>svg/4.svg</file>
+		<file>svg/demoplugin_dock.svg</file>
+	</qresource>
 </RCC>

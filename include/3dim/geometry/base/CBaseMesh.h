@@ -65,13 +65,13 @@ namespace geometry
 		virtual int  componentCount();
 
 		//! is model closed
-		virtual bool isClosed();
+		virtual bool isClosed() const;
 
 		//! is model 2-manifold
-		virtual bool isTwoManifold();
+		virtual bool isTwoManifold() const;
 
 		//! Calculate mesh volume
-		virtual double meshVolume();
+		virtual double meshVolume() const;
 
 		//! Invert all normals
 		virtual void invertNormals();

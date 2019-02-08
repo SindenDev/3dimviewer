@@ -193,7 +193,7 @@ OFCondition CThreadedDICOMReceiver::acceptUnknownContextsWithTransferSyntax(
             T_ASC_P_ResultReason reason;
             // do not refuse if already accepted
             DUL_PRESENTATIONCONTEXT * dpc = findPresentationContextID(params->DULparams.acceptedPresentationContext, pc.presentationContextID);
-            if ((dpc == NULL) || ((dpc != NULL) && (dpc->result != ASC_P_ACCEPTANCE)))
+            if ((dpc == NULL) || (dpc->result != ASC_P_ACCEPTANCE))
             {
                 if (abstractOK)
                     reason = ASC_P_TRANSFERSYNTAXESNOTSUPPORTED;

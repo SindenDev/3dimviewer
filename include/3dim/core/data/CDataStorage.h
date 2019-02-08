@@ -60,7 +60,7 @@ namespace Storage
 VPL_DECLARE_EXCEPTION(CUnknowEntry, "Failed to recognize a storage entry")
 
 //! Maximal allowed value of an entry identifier.
-enum { MAX_ID = 3500 };
+enum { MAX_ID = 4000 };
 
 //! This flags can be passed to the invalidate() method.
 enum EInvalidateFlags

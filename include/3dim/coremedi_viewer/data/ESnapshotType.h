@@ -36,8 +36,9 @@ namespace data
 		//UNDO_IMPLANTS = 2,
 		UNDO_MODELS = 4,
 		//UNDO_NERVES = 8,
-		//UNDO_TEETH = 16
-        UNDO_NOTES = 64
+		//UNDO_TEETH = 16,
+        UNDO_NOTES = 64,
+        UNDO_MANSEG3D = 128
     };
 
 } // namespace data

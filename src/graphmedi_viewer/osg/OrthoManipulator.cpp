@@ -36,20 +36,32 @@ using namespace osgGA;
 
 // Constructor
 OrthoManipulator::OrthoManipulator()
-	: event1(NULL),
-	  event2(NULL),
-	  _thrown(false),
-      _near(0),
-      _far(0),
-      _left(0),
-      _right(0),
-      _bottom(0),
-      _top(0),
-      _zoom(1.0),
-      _shiftScale(1.0),
-      _zoomScale(1.0),
-      m_bUseStoredBB(false)
+    : event1(NULL),
+    event2(NULL),
+    _thrown(false),
+    _near(0),
+    _far(0),
+    _left(0),
+    _right(0),
+    _bottom(0),
+    _top(0),
+    _zoom(1.0),
+    _shiftScale(1.0),
+    _zoomScale(1.0),
+    m_bUseStoredBB(false),
+    m_wasPush(false),
+    m_enabled(true)
 {
+}
+
+void OrthoManipulator::zoomGesture(double zoomFactor)
+{
+    zoom(zoomFactor - 1.0);
+}
+
+void OrthoManipulator::panGesture(osg::Vec2 movement)
+{
+    move(movement);
 }
 
 // Handle events
@@ -66,6 +78,7 @@ bool OrthoManipulator::handle(const GUIEventAdapter& ea,GUIActionAdapter& us)
 	// Mouse down
 	case(GUIEventAdapter::PUSH):
 		{
+            m_wasPush = true;
 			clearStack();
 			addMouseEvent(ea);
 			if (calcMovement()) us.requestRedraw();
@@ -76,6 +89,15 @@ bool OrthoManipulator::handle(const GUIEventAdapter& ea,GUIActionAdapter& us)
 
 	case(GUIEventAdapter::RELEASE):
 		{
+            if (!m_wasPush)
+            {
+                return false;
+            }
+            else
+            {
+                m_wasPush = false;
+            }
+
 			// Left mouse button - rotate
 			if (ea.getButtonMask()==0)
 			{
@@ -118,6 +140,11 @@ bool OrthoManipulator::handle(const GUIEventAdapter& ea,GUIActionAdapter& us)
 
 	case(GUIEventAdapter::DRAG):
 		{
+            if (!m_wasPush)
+            {
+                return false;
+            }
+
 			addMouseEvent(ea);
 			if (calcMovement()) us.requestRedraw();
 			us.requestContinuousUpdate(false);

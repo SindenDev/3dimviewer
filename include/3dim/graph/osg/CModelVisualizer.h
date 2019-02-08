@@ -25,146 +25,68 @@
 
 #include <osg/CTriMesh.h>
 #include <osg/COnOffNode.h>
-//#include <coremedi/app/Signals.h>
-#include <osg/PolygonMode>
-#include <osg/CPseudoMaterial.h>
-
 #include "CGeneralObjectObserverOSG.h"
-
-#include <data/CDataStorage.h>
-#include <data/CModel.h>
-#include <data/CObjectPtr.h>
-
+#include <osg/CActiveObjectBase.h>
 #include <osgManipulator/Dragger>
 
 namespace osg
 {
     ///////////////////////////////////////////////////////////////////////////////
-    // Global functions
-    namespace ModelVisualizer
-    {
-        //! Setups all OSG properties required for correct visualization of a surface mesh.
-        //bool setupModelStateSet( osg::Node *pMesh );
-        bool setupModelStateSet(osg::Geode *pMesh);
-    }
-
-    ///////////////////////////////////////////////////////////////////////////////
     //! Surface model visualizer.
-    //! - Parameter T should be data::CModel class or any other derived from it.
-    //! - The parametr prescribes type of a storage item whose Id is given
-    //!   in the constructor.
-    template <class T>
-    class CAnyModelVisualizer : public COnOffNode, public scene::CGeneralObjectObserverOSG<CAnyModelVisualizer<T> >
+    class CModelVisualizer : public COnOffNode, public scene::CGeneralObjectObserverOSG<CModelVisualizer>
     {
     public:
-        //! Storage item type.
-        typedef T tModel;
+        /**
+        * \class   CModelEventsHelperDragger
+        *
+        * \brief   A model events helper dragger - used for CDraggerEventHandler activation.
+        */
+        class CModelEventsHelperDragger : public osgManipulator::Dragger, public CActiveObjectBase
+        {
+        public:
+            CModelEventsHelperDragger(int id) : osg::CActiveObjectBase("CModelEventsHelperDragger", 4), m_id(id) {}
 
-        //! Storage observer type.
-        typedef scene::CGeneralObjectObserverOSG<CAnyModelVisualizer<T> > tObserver;
+            int getModelId() const { return m_id; }
 
-        //! Materials
+        protected:
+            int m_id;
+        };
+
+    public:
+        CModelVisualizer(int modelId);
+
+        virtual void updateFromStorage() override;
+
+        int getId() const;
+        void setId(int id);
+
+        void setManualUpdates(bool bSet);
+        bool getManualUpdates() const;
+
+        osg::observer_ptr<CTriMesh> getMesh();
+        osg::observer_ptr<osg::MatrixTransform> getModelTransform();
+        osg::observer_ptr<CModelEventsHelperDragger> getDragger();
+
+        void showWireframe(bool bShow);
+
+        void updatePartOfMesh(const std::vector<std::pair<long, osg::CTriMesh::SPositionNormal>>& handles);
+
+    public:
         osg::ref_ptr<osg::CPseudoMaterial> m_materialRegular;
         osg::ref_ptr<osg::CPseudoMaterial> m_materialSelected;
         osg::ref_ptr<osg::CPseudoMaterial> m_materialSkinnedRegular;
         osg::ref_ptr<osg::CPseudoMaterial> m_materialSkinnedSelected;
 
-    public:
-        //! Constructor
-        CAnyModelVisualizer(int ModelId);
-
-        //! Method called on OSG update callback.
-        virtual void updateFromStorage();
-
-        //! Update only part of mesh
-        virtual void updatePartOfMesh(const CTriMesh::tIdPosVec &handles);
-
-        //! Get model id
-        int getId()
-        {
-            return m_ModelId;
-        }
-
-        //! Get model transform
-        osg::MatrixTransform* getModelTransform()
-        {
-            return m_pTransform.get();
-        }
-
-        //! Set/unset manual updates
-        void setManualUpdates(bool bSet)
-        {
-            m_bManualUpdate = bSet;
-        }
-
-        //! Get manual updates flag value
-        bool getManualUpdates()
-        {
-            return m_bManualUpdate;
-        }
-
-        //! Get mesh
-        CTriMesh *getMesh()
-        {
-            return m_pMesh;
-        }
-
-        const CTriMesh *getMesh() const
-        {
-            return m_pMesh;
-        }
-
-        //! Enable or disable wireframe mode
-        void showWireframe(bool bShow);
-
     protected:
-        //! Build KD-tree for visualizer
-        void buildKDTree();
+        int m_modelId;
 
-    public:
-
-        /**
-         * \class   CModelEventsHelperDragger
-         *
-         * \brief   A model events helper dragger - used for CDraggerEventHandler activation.
-         */
-
-        class CModelEventsHelperDragger : public osgManipulator::Dragger
-        {
-        public:
-            CModelEventsHelperDragger(int id) : m_id(id) {}
-
-            int getModelId() const { return m_id; }
-
-        protected:
-            // Model id
-            int m_id;
-        };
-
-    protected:
-        //! Identifier of a concrete model.
-        int m_ModelId;
-
-        //! Triangles...
         osg::ref_ptr<CTriMesh> m_pMesh;
-
-        //! Matrix transform of the model
         osg::ref_ptr<osg::MatrixTransform> m_pTransform;
+        osg::ref_ptr<CModelEventsHelperDragger> m_dragger;
 
-        //! Object is manually updated?
         bool m_bManualUpdate;
-
-        //! Should kd-tree be used?
         bool m_bUseKDTree;
     };
-
-    ///////////////////////////////////////////////////////////////////////////////
-    //! Surface model visualizer.
-    typedef CAnyModelVisualizer<data::CModel> CModelVisualizer;
-
-    ///////////////////////////////////////////////////////////////////////////////
-    // Method templates
-    #include "CModelVisualizer.hxx"
 
 } // namespace osg
 

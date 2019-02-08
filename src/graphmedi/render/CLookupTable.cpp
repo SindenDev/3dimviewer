@@ -122,22 +122,23 @@ CLookupTableComponent::CLookupTableComponent()
 CLookupTableComponent::~CLookupTableComponent()
 { }
 
-osg::Vec4 CLookupTableComponent::colorDensity(osg::Vec2d position, bool withAlphaFactor) const
+osg::Vec4 CLookupTableComponent::colorDensity(const osg::Vec2d& position, bool withAlphaFactor) const
 {
     osg::Vec4 color;
+    const int sizePoints = m_cachedDensityPoints.size();
 
-    if (m_cachedDensityPoints.size() == 0)
+    if (sizePoints == 0)
     {
         color = osg::Vec4(0.0, 0.0, 0.0, 0.0);
     }
-    else if (m_cachedDensityPoints.size() == 1)
+    else if (sizePoints == 1)
     {
         return m_cachedDensityPoints[0].color();
     }
     else
     {
         int index = 0;
-        for (int i = 0; i < int(m_cachedDensityPoints.size()) - 1; ++i)
+        for (int i = 0; i < sizePoints - 1; ++i)
         {
             if (position.x() > m_cachedDensityPoints[i].position().x())
             {
@@ -165,22 +166,23 @@ osg::Vec4 CLookupTableComponent::colorDensity(osg::Vec2d position, bool withAlph
     return color;
 }
 
-osg::Vec4 CLookupTableComponent::colorGradient(osg::Vec2d position, bool withAlphaFactor) const
+osg::Vec4 CLookupTableComponent::colorGradient(const osg::Vec2d& position, bool withAlphaFactor) const
 {
     osg::Vec4 color;
+    const int gpSize = (int)m_cachedGradientPoints.size();
 
-    if (m_cachedGradientPoints.size() == 0)
+    if (gpSize == 0)
     {
         color = osg::Vec4(0.0, 0.0, 0.0, 0.0);
     }
-    else if (m_cachedGradientPoints.size() == 1)
+    else if (gpSize == 1)
     {
         return m_cachedGradientPoints[0].color();
     }
     else
     {
         int index = 0;
-        for (int i = 0; i < int(m_cachedGradientPoints.size()) - 1; ++i)
+        for (int i = 0; i < gpSize - 1; ++i)
         {
             if (position.y() > m_cachedGradientPoints[i].position().y())
             {
@@ -209,7 +211,7 @@ osg::Vec4 CLookupTableComponent::colorGradient(osg::Vec2d position, bool withAlp
 }
 
 #pragma optimize("", off) // VS2013 sometimes over-optimizes this code and crashes afterwards (Release build only)
-osg::Vec4 CLookupTableComponent::color2d(osg::Vec2d position, bool withAlphaFactor) const
+osg::Vec4 CLookupTableComponent::color2d(const osg::Vec2d& position, bool withAlphaFactor) const
 {
     osg::Vec4 color = osg::Vec4(0.0, 0.0, 0.0, 0.0);
 
@@ -486,11 +488,12 @@ CLookupTable::CLookupTable()
 CLookupTable::~CLookupTable()
 { }
 
-osg::Vec4 CLookupTable::color(osg::Vec2d position) const
+osg::Vec4 CLookupTable::color(const osg::Vec2d& position) const
 {
     osg::Vec4 result;
+    const size_t componentsSize = m_components.size();
 
-    if (m_components.size() == 0)
+    if (componentsSize == 0)
     {
         return result;
     }
@@ -498,7 +501,7 @@ osg::Vec4 CLookupTable::color(osg::Vec2d position) const
     {
         result = m_components[0].color(position);
 
-        for (std::size_t i = 1; i < m_components.size(); ++i)
+        for (std::size_t i = 1; i < componentsSize; ++i)
         {
             result = blendColor(m_components[i].color(position), result);
         }
@@ -754,18 +757,18 @@ void CLookupTable::clear(int componentIndex)
     m_components[componentIndex].clear();
 }
 
-osg::Vec4 CLookupTable::blendColor(osg::Vec4 colorA, osg::Vec4 colorB)
+osg::Vec4 CLookupTable::blendColor(const osg::Vec4 &colorA, const osg::Vec4 &colorB)
 {
-    osg::Vec4 blendColor;
-
-    blendColor.a() = blendAlpha(colorA.a(), colorB.a());
-    if (blendColor.a() > 0.0)
+    const float a = blendAlpha(colorA.a(), colorB.a());
+    float r = 0, g = 0, b = 0;
+    if (a > 0.0)
     {
-        blendColor.r() = 1.0 / blendColor.a() * blendColorComponent(colorA.r(), colorA.a(), colorB.r(), colorB.a());
-        blendColor.g() = 1.0 / blendColor.a() * blendColorComponent(colorA.g(), colorA.a(), colorB.g(), colorB.a());
-        blendColor.b() = 1.0 / blendColor.a() * blendColorComponent(colorA.b(), colorA.a(), colorB.b(), colorB.a());
+        const float invA = 1.0f / a;
+        r = invA * blendColorComponent(colorA.r(), colorA.a(), colorB.r(), colorB.a());
+        g = invA * blendColorComponent(colorA.g(), colorA.a(), colorB.g(), colorB.a());
+        b = invA * blendColorComponent(colorA.b(), colorA.a(), colorB.b(), colorB.a());
     }
-    return blendColor;
+    return osg::Vec4(r, g, b, a);
 }
 
 float CLookupTable::blendColorComponent(float colorAComponent, float colorAAlpha, float colorBComponent, float colorBAlpha)

@@ -23,6 +23,8 @@
 #ifndef CDicomDCTk_H
 #define CDicomDCTk_H
 
+#if !defined( TRIDIM_USE_GDCM )
+
 #include <data/CDicom.h>
 
 
@@ -116,5 +118,6 @@ typedef CDicomDCTk::tSmartPtr  CDicomDCTkPtr;
 
 } // namespace data
 
-#endif // CDicom_H
+#endif //TRIDIM_USE_GDCM
+#endif // CDicomDCTk_H
 //loadDicom dat ako static do triedy

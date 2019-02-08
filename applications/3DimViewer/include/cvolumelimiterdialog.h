@@ -43,7 +43,7 @@ class CVolumeLimiterDialog : public QDialog
     
 public:
     //! Constructor
-    explicit CVolumeLimiterDialog(QWidget *parent = 0);
+    explicit CVolumeLimiterDialog(QWidget *parent = 0, Qt::WindowFlags f = 0);
 
     //! Destructor
     ~CVolumeLimiterDialog();

@@ -26,7 +26,6 @@
 #include <data/CStorageInterface.h>
 #include <VPL/Base/Object.h>
 #include <data/CSerializableData.h>
-#include <AppVersion.h>
 #include <QDateTime>
 #include <QVariant>
 #include <stdlib.h>

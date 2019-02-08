@@ -279,7 +279,7 @@
            </property>
            <property name="icon">
             <iconset resource="../resources.qrc">
-             <normaloff>:/icons/magnifier.png</normaloff>:/icons/magnifier.png</iconset>
+             <normaloff>:/svg/svg/magnifier.svg</normaloff>:/svg/svg/magnifier.svg</iconset>
            </property>
           </widget>
          </item>

@@ -24,6 +24,10 @@
 #define CTWOMATERIALSNODE_H_INCLUDED
 
 #include <osg/CPseudoMaterial.h>
+#include <osg/Node>
+#include <osg/CPseudoMaterialCache.h>
+
+#define USE_PSEUDOMATERIALS_CACHE
 
 namespace osg
 {
@@ -64,25 +68,53 @@ namespace osg
     template<class Node>
     void osg::CTwoMaterialsNode<Node>::setDiffuse(MaterialNumber m, const osg::Vec3& diffuse)
     {
+#ifdef USE_PSEUDOMATERIALS_CACHE
+        const CPseudoMaterial* prevMaterial = m_material[m];
+        m_material[m] = CPseudoMaterialCache::getMaterialCache()->getAdjustedMaterialDiffuse(m_material[m], diffuse);
+        if (m_material[m] != prevMaterial && m == m_currentMaterial) // auto apply material when using a new object
+            applyMaterial(m);
+#else
         m_material[m]->uniform("Diffuse")->set(diffuse);
+#endif
     }
 
     template<class Node>
     void osg::CTwoMaterialsNode<Node>::setEmission(MaterialNumber m, const osg::Vec3& emission)
     {
+#ifdef USE_PSEUDOMATERIALS_CACHE
+        const CPseudoMaterial* prevMaterial = m_material[m];
+        m_material[m] = CPseudoMaterialCache::getMaterialCache()->getAdjustedMaterialEmission(m_material[m], emission);
+        if (m_material[m] != prevMaterial && m == m_currentMaterial) // auto apply material when using a new object
+            applyMaterial(m);
+#else
         m_material[m]->uniform("Emission")->set(emission);
+#endif
     }
 
     template<class Node>
     void osg::CTwoMaterialsNode<Node>::setSpecularity(MaterialNumber m, float specularity)
     {
+#ifdef USE_PSEUDOMATERIALS_CACHE
+        const CPseudoMaterial* prevMaterial = m_material[m];
+        m_material[m] = CPseudoMaterialCache::getMaterialCache()->getAdjustedMaterialSpecularity(m_material[m], specularity);
+        if (m_material[m] != prevMaterial && m == m_currentMaterial) // auto apply material when using a new object
+            applyMaterial(m);
+#else
         m_material[m]->uniform("Specularity")->set(specularity);
+#endif
     }
 
     template<class Node>
     void osg::CTwoMaterialsNode<Node>::setShininess(MaterialNumber m, float shininess)
     {
+#ifdef USE_PSEUDOMATERIALS_CACHE
+        const CPseudoMaterial* prevMaterial = m_material[m];
+        m_material[m] = CPseudoMaterialCache::getMaterialCache()->getAdjustedMaterialShininess(m_material[m], shininess);
+        if (m_material[m] != prevMaterial && m == m_currentMaterial) // auto apply material when using a new object
+            applyMaterial(m);
+#else
         m_material[m]->uniform("Shininess")->set(shininess);
+#endif
     }
 
     template<class Node>
@@ -107,7 +139,7 @@ namespace osg
     float osg::CTwoMaterialsNode<Node>::getSpecularity(MaterialNumber m)
     {
         float specularity;
-        m_material[m]->uniform("Diffuse")->get(specularity);
+        m_material[m]->uniform("Specularity")->get(specularity);
 
         return specularity;
     }
@@ -116,7 +148,7 @@ namespace osg
     float osg::CTwoMaterialsNode<Node>::getShininess(MaterialNumber m)
     {
         float shininess;
-        m_material[m]->uniform("Diffuse")->get(shininess);
+        m_material[m]->uniform("Shininess")->get(shininess);
 
         return shininess;
     }
@@ -138,8 +170,15 @@ namespace osg
     template<class Node>
     osg::CPseudoMaterial* osg::CTwoMaterialsNode<Node>::getMaterial(MaterialNumber m)
     {
+#ifdef USE_PSEUDOMATERIALS_CACHE
+        if (CPseudoMaterialCache::getMaterialCache()->isInCache(m_material[m]))
+        {
+            // can't change material which is in cache - make an uncached copy of the material
+            m_material[m] = CPseudoMaterialCache::getMaterialCache()->getMaterialCopy(m_material[m]);
+        }
+#endif
         return m_material[m];
-    }
+    }    
 
     template<class Node>
     osg::CTwoMaterialsNode<Node>::CTwoMaterialsNode(bool autoApply/* = true*/)
@@ -148,12 +187,16 @@ namespace osg
 
         for (int i = 0; i < 2; ++i)
         {
+#ifdef USE_PSEUDOMATERIALS_CACHE
+            m_material[i] = CPseudoMaterialCache::getMaterialCache()->getCachedMaterial(osg::Vec3(1.0f, 1.0f, 1.0f), osg::Vec3(0.1f, 0.1f, 0.1f), 4.0f, 0.125f, true);
+#else
             m_material[i] = new osg::CPseudoMaterial();
 
             m_material[i]->uniform("Diffuse")->set(osg::Vec3(1.0f, 1.0f, 1.0f));
             m_material[i]->uniform("Emission")->set(osg::Vec3(0.1f, 0.1f, 0.1f));
             m_material[i]->uniform("Shininess")->set(4.0f);
             m_material[i]->uniform("Specularity")->set(0.125f);
+#endif
         }
 
         if (autoApply)

@@ -39,6 +39,12 @@
 #define MASK_CEPHALO_SHAPE_DRAGGER 1 << 12
 #define MASK_CEPHALO_LANDMARK_DRAGGER 1 << 13
 
+#define MASK_REGION_PREVIEW 1 << 14
+
+#define MASK_LANDMARK_ANNOTATION 1 << 15
+
+#define MASK_ORTHO_2D_DRAGGER 1 << 15
+
 // NodeMasks_H_included
 #endif
 

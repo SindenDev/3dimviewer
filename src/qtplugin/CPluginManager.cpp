@@ -96,6 +96,17 @@ void CPluginManager::loadPluginsInDir(QString dirName)
 #else
     foreach (QString fileName, pluginsDir.entryList(QDir::Files)) {
 #endif
+    #ifdef _WIN32
+        // ignore microsoft libraries
+        if (fileName.startsWith("api-ms-win", Qt::CaseInsensitive) || fileName.startsWith("msvc", Qt::CaseInsensitive))
+            continue;
+        // ignore openscenegraph libraries
+        if (fileName.contains(QRegExp("^osg\\d{2,3}-")) || fileName.startsWith("osgdb_",Qt::CaseInsensitive) || fileName.contains("OpenThreads"))
+            continue;
+        // ignore Qt libraries
+        if (fileName.startsWith("Qt5"))
+            continue;
+    #endif
 		QPluginLoader *loader = new QPluginLoader(pluginsDir.absoluteFilePath(fileName));
         if (NULL!=loader)
         {
@@ -106,7 +117,15 @@ void CPluginManager::loadPluginsInDir(QString dirName)
                 m_plugins.push_back(loader);
             }
             else
+            {
+#ifdef TENSORFLOW_BUILT_WITH_CUDA
+                if ("DeepLearningPlugin.dll" == fileName)
+                {
+                    QMessageBox::warning(m_pMain, QCoreApplication::applicationName(), tr("Deep Learning plugin could not be loaded. If 3DimViewer was built with GPU support make sure that CUDA 9.0 and cuDNN v7.0.5 are installed correctly."));
+                }
+#endif
                 delete loader;
+            }
         }
     }
     // load plugins from subdirectories
@@ -126,7 +145,7 @@ void CPluginManager::disconnectPlugins()
 		for (int i = 0; i<MAX_MODELS; ++i)
 		{
 			data::CObjectPtr<data::CModel> spModel(APP_STORAGE.getEntry(data::Storage::BonesModel::Id + i));
-            geometry::CMesh* pMesh=spModel->getMesh();
+            const geometry::CMesh* pMesh=spModel->getMesh();
 			if (NULL != pMesh)
 			{
 				spModel->setMesh(NULL);
@@ -256,13 +275,14 @@ void CPluginManager::initSignalTable()
 	m_vplSignals[VPL_SIGNAL(SigGetContoursVisibility).getId()] = &(VPL_SIGNAL(SigGetContoursVisibility));
 	m_vplSignals[VPL_SIGNAL(SigVolumeOfInterestChanged).getId()] = &(VPL_SIGNAL(SigVolumeOfInterestChanged));
 	m_vplSignals[VPL_SIGNAL(SigEnableRegionColoring).getId()] = &(VPL_SIGNAL(SigEnableRegionColoring));
+    m_vplSignals[VPL_SIGNAL(SigEnableMultiClassRegionColoring).getId()] = &(VPL_SIGNAL(SigEnableMultiClassRegionColoring));
 	m_vplSignals[VPL_SIGNAL(SigShowVolumeOfInterestDialog).getId()] = &(VPL_SIGNAL(SigShowVolumeOfInterestDialog));
 	m_vplSignals[VPL_SIGNAL(SigGetModelCutVisibility).getId()] = &(VPL_SIGNAL(SigGetModelCutVisibility));
 	m_vplSignals[VPL_SIGNAL(SigSetModelCutVisibility).getId()] = &(VPL_SIGNAL(SigSetModelCutVisibility));
 	m_vplSignals[VPL_SIGNAL(SigGetSelectedModelId).getId()] = &(VPL_SIGNAL(SigGetSelectedModelId));
 	m_vplSignals[VPL_SIGNAL(SigEstimateDensityWindow).getId()] = &(VPL_SIGNAL(SigEstimateDensityWindow));
 	m_vplSignals[VPL_SIGNAL(SigSetDensityWindow).getId()] = &(VPL_SIGNAL(SigSetDensityWindow));
-	m_vplSignals[VPL_SIGNAL(SigSaveModel).getId()] = &(VPL_SIGNAL(SigSaveModel));
+	m_vplSignals[VPL_SIGNAL(SigSaveModelExt).getId()] = &(VPL_SIGNAL(SigSaveModelExt));
     m_vplSignals[VPL_SIGNAL(SigNewTransformMatrixFromNote).getId()] = &(VPL_SIGNAL(SigNewTransformMatrixFromNote));
     m_vplSignals[VPL_SIGNAL(SigRemoveModel).getId()] = &(VPL_SIGNAL(SigRemoveModel));
 }
@@ -324,7 +344,7 @@ void CPluginManager::initPlugin(QObject* plugin, const QString& fileName)
             pDW->setObjectName(pPanel->objectName());
 			QString icon  = plugin->property("PanelIcon").toString();
 			if (icon.isEmpty())
-				pDW->setProperty("Icon",":/icons/page.png");
+				pDW->setProperty("Icon",":/svg/svg/page.svg");
 			else
 				pDW->setProperty("Icon",icon);
             pDW->hide();
@@ -591,7 +611,7 @@ void CPluginManager::populateMenus(QObject *plugin)
 				if (!icon.isEmpty())
 					pActShowPanel->setIcon(QIcon(icon));
 				else
-					pActShowPanel->setIcon(QIcon(":/icons/3dim.ico"));
+					pActShowPanel->setIcon(QIcon(":/svg/svg/3dim.svg"));
                 m_pluginsToolbar->addAction(pActShowPanel);	
 
                 // connect plugin menu button to event filter

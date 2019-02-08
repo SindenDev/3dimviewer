@@ -36,6 +36,8 @@
 // STL
 #include <string>
 
+class QGestureEvent;
+
 //! Qt-OSG Canvas
 class OSGCanvas
     : public QGLOSGWidget
@@ -46,7 +48,7 @@ public:
     // Mutual access.
     typedef vpl::base::CLockableObject<OSGCanvas>::CLock tLock;
     // Default constructor
-    explicit OSGCanvas(QWidget* parent, bool antialiasing);
+    explicit OSGCanvas(QWidget* parent);
     explicit OSGCanvas(QWidget* parent, const osg::Vec4& bgColor);
     // Destructor.
     virtual ~OSGCanvas();
@@ -57,6 +59,11 @@ protected:
 	bool				m_bShortcut;
     //! Custom cursor
     QCursor*			m_customCursor;
+
+    double m_lastScale;
+    osg::Vec2 m_lastCenter;
+    double m_lastRotation;
+
 private:
     virtual void        init(QWidget *parent, const osg::Vec4& bgColor);
 public:
@@ -85,6 +92,7 @@ public:
     void restoreMouseMode(bool bForce=false);
 
     //! event handlers
+    virtual bool        gestureEvent(QGestureEvent* event);
     virtual void        keyPressEvent( QKeyEvent* event );
     virtual void        keyReleaseEvent( QKeyEvent* event );
     virtual void        wheelEvent ( QWheelEvent * event );

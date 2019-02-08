@@ -27,6 +27,8 @@
 #include <VPL/Module/Signal.h>
 #include <data/CDataStorage.h>
 
+#include <controls/ccollapsiblegroupbox.h>
+
 namespace Ui {
 class OrthoSlicesWidget;
 }
@@ -47,20 +49,29 @@ private slots:
 
     void on_yzSliceSlider_valueChanged(int value);
 
+    void on_arbSliceSlider_valueChanged(int value);
+
     void on_xySliceModeCombo_currentIndexChanged(int index);
 
     void on_xzSliceModeCombo_currentIndexChanged(int index);
 
     void on_yzSliceModeCombo_currentIndexChanged(int index);
 
+    void on_pushButtonAlignXY_clicked();
+    void on_pushButtonAlignXZ_clicked();
+    void on_pushButtonAlignYZ_clicked();
+
+    void packGroupBox(bool checked);
+    void packGroupBox(QGroupBox* pWidget, bool checked);
+
 private:
     Ui::OrthoSlicesWidget *ui;
 
     // Signal connections.
     vpl::mod::tSignalConnection m_Connection;
-    vpl::mod::tSignalConnection m_ConnectionXY, m_ConnectionXZ, m_ConnectionYZ;
+    vpl::mod::tSignalConnection m_ConnectionXY, m_ConnectionXZ, m_ConnectionYZ, m_ConnectionARB;
 
-    int m_LastXYPosition, m_LastXZPosition, m_LastYZPosition;
+    int m_LastXYPosition, m_LastXZPosition, m_LastYZPosition, m_LastARBPosition;
     bool m_bDontNotify;
 
     //! Called on volume data change.
@@ -70,6 +81,7 @@ private:
     void onNewSliceXY(data::CStorageEntry *pEntry);
     void onNewSliceXZ(data::CStorageEntry *pEntry);
     void onNewSliceYZ(data::CStorageEntry *pEntry);
+    void onNewSliceARB(data::CStorageEntry *pEntry);
 };
 
 #endif // ORTHOSLICESWIDGET_H

@@ -38,6 +38,10 @@
 #include <cmath>
 
 #include <osg/CThickLineMaterial.h>
+#include <osg/CPseudoMaterial.h>
+#include "osg/CConvertToGeometry.h"
+
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //
@@ -284,7 +288,7 @@ void scene::CSceneOrientationWidget::createScene(void)
     std::string fontName = ptrOptions->GetDropperFontName();
 //    unsigned int fontSize = ptrOptions->GetDropperFontSize();
     
-    unsigned int fontSize = 24 * scaleFactor;
+    unsigned int fontSize = 16 * scaleFactor;
     ptrOptions.release();
 
     // Assistant model
@@ -294,7 +298,10 @@ void scene::CSceneOrientationWidget::createScene(void)
     ropt += OpenMesh::IO::Options::Binary;
     if( OpenMesh::IO::read_mesh(*pMesh, "models/assistant_body.stl", ropt) )
     {
-        m_model = convertOpenMesh2OSGGeometry(pMesh, osg::Vec4(1.0, 1.0, 1.0, 1.0));
+        m_model = osg::CConvertToGeometry::convert(*pMesh, { true, true, true });
+
+        m_model->getOrCreateStateSet()->setMode(GL_DEPTH_TEST, osg::StateAttribute::ON | osg::StateAttribute::PROTECTED);
+
         m_sceneGeometry->addDrawable( m_model.get() );
 
         m_materialBodyRegular->apply(m_model);
