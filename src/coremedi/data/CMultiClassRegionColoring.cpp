@@ -37,19 +37,20 @@ data::CMultiClassRegionColoring::CMultiClassRegionColoring(void)
     , m_Active(0)
     , m_DummyColor(0, 0, 0, 0)
     , m_maxRegionIndex(0)
+    , m_alpha(ALPHA)
 {
     // Initialize the storage
     CMultiClassRegionColoring::init();
 
-    m_colorsTable[0] = tColor(255, 128, 128, ALPHA);
-    m_colorsTable[1] = tColor(128, 255, 128, ALPHA);
-    m_colorsTable[2] = tColor(128, 128, 255, ALPHA);
-    m_colorsTable[3] = tColor(255, 255, 128, ALPHA);
-    m_colorsTable[4] = tColor(128, 255, 255, ALPHA);
-    m_colorsTable[5] = tColor(255, 128, 255, ALPHA);
-    m_colorsTable[6] = tColor(255, 128, 64, ALPHA);
-    m_colorsTable[7] = tColor(0, 128, 128, ALPHA);
-    m_colorsTable[8] = tColor(128, 128, 64, ALPHA);
+    m_colorsTable[0] = tColor(255, 128, 128, m_alpha);
+    m_colorsTable[1] = tColor(128, 255, 128, m_alpha);
+    m_colorsTable[2] = tColor(128, 128, 255, m_alpha);
+    m_colorsTable[3] = tColor(255, 255, 128, m_alpha);
+    m_colorsTable[4] = tColor(128, 255, 255, m_alpha);
+    m_colorsTable[5] = tColor(255, 128, 255, m_alpha);
+    m_colorsTable[6] = tColor(255, 128, 64, m_alpha);
+    m_colorsTable[7] = tColor(0, 128, 128, m_alpha);
+    m_colorsTable[8] = tColor(128, 128, 64, m_alpha);
 }
 
 void data::CMultiClassRegionColoring::colorize(vpl::img::CRGBImage &rgbImage, const vpl::img::CImage<data::tRegionVoxel> &regionImage)

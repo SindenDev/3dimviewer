@@ -84,7 +84,7 @@ public:
     }
 
     //! Calculate bounding box center
-    Vec3 center() const { return (_max + _min) * 0.5; }
+    Vec3 center() const { return (_max + _min) * geometry::Scalar(0.5); }
 
     //! Calculate bounding box radius (radius of the minimal possible bounding sphere)
     double radius() const { return sqrtf(radius2()); }

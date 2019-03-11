@@ -768,10 +768,16 @@ scene::CArbitrarySliceScene::CArbitrarySliceScene(OSGOrtho2DCanvas* canvas) :
 
     this->setName("ArbScene");
 
+    // Get widgets color
+    data::CObjectPtr<data::CSceneWidgetParameters> ptrCOptions(APP_STORAGE.getEntry(data::Storage::SceneWidgetsParameters::Id));
+    m_widgetsColor = ptrCOptions->getMarkersColor();
+
     // move the scene a bit back so that everything is visible
     this->setMatrix(osg::Matrix::scale(1.0f, 1.0f, 1.0f) * osg::Matrix::translate(osg::Vec3(0, 0, SCENE_SHIFT_AMMOUNT)));
     this->m_unOrthoTransformMatrix = osg::Matrix::inverse(this->getMatrix());
     this->m_orthoTransformMatrix = this->getMatrix();
+
+    createWidgetsScene(canvas, osg::Matrix::identity(), SW_ORIENT | SW_RULER | CSceneOrientationWidget::SW_ALL_LABELS | CSceneOrientationWidget::SW_POST_LABEL);
 
     //
     tObserverType::connect(APP_STORAGE.getEntry(data::Storage::ArbitrarySlice::Id).get());
@@ -833,6 +839,10 @@ scene::CArbitrarySliceScene::CArbitrarySliceScene(OSGOrtho2DCanvas* canvas) :
     m_pCanvas->centerAndScale();
 
     m_conSliceMoved = VPL_SIGNAL(SigOrthoSliceMoved).connect(this, &CArbitrarySliceScene::orthoSliceMoved);
+
+    updateGeometry();
+
+    m_pCanvas->Refresh(false);
 }
 
 scene::CArbitrarySliceScene::~CArbitrarySliceScene()
@@ -846,6 +856,41 @@ scene::CArbitrarySliceScene::~CArbitrarySliceScene()
     {
         VPL_SIGNAL(SigOrthoSliceMoved).disconnect(m_conSliceMoved);
     }
+}
+
+void scene::CArbitrarySliceScene::createWidgetsScene(OSGCanvas *pCanvas, const osg::Matrix &viewMatrix, int Flags)
+{
+    // Create widgets scene
+    m_widgetOverlay = new scene::CWidgetOverlayNode(pCanvas);
+
+    // Add widgets
+    if (Flags & SW_INFO)
+    {
+        scene::CSceneInfoWidget * info = new scene::CSceneInfoWidget(m_pCanvas);
+        m_widgetOverlay->addWidget(info);
+    }
+
+    if (Flags & SW_ORIENT)
+    {
+        m_orientationWidget = new scene::CSceneOrientationWidget(m_pCanvas, 100, 100, viewMatrix, Flags);
+        m_orientationWidget->setUpdatesEnabled(false);
+
+        m_widgetOverlay->addWidget(m_orientationWidget);       
+
+        if (Flags & scene::CSceneOrientationWidget::SW_MOVABLE)
+        {
+            m_orientationWidget->setMatrix(osg::Matrix::identity());
+        }
+    }
+
+    if (Flags & SW_RULER)
+    {
+        scene::CRulerWidget * ruler = new scene::CRulerWidget(m_pCanvas, 60, 400, m_widgetsColor);
+        m_widgetOverlay->addWidget(ruler);
+        ruler->setWindowManager(m_widgetOverlay->getWM());
+    }
+
+    this->addChild(m_widgetOverlay.get());
 }
 
 osg::CArbitrarySliceGeometry* scene::CArbitrarySliceScene::getSlice() const
@@ -878,12 +923,19 @@ void scene::CArbitrarySliceScene::updateFromStorage()
     m_pCanvas->Refresh(false);
 }
 
-void scene::CArbitrarySliceScene::setupScene(data::CDensityData & data)
+void scene::CArbitrarySliceScene::updateGeometry()
 {
     data::CObjectPtr< data::CArbitrarySlice > slice(APP_STORAGE.getEntry(data::Storage::ArbitrarySlice::Id));
     m_selection->setVoxelDepth(slice->getPositionMax() - slice->getPositionMin(), slice->getSliceVoxelSize()[2]);
     m_selection->setPlaneNormal(slice->getPlaneNormal());
     m_pCanvas->centerAndScale();
+
+    m_orientationWidget->setMatrix(osg::Matrix::inverse(slice->getRotationMatrix()) * osg::Matrix::rotate(osg::DegreesToRadians(180.0), osg::Vec3(0.0, 1.0, 0.0)));
+}
+
+void scene::CArbitrarySliceScene::setupScene(data::CDensityData & data)
+{
+    updateGeometry();
 }
 
 void scene::CArbitrarySliceScene::updateFromStorageArbitrarySlice()
@@ -919,6 +971,8 @@ void scene::CArbitrarySliceScene::updateFromStorageArbitrarySlice()
     this->p_AnchorAndCenterGroup->setMatrix(transformation);
 
     m_pImplantSlice->update(*slice.get());
+
+    m_orientationWidget->setMatrix(osg::Matrix::inverse(slice->getRotationMatrix()) * osg::Matrix::rotate(osg::DegreesToRadians(180.0), osg::Vec3(0.0, 1.0, 0.0)));
 }
 
 void scene::CArbitrarySliceScene::sliceUpDown(int direction)

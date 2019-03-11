@@ -25,338 +25,469 @@
 #include <osg/Camera>
 #include <osg/Version>
 
+const char clipByFrustum[] =
+"bool clipByFrustum(mat4 m, inout vec4 vertex1, inout vec4 vertex2) \n\
+{ \n\
+    vec3 p1 = vertex1.xyz; \n\
+    vec3 p2 = vertex2.xyz; \n\
+    \n\
+    vec4 left; \n\
+    vec4 right; \n\
+    vec4 top; \n\
+    vec4 bottom; \n\
+    vec4 near; \n\
+    vec4 far; \n\
+    \n\
+    // extract planes from modelviewprojection matrix \n\
+    for (int i = 0; i < 4; i++) \n\
+    { \n\
+        left[i] = m[i][3] + m[i][0]; \n\
+        right[i] = m[i][3] - m[i][0]; \n\
+        bottom[i] = m[i][3] + m[i][1]; \n\
+        top[i] = m[i][3] - m[i][1]; \n\
+        near[i] = m[i][3] + m[i][2]; \n\
+        far[i] = m[i][3] - m[i][2]; \n\
+    } \n\
+\n\
+    vec4 planes[6] = vec4[6](left, right, top, bottom, near, far); \n\
+\n\
+    // normalize the planes \n\
+    for (int i = 0; i < 6; i++) \n\
+    { \n\
+        planes[i] = planes[i] / length(planes[i].xyz); \n\
+    } \n\
+\n\
+    float p1t = 0.0; \n\
+    float p2t = 1.0; \n\
+\n\
+    // test against all planes and cut out pieces outside frustum \n\
+    for (int i = 0; i < 6; i++) \n\
+    { \n\
+        float d1 = dot(p1, planes[i].xyz) + planes[i].w; \n\
+        float d2 = dot(p2, planes[i].xyz) + planes[i].w; \n\
+    \n\
+        if(d1 < 0.0 && d2 < 0.0) \n\
+        { \n\
+            return true; \n\
+        } \n\
+    \n\
+        float t = abs(d1) / (abs(d1) + abs(d2)); \n\
+    \n\
+        if(d1 < 0.0) \n\
+        { \n\
+            if(t > p1t) \n\
+            { \n\
+                p1t = t; \n\
+            } \n\
+        } \n\
+        else if(d2 < 0.0) \n\
+        { \n\
+            if (t < p2t) \n\
+            { \n\
+                p2t = t; \n\
+            } \n\
+        } \n\
+        if(p1t >= p2t) \n\
+        { \n\
+            return true; \n\
+        } \n\
+    } \n\
+\n\
+    vec3 v = p2 - p1; \n\
+\n\
+    if(p1t > 0.0) \n\
+    { \n\
+        vec3 p = p1 + p1t * v; \n\
+        vertex1 = vec4(p, 1.0); \n\
+    } \n\
+    if(p2t < 1.0) \n\
+    { \n\
+        vec3 p = p1 + p2t * v; \n\
+        vertex2 = vec4(p, 1.0); \n\
+    } \n\
+        return false; \n\
+} \n\
+";
 
 const char geomShaderLineStripAdjacencySrc[] =
-"/* \brief Geometry GLSL shader that demonstrates how to draw basic thick and smooth lines in 3D.\n\
-* This file is a part of shader-3dcurve example (https://github.com/vicrucann/shader-3dcurve).\n\
-*\n\
-* \\author Victoria Rudakova\n\
-* \\date January 2017\n\
-* \\copyright MIT license\n\
-*/\n\
-uniform vec2 Viewport;\n\
+"   /*Geometry GLSL shader that demonstrates how to draw basic thick and smooth lines in 3D. \n\
+    * This file is a part of shader-3dcurve example (https://github.com/vicrucann/shader-3dcurve). \n\
+    * \n\
+    * \\author Victoria Rudakova \n\
+    * \\date January 2017 \n\
+    * \\copyright MIT license \n\
+    */ \n\
 \n\
-const float MiterLimit = 0.75;\n\
+    uniform vec2 Viewport; \n\
+    uniform mat4 osg_ModelViewProjectionMatrix; \n\
+    const float MiterLimit = 0.75; \n\
 \n\
-layout(lines_adjacency) in;\n\
-layout(triangle_strip, max_vertices = 7) out;\n\
+    layout(lines_adjacency) in; \n\
+    layout(triangle_strip, max_vertices = 7) out; \n\
 \n\
-in VertexData\n\
-{\n\
-    vec4 vertexColor;\n\
-} VertexIn[4];\n\
+    in VertexData \n\
+    { \n\
+        vec4 vertexColor; \n\
+    } VertexIn[4]; \n\
 \n\
-out VertexData\n\
-{\n\
-    vec4 vertexColor;\n\
-} VertexOut;\n\
+    out VertexData \n\
+    { \n\
+        vec4 vertexColor; \n\
+    } VertexOut; \n\
 \n\
-vec2 toScreenSpace(vec4 vertex)\n\
-{\n\
-    return vec2(vertex.xy / vertex.w) * Viewport;\n\
-}\n\
+bool clipByFrustum(mat4 m, inout vec4 vertex1, inout vec4 vertex2, inout vec4 vertex3, inout vec4 vertex4) \n\
+{ \n\
+    vec3 p1 = vertex2.xyz; \n\
+    vec3 p2 = vertex3.xyz; \n\
+    \n\
+    vec4 left; \n\
+    vec4 right; \n\
+    vec4 top; \n\
+    vec4 bottom; \n\
+    vec4 near; \n\
+    vec4 far; \n\
+    \n\
+    // extract planes from modelviewprojection matrix \n\
+    for (int i = 0; i < 4; i++) \n\
+    { \n\
+        left[i] = m[i][3] + m[i][0]; \n\
+        right[i] = m[i][3] - m[i][0]; \n\
+        bottom[i] = m[i][3] + m[i][1]; \n\
+        top[i] = m[i][3] - m[i][1]; \n\
+        near[i] = m[i][3] + m[i][2]; \n\
+        far[i] = m[i][3] - m[i][2]; \n\
+    } \n\
 \n\
-float toZValue(vec4 vertex)\n\
-{\n\
-    return (vertex.z / vertex.w);\n\
-}\n\
+    vec4 planes[6] = vec4[6](left, right, top, bottom, near, far); \n\
 \n\
-void drawSegment(vec2 points[4], vec4 colors[4], float zValues[4])\n\
-{\n\
-    vec2 p0 = points[0];\n\
-    vec2 p1 = points[1];\n\
-    vec2 p2 = points[2];\n\
-    vec2 p3 = points[3];\n\
+    // normalize the planes \n\
+    for (int i = 0; i < 6; i++) \n\
+    { \n\
+        planes[i] = planes[i] / length(planes[i].xyz); \n\
+    } \n\
 \n\
-    /* determine the direction of each of the 3 segments (previous, current, next) */\n\
-    vec2 v1 = normalize(p2 - p1); \n\
-    vec2 v0 = all(equal(p0, p1)) ? v1 : normalize(p1 - p0); \n\
-    vec2 v2 = all(equal(p2, p3)) ? v1 : normalize(p3 - p2); \n\
+    float p1t = 0.0; \n\
+    float p2t = 1.0; \n\
 \n\
-    /* determine the normal of each of the 3 segments (previous, current, next) */\n\
-    vec2 n0 = vec2(-v0.y, v0.x);\n\
-    vec2 n1 = vec2(-v1.y, v1.x);\n\
-    vec2 n2 = vec2(-v2.y, v2.x);\n\
+    // test against all planes and cut out pieces outside frustum \n\
+    for (int i = 0; i < 6; i++) \n\
+    { \n\
+        float d1 = dot(p1, planes[i].xyz) + planes[i].w; \n\
+        float d2 = dot(p2, planes[i].xyz) + planes[i].w; \n\
+    \n\
+        if(d1 < 0.0 && d2 < 0.0) \n\
+        { \n\
+            return true; \n\
+        } \n\
+    \n\
+        float t = abs(d1) / (abs(d1) + abs(d2)); \n\
+    \n\
+        if(d1 < 0.0) \n\
+        { \n\
+            if(t > p1t) \n\
+            { \n\
+                p1t = t; \n\
+            } \n\
+        } \n\
+        else if(d2 < 0.0) \n\
+        { \n\
+            if (t < p2t) \n\
+            { \n\
+                p2t = t; \n\
+            } \n\
+        } \n\
+        if(p1t >= p2t) \n\
+        { \n\
+            return true; \n\
+        } \n\
+    } \n\
 \n\
-    /* determine miter lines by averaging the normals of the 2 segments */\n\
-    vec2 miter_a = normalize(n0 + n1); // miter at start of current segment\n\
-    vec2 miter_b = normalize(n1 + n2); // miter at end of current segment\n\
+    vec3 v = p2 - p1; \n\
 \n\
-    /* determine the length of the miter by projecting it onto normal and then inverse it */\n\
-    float an1 = dot(miter_a, n1);\n\
-    float bn1 = dot(miter_b, n2);\n\
-    if (an1 == 0) an1 = 1;\n\
-    if (bn1 == 0) bn1 = 1;\n\
-    float length_a = Thickness / an1;\n\
-    float length_b = Thickness / bn1;\n\
+    if(p1t > 0.0) \n\
+    { \n\
+        vec3 p = p1 + p1t * v; \n\
+        vertex2 = vec4(p, 1.0); \n\
+        vertex1 = vertex2; \n\
+    } \n\
+    if(p2t < 1.0) \n\
+    { \n\
+        vec3 p = p1 + p2t * v; \n\
+        vertex3 = vec4(p, 1.0); \n\
+        vertex4 = vertex3; \n\
+    } \n\
+        return false; \n\
+} \n\
+void main(void) \n\
+{ \n\
+    vec4 vertex1 = gl_in[0].gl_Position; \n\
+    vec4 vertex2 = gl_in[1].gl_Position; \n\
+    vec4 vertex3 = gl_in[2].gl_Position; \n\
+    vec4 vertex4 = gl_in[3].gl_Position; \n\
 \n\
-    /* prevent excessively long miters at sharp corners */\n\
-    if (dot(v0, v1) < -MiterLimit)\n\
-    {\n\
-        miter_a = n1;\n\
-        length_a = Thickness;\n\
+    if(clipByFrustum(osg_ModelViewProjectionMatrix, vertex1, vertex2, vertex3, vertex4)) \n\
+    { \n\
+        return; \n\
+    } \n\
 \n\
-        /* close the gap */\n\
-        if (dot(v0, n1) > 0)\n\
-        {\n\
-            VertexOut.vertexColor = colors[1];\n\
-            gl_Position = vec4((p1 + Thickness * n0) / Viewport, zValues[1], 1.0);\n\
-            EmitVertex();\n\
+    //vec4 color1 = VertexIn[0].vertexColor; \n\
+    vec4 color2 = VertexIn[1].vertexColor; \n\
+    vec4 color3 = VertexIn[2].vertexColor; \n\
+    //vec4 color4 = VertexIn[3].vertexColor; \n\
 \n\
-            VertexOut.vertexColor = colors[1];\n\
-            gl_Position = vec4((p1 + Thickness * n1) / Viewport, zValues[1], 1.0);\n\
-            EmitVertex();\n\
+    vec4 p1 = osg_ModelViewProjectionMatrix * vertex1; \n\
+    vec4 p2 = osg_ModelViewProjectionMatrix * vertex2; \n\
+    vec4 p3 = osg_ModelViewProjectionMatrix * vertex3; \n\
+    vec4 p4 = osg_ModelViewProjectionMatrix * vertex4; \n\
 \n\
-            VertexOut.vertexColor = colors[1];\n\
-            gl_Position = vec4(p1 / Viewport, 0.0, 1.0);\n\
-            EmitVertex();\n\
+    vec3 ndc1 = p1.xyz / p1.w; \n\
+    vec3 ndc2 = p2.xyz / p2.w; \n\
+    vec3 ndc3 = p3.xyz / p3.w; \n\
+    vec3 ndc4 = p4.xyz / p4.w; \n\
 \n\
-            EndPrimitive();\n\
-        }\n\
-        else\n\
-        {\n\
-            VertexOut.vertexColor = colors[1];\n\
-            gl_Position = vec4((p1 - Thickness * n1) / Viewport, zValues[1], 1.0);\n\
-            EmitVertex();\n\
+    vec2 s1 = ndc1.xy * Viewport; \n\
+    vec2 s2 = ndc2.xy * Viewport; \n\
+    vec2 s3 = ndc3.xy * Viewport; \n\
+    vec2 s4 = ndc4.xy * Viewport; \n\
 \n\
-            VertexOut.vertexColor = colors[1];\n\
-            gl_Position = vec4((p1 - Thickness * n0) / Viewport, zValues[1], 1.0);\n\
-            EmitVertex();\n\
+    /* determine the direction of each of the 3 segments (previous, current, next) */ \n\
+    vec2 v1 = normalize(s3 - s2); \n\
+    vec2 v0 = all(equal(s1, s2)) ? v1 : normalize(s2 - s1); \n\
+    vec2 v2 = all(equal(s3, s4)) ? v1 : normalize(s4 - s3); \n\
 \n\
-            VertexOut.vertexColor = colors[1];\n\
-            gl_Position = vec4(p1 / Viewport, zValues[1], 1.0);\n\
-            EmitVertex();\n\
+    /* determine the normal of each of the 3 segments (previous, current, next) */ \n\
+    vec2 n0 = vec2(-v0.y, v0.x); \n\
+    vec2 n1 = vec2(-v1.y, v1.x); \n\
+    vec2 n2 = vec2(-v2.y, v2.x); \n\
 \n\
-            EndPrimitive();\n\
-        }\n\
-    }\n\
-    if (dot(v1, v2) < -MiterLimit)\n\
-    {\n\
-        miter_b = n1;\n\
-        length_b = Thickness;\n\
-    }\n\
-    // generate the triangle strip\n\
-    VertexOut.vertexColor = colors[1];\n\
-    gl_Position = vec4((p1 + length_a * miter_a) / Viewport, zValues[1], 1.0);\n\
-    EmitVertex();\n\
+    /* determine miter lines by averaging the normals of the 2 segments */ \n\
+    vec2 miter_a = normalize(n0 + n1); // miter at start of current segment \n\
+    vec2 miter_b = normalize(n1 + n2); // miter at end of current segment \n\
 \n\
-    VertexOut.vertexColor = colors[1];\n\
-    gl_Position = vec4((p1 - length_a * miter_a) / Viewport, zValues[1], 1.0);\n\
-    EmitVertex();\n\
+    /* determine the length of the miter by projecting it onto normal and then inverse it */ \n\
+    float an1 = dot(miter_a, n1); \n\
+    float bn1 = dot(miter_b, n2); \n\
 \n\
-    VertexOut.vertexColor = colors[2];\n\
-    gl_Position = vec4((p2 + length_b * miter_b) / Viewport, zValues[2], 1.0);\n\
-    EmitVertex();\n\
+    if (an1 == 0) an1 = 1; \n\
+    if (bn1 == 0) bn1 = 1; \n\
 \n\
-    VertexOut.vertexColor = colors[2];\n\
-    gl_Position = vec4((p2 - length_b * miter_b) / Viewport, zValues[2], 1.0);\n\
-    EmitVertex();\n\
+    float length_a = Thickness / an1; \n\
+    float length_b = Thickness / bn1; \n\
 \n\
-    EndPrimitive();\n\
-}\n\
+    /* prevent excessively long miters at sharp corners */ \n\
+    if (dot(v0, v1) < -MiterLimit) \n\
+    { \n\
+        miter_a = n1; \n\
+        length_a = Thickness; \n\
+    \n\
+         vec2 offset1 = (Thickness * n0) / Viewport; \n\
+         vec2 offset2 = (Thickness * n1) / Viewport; \n\
+    \n\
+        /* close the gap */ \n\
+        if (dot(v0, n1) > 0) \n\
+        { \n\
+            VertexOut.vertexColor = color2; \n\
+            gl_Position = vec4((ndc2.xy + offset1), ndc2.z, 1.0); \n\
+            EmitVertex(); \n\
+        \n\
+            VertexOut.vertexColor = color2; \n\
+            gl_Position = vec4((ndc2.xy + offset2), ndc2.z, 1.0); \n\
+            EmitVertex(); \n\
+        \n\
+            VertexOut.vertexColor = color2; \n\
+            gl_Position = vec4(ndc2, 1.0); \n\
+            EmitVertex(); \n\
+        \n\
+            EndPrimitive(); \n\
+        } \n\
+        else \n\
+        { \n\
+            VertexOut.vertexColor = color2; \n\
+            gl_Position = vec4((ndc2.xy - offset2), ndc2.z, 1.0); \n\
+            EmitVertex(); \n\
+        \n\
+            VertexOut.vertexColor = color2; \n\
+            gl_Position = vec4((ndc2.xy - offset1), ndc2.z, 1.0); \n\
+            EmitVertex(); \n\
+        \n\
+            VertexOut.vertexColor = color2; \n\
+            gl_Position = vec4(ndc2, 1.0); \n\
+            EmitVertex(); \n\
+        \n\
+            EndPrimitive(); \n\
+        } \n\
+    } \n\
+    if (dot(v1, v2) < -MiterLimit) \n\
+    { \n\
+        miter_b = n1; \n\
+        length_b = Thickness; \n\
+    } \n\
 \n\
-void main(void)\n\
-{\n\
-    /* 4 points*/\n\
-    vec4 Points[4];\n\
-    Points[0] = gl_in[0].gl_Position;\n\
-    Points[1] = gl_in[1].gl_Position;\n\
-    Points[2] = gl_in[2].gl_Position;\n\
-    Points[3] = gl_in[3].gl_Position;\n\
+    vec2 offset1 = (length_a * miter_a) / Viewport; \n\
+    vec2 offset2 = (length_b * miter_b) / Viewport; \n\
 \n\
-    /* 4 attached colors*/\n\
-    vec4 colors[4];\n\
-    colors[0] = VertexIn[0].vertexColor;\n\
-    colors[1] = VertexIn[1].vertexColor;\n\
-    colors[2] = VertexIn[2].vertexColor;\n\
-    colors[3] = VertexIn[3].vertexColor;\n\
+    // generate the triangle strip \n\
+    VertexOut.vertexColor = color2; \n\
+    gl_Position = vec4((ndc2.xy + offset1), ndc2.z, 1.0); \n\
+    EmitVertex(); \n\
 \n\
-    /* screen coords*/\n\
-    vec2 points[4];\n\
-    points[0] = toScreenSpace(Points[0]);\n\
-    points[1] = toScreenSpace(Points[1]);\n\
-    points[2] = toScreenSpace(Points[2]);\n\
-    points[3] = toScreenSpace(Points[3]);\n\
+    VertexOut.vertexColor = color2; \n\
+    gl_Position = vec4((ndc2.xy - offset1), ndc2.z, 1.0); \n\
+    EmitVertex(); \n\
 \n\
-    /* deepness values*/\n\
-    float zValues[4];\n\
-    zValues[0] = toZValue(Points[0]);\n\
-    zValues[1] = toZValue(Points[1]);\n\
-    zValues[2] = toZValue(Points[2]);\n\
-    zValues[3] = toZValue(Points[3]);\n\
+    VertexOut.vertexColor = color3; \n\
+    gl_Position = vec4((ndc3.xy + offset2), ndc3.z, 1.0); \n\
+    EmitVertex(); \n\
 \n\
-    drawSegment(points, colors, zValues);\n\
-}";
+    VertexOut.vertexColor = color3; \n\
+    gl_Position = vec4((ndc3.xy - offset2), ndc3.z, 1.0); \n\
+    EmitVertex(); \n\
+\n\
+    EndPrimitive(); \n\
+} \n\
+";
 
 const char geomShaderLinesSrc[] =
-"uniform vec2 Viewport;\n\
+"   uniform vec2 Viewport; \n\
+    uniform mat4 osg_ModelViewProjectionMatrix; \n\
 \n\
-layout(lines) in;\n\
-layout(triangle_strip, max_vertices = 4) out;\n\
+    layout(lines) in; \n\
+    layout(triangle_strip, max_vertices = 4) out; \n\
 \n\
-in VertexData\n\
-{\n\
-    vec4 vertexColor;\n\
-} VertexIn[2];\n\
+    in VertexData \n\
+    { \n\
+        vec4 vertexColor; \n\
+    } VertexIn[2]; \n\
 \n\
-out VertexData\n\
-{\n\
-    vec4 vertexColor;\n\
-} VertexOut;\n\
+    out VertexData \n\
+    { \n\
+        vec4 vertexColor; \n\
+    } VertexOut; \n\
 \n\
-vec2 toScreenSpace(vec4 vertex)\n\
-{\n\
-    return vec2(vertex.xy / vertex.w) * Viewport;\n\
-}\n\
-\n\
-float toZValue(vec4 vertex)\n\
-{\n\
-    return (vertex.z / vertex.w);\n\
-}\n\
-\n\
-void drawSegment(vec2 points[2], vec4 colors[2], float zValues[2])\n\
-{\n\
-    vec2 p0 = points[0];\n\
-    vec2 p1 = points[1];\n\
-\n\
-    /* determine the direction of each of the 3 segments (previous, current, next) */\n\
-    vec2 v0 = normalize(p1 - p0);\n\
-\n\
-    /* determine the normal of each of the 3 segments (previous, current, next) */\n\
-    vec2 n0 = vec2(-v0.y, v0.x);\n\
-\n\
-    /* generate the triangle strip*/\n\
-    VertexOut.vertexColor = colors[0];\n\
-    gl_Position = vec4((p0 + Thickness * n0) / Viewport, zValues[0], 1.0); \n\
-    EmitVertex(); \n\
-\n\
-    VertexOut.vertexColor = colors[0];\n\
-    gl_Position = vec4((p0 - Thickness * n0) / Viewport, zValues[0], 1.0); \n\
-    EmitVertex(); \n\
-\n\
-    VertexOut.vertexColor = colors[1];\n\
-    gl_Position = vec4((p1 + Thickness * n0) / Viewport, zValues[1], 1.0); \n\
-    EmitVertex(); \n\
+    vec2 screenOffset(vec3 ndc1, vec3 ndc2, vec2 viewport, float thickness) \n\
+    { \n\
+        vec2 s1 = ndc1.xy * viewport; \n\
+        vec2 s2 = ndc2.xy * viewport; \n\
     \n\
-    VertexOut.vertexColor = colors[1];\n\
-    gl_Position = vec4((p1 - Thickness * n0) / Viewport, zValues[1], 1.0); \n\
-    EmitVertex(); \n\
+        vec2 v = normalize(s1 - s2); \n\
+        vec2 n = vec2(-v.y, v.x); \n\
+        return (thickness * n) / viewport; \n\
+    } \n\
+\n\
+    void main(void) \n\
+    { \n\
+        vec4 vertex1 = gl_in[0].gl_Position; \n\
+        vec4 vertex2 = gl_in[1].gl_Position; \n\
     \n\
-    EndPrimitive(); \n\
-}\n\
-\n\
-void main(void)\n\
-{\n\
-    /* 2 points*/\n\
-    vec4 Points[2];\n\
-    Points[0] = gl_in[0].gl_Position;\n\
-    Points[1] = gl_in[1].gl_Position;\n\
-\n\
-    /* 2 attached colors*/\n\
-    vec4 colors[2];\n\
-    colors[0] = VertexIn[0].vertexColor;\n\
-    colors[1] = VertexIn[1].vertexColor;\n\
-\n\
-    /* screen coords*/\n\
-    vec2 points[2];\n\
-    points[0] = toScreenSpace(Points[0]);\n\
-    points[1] = toScreenSpace(Points[1]);\n\
-\n\
-    /* deepness values*/\n\
-    float zValues[2];\n\
-    zValues[0] = toZValue(Points[0]);\n\
-    zValues[1] = toZValue(Points[1]);\n\
-\n\
-    drawSegment(points, colors, zValues);\n\
-}";
+        if(clipByFrustum(osg_ModelViewProjectionMatrix, vertex1, vertex2)) \n\
+        { \n\
+            return; \n\
+        } \n\
+    \n\
+        vec4 color1 = VertexIn[0].vertexColor; \n\
+        vec4 color2 = VertexIn[1].vertexColor; \n\
+    \n\
+        vec4 p1 = osg_ModelViewProjectionMatrix * vertex1; \n\
+        vec4 p2 = osg_ModelViewProjectionMatrix * vertex2; \n\
+    \n\
+        vec3 ndc1 = p1.xyz / p1.w; \n\
+        vec3 ndc2 = p2.xyz / p2.w; \n\
+    \n\
+        vec2 offset = screenOffset(ndc1, ndc2, Viewport, Thickness); \n\
+    \n\
+        VertexOut.vertexColor = color1; \n\
+        gl_Position = vec4((ndc1.xy + offset), ndc1.z, 1.0); \n\
+        EmitVertex(); \n\
+    \n\
+        VertexOut.vertexColor = color1; \n\
+        gl_Position = vec4((ndc1.xy - offset), ndc1.z, 1.0); \n\
+        EmitVertex(); \n\
+    \n\
+        VertexOut.vertexColor = color2; \n\
+        gl_Position = vec4((ndc2.xy + offset), ndc2.z, 1.0); \n\
+        EmitVertex(); \n\
+    \n\
+        VertexOut.vertexColor = color2; \n\
+        gl_Position = vec4((ndc2.xy - offset), ndc2.z, 1.0); \n\
+        EmitVertex(); \n\
+    \n\
+        EndPrimitive(); \n\
+    } \n\
+";
 
 const char geomShaderLineStippleSrc[] =
-"uniform vec2 Viewport;\n\
+"   uniform vec2 Viewport; \n\
+    uniform mat4 osg_ModelViewProjectionMatrix; \n\
 \n\
-layout(lines) in;\n\
-layout(triangle_strip, max_vertices = 4) out;\n\
+    layout(lines) in; \n\
+    layout(triangle_strip, max_vertices = 4) out; \n\
 \n\
-in VertexData\n\
-{\n\
-    vec4 vertexColor;\n\
-} VertexIn[2];\n\
+    in VertexData \n\
+    { \n\
+        vec4 vertexColor; \n\
+    } VertexIn[2]; \n\
 \n\
-out VertexData\n\
-{\n\
-    vec2 texCoords;\n\
-    vec4 vertexColor;\n\
-} VertexOut;\n\
+    out VertexData \n\
+    { \n\
+        vec2 texCoords; \n\
+        vec4 vertexColor; \n\
+    } VertexOut; \n\
 \n\
-vec2 toScreenSpace(vec4 vertex)\n\
-{\n\
-    return vec2(vertex.xy / vertex.w) * Viewport;\n\
-}\n\
-\n\
-float toZValue(vec4 vertex)\n\
-{\n\
-    return (vertex.z / vertex.w);\n\
-}\n\
-\n\
-void drawSegment(vec2 points[2], vec4 colors[2], float zValues[2])\n\
-{\n\
-    vec2 p0 = points[0];\n\
-    vec2 p1 = points[1];\n\
-\n\
-    /* determine the direction of each of the 3 segments (previous, current, next) */\n\
-    vec2 v0 = normalize(p1 - p0);\n\
-    float t0 = distance(p0, p1) / (Thickness*16);\n\
-\n\
-    /* determine the normal of each of the 3 segments (previous, current, next) */\n\
-    vec2 n0 = vec2(-v0.y, v0.x);\n\
-\n\
-    /* generate the triangle strip*/\n\
-    VertexOut.texCoords = vec2(0, 0);\n\
-    VertexOut.vertexColor = colors[0];\n\
-    gl_Position = vec4((p0 + Thickness * n0) / Viewport, zValues[0], 1.0); \n\
-    EmitVertex(); \n\
-\n\
-    VertexOut.texCoords = vec2(0, 1);\n\
-    VertexOut.vertexColor = colors[0];\n\
-    gl_Position = vec4((p0 - Thickness * n0) / Viewport, zValues[0], 1.0); \n\
-    EmitVertex(); \n\
-\n\
-    VertexOut.texCoords = vec2(t0, 0);\n\
-    VertexOut.vertexColor = colors[1];\n\
-    gl_Position = vec4((p1 + Thickness * n0) / Viewport, zValues[1], 1.0); \n\
-    EmitVertex(); \n\
+    vec2 screenOffset(vec3 ndc1, vec3 ndc2, vec2 viewport, float thickness) \n\
+    { \n\
+        vec2 s1 = ndc1.xy * viewport; \n\
+        vec2 s2 = ndc2.xy * viewport; \n\
     \n\
-    VertexOut.texCoords = vec2(t0, 1);\n\
-    VertexOut.vertexColor = colors[1];\n\
-    gl_Position = vec4((p1 - Thickness * n0) / Viewport, zValues[1], 1.0); \n\
-    EmitVertex(); \n\
+        vec2 v = normalize(s1 - s2); \n\
+        vec2 n = vec2(-v.y, v.x); \n\
+        return (thickness * n) / viewport; \n\
+    } \n\
+\n\
+    void main(void) \n\
+    { \n\
+        vec4 vertex1 = gl_in[0].gl_Position; \n\
+        vec4 vertex2 = gl_in[1].gl_Position; \n\
     \n\
-    EndPrimitive(); \n\
-}\n\
-\n\
-void main(void)\n\
-{\n\
-    /* 2 points*/\n\
-    vec4 Points[2];\n\
-    Points[0] = gl_in[0].gl_Position;\n\
-    Points[1] = gl_in[1].gl_Position;\n\
-\n\
-    /* 2 attached colors*/\n\
-    vec4 colors[2];\n\
-    colors[0] = VertexIn[0].vertexColor;\n\
-    colors[1] = VertexIn[1].vertexColor;\n\
-\n\
-    /* screen coords*/\n\
-    vec2 points[2];\n\
-    points[0] = toScreenSpace(Points[0]);\n\
-    points[1] = toScreenSpace(Points[1]);\n\
-\n\
-    /* deepness values*/\n\
-    float zValues[2];\n\
-    zValues[0] = toZValue(Points[0]);\n\
-    zValues[1] = toZValue(Points[1]);\n\
-\n\
-    drawSegment(points, colors, zValues);\n\
-}";
+        if(clipByFrustum(osg_ModelViewProjectionMatrix, vertex1, vertex2)) \n\
+        { \n\
+            return; \n\
+        } \n\
+    \n\
+        vec4 color1 = VertexIn[0].vertexColor; \n\
+        vec4 color2 = VertexIn[1].vertexColor; \n\
+    \n\
+        vec4 p1 = osg_ModelViewProjectionMatrix * vertex1; \n\
+        vec4 p2 = osg_ModelViewProjectionMatrix * vertex2; \n\
+    \n\
+        vec3 ndc1 = p1.xyz / p1.w; \n\
+        vec3 ndc2 = p2.xyz / p2.w; \n\
+    \n\
+        vec2 offset = screenOffset(ndc1, ndc2, Viewport, Thickness); \n\
+        float t = distance(ndc1.xy * Viewport, ndc2.xy * Viewport) / (Thickness * 16); \n\
+    \n\
+        VertexOut.texCoords = vec2(0, 0); \n\
+        VertexOut.vertexColor = color1; \n\
+        gl_Position = vec4((ndc1.xy + offset), ndc1.z, 1.0); \n\
+        EmitVertex(); \n\
+    \n\
+        VertexOut.texCoords = vec2(0, 1); \n\
+        VertexOut.vertexColor = color1; \n\
+        gl_Position = vec4((ndc1.xy - offset), ndc1.z, 1.0); \n\
+        EmitVertex(); \n\
+    \n\
+        VertexOut.texCoords = vec2(t, 0); \n\
+        VertexOut.vertexColor = color2; \n\
+        gl_Position = vec4((ndc2.xy + offset), ndc2.z, 1.0); \n\
+        EmitVertex(); \n\
+    \n\
+        VertexOut.texCoords = vec2(t, 1); \n\
+        VertexOut.vertexColor = color2; \n\
+        gl_Position = vec4((ndc2.xy - offset), ndc2.z, 1.0); \n\
+        EmitVertex(); \n\
+    \n\
+        EndPrimitive(); \n\
+    } \n\
+";
 
 class ViewportCallback : public osg::UniformCallback
 {
@@ -390,7 +521,7 @@ osg::CThickLineMaterial::CThickLineMaterial(osg::Camera* camera, float thickness
 
     m_program = new osg::Program();
 
-    m_vertShader = new osg::Shader(osg::Shader::VERTEX, colorShaderVert);
+    m_vertShader = new osg::Shader(osg::Shader::VERTEX, colorShaderVertObjectSpace);
     m_geomShader = new osg::Shader(osg::Shader::GEOMETRY, composeShaderSource(mode));
 
     if (mode == ShaderMode::LineStipple)
@@ -440,14 +571,14 @@ std::string osg::CThickLineMaterial::composeShaderSource(ShaderMode mode) const
         switch (mode)
         {
         case ShaderMode::Lines:
-            return geomShaderLinesSrc;
+            return std::string(clipByFrustum) + geomShaderLinesSrc;
         case ShaderMode::LineStripAdjacency:
-            return geomShaderLineStripAdjacencySrc;
+            return std::string(geomShaderLineStripAdjacencySrc);
         case ShaderMode::LineStipple:
-            return geomShaderLineStippleSrc;
+            return std::string(clipByFrustum) + geomShaderLineStippleSrc;
         }
 
-        return "";
+        return std::string();
     };
 
     return std::string("#version 330 core\n") + "const float Thickness = " + std::to_string(m_thickness) + ";\n" + shaderSource(mode);

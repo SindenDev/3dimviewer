@@ -103,7 +103,7 @@ osg::CArbitrarySliceGeometry::CArbitrarySliceGeometry()
     this->addChild(p_SliceGeode.get());
     this->addChild(p_FrameGeode.get());
 
-    setNodeMask(~MASK_ORTHO_2D_DRAGGER);
+    setNodeMask(~(MASK_ORTHO_2D_DRAGGER));
 }
 
 //=====================================================================================================================

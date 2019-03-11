@@ -404,6 +404,10 @@ void PSVolumeRendering::redraw(bool bEraseBackground)
 
 void PSVolumeRendering::enable(bool bEnable)
 {
+    std::string boolStr = bEnable ? "true" : "false";
+    std::string message = "Enable VR: " + boolStr;
+    VPL_LOG_INFO(message);
+
     m_Enabled = bEnable;
 
     // signal others that VR has been enabled

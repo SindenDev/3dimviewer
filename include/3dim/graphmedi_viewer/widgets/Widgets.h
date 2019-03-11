@@ -148,10 +148,18 @@ public:
                             );
 
     //! Set matrix
-    void setMatrix(const osg::Matrix & matrix) { m_transform->setMatrix( matrix ); }
+    void setMatrix(const osg::Matrix & matrix)
+    {
+        m_transform->setMatrix( matrix );
+    }
 
     //! Changes the internal flags.
     void setFlags(int Flags) { m_Flags = Flags; }
+
+    void setUpdatesEnabled(bool enabled)
+    {
+        m_canUpdate = enabled;
+    }
 
     //! Update from storage.
     virtual void updateFromStorage();
@@ -203,6 +211,8 @@ protected:
 
     //! Scene flags.
     int m_Flags;
+
+    bool m_canUpdate;
 
     //! Viewer
     osg::ref_ptr< osgViewer::Viewer > m_viewer;

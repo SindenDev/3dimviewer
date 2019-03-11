@@ -39,7 +39,7 @@ namespace data
 #endif
 
 template <class tPixel>
-int getBitFromValue(const tPixel& value, int bitIndex)
+int getBitFromValue(const tPixel& value, tPixel bitIndex)
 {
     INDEXTEST;
 
@@ -49,7 +49,7 @@ int getBitFromValue(const tPixel& value, int bitIndex)
 }
 
 template <class tPixel>
-void setBitInValue(tPixel& value, int bitIndex)
+void setBitInValue(tPixel& value, tPixel bitIndex)
 {
     INDEXTEST;
 
@@ -57,7 +57,7 @@ void setBitInValue(tPixel& value, int bitIndex)
 }
 
 template <class tPixel>
-void clearBitInValue(tPixel& value, int bitIndex)
+void clearBitInValue(tPixel& value, tPixel bitIndex)
 {
     INDEXTEST;
 

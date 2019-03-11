@@ -57,6 +57,8 @@ osg::Geometry* osg::CConvertToGeometry::convert(geometry::CMesh& mesh, MeshConve
         osg::ref_ptr<osg::Vec3Array> vertices = new osg::Vec3Array(numvert);
         osg::ref_ptr<osg::DrawElementsUInt> primitives = new osg::DrawElementsUInt(osg::PrimitiveSet::TRIANGLES, numtris * 3);
         osg::ref_ptr<osg::Vec3Array> normals = new osg::Vec3Array(params.useNormals ? numvert : 0);
+        osg::ref_ptr<osg::Vec4Array> colors = new osg::Vec4Array(params.useVertexColors ? numvert : 0);
+        osg::ref_ptr<osg::Vec2Array> texCoords = new osg::Vec2Array(params.useTexCoords ? numvert : 0);
 
         long index = 0;
         for (auto vh : mesh.vertices())
@@ -68,6 +70,16 @@ osg::Geometry* osg::CConvertToGeometry::convert(geometry::CMesh& mesh, MeshConve
             if (params.useNormals)
             {
                 (*normals)[index] = geometry::convert3<osg::Vec3>(mesh.normal(vh));
+            }
+
+            if (params.useTexCoords)
+            {
+                (*texCoords)[index] = osg::Vec2(mesh.texcoord2D(vh)[0], mesh.texcoord2D(vh)[1]);
+            }
+
+            if (params.useVertexColors)
+            {
+                (*colors)[index] = osg::Vec4(mesh.color(vh)[0] / 255.0, mesh.color(vh)[1] / 255.0, mesh.color(vh)[2] / 255.0, 1.0);
             }
 
             index++;
@@ -88,6 +100,17 @@ osg::Geometry* osg::CConvertToGeometry::convert(geometry::CMesh& mesh, MeshConve
         if (params.useNormals)
         {
             geometry->setNormalArray(normals, osg::Array::BIND_PER_VERTEX);
+        }
+
+        if (params.useVertexColors)
+        {
+            geometry->setColorArray(colors, osg::Array::BIND_PER_VERTEX);
+        }
+
+        if (params.useTexCoords)
+        {
+            geometry->setTexCoordArray(0, texCoords, osg::Array::BIND_PER_VERTEX);
+            geometry->setTexCoordArray(1, texCoords, osg::Array::BIND_PER_VERTEX);
         }
     }
     else
@@ -161,22 +184,44 @@ osg::Texture2D* osg::CConvertToGeometry::convert(const vpl::img::CRGBAImage::tSm
     return osgTexture;
 }
 
-osg::MeshConversionParams::MeshConversionParams() : MeshConversionParams(true, true, true)
+osg::MeshConversionParams osg::MeshConversionParams::SimpleWhite()
 {
+    return MeshConversionParams();
 }
 
-osg::MeshConversionParams::MeshConversionParams(bool sharedVertices_, bool useNormals_, osg::Vec4 color_)
-    : sharedVertices(sharedVertices_)
-    , useNormals(useNormals_)
-    , useColor(true)
-    , color(color_)
+osg::MeshConversionParams osg::MeshConversionParams::FlatShading()
 {
+    MeshConversionParams params;
+
+    params.sharedVertices = false;
+
+    return params;
 }
 
-osg::MeshConversionParams::MeshConversionParams(bool sharedVertices_, bool useNormals_, bool useColor_)
-    : sharedVertices(sharedVertices_)
-    , useNormals(useNormals_)
-    , useColor(useColor_)
-    , color(osg::Vec4(1.0, 1.0, 1.0, 1.0))
+osg::MeshConversionParams osg::MeshConversionParams::JustVertices()
 {
+    MeshConversionParams params;
+
+    params.useNormals = false;
+    params.useColor = false;
+
+    return params;
+}
+
+osg::MeshConversionParams osg::MeshConversionParams::WithoutColor()
+{
+    MeshConversionParams params;
+
+    params.useColor = false;
+
+    return params;
+}
+
+osg::MeshConversionParams osg::MeshConversionParams::WithTexture()
+{
+    MeshConversionParams params;
+
+    params.useTexCoords = true;
+
+    return params;
 }

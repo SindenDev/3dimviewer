@@ -118,7 +118,7 @@ bool HausdorffDistance::compute()
     }
     return true;
 }
-
+ 
 double HausdorffDistance::getMinDistance() const
 {
     if (m_min < 1.0e-5)

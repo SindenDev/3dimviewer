@@ -868,6 +868,8 @@ private slots:
     //! Adjust top splitter position when the bottom one has moved
     void            bottomSplitterMoved( int pos, int index );
 
+    void openPreferences(int pageIndex);
+
 // screenshots
     QImage*         canvasScreenShotToQImage(OSGCanvas* pCanvas, int nRenderingSize, bool bIncludeWidgets);
     void            saveScreenshotOfCanvas(OSGCanvas* pCanvas);

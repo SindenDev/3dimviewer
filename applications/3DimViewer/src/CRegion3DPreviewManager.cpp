@@ -122,7 +122,6 @@ VPL_THREAD_ROUTINE(CRegion3DPreviewManager::backgroundWorker)
 
         if (!pManager->m_canUpdate)
         {
-            int redraw = pManager->m_redrawInterval;
             pManager->m_mutex.unlock();
             vpl::sys::sleep(500);
             continue;
@@ -149,9 +148,9 @@ VPL_THREAD_ROUTINE(CRegion3DPreviewManager::backgroundWorker)
         pManager->m_mutex.unlock();
 
         data::CObjectPtr<data::CMultiClassRegionData> spRegionData(APP_STORAGE.getEntry(data::Storage::MultiClassRegionData::Id, data::Storage::NO_UPDATE));
-        data::CMultiClassRegionData& volume = *spRegionData.get();
         vpl::sys::CMutex &sizeMutex = spRegionData->getSizeMutex();
         sizeMutex.lock();
+        data::CMultiClassRegionData& volume = *spRegionData.get();
         spRegionData.release();
 
         if (bitIndex >= 0)

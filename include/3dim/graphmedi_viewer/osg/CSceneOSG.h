@@ -455,6 +455,7 @@ public:
     //! Method called on OSG update callback.
     virtual void updateFromStorage() override;
     void updateFromStorageArbitrarySlice();
+    void updateGeometry();
 
     //
     virtual void setupScene(data::CDensityData & data) override;
@@ -483,7 +484,17 @@ protected:
     //! Slice moved signal connections
     vpl::mod::tSignalConnection m_conSliceMoved;
 
+    //! Widget overlay node
+    osg::ref_ptr<CWidgetOverlayNode> m_widgetOverlay;
+    osg::ref_ptr<scene::CSceneOrientationWidget> m_orientationWidget;
+
+    //! Widgets base color
+    osg::Vec4 m_widgetsColor;
+
     void orthoSliceMoved();
+
+    //! Create widgets overlay scene
+    void createWidgetsScene(OSGCanvas *pCanvas, const osg::Matrix & viewMatrix, int Flags);
 };
 
 

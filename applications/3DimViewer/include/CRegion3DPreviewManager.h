@@ -54,7 +54,7 @@ private:
     //! Region volume changed?
     bool m_dataChanged;
 
-    //! During some operation, we don+t want to update the preview (because of the performance), e.g. brush
+    //! During some operation, we don't want to update the preview (because of the performance), e.g. brush
     bool m_canUpdate;
 
     //! Interval in which the background thread will check changes in segmentation.

@@ -23,6 +23,10 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
 
+#ifdef _WIN32
+#include <QtPlatformHeaders/QWindowsWindowFunctions>
+#endif
+
 #include "AppConfigure.h"
 
 #include <C3DimApplication.h>
@@ -218,6 +222,11 @@ MainWindow::MainWindow(QWidget *parent, CPluginManager* pPlugins) :
     // setup UI
     ui->setupUi(this);
 
+#ifdef Q_OS_WIN // see http://doc.qt.io/qt-5/windows-issues.html#fullscreen-opengl-based-windows for more info
+    winId(); // Allocate window handle
+    QWindowsWindowFunctions::setHasBorderInFullScreen(windowHandle(), true);
+#endif
+
     installEventFilter(this);
 
     data::CObjectPtr<data::CRegionData> spOldRegionData(APP_STORAGE.getEntry(data::Storage::RegionData::Id));
@@ -287,6 +296,8 @@ MainWindow::MainWindow(QWidget *parent, CPluginManager* pPlugins) :
     VPL_SIGNAL(SigPluginLog).connect(this, &MainWindow::pluginLog);
 
     VPL_SIGNAL(SigSaveScreenshot).connect(this, &MainWindow::saveScreenshot);
+
+    VPL_SIGNAL(SigOpenPreferences).connect(this, &MainWindow::openPreferences);
 
 
 	QSettings settings;
@@ -442,6 +453,7 @@ MainWindow::MainWindow(QWidget *parent, CPluginManager* pPlugins) :
     vplSignalsTable[VPL_SIGNAL(SigRegion3DPreviewVisible).getId()] = &(VPL_SIGNAL(SigRegion3DPreviewVisible));
     vplSignalsTable[VPL_SIGNAL(SigHasCnnModels).getId()] = &(VPL_SIGNAL(SigHasCnnModels));
     vplSignalsTable[VPL_SIGNAL(SigHasLandmarksDefinition).getId()] = &(VPL_SIGNAL(SigHasLandmarksDefinition));
+    vplSignalsTable[VPL_SIGNAL(SigOpenPreferences).getId()] = &(VPL_SIGNAL(SigOpenPreferences));
 
 
 #ifdef ENABLE_PYTHON
@@ -3171,8 +3183,8 @@ bool MainWindow::openDICOMZIP(QString fileName)
 
 bool MainWindow::openDICOM(const QString& fileName, const QString& realName, bool fromFolder)
 {
-    m_region3DPreviewVisualizer->setVisibility(false);
-    m_3DView->Refresh(false);
+    //m_region3DPreviewVisualizer->setVisibility(false);
+    //m_3DView->Refresh(false);
 
 	setVOIVisibility(false);
 
@@ -3357,9 +3369,13 @@ bool MainWindow::preOpen()
     }   
 
     m_region3DPreviewManager->stop();
+    m_region3DPreviewManager->setCanUpdate(false);
+    m_region3DPreviewVisualizer->setVisibility(false);
+    m_3DView->Refresh(false);
 
     return true;
 }
+
 void MainWindow::pluginLog(int type, const std::string& whatInvoke, const std::string& message)
 {
     switch(type)
@@ -3384,6 +3400,7 @@ void MainWindow::pluginLog(int type, const std::string& whatInvoke, const std::s
         break;
     }
 }
+
 void MainWindow::postOpenActions()
 {
     data::CObjectPtr<data::CMultiClassRegionData> spRegionData(APP_STORAGE.getEntry(data::Storage::MultiClassRegionData::Id));
@@ -3397,6 +3414,8 @@ void MainWindow::postOpenActions()
     data::CObjectPtr< data::CDensityData > pVolume(APP_STORAGE.getEntry(ptrDataset->getId()));
     vpl::img::CSize3d voxelSize(pVolume->getDX(), pVolume->getDY(), pVolume->getDZ());
 
+    VPL_LOG_INFO("About to update 3D preview");
+
     m_region3DPreviewManager->init(voxelSize, 0);
     geometry::Vec3Array vertices;
     std::vector<int> indicies;
@@ -3405,6 +3424,9 @@ void MainWindow::postOpenActions()
 
     if (m_region3DPreviewVisible)
     {
+        VPL_LOG_INFO("3D preview visible.");
+
+        m_region3DPreviewManager->setCanUpdate(true);
         m_region3DPreviewManager->run();
         m_region3DPreviewVisualizer->setVisibility(true);
         m_3DView->Refresh(false);
@@ -3413,8 +3435,8 @@ void MainWindow::postOpenActions()
     undoRedoEnabler();
     fixBadSliceSliderPos();
     resetLimit();
-
 }
+
 void MainWindow::postOpen(const QString& filename, bool bDicomData)
 {
     postOpenActions();
@@ -3426,7 +3448,6 @@ void MainWindow::postOpen(const QString& filename, bool bDicomData)
     setProperty("ProjectName",m_wsProjectPath);
     addToRecentFiles(filename);
 	m_savedEntriesVersionList = getVersionList();
-
 }
 
 void MainWindow::postSave(const QString& filename)
@@ -3536,6 +3557,8 @@ bool MainWindow::openVLM(const QString &wsFileName)
     // 2012/03/12: Modified by Majkl (Linux compatible code)
 //    std::string ansiName = fileName.toUtf8();
     std::string ansiName = wsFileName.toStdString();
+
+    VPL_LOG_INFO("Loading VLM volume.");
 
     CProgress progress(this);
     progress.setLabelText(tr("Loading input volumetric data, please wait..."));
@@ -4032,12 +4055,13 @@ bool MainWindow::openSTL()
         break;
     }
 
-	QString filePath = QFileDialog::getOpenFileName(this, tr("Choose an input polygonal model to load..."), previousDir, tr("Stereo litography model (*.stl);;Binary Polygon file format (*.ply);;ASCII Polygon file format (*.ply);;OpenCTM compressed file format (*.ctm)"), &selectedFilter);
+	QString filePath = QFileDialog::getOpenFileName(this, tr("Choose an input polygonal model to load..."), previousDir, tr("Stereo litography model (*.stl);;Binary Polygon file format (*.ply);;ASCII Polygon file format (*.ply)"/*;;OpenCTM compressed file format (*.ctm)*/), &selectedFilter);
 	if (filePath.isEmpty())
         return false;
 
 	QFileInfo pathInfo(filePath);
     settings.setValue("STLdir",pathInfo.dir().absolutePath());
+
 	return openSTL(filePath, pathInfo.fileName());
 }
 
@@ -4101,6 +4125,8 @@ bool MainWindow::openSTL(const QString& filePath, const QString& fileName)
 	std::string ansiName = filePath.toStdString();
 #endif
 
+    VPL_LOG_INFO("MainWindow: openSTL()");
+
     QApplication::setOverrideCursor(QCursor(Qt::WaitCursor));
 
     // get file extension
@@ -4124,6 +4150,7 @@ bool MainWindow::openSTL(const QString& filePath, const QString& fileName)
 		if (id < 0)
 		{
 			QApplication::restoreOverrideCursor();
+            VPL_LOG_INFO("No free id.");
 			return false;
 		}
 
@@ -4334,6 +4361,7 @@ bool MainWindow::openSTL(const QString& filePath, const QString& fileName)
             delete pMesh;
             result = false;
 			QApplication::restoreOverrideCursor();
+            VPL_LOG_INFO("Failed to load model.");
             showMessageBox(QMessageBox::Critical,tr("Failed to load polygonal model!"));
         }
         else
@@ -4343,6 +4371,7 @@ bool MainWindow::openSTL(const QString& filePath, const QString& fileName)
 			if (id < 0)
 			{
 				QApplication::restoreOverrideCursor();
+                VPL_LOG_INFO("No free id.");
 				return false;
 			}
 			loadedID = id;
@@ -4379,6 +4408,12 @@ bool MainWindow::openSTL(const QString& filePath, const QString& fileName)
         addToRecentFiles(filePath);
 	}
     QApplication::restoreOverrideCursor();
+
+    if (result)
+    {
+        VPL_LOG_INFO("Model loaded.");
+    }
+
     return result;
 }
 
@@ -4494,7 +4529,7 @@ bool MainWindow::saveSTLById(int storage_id, bool useDicom)
             break;
     }
 
-	QString fileName = QFileDialog::getSaveFileName(this, tr("Please, specify an output file..."), previousDir, tr("Stereo litography model (*.stl);;Binary Polygon file format (*.ply);;ASCII Polygon file format (*.ply);;OpenCTM compressed file format (*.ctm)"), &selectedFilter);
+	QString fileName = QFileDialog::getSaveFileName(this, tr("Please, specify an output file..."), previousDir, tr("Stereo litography model (*.stl);;Binary Polygon file format (*.ply);;ASCII Polygon file format (*.ply)"/*;;OpenCTM compressed file format (*.ctm)*/), &selectedFilter);
     if (fileName.isEmpty())
         return false;
 
@@ -4510,6 +4545,9 @@ bool MainWindow::saveSTLById(int storage_id, bool useDicom)
     //std::string ansiName = fileName.toUtf8();
     std::string ansiName = fileName.toStdString();
 #endif
+
+    QString message = "Saving model: " + selectedFilter + ": " + QString::number(pMesh->n_faces()) + " faces, " + QString::number(pMesh->n_vertices()) + " vertices, " + QString::number(pMesh->componentCount()) + " components";
+    VPL_LOG_INFO(message.toStdString());
 
     QApplication::setOverrideCursor(QCursor(Qt::WaitCursor));
     OpenMesh::IO::Options wopt = OpenMesh::IO::Options::Binary;
@@ -4561,12 +4599,14 @@ bool MainWindow::saveSTLById(int storage_id, bool useDicom)
 		pMesh->request_vertex_normals();	//writer needs per vertex normals..
 	}
 
-	const OpenMesh::IO::_CTMWriter_ &CTMWriter = OpenMesh::IO::_CTMWriter_();
+	//const OpenMesh::IO::_CTMWriter_ &CTMWriter = OpenMesh::IO::_CTMWriter_();
+    //VPL_LOG_INFO("CTMWriter created.");
 
     bool result = true;
     if (!OpenMesh::IO::write_mesh(*pMesh, ansiName, wopt))
     {
         result = false;
+        VPL_LOG_INFO("Failed to save model.");
         showMessageBox(QMessageBox::Critical, tr("Failed to save polygonal model!"));
     }
     else
@@ -4590,6 +4630,12 @@ bool MainWindow::saveSTLById(int storage_id, bool useDicom)
 	if (pMesh != spModel->getMesh())
 		delete pMesh;
     QApplication::restoreOverrideCursor();
+
+    if (result)
+    {
+        VPL_LOG_INFO("Model saved.");
+    }
+
     return result;
 }
 
@@ -7102,7 +7148,6 @@ void MainWindow::sigRegionDataChanged( data::CStorageEntry *pEntry )
         {
             m_region3DPreviewManager->regionDataChanged();
         }
-
     }
     setProperty("SegmentationChanged",true);
 }
@@ -7397,13 +7442,19 @@ void MainWindow::dropEvent(QDropEvent* event)
             QString path = urlList.at(i).toLocalFile();
             if (path.endsWith(".vlm",Qt::CaseInsensitive))
             {
-                bOpenedSomething |= openVLM(path);
+                if (preOpen())
+                {
+                    bOpenedSomething |= openVLM(path);
+                }
             }
             else
             {
                 if (path.endsWith(".dcm",Qt::CaseInsensitive) || path.endsWith(".dicom",Qt::CaseInsensitive))
                 {
-                    bOpenedSomething |= openDICOM(path, path, true);
+                    if (preOpen())
+                    {
+                        bOpenedSomething |= openDICOM(path, path, true);
+                    }
                 }
                 else
                 {
@@ -7415,10 +7466,13 @@ void MainWindow::dropEvent(QDropEvent* event)
                     }
                     else
                     {
-                        if (path.endsWith(".zip",Qt::CaseInsensitive))
-                            bOpenedSomething |= openDICOMZIP(path);
-                        else
-                            bOpenedSomething |= openDICOM(path, path, true);
+                        if (preOpen())
+                        {
+                            if (path.endsWith(".zip", Qt::CaseInsensitive))
+                                bOpenedSomething |= openDICOMZIP(path);
+                            else
+                                bOpenedSomething |= openDICOM(path, path, true);
+                        }
                     }
                 }
             }
@@ -8448,6 +8502,10 @@ void MainWindow::removeAllModels()
 
 void MainWindow::setActiveRegion3DPreviewVisibility(bool visible)
 {
+    std::string boolStr = visible ? "true" : "false";
+    std::string message = "MainWindow: setActiveRegion3DPreviewVisibility(): " + boolStr;
+    VPL_LOG_INFO(message);
+
     if (visible)
     {
         data::CObjectPtr< data::CActiveDataSet > ptrDataset(APP_STORAGE.getEntry(data::Storage::ActiveDataSet::Id));
@@ -8457,6 +8515,7 @@ void MainWindow::setActiveRegion3DPreviewVisibility(bool visible)
         data::CObjectPtr<data::CMultiClassRegionColoring> spMultiClassRegionColoring(APP_STORAGE.getEntry(data::Storage::MultiClassRegionColoring::Id));
         data::CMultiClassRegionData::tVoxel activeRegion = spMultiClassRegionColoring->getActiveRegion();
 
+        m_region3DPreviewManager->setCanUpdate(true);
         m_region3DPreviewManager->init(voxelSize, activeRegion);
         m_region3DPreviewManager->run();
     }
@@ -9033,4 +9092,12 @@ void MainWindow::pingFinished(QNetworkReply* reply)
 void MainWindow::sslErrorHandler(QNetworkReply* reply, const QList<QSslError> & errlist)
 {
     reply->ignoreSslErrors();
+}
+
+void MainWindow::openPreferences(int pageIndex)
+{
+    QSettings settings;
+    settings.setValue("PreferencesPage", pageIndex);
+
+    showPreferencesDialog();
 }

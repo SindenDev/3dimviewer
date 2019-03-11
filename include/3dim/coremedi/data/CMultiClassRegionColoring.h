@@ -233,7 +233,7 @@ public:
         }
         
         // Resize the vector of colors
-        m_Colors.resize(Size, bRandomColor, ALPHA);
+        m_Colors.resize(Size, bRandomColor, m_alpha);
 
         int oldSize = m_Regions.size();
 
@@ -318,6 +318,16 @@ public:
     {
 //        return m_Colors.getColor(i);
         return m_Colors.getColorSafe(i);
+    }
+
+    void setAlpha(int alpha)
+    {
+        m_alpha = alpha;
+
+        for (int c = 0; c < m_colorsTable.getSize(); ++c)
+        {
+            m_colorsTable[c].getA() = m_alpha;
+        }
     }
 
     //! Sets region seeds.
@@ -439,18 +449,20 @@ public:
 	//! Initializes the object to its default state.
     void init()
     {
+        m_alpha = ALPHA;
+
         resize(NUM_OF_REGIONS);
 
         // Initialize colors
-        /*m_Colors[0] = tColor(255, 128, 128, ALPHA);
-        m_Colors[1] = tColor(128, 255, 128, ALPHA);
-        m_Colors[2] = tColor(128, 128, 255, ALPHA);
-        m_Colors[3] = tColor(255, 255, 128, ALPHA);
-        m_Colors[4] = tColor(128, 255, 255, ALPHA);
-        m_Colors[5] = tColor(255, 128, 255, ALPHA);
-        m_Colors[6] = tColor(255, 128, 64, ALPHA);
-        m_Colors[7] = tColor(0, 128, 128, ALPHA);
-        m_Colors[8] = tColor(128, 128, 64, ALPHA);
+        /*m_Colors[0] = tColor(255, 128, 128, m_alpha);
+        m_Colors[1] = tColor(128, 255, 128, m_alpha);
+        m_Colors[2] = tColor(128, 128, 255, m_alpha);
+        m_Colors[3] = tColor(255, 255, 128, m_alpha);
+        m_Colors[4] = tColor(128, 255, 255, m_alpha);
+        m_Colors[5] = tColor(255, 128, 255, m_alpha);
+        m_Colors[6] = tColor(255, 128, 64, m_alpha);
+        m_Colors[7] = tColor(0, 128, 128, m_alpha);
+        m_Colors[8] = tColor(128, 128, 64, m_alpha);
 
         // Initialize regions
 		m_Regions[0].setName("Region 1").setVisibility(true).setSelected(false).setAuxiliary(false);
@@ -613,6 +625,8 @@ protected:
     tColor m_DummyColor;
 
     int m_maxRegionIndex;
+
+    int m_alpha;
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -40,19 +40,27 @@ namespace osg
 
     struct MeshConversionParams
     {
-        MeshConversionParams();
-        MeshConversionParams(bool sharedVertices_, bool useNormals_, osg::Vec4 color_);
-        MeshConversionParams(bool sharedVertices_, bool useNormals_, bool useColor_);
+        MeshConversionParams() {}
+
+        static MeshConversionParams FlatShading();
+        static MeshConversionParams SimpleWhite();
+        static MeshConversionParams JustVertices();
+        static MeshConversionParams WithoutColor();
+        static MeshConversionParams WithTexture();
 
         // DrawElements vs DrawArrays
-        bool sharedVertices;
+        bool sharedVertices = true;
         // Add normals, either vertex normal or face normals depending on "sharedVertices" param
-        bool useNormals;
+        bool useNormals = true;
         // Add overall color
-        bool useColor;
+        bool useColor = true;
+        // Copy texture coords
+        bool useTexCoords = false;
+        // Copy vertex colors
+        bool useVertexColors = false;
 
         // Used when "useColor" is true
-        osg::Vec4 color;
+        osg::Vec4 color = osg::Vec4(1.0, 1.0, 1.0, 1.0);
     };
 
     class CConvertToGeometry

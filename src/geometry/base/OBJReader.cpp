@@ -106,7 +106,7 @@ namespace geometry
         return true;
     }
 
-    bool OBJReader::read(std::string &filename, geometry::CMesh &mesh, std::vector<std::string> &materialFiles)
+    bool OBJReader::read(const std::string &filename, geometry::CMesh &mesh, std::vector<std::string> &materialFiles)
     {
         std::ifstream input;
         input.open(filename, std::ios_base::in);

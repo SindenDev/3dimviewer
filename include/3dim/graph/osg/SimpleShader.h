@@ -119,4 +119,21 @@ void main()\n\
     outColor = VertexIn.vertexColor;\n\
 }\n";
 
+const char colorShaderVertObjectSpace[] =
+"#version 330 core \n\
+\n\
+in vec4 osg_Vertex; \n\
+in vec4 osg_Color; \n\
+\n\
+out VertexData \n\
+{ \n\
+    vec4 vertexColor; \n\
+} VertexOut; \n\
+\n\
+void main() \n\
+{ \n\
+    gl_Position = osg_Vertex; \n\
+    VertexOut.vertexColor = osg_Color; \n\
+}\n";
+
 #endif
