@@ -184,7 +184,7 @@ set(options_to_unset "${options_to_unset};BUILD_PLUGINS;BUILD_WITH_GDCM;BUILD_WI
 
 if (MSVC)
 	option( BUILD_USE_PRECOMPILED_HEADERS "Use precompiled headers?" ON )
-	option( BUILD_INSTALL_ALSO_REQUIRED_SYSTEM_LIBS "This will install all the ucrt system dlls. Not required most of the tim." OFF)
+	option( BUILD_INSTALL_ALSO_REQUIRED_SYSTEM_LIBS "This will install all the ucrt system dlls. Not required most of the time." OFF)
 	
 	set(options_to_unset "${options_to_unset};BUILD_USE_PRECOMPILED_HEADERS;BUILD_INSTALL_ALSO_REQUIRED_SYSTEM_LIBS" CACHE INTERNAL "")	
 endif()

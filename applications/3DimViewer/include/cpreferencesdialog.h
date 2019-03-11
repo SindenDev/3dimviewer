@@ -38,7 +38,7 @@
 #define DEFAULT_MODEL_REGION_LINK		true
 #define DEFAULT_SAVE_PATH_MODE          0
 #define DEFAULT_SAVED_FILES_NAME_MODE	0
-#define DEFAULT_BRUSH_THICKNESS         1
+#define DEFAULT_BRUSH_THICKNESS         0
 #define DEFAULT_STYLESHEET              ""
 #define DEFAULT_DICOM_PORT              5678
 #define DEFAULT_BIG_ICONS				true

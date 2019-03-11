@@ -93,6 +93,8 @@ VPL_DECLARE_SIGNAL_0(1158, bool, SigRegion3DPreviewVisible);
 VPL_DECLARE_SIGNAL_1(1159, bool, const QString&, SigHasCnnModels);
 VPL_DECLARE_SIGNAL_1(1160, bool, const QString&, SigHasLandmarksDefinition);
 
+VPL_DECLARE_SIGNAL_1(1161, void, int, SigOpenPreferences);
+
 #endif // _3DVSignals_H
 
 ///////////////////////////////////////////////////////////////////////////////

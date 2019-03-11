@@ -78,7 +78,7 @@ background-repeat: none;</string>
       </size>
      </property>
      <property name="currentIndex">
-      <number>5</number>
+      <number>0</number>
      </property>
      <widget class="QWidget" name="pageGeneral">
       <layout class="QFormLayout" name="formLayout_3">
@@ -284,11 +284,6 @@ background-repeat: none;</string>
          <item>
           <property name="text">
            <string>ASCII Polygon file format (*.ply)</string>
-          </property>
-         </item>
-         <item>
-          <property name="text">
-           <string>OpenCTM compressed file format (*.ctm)</string>
           </property>
          </item>
         </widget>

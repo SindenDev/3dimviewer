@@ -618,6 +618,8 @@ void CExamination::setSlicePositionXY(int Position)
 
     // Update the slice data
     APP_STORAGE.invalidate(spSlice.getEntryPtr());
+
+    VPL_SIGNAL(SigOrthoSliceMoved).invoke();
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -639,6 +641,8 @@ void CExamination::setSlicePositionXZ(int Position)
 
     // Update the slice data
     APP_STORAGE.invalidate(spSlice.getEntryPtr());
+
+    VPL_SIGNAL(SigOrthoSliceMoved).invoke();
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -660,6 +664,8 @@ void CExamination::setSlicePositionYZ(int Position)
 
     // Update the slice data
     APP_STORAGE.invalidate(spSlice.getEntryPtr());
+
+    VPL_SIGNAL(SigOrthoSliceMoved).invoke();
 }
 
 ///////////////////////////////////////////////////////////////////////////////

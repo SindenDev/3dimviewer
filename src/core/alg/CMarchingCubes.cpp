@@ -23,9 +23,15 @@
 ////////////////////////////////////////////////////////////
 // Includes
 
+#ifdef _OPENMP
+#include <omp.h>
+#endif
+
 #include <alg/CMarchingCubes.h>
 #include <base/stack_allocator.hpp>
 #include <VPL/Base/Logging.h>
+
+#include <chrono>
 
 ////////////////////////////////////////////////////////////
 // scheme cubes with numbering conventions of nodes and edges
@@ -1535,15 +1541,21 @@ bool CMarchingCubes::generateMesh(
     bool earlyBreak = false;
 
     // generate submeshes
-    #pragma omp parallel for
+    #pragma omp parallel for schedule(dynamic)
     for (int i = 0; i < workerCount; ++i)
     {
         if (earlyBreak)
         {
             continue;
         }
+        //auto start = std::chrono::high_resolution_clock::now();
 
         workers[i].generateMesh(volumeFunctor, reduceFlatAreas);
+
+        //auto dur = std::chrono::high_resolution_clock::now() - start;
+        //auto seconds = std::chrono::duration_cast<std::chrono::seconds>(dur);
+        //auto milli = std::chrono::duration_cast<std::chrono::milliseconds>(dur) - seconds;
+        //VPL_LOG_INFO("Marching cubes worker " << i << " finished in " << seconds.count() << ":" << milli.count() << " on thread " << omp_get_thread_num());
 
         #pragma omp critical
         earlyBreak = !progress();
@@ -1557,7 +1569,7 @@ bool CMarchingCubes::generateMesh(
     // generate submeshes
     if (reduceFlatAreas)
     {
-        #pragma omp parallel for
+        #pragma omp parallel for schedule(dynamic)
         for (int i = 0; i < workerCount; ++i)
         {
             if (earlyBreak)
@@ -1578,6 +1590,8 @@ bool CMarchingCubes::generateMesh(
         return false;
     }
 
+    //auto start = std::chrono::high_resolution_clock::now();
+
     // merge submeshes
     mesh.clear();
     std::map<int, std::set<std::pair<geometry::CMesh::VertexHandle, int> > > vertexMap;
@@ -1592,6 +1606,11 @@ bool CMarchingCubes::generateMesh(
             return false;
         }
     }
+
+    //auto dur = std::chrono::high_resolution_clock::now() - start;
+    //auto seconds = std::chrono::duration_cast<std::chrono::seconds>(dur);
+    //auto milli = std::chrono::duration_cast<std::chrono::milliseconds>(dur) - seconds;
+    //VPL_LOG_INFO("Marching cubes meshes merged in " << seconds.count() << ":" << milli.count());
 
     mesh.garbage_collection();
 
@@ -3099,6 +3118,13 @@ bool CMarchingCubesWorker::eliminateEdgeVertex(geometry::CMesh &mesh, geometry::
         vertices.push_back(mesh.point(vvit.handle()));
     }
 
+    // stack based allocator for fvertices vector
+#ifndef _DEBUG
+    const std::size_t stack_size = 3;
+    geometry::CMesh::VertexHandle bufferVH[stack_size];
+    typedef stack_allocator<geometry::CMesh::VertexHandle, stack_size> allocator_type;
+#endif
+
     // try every edge
     for (geometry::CMesh::VertexOHalfedgeIter vohit = mesh.voh_begin(eliminate_vertex); vohit != mesh.voh_end(eliminate_vertex); ++vohit)
     {
@@ -3121,7 +3147,11 @@ bool CMarchingCubesWorker::eliminateEdgeVertex(geometry::CMesh &mesh, geometry::
         {
             geometry::CMesh::FaceHandle face = vfit.handle();
             bool hasTarget = false;
+#ifdef _DEBUG
             std::vector<geometry::CMesh::VertexHandle> fvertices;
+#else   // use stack based allocator for better performance
+            std::vector<geometry::CMesh::VertexHandle, allocator_type> fvertices((allocator_type(bufferVH)));
+#endif
 
             // construct virtual face
             for (geometry::CMesh::FaceVertexIter fvit = mesh.fv_begin(face); fvit != mesh.fv_end(face); ++fvit)

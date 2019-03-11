@@ -191,6 +191,7 @@ scene::CSceneOrientationWidget::CSceneOrientationWidget(OSGCanvas *pCanvas,
                                                         )
     : osgWidget::Box("InfoBox", osgWidget::Box::VERTICAL)
     , m_Flags( Flags )
+    , m_canUpdate(true)
 {
     setCanvas(pCanvas);
     scene::CGeneralObjectObserverOSG<CSceneOrientationWidget>::connect(APP_STORAGE.getEntry(data::Storage::PreviewModel::Id).get());
@@ -298,7 +299,7 @@ void scene::CSceneOrientationWidget::createScene(void)
     ropt += OpenMesh::IO::Options::Binary;
     if( OpenMesh::IO::read_mesh(*pMesh, "models/assistant_body.stl", ropt) )
     {
-        m_model = osg::CConvertToGeometry::convert(*pMesh, { true, true, true });
+        m_model = osg::CConvertToGeometry::convert(*pMesh, osg::MeshConversionParams::SimpleWhite());
 
         m_model->getOrCreateStateSet()->setMode(GL_DEPTH_TEST, osg::StateAttribute::ON | osg::StateAttribute::PROTECTED);
 
@@ -457,6 +458,11 @@ void scene::CSceneOrientationWidget::scaleScene(osg::Node *scene)
 
 void scene::CSceneOrientationWidget::updateFromStorage()
 {
+    if (!m_canUpdate)
+    {
+        return;
+    }
+
     // Get current rotation matrix - as in ruller widget we must use manipulator to get realy current position
     osg::Matrix m( m_viewer->getCameraManipulator()->getInverseMatrix() );
     osg::Matrix rotation( m.getRotate() );

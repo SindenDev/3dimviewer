@@ -47,7 +47,7 @@ namespace geometry
     public:
         MTLReader();
         ~MTLReader();
-        bool read(std::string &filename, std::vector<Material> &materials);
+        bool read(const std::string &filename, std::vector<Material> &materials);
 
     private:
         bool read(std::ifstream &input, std::vector<Material> &materials);

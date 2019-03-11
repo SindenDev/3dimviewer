@@ -83,6 +83,16 @@ namespace geometry
          */
         bool calcBoundingBox(geometry::Vec3 &min, geometry::Vec3 &max) const;
 
+        /**
+         * Gets data vector access
+         *
+         * \return  The data vector.
+         */
+
+        const tDataVec &getDataVec() const 
+        { 
+            return m_data; 
+        }
     protected:
         //! Stored points
         geometry::Vec3Array m_points;
@@ -191,6 +201,25 @@ namespace geometry
         size_t getNumPointsInCloud() const { return m_pc != nullptr ? m_pc->size() : 0; }
 
         const Vec3Array &getPointsPositions() const { return m_pc->getPoints(); }
+
+        //! Refresh tree after some points position changes.
+        bool refreshTree()
+        {
+            // Create tree data structure
+            m_tree.init(m_pc->getPoints());
+
+            // Return true if tree is valid
+            return m_tree.hasData();
+        }
+
+        /**
+         * Gets data vector access
+         *
+         * \return  The data vector.
+         */
+
+        const tDataVec &getDataVec() const { return m_pc->getDataVec(); }
+
     protected:
         //! Delete all previous data
         void clear();
@@ -434,11 +463,8 @@ namespace geometry
         // Create new adaptor
         m_pc = new geometry::CPointlCloudAdaptor<tData>(points, data);
 
-        // Create tree data structure
-        m_tree.init(m_pc->getPoints());
 
-        // Return true if tree is valid
-        return m_tree.hasData();
+        return refreshTree();
     }
 } // namespace geometry
 

@@ -137,7 +137,7 @@ namespace geometry
         return true;
     }
 
-    bool MTLReader::read(std::string &filename, std::vector<Material> &materials)
+    bool MTLReader::read(const std::string &filename, std::vector<Material> &materials)
     {
         std::ifstream input;
         input.open(filename, std::ios_base::in);

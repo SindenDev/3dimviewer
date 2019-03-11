@@ -47,6 +47,9 @@ namespace app {
             if (m_logFile.is_open())
                 m_logFile << msg;
 
+            if (m_autoNewline)
+                m_logFile << std::endl;
+
             if (print)
                 std::cout << msg;
 
@@ -60,7 +63,14 @@ namespace app {
             m_logFile.close();
         }
 
+        void setAutoNewline(bool value) { 
+            m_autoNewline = value; 
+        }
+
+    private:
         std::ofstream m_logFile;
         std::string m_name;
+        bool m_autoNewline = false;
+
     };
 }

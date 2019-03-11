@@ -350,8 +350,6 @@ void scene::CDraggableSlice::moveInDepth( int iPosition )
 	p_Selection->manualTranslation( translation );
 
 	p_Dragger->setMatrix( p_Selection->getMatrix() );
-
-    VPL_SIGNAL(SigOrthoSliceMoved).invoke();
 }
 
 //====================================================================================================================

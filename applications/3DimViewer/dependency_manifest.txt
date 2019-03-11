@@ -1,6 +1,6 @@
-Qt 5.9.5
+Qt 5.9.7
 OSG 3.6.2
-VPL 181206
+VPL 190227
 TinyXML2 7.0.0
 glad 0.1.18a0 gl46
 Zlib 1.2.11

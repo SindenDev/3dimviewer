@@ -36,7 +36,7 @@ namespace geometry
     public:
         OBJReader();
         ~OBJReader();
-        bool read(std::string &filename, geometry::CMesh &mesh, std::vector<std::string> &materialFiles);
+        bool read(const std::string &filename, geometry::CMesh &mesh, std::vector<std::string> &materialFiles);
 
     private:
         bool read(std::ifstream &input, geometry::CMesh &mesh, std::vector<std::string> &materialFiles);
