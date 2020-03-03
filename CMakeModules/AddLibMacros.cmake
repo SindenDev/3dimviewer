@@ -402,6 +402,8 @@ endmacro()
    
 macro(ADD_LIB_CERES)
     
+    target_compile_definitions(${TRIDIM_CURRENT_TARGET} PRIVATE TRIDIM_USE_CERES )
+    
     if(UNIX)
 
         # This module defines the following variables:
@@ -646,6 +648,7 @@ endmacro()
 # Find PhysicsFS
 macro( ADD_LIB_PHYSFS )
 
+    target_compile_definitions(${TRIDIM_CURRENT_TARGET} PRIVATE TRIDIM_USE_PHYSFS )
     ADD_LIB(${PHYSFS_LIB_NAME} ${ARGV})
 
 endmacro( ADD_LIB_PHYSFS )

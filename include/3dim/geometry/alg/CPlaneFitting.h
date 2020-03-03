@@ -1,6 +1,8 @@
 #ifndef CPlaneFitting_H_included
 #define CPlaneFitting_H_included
 
+#if defined (TRIDIM_USE_CERES)
+
 #include <geometry/base/types.h>
 #include <geometry/base/CPlane.h>
 
@@ -84,4 +86,6 @@ namespace geometry
 }
 
 // CPlaneFitting_H_included
+#endif
+
 #endif

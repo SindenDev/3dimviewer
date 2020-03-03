@@ -42,6 +42,7 @@
 
 //== INCLUDES =================================================================
 
+#if defined (TRIDIM_USE_PHYSFS)
 
 // STL
 #include <geometry/base/CTMReader.h>
@@ -486,3 +487,5 @@ namespace OpenMesh
     } // namespace IO
 } // namespace OpenMesh
 //=============================================================================
+
+#endif

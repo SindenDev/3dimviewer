@@ -51,8 +51,8 @@ ADD_LIB_OPENMESH()
 ADD_LIB_OSG()
 ADD_LIB_OPENCTM()
 ADD_LIB_FLANN()
-ADD_LIB_CERES()
-ADD_LIB_PHYSFS()
+#ADD_LIB_CERES()
+#ADD_LIB_PHYSFS()
 
 #-------------------------------------------------------------------------------
 # Add Headers and Sources

@@ -1,3 +1,4 @@
+#if defined (TRIDIM_USE_CERES)
 
 #include <geometry/alg/CPlaneFitting.h>
 
@@ -78,3 +79,4 @@ void geometry::CPlaneFitting::arrayToPlane(const tDoubleQuad &input, CPlane &out
     output.set(input[0], input[1], input[2], input[3]);
 }
 
+#endif

@@ -1,6 +1,6 @@
-Qt 5.9.7
+Qt 5.9.5
 OSG 3.6.2
-VPL 190227
+VPL 181206
 TinyXML2 7.0.0
 glad 0.1.18a0 gl46
 Zlib 1.2.11
@@ -8,8 +8,6 @@ Flann 1.8.4 fixed namespace
 DCMTK 3.6.1_20121102
 Iconv 1.14
 Eigen 3.3.3
-PhysFS 3.0.1 Patched
 OpenSSL 1.0.2j
 OpenCTM 1.0.3
 OpenMesh 7.1
-Ceres Solver 1.13.0
